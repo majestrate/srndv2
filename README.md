@@ -18,10 +18,12 @@ donate: bitcoin 15yuMzuueV8y5vPQQ39ZqQVz5Ey98DNrjE
 
 ## testing ##
 
-    venv/bin/pip install tox
-	tox
-
+    venv/bin/pip install pytest
+	cd src
+	../venv/bin/py.test
+	
 ## running ##
 
-    venv/bin/python -m srnd
+    cd src
+    ../venv/bin/python -m srnd
 

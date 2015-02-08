@@ -1,6 +1,7 @@
 #
 # network.py
 #
+from . import config
 from . import nntp
 import asyncio
 import logging
@@ -18,7 +19,9 @@ class NNTPD:
         self.log = logging.getLogger('nntpd')
         self.bindhost = conf['bind_host']
         self.bindport = conf['bind_port']
-
+        # TODO: move to use as parameter
+        self.feed_config = config.load_feed_config()
+        self.default_feed_policy = nntp.FeedPolicy(self.feed_config['default'].keys())
 
     def start(self):
         """

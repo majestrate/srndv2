@@ -22,11 +22,23 @@ def load_config(fname='srnd.ini'):
         config['srnd']['bind_port'] = '1199'
         with open(fname, 'w') as f:
             config.write(f)
-    config.read('srnd.ini')
+    config.read(fname)
     return config
 
 
-def load_outfeeds(fname='outfeeds.ini'):
+def load_feed_config(fname='feeds.ini'):
     """
     load outfeed config
     """
+    
+    config = configparser.ConfigParser()
+    if not os.path.exists(fname):
+        # generate default config
+        config['default'] = dict()
+        config['default']['ano.paste'] = '0'
+        config['default']['overchan.*'] = '1'
+        config['default']['ctl'] = '1'
+        with open(fname, 'w') as f:
+            config.write(f)
+    config.read(fname)
+    return config

@@ -38,7 +38,7 @@ class DaemonTest(unittest.TestCase):
         self.cl = self.nntp()
         for group in self.groups.split(','):
             print ('check {}'.format(group))
-            self.cl.groups(group)
+            self.cl.group(group)
         ftr.set_result(True)
 
     def end(self):
@@ -46,9 +46,10 @@ class DaemonTest(unittest.TestCase):
         
 
     def test_all(self):
+        assert False
         loop = asyncio.get_event_loop()
         try:
-            for func in (self.nntp_check_caps,):
+            for func in (self.nntp_check_caps, self.nntp_check_groups):
                 ftr = asyncio.Future()
                 def runit():
                     try:
@@ -64,3 +65,4 @@ class DaemonTest(unittest.TestCase):
         except asyncio.TimeoutError:
             pytest.fail('timeout')
             
+

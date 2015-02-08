@@ -3,6 +3,58 @@
 #
 import asyncio
 import logging
+import re
+
+
+class PolicyRule:
+    """
+    string / regexp based rule matcher
+    """
+
+    def __init__(self, rule):
+        if rule[0] == '*' or rule == '!*' or rule == '!':
+            raise Exception('invalid rule: {}'.format(rule))
+
+        self.is_re = '*' in rule
+        self._inv = rule[0] == '!'
+        if self._inv:
+            rule = rule[1:]
+        self.rule = rule.lower()
+        if self.is_re:
+            rule = rule.replace('.', '\\.')
+            self.rule = re.compile(rule)
+            
+
+    def _re_check(self, newsgroup):
+        return self.rule.match(newsgroup) is not None
+
+    def allows_newsgroup(self, newsgroup):
+        """
+        check if this rule allows a newsgroup
+        """
+        res = False
+        if self.is_re:
+            res = self._re_check(newsgroup)
+        else:
+            res = newsgroup.lower() == self.rule
+        if self._inv:
+            return not res
+        return res
+
+class FeedPolicy:
+    """
+    dictactes what groups are carried and accepted
+    """
+
+    def __init__(self, rule_strs):
+        self.rules = list()
+        for rule in rule_strs:
+            self.rules.append(PolicyRule(rule))
+        
+    def allow_newsgroup(self, newsgroup):
+        for rule in self.rules:
+            if rule.match(newsgroup):
+                return True
 
 class Connection:
     """
@@ -51,7 +103,6 @@ class Connection:
         self.w.write(data)
         yield from self.w.drain()
         data = None
-    
 
     @asyncio.coroutine
     def run(self):
@@ -71,6 +122,9 @@ class Connection:
             line = yield from self.r.readline()
             line = line.decode('ascii')
             self.log.debug('got line: {}'.format(line))
+            if len(line) == 0:
+                self._run = False
+                break
             commands = None
             if self.state == 'multiline':
                 self._lines.append(line)

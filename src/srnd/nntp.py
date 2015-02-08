@@ -36,10 +36,16 @@ class Connection:
         self._lines = list()
 
     @asyncio.coroutine
+    def sendline(self, line):
+        yield from self.send(line)
+        yield from self.send(b'\r\n')
+ 
+    @asyncio.coroutine
     def send(self, data):
         """
         send them arbitrary data
         """
+        self.log.debug('send data: {}'.format(data))
         if not isinstance(data, bytes):
             data = data.encode('ascii')
         self.w.write(data)
@@ -60,14 +66,16 @@ class Connection:
 
         if self.ib: # send initial welcome banner if inbound
             for line in self.welcome:
-                yield from self.send(line+'\r\n')
+                yield from self.sendline(line)
         while self._run: 
             line = yield from self.r.readline()
+            line = line.decode('ascii')
+            self.log.debug('got line: {}'.format(line))
             commands = None
             if self.state == 'multiline':
                 self._lines.append(line)
-            commands = line.split()
-
+            commands = line.strip('\r\n').split()
+            self.log.debug('commands {}'.format(commands))
             if self.ib: # inbound
                 if commands: # we are wanting a command
                     if commands[0] == 'CAPABILITIES': # send capabilities

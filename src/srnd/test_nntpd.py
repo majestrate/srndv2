@@ -7,6 +7,7 @@ import unittest
 
 import pytest
 
+logging.basicConfig(level=logging.DEBUG)
 
 class DaemonTest(unittest.TestCase):
 
@@ -28,7 +29,8 @@ class DaemonTest(unittest.TestCase):
         self.cl = self.nntp()
         caps = self.cl.getcapabilities()
         assert 'POST' in caps
-        assert 'STREAM' in caps
+        assert 'STREAMING' in caps
+        assert 'SOCIALISM' not in caps
         ftr.set_result(True)
 
     def nntp_check_groups(self, ftr):

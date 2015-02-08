@@ -4,6 +4,7 @@
 
 from . import config
 from . import network
+import asyncio
 import logging
 
 def main():
@@ -20,5 +21,11 @@ def main():
 
     srnd_conf = conf['srnd']
     daemon = network.NNTPD(srnd_conf)
-    daemon.run()
-    
+    daemon.start()
+    loop = asyncio.get_event_loop()
+    try:
+        loop.run_forever()
+    finally:
+        daemon.end()
+        loop.close()
+

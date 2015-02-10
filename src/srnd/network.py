@@ -23,7 +23,7 @@ class NNTPD:
         # TODO: move to use as parameter
         self.feed_config = feed_config
         self.default_feed_policy = nntp.FeedPolicy(self.feed_config['default'].keys())
-        self.article_store = storage.FileSystemArticleStore(store_config)
+        self.store = storage.FileSystemArticleStore(store_config)
 
 
     def start(self):

@@ -3,8 +3,10 @@
 #
 import asyncio
 import logging
+import os
 import re
 
+from . import util
 
 class PolicyRule:
     """
@@ -104,6 +106,11 @@ class Connection:
         yield from self.w.drain()
         data = None
 
+    def enable_stream(self):
+        """
+        enable streaming mode
+        """
+        pass            
 
     @asyncio.coroutine
     def handle_CAPABILITIES(self, args):
@@ -121,6 +128,58 @@ class Connection:
         yield from self.send_response(411, 'no such news group')
         
 
+
+    @asyncio.coroutine
+    def handle_QUIT(self, args):
+        yield from self.send_response(205, 'kthnxbai')
+        self.w.close()
+        
+    @asyncio.coroutine
+    def handle_MODE(self, args):
+        """
+        handle MODE command
+        currently only supports STREAM
+        """
+        if args[0] == 'STREAM':
+            self.enable_stream()
+            yield from self.send_response(203, 'stream as desired yo')
+        else:
+            yield from self.send_response(501, 'Unknown MODE option')
+
+    def handle_CHECK(self, args):
+        """
+        handle CHECK command
+        checks if article exists
+        """
+        aid = args[0]
+        if self.daemon.store.article_banned(aid):
+            yield from self.send_response(437, '{} this article is banned'.format(aid))
+        elif self.daemon.store.has_article(args):
+            yield from self.send_response(435, '{} we have this article'.format(aid))
+        else:
+            yield from self.send_response(238, '{} article wanted plz gib'.format(aid))
+            
+    @asyncio.coroutine
+    def handle_TAKETHIS(self, args):
+        """
+        handle TAKETHIS command
+        takes 1 article
+        """
+        if util.is_valid_article_id(args[0]):
+            with self.daemon.store.open_article(args[0]) as f:
+                line = yield from self.r.readline()
+                while line != b'.\r\n':
+                    line = line.replace(b'\r', b'')
+                    f.write(line)
+                    try:
+                        line = yield from self.r.readline()
+                    except ValueError as e:
+                        self.log.error('bad line for article {}: {}'.format(args[0], e))
+            self.log.info("recv'd article {}".format(args[0]))
+            yield from self.send_response(239, 'article transfered okay woot')
+        else:
+            yield from self.send_response(439, 'article rejected gtfo')
+        
     @asyncio.coroutine
     def handle_IHAVE(self, args):
         """

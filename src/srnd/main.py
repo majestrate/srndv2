@@ -21,7 +21,8 @@ def main():
 
     srnd_conf = conf['srnd']
     store_conf = conf['store']
-    daemon = network.NNTPD(srnd_conf)
+    feed_conf = config.load_feed_config()
+    daemon = network.NNTPD(srnd_conf, feed_conf, store_conf)
     daemon.start()
     loop = asyncio.get_event_loop()
     try:

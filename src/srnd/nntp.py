@@ -69,6 +69,7 @@ class Connection:
         'IMPLEMENTATION srndv2 better overchan nntpd v0.1',
         'POST',
         'IHAVE',
+        'READER',
         'STREAMING'
     )
 
@@ -110,7 +111,13 @@ class Connection:
         """
         enable streaming mode
         """
-        pass            
+        self.state = 'stream'           
+
+    def enable_reader(self):
+        """
+        enable reader mode
+        """
+        self.state = 'reader'
 
     @asyncio.coroutine
     def handle_CAPABILITIES(self, args):
@@ -124,9 +131,12 @@ class Connection:
 
     @asyncio.coroutine
     def handle_GROUP(self, args):
-        # TODO: handle group command
-        yield from self.send_response(411, 'no such news group')
-        
+        if self.state == 'reader' and self.daemon.store.has_group(args[0]):
+            num, p_min, p_max = self.daemon.store.get_group_info(args[0])
+            yield from self.send_response(211,'{} {} {} {}'.format(num, p_min, p_max, args[0]))
+        else:
+            yield from self.send_response(411, 'no such news group')
+            
 
 
     @asyncio.coroutine
@@ -143,6 +153,9 @@ class Connection:
         if args[0] == 'STREAM':
             self.enable_stream()
             yield from self.send_response(203, 'stream as desired yo')
+        elif args[0] == 'READER':
+            self.enable_reader()
+            yield from self.send_response(200,'Reader mode, reading all fine')
         else:
             yield from self.send_response(501, 'Unknown MODE option')
 
@@ -158,14 +171,21 @@ class Connection:
             yield from self.send_response(435, '{} we have this article'.format(aid))
         else:
             yield from self.send_response(238, '{} article wanted plz gib'.format(aid))
-            
+
+    def handle_XSECRET(self, args):
+        if len(args) == 2:
+            pass
+        else:
+            yield from self.send_response(481, 'Invalid login')
+        
+
     @asyncio.coroutine
     def handle_TAKETHIS(self, args):
         """
         handle TAKETHIS command
         takes 1 article
         """
-        if not self.daemon.store.has_article(args[0]):  
+        if self.state == 'stream' and not self.daemon.store.has_article(args[0]):  
             with self.daemon.store.open_article(args[0]) as f:
                 line = yield from self.r.readline()
                 while line != b'.\r\n':
@@ -185,7 +205,7 @@ class Connection:
         """
         handle IHAVE command
         """
-        if self.daemon.has_article(args[0]):
+        if self.state != 'stream' or self.daemon.has_article(args[0]):
             yield from self.send_response(435, 'article not wanted do not send it')
         else:
             yield from self.send_response(335, 'send article. End with <CR-LF>.<CL-LF>')

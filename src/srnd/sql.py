@@ -15,8 +15,9 @@ newsgroups = Table("newsgroups", _metadata,
 
 
 article_group_int = Table("article_group_ints",_metadata,
-                          Column("message_id", Text, primary_key=True),
-                          Column("newsgroup", Text, primary_key=True))
+                          Column("message_id", Text),
+                          Column("newsgroup", Text),
+                          Column("post_id", Integer, primary_key=True, autoincrement=True))
 
 articles = Table("articles", _metadata,
                  Column("message_id", Text, primary_key=True),

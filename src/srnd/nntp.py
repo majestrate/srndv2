@@ -94,6 +94,7 @@ class Connection:
         self._lines = list()
         self.db = sql.SQL()
         self.db.connect()
+        self.group = None
 
     @asyncio.coroutine
     def sendline(self, line):
@@ -133,12 +134,51 @@ class Connection:
             yield from self.send(cap + '\r\n')
         yield from self.send('.\r\n')
 
+    
+    @asyncio.coroutine
+    def handle_HEAD(self, args):
+        res = self.db.connection.execute(
+            sql.select([sql.article_group_int.c.message_id]).where(
+                sql.article_group_int.c.post_id == args[0])).fetchone()
+        if res:
+            article_id = res[0]
+            yield from self.send_response(221, '{} {} headers get, text follows'.format(args[0], article_id))
+            with self.daemon.store.open_article(article_id, True) as f:
+                while True:
+                    line = f.readline()
+                    if line == '\r\n' or line == '\n' or len(line) == 0:
+                        yield from self.send(b'\r\n.\r\n')
+                        return
+                    else:
+                        yield from self.send(line)
+        else:
+            yield from self.send_response('432', 'no suck article')
 
+    @asyncio.coroutine
+    def handle_ARTICLE(self, args):
+        res = self.db.connection.execute(
+            sql.select([sql.article_group_int.c.message_id]).where(
+                sql.article_group_int.c.post_id == args[0])).fetchone()
+        if res:
+            article_id = res[0]
+            yield from self.send_response(220, '{} {} atricle get, text follows'.format(args[0], article_id))
+            with self.daemon.store.open_article(article_id, True) as f:
+                while True:
+                    line = f.readline()
+                    if len(line) == 0:
+                        yield from self.send(b'\r\n.\r\n')
+                        return
+                    else:
+                        yield from self.send(line)
+        else:
+            yield from self.send_response('432', 'no suck article')
+        
     @asyncio.coroutine
     def handle_GROUP(self, args):
         if self.state == 'reader' and self.daemon.store.has_group(args[0]):
             num, p_min, p_max = self.daemon.store.get_group_info(args[0])
             yield from self.send_response(211,'{} {} {} {}'.format(num, p_min, p_max, args[0]))
+            self.group = args[0]
         else:
             yield from self.send_response(411, 'no such news group')
             
@@ -148,8 +188,8 @@ class Connection:
             yield from self.send_response(215, 'list of newsgroups ahead')
             for group, last, first, posting in self.daemon.store.get_all_groups():
                 posting = posting and 'y' or 'n'
-                yield from self.send('{} {} {} {}'.format(group, last, first, posting))
-            yield from self.send(b'\r\n.\r\n')
+                yield from self.send('{} {} {} {}\r\n'.format(group, last, first, posting))
+            yield from self.send(b'.\r\n')
             
         else:
             yield from self.send_response(500, 'nope')
@@ -180,7 +220,7 @@ class Connection:
         checks if article exists
         """
         aid = args[0]
-        if self.daemon.store.article_banned(aid):
+        if self.daemon.store.article_banned(aid) or not util.is_valid_article_id(aid):
             yield from self.send_response(437, '{} this article is banned'.format(aid))
         elif self.daemon.store.has_article(aid):
             yield from self.send_response(435, '{} we have this article'.format(aid))
@@ -201,26 +241,26 @@ class Connection:
         handle TAKETHIS command
         takes 1 article
         """
-        if not self.daemon.store.has_article(args[0]):  
-            with self.daemon.store.open_article(args[0]) as f:
-                line = yield from self.r.readline()
-                while line != b'.\r\n':
-                    line = line.replace(b'\r', b'')
-                    f.write(line)
-                    try:
-                        line = yield from self.r.readline()
-                    except ValueError as e:
-                        self.log.error('bad line for article {}: {}'.format(args[0], e))
+        with self.daemon.store.open_article(args[0]) as f:
+            line = yield from self.r.readline()
+            while line != b'.\r\n':
+                line = line.replace(b'\r', b'')
+                f.write(line)
+                try:
+                    line = yield from self.r.readline()
+                except ValueError as e:
+                    self.log.error('bad line for article {}: {}'.format(args[0], e))
 
-            with self.daemon.store.open_article(args[0], True) as f:
-                m = message.Message(args[0])
-                m.load(f)
-                self.daemon.store.save_message(m)
+        with self.daemon.store.open_article(args[0], True) as f:
+            m = message.Message(args[0])
+            m.load(f)
+            self.daemon.store.save_message(m)
                 
-            self.log.info("recv'd article {}".format(args[0]))
-            yield from self.send_response(239, 'article transfered okay woot')
+        self.log.info("recv'd article {}".format(args[0]))
+        if self.daemon.store.has_article(args[0]):
+            yield from self.send_response(239, args[0])
         else:
-            yield from self.send_response(439, 'article rejected gtfo')
+            yield from self.send_response(439, args[0])
         
     @asyncio.coroutine
     def handle_IHAVE(self, args):

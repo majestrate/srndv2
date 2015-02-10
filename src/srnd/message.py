@@ -171,9 +171,9 @@ class Message:
             oldline = None
             for line in fd:
                 if oldline:
-                    hasher.update(oldline.encode('ascii'))
+                    hasher.update(oldline.encode('utf-8'))
                 oldline = line.replace("\n", "\r\n")
-            hasher.update(oldline.replace("\r\n", "").encode('ascii'))
+            hasher.update(oldline.replace("\r\n", "").encode('utf-8'))
             dg = hasher.digest()
             fd.seek(bodyoffset)
             try:

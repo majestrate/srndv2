@@ -109,10 +109,16 @@ class FileSystemArticleStore(BaseArticleStore):
             
 
     def get_group_info(self, group):
+        # TODO optimize
         res = self.db.connection.execute(
-            sql.select([sql.func.count(sql.article_group_int.c.message_id)]).where(
+            sql.select([sql.article_group_int.c.post_id]).where(
+                sql.article_group_int.c.newsgroup == group).limit(
+                    500).order_by(sql.article_group_int.c.post_id))
+        allposts = res.fetchall()
+        res = self.db.connection.execute(
+            sql.select([sql.func.count(sql.article_group_int.c.post_id)]).where(
                 sql.article_group_int.c.newsgroup == group)).scalar()
-        return res, 1, res
+        return res, allposts[0][0], allposts[-1][0]
 
     def __del__(self):
         self.db.close()

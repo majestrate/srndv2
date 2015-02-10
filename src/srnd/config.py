@@ -15,6 +15,9 @@ def load_config(fname='srnd.ini'):
         # generate default config
         config['log'] = dict()
         config['log']['level'] = 'info'
+        
+        config['database'] = dict()
+        config['database']['url'] = 'sqlite:///test.db'
 
         config['store'] = dict()
         config['store']['base_dir'] = './articles/'

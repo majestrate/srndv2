@@ -1,5 +1,6 @@
 *.pyc
 *~
 *.ini
+*.db
 venv
 src/articles

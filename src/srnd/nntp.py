@@ -104,6 +104,52 @@ class Connection:
         yield from self.w.drain()
         data = None
 
+
+    @asyncio.coroutine
+    def handle_CAPABILITIES(self, args):
+        """
+        handle capacities command
+        """
+        for cap in self.caps:
+            yield from self.send(cap + '\r\n')
+        yield from self.send('.\r\n')
+
+
+    @asyncio.coroutine
+    def handle_GROUP(self, args):
+        # TODO: handle group command
+        yield from self.send_response(411, 'no such news group')
+        
+
+    @asyncio.coroutine
+    def handle_IHAVE(self, args):
+        """
+        handle IHAVE command
+        """
+        if self.daemon.has_article(args[0]):
+            yield from self.send_response(435, 'article not wanted do not send it')
+        else:
+            yield from self.send_response(335, 'send article. End with <CR-LF>.<CL-LF>')
+            if util.is_valid_article_id(args[0]):
+               with self.daemon.store.open_article(args[0]) as f:
+                    line = yield from self.r.readline()
+                    while line != b'':
+                        f.write(line)
+                        f.write(b'\r\n')
+                    line = yield from self.r.readline()
+                    if line != b'.\r\n':
+                        self.log.warn('expected end of article but did not get it')
+            else:
+               yield from self.send_response(437, 'article rejected, invalid id')
+                    
+
+    @asyncio.coroutine
+    def send_response(self, code, message):
+        """
+        send an error respose
+        """
+        yield from self.send('{} {}\r\n'.format(code, message))
+
     @asyncio.coroutine
     def run(self):
         """
@@ -118,29 +164,26 @@ class Connection:
         if self.ib: # send initial welcome banner if inbound
             for line in self.welcome:
                 yield from self.sendline(line)
+
         while self._run: 
+
             line = yield from self.r.readline()
             line = line.decode('ascii')
+
             self.log.debug('got line: {}'.format(line))
+
             if len(line) == 0:
                 self._run = False
                 break
-            commands = None
-            if self.state == 'multiline':
-                self._lines.append(line)
+
             commands = line.strip('\r\n').split()
+
             self.log.debug('commands {}'.format(commands))
-            if self.ib: # inbound
-                if commands: # we are wanting a command
-                    if commands[0] == 'CAPABILITIES': # send capabilities
-                        for cap in self.caps:
-                            yield from self.send(cap + '\r\n')
-                        yield from self.send('.\r\n')
-            else:
-                if commands:
-                    if self.state == 'initial':
-                        if commands[0] == '200':
-                            # request caps
-                            self.send('CAPABILITIES\r\n')
-                            self.state = 'multiline'
-                    
+
+            if commands:
+                meth = 'handle_{}'.format(commands[0].upper())
+                args = len(commands) > 1 and commands[1:] or list()
+                if hasattr(self, meth):
+                    yield from getattr(self, meth)(args)
+                else:
+                    yield from self.send_response(503, '{} not implemented'.format(commands[0]))

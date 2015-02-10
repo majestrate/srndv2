@@ -3,6 +3,7 @@
 #
 from . import config
 from . import nntp
+from . import storage
 import asyncio
 import logging
 
@@ -12,16 +13,18 @@ class NNTPD:
     nntp daemon
     """
 
-    def __init__(self, conf):
+    def __init__(self, daemon_conf, feed_config, store_config):
         """
         pass in valid config from config parser
         """
         self.log = logging.getLogger('nntpd')
-        self.bindhost = conf['bind_host']
-        self.bindport = conf['bind_port']
+        self.bindhost = daemon_conf['bind_host']
+        self.bindport = daemon_conf['bind_port']
         # TODO: move to use as parameter
-        self.feed_config = config.load_feed_config()
+        self.feed_config = feed_config
         self.default_feed_policy = nntp.FeedPolicy(self.feed_config['default'].keys())
+        self.article_store = storage.FileSystemArticleStore(store_config)
+
 
     def start(self):
         """

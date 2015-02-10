@@ -16,6 +16,8 @@ def load_config(fname='srnd.ini'):
         config['log'] = dict()
         config['log']['level'] = 'info'
 
+        config['store']['base_dir'] = './data/articles/'
+
         config['srnd'] = dict()
         config['srnd']['instance_name'] = '{}.srndv2.tld'.format(os.environ['USER'])
         config['srnd']['bind_host'] = '::1'

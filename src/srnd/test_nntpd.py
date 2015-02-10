@@ -13,11 +13,18 @@ class DaemonTest(unittest.TestCase):
 
     def setUp(self):
         self.groups = 'overchan.test,ctl'
-        conf = dict()
-        conf['bind_host'] = '::1'
-        conf['bind_port'] = '11199'
-        conf['groups'] = self.groups
-        self.daemon = network.NNTPD(conf)
+        daemon_conf = dict()
+        daemon_conf['bind_host'] = '::1'
+        daemon_conf['bind_port'] = '11199'
+        daemon_conf['groups'] = self.groups
+        
+        feed_conf = dict()
+        feed_conf['default'] = dict()
+
+        store_conf = dict()
+        store_conf['base_dir'] = 'test_data/articles'
+
+        self.daemon = network.NNTPD(daemon_conf, feed_conf, store_conf)
         self.daemon.start()
         loop = asyncio.get_event_loop()
 
@@ -46,7 +53,6 @@ class DaemonTest(unittest.TestCase):
         
 
     def test_all(self):
-        assert False
         loop = asyncio.get_event_loop()
         try:
             for func in (self.nntp_check_caps, self.nntp_check_groups):

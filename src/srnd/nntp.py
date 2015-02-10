@@ -165,7 +165,7 @@ class Connection:
         handle TAKETHIS command
         takes 1 article
         """
-        if util.is_valid_article_id(args[0]):
+        if not self.daemon.store.has_article(args[0]):  
             with self.daemon.store.open_article(args[0]) as f:
                 line = yield from self.r.readline()
                 while line != b'.\r\n':

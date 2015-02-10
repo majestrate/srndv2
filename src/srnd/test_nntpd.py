@@ -22,7 +22,7 @@ class DaemonTest(unittest.TestCase):
         feed_conf['default'] = dict()
 
         store_conf = dict()
-        store_conf['base_dir'] = 'test_data/articles'
+        store_conf['base_dir'] = 'articles'
 
         self.daemon = network.NNTPD(daemon_conf, feed_conf, store_conf)
         self.daemon.start()

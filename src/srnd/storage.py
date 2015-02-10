@@ -49,4 +49,4 @@ class FileSystemArticleStore(BaseArticleStore):
     def has_article(self, article_id):
         if util.is_valid_article_id(article_id):
             return os.path.exists(os.path.join(self.base_dir, article_id))
-        return False
+        return True

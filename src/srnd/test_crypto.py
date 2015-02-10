@@ -3,5 +3,7 @@
 #
 from . import crypto
 
-def test_sign():
-    pass
+import pytest
+
+def test_sign_verify_post():
+    pytest.fail('not implemented')

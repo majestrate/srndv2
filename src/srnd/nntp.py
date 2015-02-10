@@ -6,7 +6,10 @@ import logging
 import os
 import re
 
+from . import message
+from . import sql
 from . import util
+
 
 class PolicyRule:
     """
@@ -89,6 +92,8 @@ class Connection:
         self.state = 'initial'
         self._run = False
         self._lines = list()
+        self.db = sql.SQL()
+        self.db.connect()
 
     @asyncio.coroutine
     def sendline(self, line):
@@ -137,7 +142,17 @@ class Connection:
         else:
             yield from self.send_response(411, 'no such news group')
             
-
+    @asyncio.coroutine
+    def handle_LIST(self, args):
+        if self.state == 'reader':
+            yield from self.send_response(215, 'list of newsgroups ahead')
+            for group, last, first, posting in self.daemon.store.get_all_groups():
+                posting = posting and 'y' or 'n'
+                yield from self.send('{} {} {} {}'.format(group, last, first, posting))
+            yield from self.send(b'\r\n.\r\n')
+            
+        else:
+            yield from self.send_response(500, 'nope')
 
     @asyncio.coroutine
     def handle_QUIT(self, args):
@@ -167,7 +182,7 @@ class Connection:
         aid = args[0]
         if self.daemon.store.article_banned(aid):
             yield from self.send_response(437, '{} this article is banned'.format(aid))
-        elif self.daemon.store.has_article(args):
+        elif self.daemon.store.has_article(aid):
             yield from self.send_response(435, '{} we have this article'.format(aid))
         else:
             yield from self.send_response(238, '{} article wanted plz gib'.format(aid))
@@ -177,7 +192,8 @@ class Connection:
             pass
         else:
             yield from self.send_response(481, 'Invalid login')
-        
+
+            
 
     @asyncio.coroutine
     def handle_TAKETHIS(self, args):
@@ -185,7 +201,7 @@ class Connection:
         handle TAKETHIS command
         takes 1 article
         """
-        if self.state == 'stream' and not self.daemon.store.has_article(args[0]):  
+        if not self.daemon.store.has_article(args[0]):  
             with self.daemon.store.open_article(args[0]) as f:
                 line = yield from self.r.readline()
                 while line != b'.\r\n':
@@ -195,6 +211,12 @@ class Connection:
                         line = yield from self.r.readline()
                     except ValueError as e:
                         self.log.error('bad line for article {}: {}'.format(args[0], e))
+
+            with self.daemon.store.open_article(args[0], True) as f:
+                m = message.Message(args[0])
+                m.load(f)
+                self.daemon.store.save_message(m)
+                
             self.log.info("recv'd article {}".format(args[0]))
             yield from self.send_response(239, 'article transfered okay woot')
         else:
@@ -210,7 +232,7 @@ class Connection:
         else:
             yield from self.send_response(335, 'send article. End with <CR-LF>.<CL-LF>')
             if util.is_valid_article_id(args[0]):
-               with self.daemon.store.open_article(args[0]) as f:
+                with self.daemon.store.open_article(args[0]) as f:
                     line = yield from self.r.readline()
                     while line != b'':
                         f.write(line)
@@ -218,6 +240,10 @@ class Connection:
                     line = yield from self.r.readline()
                     if line != b'.\r\n':
                         self.log.warn('expected end of article but did not get it')
+                with self.daemon.store.open_article(args[0], True) as f:
+                    m = message.Message(args[0])
+                    m.load(f)
+                    self.daemon.store.save_message(m)
             else:
                yield from self.send_response(437, 'article rejected, invalid id')
                     

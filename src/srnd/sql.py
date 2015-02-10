@@ -9,11 +9,17 @@ _metadata = MetaData()
 
 newsgroups = Table("newsgroups", _metadata,
                    Column("updated", Integer),
+                   Column("first", Integer),
+                   Column("last", Integer),
                    Column("name", Text, unique=True, primary_key=True))
+
+
+article_group_int = Table("article_group_ints",_metadata,
+                          Column("message_id", Text, primary_key=True),
+                          Column("newsgroup", Text, primary_key=True))
 
 articles = Table("articles", _metadata,
                  Column("message_id", Text, primary_key=True),
-                 Column("newsgroup", Text),
                  Column("message", Text),
                  Column("posted_at", Integer),
                  Column("name", Text),
@@ -23,8 +29,6 @@ articles = Table("articles", _metadata,
                  Column("email", Text),
                  Column("references", Text),
                  Column("filename", Text),
-                 Column("filepath", Text),
-                 Column("thumbpath", Text),
                  Column("imagehash", Text),
                  Column("posthash", Text))
                      
@@ -40,19 +44,31 @@ class SQL:
         if dbconf is None:
             dbconf = config.load_config()['database']
         self.engine = create_engine(dbconf['url'])
+        self.connection = None
 
     def connect(self):
+        if self.connection:
+            return
         self.connection = self.engine.connect()
 
     def close(self):
-        self.connection.close()
+        if self.connection:
+            self.connection.close()
+        self.connection = None
 
+    def __del__(self):
+        self.close()
+        
 # 
 # initialize database
 #
 def create(dbconf=None):
     if dbconf is None:
-        dbconf = config.load_confg()['database']
+        dbconf = config.load_config()['database']
     sql = SQL(dbconf)
     _metadata.create_all(sql.engine)
     return sql
+
+
+db = SQL()
+db.connect()

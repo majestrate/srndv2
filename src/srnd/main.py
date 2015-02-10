@@ -4,6 +4,7 @@
 
 from . import config
 from . import network
+from . import sql
 import asyncio
 import logging
 
@@ -23,6 +24,7 @@ def main():
     store_conf = conf['store']
     feed_conf = config.load_feed_config()
     daemon = network.NNTPD(srnd_conf, feed_conf, store_conf)
+    sql.create()
     daemon.start()
     loop = asyncio.get_event_loop()
     try:

@@ -148,10 +148,12 @@ class Outfeed:
     def run(self):
         self._run = True
         while self._run:
-            pair = yield from self.connect()
-            if pair:
-                r, w = pair
-                self.log.info('connected')
-                self.feed = nntp.Connection(self.daemon, r, w)
-                asyncio.async(self.feed.run())
-                
+            if self.feed is None:
+                pair = yield from self.connect()
+                if pair:
+                    r, w = pair
+                    self.log.info('connected')
+                    self.feed = nntp.Connection(self.daemon, r, w)
+                    asyncio.async(self.feed.run())
+            else:
+                yield from asyncio.sleep(1)

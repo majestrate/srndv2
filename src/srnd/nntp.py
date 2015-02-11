@@ -425,7 +425,7 @@ class Connection:
                             line = f.readline()
                             self.log.debug('read file line {}'.format(len(line)))
                             if len(line) == 0:
-                                _ = yield from self.send(b'.\r\n')
+                                _ = yield from self.send(b'.\r\n\r\n')
                                 line = yield from self.readline()
                                 self.log.debug(line)
                                 self.post = None

@@ -111,12 +111,13 @@ class Outfeed:
             r, w = yield from asyncio.open_connection(phost, pport)
             # socks 5 handshake
             w.write(b'\x05\x01\x00')
-            yield from w.drain()
+            _ = yield from w.drain()
             data = yield from r.readexactly(2)
             # socks 5 request
             if data == b'\x05\x00':
                 req = b'\x05\x01\x00\x03' + phost.encode('ascii') + struct.pack('>H', pport)
                 w.write(req)
+                _ = yield from w.drain()
                 data = yield from r.readexactly(4)
                 success = data == b'\x05\x00\x00\x03'
                 dlen = yield from r.readexactly(1)

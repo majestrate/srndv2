@@ -153,11 +153,14 @@ class Connection:
             yield from self.send_response(340, 'send article to be posted. End with <CR-LF>.<CR-LF>')
             article_id = self.daemon.generate_id()
             line = ''
+            got_ref = False
             with self.daemon.store.open_article(article_id) as f:
                 while True:
                     line = yield from self.readline()
                     self.log.debug('read line: {}'.format(line))
                     if line == b'\r\n':
+                        if not got_ref:
+                            f.write(b'References: \r\n')
                         f.write('Message-ID: {}\n'.format(article_id).encode('ascii'))
                         f.write('Path: {}\n'.format(self.daemon.name).encode('ascii'))
                     elif line == b'.\r\n':
@@ -167,6 +170,8 @@ class Connection:
                         line = b'Path: '+self.daemon.ame.encode('ascii') + b'!' + line[6:] 
                     line = line.replace(b'\r\n', b'\n')
                     f.write(line)
+                    if line.startswith(b'References:'):
+                        got_ref = True
             with self.daemon.store.open_article(article_id, True) as f:
                 m = message.Message(article_id)
                 m.load(f)
@@ -273,7 +278,8 @@ class Connection:
         checks if article exists
         """
         aid = args[0]
-        if self.daemon.store.article_banned(aid) or not util.is_valid_article_id(aid):
+        
+        if self.daemon.store.article_banned(aid) or not aid.endswith('POSTED_dropper.SRNd' or not util.is_valid_article_id(aid):
             yield from self.send_response(437, '{} this article is banned'.format(aid))
         elif self.daemon.store.has_article(aid):
             yield from self.send_response(435, '{} we have this article'.format(aid))

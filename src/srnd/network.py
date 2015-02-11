@@ -119,7 +119,7 @@ class Outfeed:
             w.write(req)
             _ = yield from w.drain()
             data = yield from r.readexactly(8)
-            success = data[1] == ord('\x5a'):
+            success = data[1] == ord('\x5a')
             self.log.debug('got handshake sucess {}'.format(success))
             if success:
                 return r, w

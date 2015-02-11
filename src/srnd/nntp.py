@@ -348,6 +348,7 @@ class Connection:
             return False
         else:
             _ = yield from self.sendline('POST')
+            _ = yield from self.r.readline()
             with self.daemon.store.open_article(article_id, True) as f:
                 while True:
                     line = f.readline()

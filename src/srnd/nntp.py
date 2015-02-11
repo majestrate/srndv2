@@ -389,7 +389,7 @@ class Connection:
                     line = yield from self.readline()
                     self.log.debug('got line {}'.format(line))
                 self.log.debug('endcaps {}'.format(caps))
-                if 'STREAMING' in caps:
+                if 'STREAMING' in caps or 'POSTIHAVESTREAMING':
                     _ = yield from self.sendline('MODE STREAM')
                     resp = yield from self.readline()
                     resp = resp.decode('utf-8')

@@ -364,6 +364,10 @@ class Connection:
         self.w.close()
 
     @asyncio.coroutine
+    def readline(self):
+        yield from self.r.readline()
+
+    @asyncio.coroutine
     def run(self):
         """
         run the connection mainloop
@@ -378,33 +382,43 @@ class Connection:
             for line in self.welcome:
                 yield from self.sendline(line)
         else:
-            line = yield from self.r.readline()
-            line = line.decode('utf-8')
-            if not line.startswith('200 '):
-                self.log.error('cannot post')
-                self.sendline('QUIT')
-                yield from self.r.readline()
-                self.close()
+            try:
+                line = yield from self.readline()
+                if line is None:
+                    self.log.error('no data read')
+                    self._run = False
+                    self.close()
+                    return
+                line = line.decode('utf-8')
+                if not line.startswith('200 '):
+                    self.log.error('cannot post')
+                    self.sendline('QUIT')
+                    yield from self.r.readline()
+                    self.close()
+                    return
+                # send caps
+                yield from self.sendline('CAPABILITIES')
+
+                line = yield from self.readline()
+                caps = list()
+                while len(line) > 0 and line != b'.\r\n':
+                    caps.append(line.decode('utf-8')[:-2])
+                    line = yield from self.readline()
+                    self.log.debug('got line {}'.format(line))
+                self.log.debug('endcaps {}'.format(caps))
+                if 'STREAMING' in caps:
+                    _ = yield from self.sendline('MODE STREAM')
+                    resp =  yield from self.readline()
+                    resp = resp.decode('utf-8')
+                    if resp.startswith('203 '):
+                        self.log.info('enable streaming')
+                        self.enable_stream()
+            except Exception as e:
+                self.log.error(e)
                 return
-            # send caps
-            yield from self.sendline('CAPABILITIES')
-            line = yield from self.r.readline()
-            caps = list()
-            while len(line) > 0 and line != b'.\r\n':
-                caps.append(line.decode('utf-8')[:-2])
-                line = yield from self.r.readline()
-                self.log.debug('got line {}'.format(line))
-            self.log.debug('endcaps {}'.format(caps))
-            if 'STREAMING' in caps:
-                _ = yield from self.sendline('MODE STREAM')
-                resp =  yield from self.r.readline()
-                resp = resp.decode('utf-8')
-                if resp.startswith('203 '):
-                    self.log.info('enable streaming')
-                    self.enable_stream()
         while self._run: 
             try:
-                line = yield from self.r.readline()
+                line = yield from self.readline()
             except:
                 self._run = False
                 break

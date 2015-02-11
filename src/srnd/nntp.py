@@ -426,10 +426,7 @@ class Connection:
         while self._run: 
             try:
                 line = yield from self.readline()
-                if line is None:
-                    self.log.error('did not read line')
-                else:
-                    line = line.decode('utf-8')
+                line = line.decode('utf-8')
             except Exception as e:
                 self.log.error(e)
                 self._run = False

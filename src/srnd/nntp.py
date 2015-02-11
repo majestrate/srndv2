@@ -428,18 +428,19 @@ class Connection:
             if self.post:
                 if line.startswith('238 '):
                     self.log.debug('they do not have {}'.format(line))
-                    _ = yield from self.sendline('TAKETHIS {}'.format(self.post))
+                    self.w.write('TAKETHIS {}\r\n'.format(self.post).encode('ascii'))
                     with self.daemon.store.open_article(self.post, True) as f:
                         while True:
                             line = f.readline()
+                            line = line.replace('\n', '\r\n')
                             self.log.debug('read file line {}'.format(len(line)))
                             if len(line) == 0:
-                                _ = yield from self.send(b'.\r\n\r\n')
+                                _ = yield from self.send(b'\r\n.\r\n')
                                 line = yield from self.readline()
                                 self.log.debug(line)
                                 self.post = None
                                 break
-                            _ = yield from self.send(line)
+                            self.w.write(line.encode('utf-8'))
                     line = yield from self.readline()
                     self.log.debug(line)
                 else:

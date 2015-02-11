@@ -315,7 +315,8 @@ class Connection:
         send an error respose
         """
         yield from self.send('{} {}\r\n'.format(code, message))
-
+    
+    @asyncio.coroutine
     def send_article(self, article_id):
         """
         send an article

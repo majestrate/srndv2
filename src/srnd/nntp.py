@@ -363,10 +363,10 @@ class Connection:
             self.daemon.feeds.remove(self)
         self.w.close()
 
-    @asyncio.coroutine
     def readline(self):
         data = yield from self.r.readline()
-        return data 
+        return data
+
     @asyncio.coroutine
     def run(self):
         """
@@ -383,7 +383,7 @@ class Connection:
                 yield from self.sendline(line)
         else:
             try:
-                line = yield from self.readline()
+                line = self.readline()
                 if line is None:
                     self.log.error('no data read')
                     self._run = False
@@ -393,22 +393,22 @@ class Connection:
                 if not line.startswith('200 '):
                     self.log.error('cannot post')
                     self.sendline('QUIT')
-                    yield from self.r.readline()
+                    _ = self.readline()
                     self.close()
                     return
                 # send caps
                 yield from self.sendline('CAPABILITIES')
 
-                line = yield from self.readline()
+                line = self.readline()
                 caps = list()
                 while len(line) > 0 and line != b'.\r\n':
                     caps.append(line.decode('utf-8')[:-2])
-                    line = yield from self.readline()
+                    line = self.readline()
                     self.log.debug('got line {}'.format(line))
                 self.log.debug('endcaps {}'.format(caps))
                 if 'STREAMING' in caps:
                     _ = yield from self.sendline('MODE STREAM')
-                    resp =  yield from self.readline()
+                    resp = self.readline()
                     resp = resp.decode('utf-8')
                     if resp.startswith('203 '):
                         self.log.info('enable streaming')
@@ -418,7 +418,7 @@ class Connection:
                 return
         while self._run: 
             try:
-                line = yield from self.readline()
+                line = self.readline()
                 if line is None:
                     self.log.error('did not read line')
                 else:

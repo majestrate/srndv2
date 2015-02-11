@@ -164,4 +164,4 @@ class Outfeed:
                     self.feed = nntp.Connection(self.daemon, r, w)
                     asyncio.async(self.feed.run())
             else:
-                yield from asyncio.sleep(1)
+                _ = yield from asyncio.sleep(1)

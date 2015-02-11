@@ -428,7 +428,7 @@ class Connection:
                 line = yield from self.readline()
                 line = line.decode('utf-8')
             except Exception as e:
-                self.log.error(e)
+                self.log.error(traceback.format_exc())
                 self._run = False
                 break
 

@@ -51,21 +51,25 @@ class Message:
         self._result = None
 
 
-    def to_dict(self):
-        return {
-            'message_id': self.message_id,
-            'messgae': self.message,
-            'subject': self.subject,
-            'name': self.sender,
-            'posted_at': self.sent,
-            'pubkey': self.pubkey,
-            'sig': self.sig,
-            'references': self.parent,
-            'filename' : self.image_name,
-            'email': self.email,
-            'imagehash': self.image_hash,
-            'posthash' : self.hash_message_uid
-        }
+    def dicts(self):
+        ret = list()
+        for group in self.groups:
+            ret.append({
+                'message_id': self.message_id,
+                'messgae': self.message,
+                'subject': self.subject,
+                'name': self.sender,
+                'posted_at': self.sent,
+                'pubkey': self.pubkey,
+                'sig': self.sig,
+                'references': self.parent,
+                'filename' : self.image_name,
+                'email': self.email,
+                'imagehash': self.image_hash,
+                'posthash' : self.hash_message_uid,
+                'newsgroup' : group
+            })
+        return ret
 
     def save(self, con):
         """
@@ -73,13 +77,7 @@ class Message:
         """
         con.execute(
             sql.articles.insert(),
-            self.to_dict())
-
-        # insert data into article group intersect table
-        vals = list()
-        for group in self.groups:
-            vals.append({'newsgroup':group, 'message_id' : self.message_id})
-        con.execute(sql.article_group_int.insert().values(vals))
+            self.dicts())
 
     def load(self, f=None):
         """

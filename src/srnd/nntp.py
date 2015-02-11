@@ -108,7 +108,7 @@ class Connection:
         """
         self.log.debug('send data: {}'.format(data))
         if not isinstance(data, bytes):
-            data = data.encode('ascii')
+            data = data.encode('utf-8')
         self.w.write(data)
         yield from self.w.drain()
         data = None
@@ -138,8 +138,8 @@ class Connection:
     @asyncio.coroutine
     def handle_HEAD(self, args):
         res = self.db.connection.execute(
-            sql.select([sql.article_group_int.c.message_id]).where(
-                sql.article_group_int.c.post_id == args[0])).fetchone()
+            sql.select([sql.articles.c.message_id]).where(
+                sql.articles.c.post_id == args[0])).fetchone()
         if res:
             article_id = res[0]
             yield from self.send_response(221, '{} {} headers get, text follows'.format(args[0], article_id))
@@ -157,8 +157,8 @@ class Connection:
     @asyncio.coroutine
     def handle_ARTICLE(self, args):
         res = self.db.connection.execute(
-            sql.select([sql.article_group_int.c.message_id]).where(
-                sql.article_group_int.c.post_id == args[0])).fetchone()
+            sql.select([sql.articles.c.message_id]).where(
+                sql.articles.c.post_id == args[0])).fetchone()
         if res:
             article_id = res[0]
             yield from self.send_response(220, '{} {} atricle get, text follows'.format(args[0], article_id))
@@ -186,8 +186,9 @@ class Connection:
     def handle_LIST(self, args):
         if self.state == 'reader':
             yield from self.send_response(215, 'list of newsgroups ahead')
-            for group, last, first, posting in self.daemon.store.get_all_groups():
-                posting = posting and 'y' or 'n'
+            for group in self.daemon.store.get_all_groups():
+                _, first, last = self.daemon.store.get_group_info(group)
+                posting = 'y'
                 yield from self.send('{} {} {} {}\r\n'.format(group, last, first, posting))
             yield from self.send(b'.\r\n')
             
@@ -241,20 +242,22 @@ class Connection:
         handle TAKETHIS command
         takes 1 article
         """
+        has = self.daemon.store.has_article(args[0])
         with self.daemon.store.open_article(args[0]) as f:
             line = yield from self.r.readline()
             while line != b'.\r\n':
                 line = line.replace(b'\r', b'')
-                f.write(line)
+                if not has:
+                    f.write(line)
                 try:
                     line = yield from self.r.readline()
                 except ValueError as e:
                     self.log.error('bad line for article {}: {}'.format(args[0], e))
-
-        with self.daemon.store.open_article(args[0], True) as f:
-            m = message.Message(args[0])
-            m.load(f)
-            self.daemon.store.save_message(m)
+        if not has:            
+            with self.daemon.store.open_article(args[0], True) as f:
+                m = message.Message(args[0])
+                m.load(f)
+                self.daemon.store.save_message(m)
                 
         self.log.info("recv'd article {}".format(args[0]))
         if self.daemon.store.has_article(args[0]):
@@ -311,9 +314,12 @@ class Connection:
                 yield from self.sendline(line)
 
         while self._run: 
-
-            line = yield from self.r.readline()
-            line = line.decode('ascii')
+            try:
+                line = yield from self.r.readline()
+            except:
+                self._run = False
+                break
+            line = line.decode('utf-8')
 
             self.log.debug('got line: {}'.format(line))
 

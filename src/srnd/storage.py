@@ -2,6 +2,7 @@
 # storage.py
 #
 import contextlib
+import logging
 import os
 import time
 
@@ -68,24 +69,20 @@ class FileSystemArticleStore(BaseArticleStore):
         util.ensure_dir(self.base_dir)
         self.db = sql.SQL()
         self.db.connect()
-
+        self.log = logging.getLogger('fs-storage')
 
     def save_message(self, msg):
         now = int(time.time())
         for group in msg.groups:
             if not self.has_group(group):
-                self.db.connection.execute(
-                    sql.newsgroups.insert(),
-                    {'name': group,'updated':now})
+                self.db.connection.execute(sql.newsgroups.insert(),{'name': group,'updated':now})
         msg.save(self.db.connection)
 
     def get_all_groups(self):
         for res in self.db.connection.execute(
                 sql.select([
-                    sql.newsgroups.c.name,
-                    sql.newsgroups.c.last,
-                    sql.newsgroups.c.first])):
-            yield res[0], res[1], res[2], True
+                    sql.newsgroups.c.name])):
+            yield res[0]
 
     def has_group(self, newsgroup):
         res = self.db.connection.execute(
@@ -109,16 +106,22 @@ class FileSystemArticleStore(BaseArticleStore):
             
 
     def get_group_info(self, group):
+        self.log.info('get group info for {}'.format(group))
         # TODO optimize
         res = self.db.connection.execute(
-            sql.select([sql.article_group_int.c.post_id]).where(
-                sql.article_group_int.c.newsgroup == group).limit(
-                    500).order_by(sql.article_group_int.c.post_id))
+            sql.select([sql.articles.c.post_id]).where(
+                sql.articles.c.newsgroup == group).limit(
+                    500).order_by(sql.articles.c.posted_at))
         allposts = res.fetchall()
+
         res = self.db.connection.execute(
-            sql.select([sql.func.count(sql.article_group_int.c.post_id)]).where(
-                sql.article_group_int.c.newsgroup == group)).scalar()
-        return res, allposts[0][0], allposts[-1][0]
+            sql.select([sql.func.count(sql.articles.c.post_id)]).where(
+                sql.articles.c.newsgroup == group)).scalar()
+        if len(allposts) > 2:
+            return res, allposts[0][0], allposts[-1][0]
+        elif len(allposts) > 1:
+            return res, allposts[0][0], allposts[0][0]
+        return 0 , 0 , 0
 
     def __del__(self):
         self.db.close()

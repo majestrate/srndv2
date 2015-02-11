@@ -115,7 +115,7 @@ class Outfeed:
             r, w = yield from asyncio.open_connection(phost, pport)
             # socks 4a handshake
             req = b'\x04\0x01' + struct.pack('>H', self.addr[1]) + b'\x00\x00\x00\x01srndv2\x00' + self.addr[0].encode('ascii') +b'\x00'
-            self.log.debug('connect out...')
+            self.log.debug('connect out... {}'.format(req))
             w.write(req)
             _ = yield from w.drain()
             data = yield from r.readexactly(8)

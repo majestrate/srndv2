@@ -30,9 +30,13 @@ class NNTPD:
         self.name = daemon_conf['instance_name']
         # TODO: move to use as parameter
         self.feed_config = feed_config
-        self.store = storage.FileSystemArticleStore(store_config)
+        self.store = storage.FileSystemArticleStore(self, store_config)
+        self.feeds = list()
 
-
+    def add_article(self, article_id):
+        for feed in self.feeds:
+            feed.add_article(article_id)
+        
     def generate_id(self):
         now = int(time.time())
         id = sha1(os.urandom(8)).hexdigest()[:10]
@@ -62,7 +66,7 @@ class NNTPD:
         for key in feeds:
             feed = Outfeed(key, self, feeds[key])
             asyncio.async(feed.run())
-
+            self.feeds.append(feed)
 
     def on_ib_connection(self, r, w):
         """
@@ -71,6 +75,7 @@ class NNTPD:
         self.log.info('inbound connection made')
         conn = nntp.Connection(self, r, w, True)
         asyncio.async(conn.run())
+        #self.feeds(
 
     def end(self):
         """
@@ -137,6 +142,7 @@ class Outfeed:
             r, w = yield from asyncio.open_connection(self.addr[0], self.addr[1])
             return r, w    
 
+    @asyncio.coroutine
     def run(self):
         self._run = True
         while self._run:

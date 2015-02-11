@@ -118,7 +118,7 @@ class Message:
             if self._check_header('subject'):
                 # parse subject header
                 self.subject = self._splitit()
-            elif self._check_heafer('path'):
+            elif self._check_header('path'):
                 self.path = self._line[6:]
             elif self._check_header('date'):
                 # parse date header

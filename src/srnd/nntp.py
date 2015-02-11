@@ -95,7 +95,7 @@ class Connection:
         self.db = sql.SQL()
         self.db.connect()
         self.group = None
-        self.authorized = False
+        self.authorized = True
 
     @asyncio.coroutine
     def sendline(self, line):
@@ -150,7 +150,7 @@ class Connection:
                     line = yield from self.r.readline()
                     if line == b'.\r\n':
                         break
-                    if line.startswuth(b'Path:'):
+                    if line.startswith(b'Path:'):
                         # inject path header
                         line = b'Path: '+self.daemon.instance_name.encode('ascii') + b'!' + line[6:] 
                     line = line.replace(b'\r\n', b'\n')
@@ -289,7 +289,7 @@ class Connection:
             while line != b'.\r\n':
                 line = line.replace(b'\r', b'')
                 if not has:
-                    if line.startswuth(b'Path:'):
+                    if line.startswith(b'Path:'):
                         # inject path header
                         line = b'Path: '+self.daemon.instance_name.encode('ascii') + b'!' + line[6:] 
                     f.write(line)

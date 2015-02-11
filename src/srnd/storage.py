@@ -71,8 +71,9 @@ class FileSystemArticleStore(BaseArticleStore):
     article store that stores articles on the filesystem
     """
 
-    def __init__(self, conf):
+    def __init__(self, daemon, conf):
         super().__init__()
+        self.daemon = daemon
         self.base_dir = conf['base_dir']
         util.ensure_dir(self.base_dir)
         self.db = sql.SQL()

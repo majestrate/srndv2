@@ -121,7 +121,7 @@ class Outfeed:
                 req = b'\x05\x01\x00\x03' + phost.encode('ascii') + struct.pack('>H', pport)
                 w.write(req)
                 _ = yield from w.drain()
-                self.log,debug('get response')
+                self.log.debug('get response')
                 data = yield from r.readexactly(4)
                 success = data == b'\x05\x00\x00\x03'
                 self.log.debug('got response success is {}'.format(success))

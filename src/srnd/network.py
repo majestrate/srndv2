@@ -114,8 +114,10 @@ class Outfeed:
             w.write(b'\x05\x01\x00')
             _ = yield from w.drain()
             data = yield from r.readexactly(2)
+            self.log.debug('got handshake')
             # socks 5 request
             if data == b'\x05\x00':
+                self.log.debug('handshake okay')
                 req = b'\x05\x01\x00\x03' + phost.encode('ascii') + struct.pack('>H', pport)
                 w.write(req)
                 _ = yield from w.drain()

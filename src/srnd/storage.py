@@ -114,15 +114,10 @@ class FileSystemArticleStore(BaseArticleStore):
         first = res[0]
 
         res = self.db.connection.execute(
-            sql.select([sql.articles.c.post_id]).where(
-                sql.articles.c.newsgroup == group).order_by(sql.desc(sql.articles.c.posted_at)).limit(1)).fetchone()
-        last = res[0]
-
-        res = self.db.connection.execute(
             sql.select([sql.func.count(sql.articles.c.post_id)]).where(
                 sql.articles.c.newsgroup == group)).scalar()
         
-        return res, first, last
+        return res, first, first + res
             
     def __del__(self):
         self.db.close()

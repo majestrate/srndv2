@@ -119,7 +119,7 @@ class Outfeed:
             # socks 5 request
             if data == b'\x05\x00':
                 self.log.debug('handshake okay')
-                req = b'\x05\x01\x00\x03' + phost.encode('ascii') + struct.pack('>H', pport)
+                req = b'\x05\x01\x00\x03' + self.addr[0].encode('ascii') + struct.pack('>H', self.addr[1])
                 w.write(req)
                 _ = yield from w.drain()
                 self.log.debug('get response')

@@ -102,8 +102,9 @@ class Connection:
 
     @asyncio.coroutine
     def sendline(self, line):
-        yield from self.send(line)
-        yield from self.send(b'\r\n')
+        if not isinstance(data, bytes):
+            data = data.encode('utf-8')
+        yield from self.send(line+b'\r\n')
  
     @asyncio.coroutine
     def send(self, data):

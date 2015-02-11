@@ -28,6 +28,7 @@ class NNTPD:
         self.bindhost = daemon_conf['bind_host']
         self.bindport = daemon_conf['bind_port']
         self.name = daemon_conf['instance_name']
+        self.instance_name = self.name
         # TODO: move to use as parameter
         self.feed_config = feed_config
         self.store = storage.FileSystemArticleStore(self, store_config)

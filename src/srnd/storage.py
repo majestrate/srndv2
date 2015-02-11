@@ -110,18 +110,19 @@ class FileSystemArticleStore(BaseArticleStore):
         # TODO optimize
         res = self.db.connection.execute(
             sql.select([sql.articles.c.post_id]).where(
-                sql.articles.c.newsgroup == group).limit(
-                    500).order_by(sql.articles.c.posted_at))
-        allposts = res.fetchall()
+                sql.articles.c.newsgroup == group).order_by(sql.asc(sql.articles.c.posted_at)).limit(1)).fetchone()
+        first = res[0]
+
+        res = self.db.connection.execute(
+            sql.select([sql.articles.c.post_id]).where(
+                sql.articles.c.newsgroup == group).order_by(sql.desc(sql.articles.c.posted_at)).limit(1)).fetchone()
+        last = res[0]
 
         res = self.db.connection.execute(
             sql.select([sql.func.count(sql.articles.c.post_id)]).where(
                 sql.articles.c.newsgroup == group)).scalar()
-        if len(allposts) > 2:
-            return res, allposts[0][0], allposts[-1][0]
-        elif len(allposts) > 1:
-            return res, allposts[0][0], allposts[0][0]
-        return 0 , 0 , 0
-
+        
+        return res, first, last
+            
     def __del__(self):
         self.db.close()

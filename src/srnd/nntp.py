@@ -117,7 +117,7 @@ class Connection:
         try:
             _ = yield from self.w.drain()
         except Exception as e:
-            self.log.error(e)
+            self.log.error(traceback.format_exc())
             self.close()
         data = None
 

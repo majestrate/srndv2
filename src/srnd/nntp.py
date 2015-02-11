@@ -419,6 +419,7 @@ class Connection:
                     with self.daemon.store.open_article(self.post, True) as f:
                         while True:
                             line = f.readline()
+                            self.log.debug('read file line {}'.format(line))
                             if len(line) == 0:
                                 self.send(b'.\r\n')
                                 self.post = None

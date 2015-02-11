@@ -122,9 +122,10 @@ class Outfeed:
                 w.write(req)
                 _ = yield from w.drain()
                 self.log.debug('get response')
-                data = yield from r.readexactly(4)
-                success = data == b'\x05\x00\x00\x03'
+                data = yield from r.readexactly(2)
+                success = data == b'\x05\x00'
                 self.log.debug('got response success is {}'.format(success))
+                _ = yield from r.readexactly(2)
                 dlen = yield from r.readexactly(1)
                 self.log.debug('read host')
                 _ = yield from r.readexactly(dlen[0] + 2)

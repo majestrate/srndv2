@@ -34,10 +34,11 @@ class NNTPD:
         self.store = storage.FileSystemArticleStore(self, store_config)
         self.feeds = list()
 
+    @asyncio.coroutine
     def add_article(self, article_id):
         self.log.debug('article added {}'.format(article_id))
         for feed in self.feeds:
-            feed.add_article(article_id)
+            yield from feed.add_article(article_id)
         
     def generate_id(self):
         now = int(time.time())

@@ -168,6 +168,7 @@ class Connection:
                 m.load(f)
                 self.daemon.store.save_message(m)
             yield from self.send_response(240, 'article posted, boohyeah')
+            yield from self.daemon.add_article(article_id)
         else:
             yield from self.send_response(440, 'posting not allowed')
 
@@ -397,6 +398,7 @@ class Connection:
                         self.enable_stream()
             except Exception as e:
                 self.log.error(traceback.format_exc())
+                self.close()
                 return
         while self._run: 
             try:
@@ -404,6 +406,7 @@ class Connection:
                 line = line.decode('utf-8')
             except Exception as e:
                 self.log.error(traceback.format_exc())
+                self.close()
                 self._run = False
                 break
 

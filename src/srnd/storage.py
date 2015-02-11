@@ -98,7 +98,6 @@ class FileSystemArticleStore(BaseArticleStore):
             if not self.has_group(group):
                 self.db.connection.execute(sql.newsgroups.insert(),{'name': group,'updated':now})
         msg.save(self.db.connection)
-        self.daemon.add_article(msg.message_id)
 
     def get_all_groups(self):
         for res in self.db.connection.execute(

@@ -327,15 +327,14 @@ class Connection:
     @asyncio.coroutine
     def send_article(self, article_id):
         """
-        send an article
-        return True on success
+        start sending an article
         """
         if self.ib:
             self.log.debug('do not send on inbound connection')
             return
         else:
             self.log.info('send article {}'.format(article_id))
-            _ = yield from self.sendline('POST')
+            _ = yield from self.sendline('CHECK {}'.format(article_id))
             self.post = article_id
 
     def close(self):
@@ -414,14 +413,17 @@ class Connection:
                 self._run = False
                 break
             if self.post:
-                if line.startswith('340 '):
-                    self.log.debug('posting...{}'.format(line))
+                if line.startswith('238 '):
+                    self.log.debug('they do not have {}'.format(line))
+                    _ = yield from self.sendline('TAKETHIS {}'.format(self.post))
                     with self.daemon.store.open_article(self.post, True) as f:
                         while True:
                             line = f.readline()
-                            self.log.debug('read file line {}'.format(line))
+                            self.log.debug('read file line {}'.format(len(line)))
                             if len(line) == 0:
-                                self.send(b'.\r\n')
+                                _ = yield from self.send(b'.\r\n')
+                                line = yield from self.readline()
+                                self.log.debug(line)
                                 self.post = None
                                 break
                             _ = yield from self.send(line)

@@ -5,6 +5,7 @@ import asyncio
 import logging
 import os
 import re
+import traceback
 
 from . import message
 from . import sql
@@ -327,10 +328,14 @@ class Connection:
         send an article
         return True on success
         """
-        self.log.info('send article {}'.format(article_id))
+        if self.ib:
+            self.log.debug('do not send on inbound connection')
+            return
+        else:
+            self.log.info('send article {}'.format(article_id))
         if self.mode == 'stream':
             _ = yield from self.sendline('CHECK {}'.format(article_id))
-            data = yield from self.r.readline()
+            data = self.readline()
             line = data.decode('utf-8')
             if line.startswith('238 '):
                 _ = yield from self.sendline('TAKETHIS {}'.format(article_id))
@@ -338,7 +343,7 @@ class Connection:
                     while True:
                         line = f.readline()
                         if len(line) == 0:
-                            line = yield from self.r.readline()
+                            line = self.readline()
                             line = line.decode('utf-8')
                             return line.startswith('239 ')
                         if line.endswith('\r\n'):
@@ -348,7 +353,7 @@ class Connection:
             return False
         else:
             _ = yield from self.sendline('POST')
-            _ = yield from self.r.readline()
+            _ = self.readline()
             with self.daemon.store.open_article(article_id, True) as f:
                 while True:
                     line = f.readline()
@@ -362,10 +367,11 @@ class Connection:
         if self in self.daemon.feeds:
             self.daemon.feeds.remove(self)
         self.w.close()
-
+        
+    @asyncio.coroutine
     def readline(self):
-        data = yield from self.r.readline()
-        return data
+        self.log.debug('readline')
+        yield from self.r.readline()
 
     @asyncio.coroutine
     def run(self):
@@ -380,45 +386,46 @@ class Connection:
 
         if self.ib: # send initial welcome banner if inbound
             for line in self.welcome:
-                yield from self.sendline(line)
+                _ = yield from self.sendline(line)
         else:
             try:
-                line = self.readline()
+                line = yield from self.readline()
                 if line is None:
                     self.log.error('no data read')
                     self._run = False
                     self.close()
                     return
+                self.log.debug(line)
                 line = line.decode('utf-8')
                 if not line.startswith('200 '):
                     self.log.error('cannot post')
                     self.sendline('QUIT')
-                    _ = self.readline()
+                    _ = yield from self.readline()
                     self.close()
                     return
                 # send caps
-                yield from self.sendline('CAPABILITIES')
+                _ = yield from self.sendline('CAPABILITIES')
 
-                line = self.readline()
+                line = yield from self.readline()
                 caps = list()
                 while len(line) > 0 and line != b'.\r\n':
                     caps.append(line.decode('utf-8')[:-2])
-                    line = self.readline()
+                    line = yield from self.readline()
                     self.log.debug('got line {}'.format(line))
                 self.log.debug('endcaps {}'.format(caps))
                 if 'STREAMING' in caps:
                     _ = yield from self.sendline('MODE STREAM')
-                    resp = self.readline()
+                    resp = yield from self.readline()
                     resp = resp.decode('utf-8')
                     if resp.startswith('203 '):
                         self.log.info('enable streaming')
                         self.enable_stream()
             except Exception as e:
-                self.log.error(e)
+                self.log.error(traceback.format_exc())
                 return
         while self._run: 
             try:
-                line = self.readline()
+                line = yield from self.readline()
                 if line is None:
                     self.log.error('did not read line')
                 else:

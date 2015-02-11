@@ -119,11 +119,12 @@ class Outfeed:
             w.write(req)
             _ = yield from w.drain()
             data = yield from r.readexactly(8)
-            success = data[1] == ord('\x5a')
+            success = chr(data[1]) == '\x5a'
             self.log.debug('got handshake sucess {}'.format(success))
             if success:
                 return r, w
             w.close()
+            yield from asyncio.sleep(1)
             return None
         elif proxy_type == 'None' or proxy_type is None:
             try:

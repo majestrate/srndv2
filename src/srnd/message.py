@@ -36,6 +36,7 @@ class Message:
         self.sender = 'Anonymous'
         self.email = ''
         self.parent = ''
+        self.path = ''
         self.sent = 0
         self.groups = list()
         self.sage = False
@@ -108,15 +109,17 @@ class Message:
         load from file descriptor
         """
         hdr_found = False
-        _parser = FeedParser()
+        #_parser = FeedParser()
         # load headers
         self._line = fd.readline()
         while len(self._line) > 0:
-            _parser.feed(self._line)
+            #_parser.feed(self._line)
             self._lline = self._line.lower()
             if self._check_header('subject'):
                 # parse subject header
                 self.subject = self._splitit()
+            elif self._check_heafer('path'):
+                self.path = self._line[6:]
             elif self._check_header('date'):
                 # parse date header
                 self.sent = self._splitit()
@@ -191,7 +194,7 @@ class Message:
                 self.log.error('failed to validate: {}'.format(e))
 
         # read body
-        _parser.feed(fd.read())
-        self._result = _parser.close()
-        del _parser
-
+        #_parser.feed(fd.read())
+        #self._result = _parser.close()
+        #del _parser
+        

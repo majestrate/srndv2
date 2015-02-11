@@ -27,3 +27,19 @@ def is_valid_article_id(aid):
 def ensure_dir(dirname):
     if not os.path.exists(dirname):
         os.mkdir(dirname)
+
+
+def parse_range(range_str):
+    if range_str.count('-') == 1:
+        parts = range_str.split('-')
+        return range(int(parts[0]), int(parts[1]))
+    return [int(range_str)]
+
+
+def parse_addr(addr):
+    addr = addr.strip()
+    if addr[0] == '[':
+        idx = addr.index(']:') 
+        return addr[:idx+1], int(addr[idx+2:])
+    idx = addr.index(':')
+    return addr[:idx] , int(addr[idx+1:])

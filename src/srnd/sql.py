@@ -7,6 +7,11 @@ from sqlalchemy import *
 
 _metadata = MetaData()
 
+users = Table("users", _metadata,
+              Column("name", String, unique=True),
+              Column("passwd", String),
+              Column("uid", Integer, primary_key=True))
+
 newsgroups = Table("newsgroups", _metadata,
                    Column("updated", Integer),
                    Column("first", Integer),

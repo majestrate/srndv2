@@ -17,7 +17,8 @@ class DaemonTest(unittest.TestCase):
         daemon_conf['bind_host'] = '::1'
         daemon_conf['bind_port'] = '11199'
         daemon_conf['groups'] = self.groups
-        
+        daemon_conf['instance_name'] = 'test.tld'
+
         feed_conf = dict()
         feed_conf['default'] = dict()
 

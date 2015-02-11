@@ -71,8 +71,8 @@ class Connection:
         'VERSION 2',
         'IMPLEMENTATION srndv2 better overchan nntpd v0.1',
         'POST',
-        'IHAVE',
         'READER',
+        'XSECRET',
         'STREAMING'
     )
 
@@ -95,6 +95,7 @@ class Connection:
         self.db = sql.SQL()
         self.db.connect()
         self.group = None
+        self.authorized = False
 
     @asyncio.coroutine
     def sendline(self, line):
@@ -124,6 +125,43 @@ class Connection:
         enable reader mode
         """
         self.state = 'reader'
+
+    @asyncio.coroutine
+    def handle_XOVER(self, args):
+        """
+        todo: implement this
+        """
+        if self.group is None:
+            yield from self.send_response(412, 'no news group selected')
+        else:
+            yield from self.send_response(420, 'not implementing this now')
+    
+    @asyncio.coroutine
+    def handle_POST(self, args):
+        """
+        handle posting via POST command
+        """
+        if self.authorized:
+            yield from self.send_response(340, 'send article to be posted. End with <CR-LF>.<CR-LF>')
+            article_id = self.daemon.generate_id()
+            line = ''
+            with self.daemon.store.open_article(article_id) as f:
+                while True:
+                    line = yield from self.r.readline()
+                    if line == b'.\r\n':
+                        break
+                    if line.startswuth(b'Path:'):
+                        # inject path header
+                        line = b'Path: '+self.daemon.instance_name.encode('ascii') + b'!' + line[6:] 
+                    line = line.replace(b'\r\n', b'\n')
+                    f.write(line)
+            with self.daemon.store.open_article(article_id, True) as f:
+                m = message.Message(article_id)
+                m.load(f)
+                self.daemon.store.save_message(m)
+            yield from self.send_response(240, 'article posted, boohyeah')
+        else:
+            yield from self.send_response(440, 'posting not allowed')
 
     @asyncio.coroutine
     def handle_CAPABILITIES(self, args):
@@ -184,14 +222,15 @@ class Connection:
             
     @asyncio.coroutine
     def handle_LIST(self, args):
-        if self.state == 'reader':
+        if len(args) > 0 and args[0].lower() == 'overview.fmt':
+            yield from self.send_response(503, 'wont do this sorry')
+        elif self.state == 'reader':
             yield from self.send_response(215, 'list of newsgroups ahead')
             for group in self.daemon.store.get_all_groups():
                 _, first, last = self.daemon.store.get_group_info(group)
                 posting = 'y'
                 yield from self.send('{} {} {} {}\r\n'.format(group, last, first, posting))
             yield from self.send(b'.\r\n')
-            
         else:
             yield from self.send_response(500, 'nope')
 
@@ -230,7 +269,9 @@ class Connection:
 
     def handle_XSECRET(self, args):
         if len(args) == 2:
-            pass
+            if self.daemon.store.check_user_login(args[0], args[1]):
+                self.authorized = True
+                yield from self.send_response(290, 'passwor for {} allowed'.format(args[0]))
         else:
             yield from self.send_response(481, 'Invalid login')
 
@@ -248,6 +289,9 @@ class Connection:
             while line != b'.\r\n':
                 line = line.replace(b'\r', b'')
                 if not has:
+                    if line.startswuth(b'Path:'):
+                        # inject path header
+                        line = b'Path: '+self.daemon.instance_name.encode('ascii') + b'!' + line[6:] 
                     f.write(line)
                 try:
                     line = yield from self.r.readline()
@@ -266,37 +310,45 @@ class Connection:
             yield from self.send_response(439, args[0])
         
     @asyncio.coroutine
-    def handle_IHAVE(self, args):
-        """
-        handle IHAVE command
-        """
-        if self.state != 'stream' or self.daemon.has_article(args[0]):
-            yield from self.send_response(435, 'article not wanted do not send it')
-        else:
-            yield from self.send_response(335, 'send article. End with <CR-LF>.<CL-LF>')
-            if util.is_valid_article_id(args[0]):
-                with self.daemon.store.open_article(args[0]) as f:
-                    line = yield from self.r.readline()
-                    while line != b'':
-                        f.write(line)
-                        f.write(b'\r\n')
-                    line = yield from self.r.readline()
-                    if line != b'.\r\n':
-                        self.log.warn('expected end of article but did not get it')
-                with self.daemon.store.open_article(args[0], True) as f:
-                    m = message.Message(args[0])
-                    m.load(f)
-                    self.daemon.store.save_message(m)
-            else:
-               yield from self.send_response(437, 'article rejected, invalid id')
-                    
-
-    @asyncio.coroutine
     def send_response(self, code, message):
         """
         send an error respose
         """
         yield from self.send('{} {}\r\n'.format(code, message))
+
+    def send_article(self, article_id):
+        """
+        send an article
+        return True on success
+        """
+        if self.mode == 'stream':
+            _ = yield from self.sendline('CHECK {}'.format(article_id))
+            data = yield from self.r.readline()
+            line = data.decode('utf-8')
+            if line.startswith('238 '):
+                _ = yield from self.sendline('TAKETHIS {}'.format(article_id))
+                with self.daemon.store.open_article(article_id, True) as f:
+                    while True:
+                        line = f.readline()
+                        if len(line) == 0:
+                            line = yield from self.r.readline()
+                            line = line.decode('utf-8')
+                            return line.startswith('239 ')
+                        if line.endswith('\r\n'):
+                            self.send(line)
+                        elif line.endswith('\n'):
+                            self.send(line.replace('\n', '\r\n'))
+            return False
+        else:
+            self.sendline('POST')
+            with self.daemon.store.open_article(article_id, True) as f:
+                while True:
+                    line = f.readline()
+                    if len(line) == 0:
+                        self.send(b'.\r\n')
+                        return True
+                    self.send(line)
+
 
     @asyncio.coroutine
     def run(self):
@@ -312,7 +364,27 @@ class Connection:
         if self.ib: # send initial welcome banner if inbound
             for line in self.welcome:
                 yield from self.sendline(line)
-
+        else:
+            line = yield from self.r.readline()
+            line = line.decode('utf-8')
+            if not line.startswith('200 '):
+                self.log.error('cannot post')
+                self.sendline('QUIT')
+                yield from self.r.readline()
+                self.w.close()
+                return
+            # send caps
+            self.sendline('CAPACITIES')
+            line = yield from self.r.readline()
+            caps = list()
+            while len(line) > 0 and line != b'.\r\n':
+                caps.append(line.decode('utf-8')[:-2])
+            if 'STREAM' in caps:
+                yield from self.sendline('MODE STREAM')
+                resp =  yield from self.r.readline()
+                resp = resp.decode('utf-8')
+                if resp.startswith('203 '):
+                    self.enable_stream()
         while self._run: 
             try:
                 line = yield from self.r.readline()

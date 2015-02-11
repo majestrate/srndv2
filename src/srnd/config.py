@@ -40,10 +40,16 @@ def load_feed_config(fname='feeds.ini'):
     config = configparser.ConfigParser()
     if not os.path.exists(fname):
         # generate default config
-        config['default'] = dict()
-        config['default']['ano.paste'] = '0'
-        config['default']['overchan.*'] = '1'
-        config['default']['ctl'] = '1'
+        config['feed-some.onion:119'] = dict()
+        config['feed-some.onion:119']['proxy-type'] = 'socks5'
+        config['feed-some.onion:119']['proxy-host'] = '127.0.0.1'
+        config['feed-some.onion:119']['proxy-port'] = '9050'
+        config['some.onion:119'] = dict()
+        config['some.onion:119']['overchan.*'] = '1'
+        config['some.onion:119']['ano.paste'] = '0'
+        config['some.onion:119']['ctl'] = '1'
+        
+
         with open(fname, 'w') as f:
             config.write(f)
     config.read(fname)

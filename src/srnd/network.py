@@ -4,9 +4,16 @@
 from . import config
 from . import nntp
 from . import storage
+from . import util
 import asyncio
 import logging
+import os
+import queue
+import struct
+import time
 
+
+from hashlib import sha1
 
 class NNTPD:
     """
@@ -20,11 +27,16 @@ class NNTPD:
         self.log = logging.getLogger('nntpd')
         self.bindhost = daemon_conf['bind_host']
         self.bindport = daemon_conf['bind_port']
+        self.name = daemon_conf['instance_name']
         # TODO: move to use as parameter
         self.feed_config = feed_config
-        self.default_feed_policy = nntp.FeedPolicy(self.feed_config['default'].keys())
         self.store = storage.FileSystemArticleStore(store_config)
 
+
+    def generate_id(self):
+        now = int(time.time())
+        id = sha1(os.urandom(8)).hexdigest()[:10]
+        return '<{}.{}@{}>'.format(now, id, self.name)
 
     def start(self):
         """
@@ -35,7 +47,23 @@ class NNTPD:
         coro = asyncio.start_server(self.on_ib_connection, self.bindhost, self.bindport, loop=self.loop)
         self.serv = self.loop.run_until_complete(coro)
         print('nntpd serving on {}'.format(self.serv.sockets[0].getsockname()))
-        
+        self.create_outfeeds()
+
+    def create_outfeeds(self):
+        feeds = dict()
+        for key in self.feed_config:
+            if key.startswith('feed-'):
+                cfg = self.feed_config[key]
+                host, port = util.parse_addr(key[5:])
+                key = '{}:{}'.format(host,port)
+                feeds[key] = dict()
+                feeds[key]['settings'] = cfg
+                feeds[key]['config'] = self.feed_config[key]
+        for key in feeds:
+            feed = Outfeed(key, self, feeds[key])
+            asyncio.async(feed.run())
+
+
     def on_ib_connection(self, r, w):
         """
         we got an inbound connection
@@ -51,3 +79,76 @@ class NNTPD:
         self.serv.close()
         self.loop.run_until_complete(self.serv.wait_closed())
         
+
+
+class Outfeed:
+
+    def __init__(self, addr, daemon, conf):
+        self.addr = util.parse_addr(addr)
+        self.daemon = daemon
+        self.settings = conf['settings']
+        self.feed_config = conf['config']
+        self.log = logging.getLogger('outfeed-%s-%s' % self.addr)
+        self._postq = queue.Queue()
+
+
+    def add_article(self, article_id):
+        self.log.debug('add article: {}'.format(article_id))
+        self._postq.put(article_id)
+
+    @asyncio.coroutine
+    def proxy_connect(self, proxy_type):
+        if proxy_type == 'socks5':
+            phost = self.settings['proxy-host']
+            pport = int(self.settings['proxy-port'])
+            r, w = yield from asyncio.open_connection(phost, pport)
+            # socks 5 handshake
+            w.write(b'\x05\x01\x00')
+            yield from w.drain()
+            data = yield from r.readexactly(2)
+            # socks 5 request
+            if data == b'\x05\x00':
+                req = b'\x05\x01\x00\x03' + phost.encode('ascii') + struct.pack('>H', pport)
+                w.write(req)
+                data = yield from r.readexactly(4)
+                success = data == b'\x05\x00\x00\x03'
+                dlen = yield from r.readexactly(1)
+                yield from r.readexactly(dlen + 2)
+                if success:
+                    self.log.info('connected')
+                    return r, w
+                else:
+                    self.log.error('failed to connect to outfeed')
+        elif proxy_type == 'None' or proxy_type is None:
+            r, w = yield from asyncio.open_connection(self.addr[0], self.addr[1])
+            return r, w
+        else:
+            self.log.error('proxy type not supported: {}'.format(proxy_type))
+        return None
+
+    @asyncio.coroutine
+    def connect(self):
+        self.log.info('attempt connection')
+        if 'proxy-type' in self.settings:
+            ptype = self.settings['proxy-type']
+            r, w = yield from self.proxy_connect(ptype)
+            return r, w
+        else:
+            r, w = yield from asyncio.open_connection(self.addr[0], self.addr[1])
+            return r, w    
+
+    def run(self):
+        self._run = True
+        while self._run:
+            pair = yield from self.connect()
+            if pair:
+                r, w = pair
+                self.log.info('connected')
+                self.feed = nntp.Connection(self.daemon, r, w)
+                asyncio.async(self.feed.run())
+                while self._run:
+                    try:
+                        article_id = self._postq.get(timeout=1)
+                        self.send_article(article_id)
+                    except queue.Empty:
+                        pass

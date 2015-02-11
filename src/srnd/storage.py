@@ -21,6 +21,11 @@ class BaseArticleStore:
         """
         return False
 
+    def save_message(self, msg):
+        """
+        save a message
+        """
+
     @contextlib.contextmanager
     def open_article(self, article_id):
         """
@@ -58,6 +63,9 @@ class BaseArticleStore:
         """
         return list()
 
+    def check_user_login(self, user, passwd):
+        return False
+
 class FileSystemArticleStore(BaseArticleStore):
     """
     article store that stores articles on the filesystem
@@ -71,6 +79,17 @@ class FileSystemArticleStore(BaseArticleStore):
         self.db.connect()
         self.log = logging.getLogger('fs-storage')
 
+    def check_user_login(self, user, passwd):
+        """
+        todo: hash passwords D:
+        """
+        res = self.db.connection.execute(
+            sql.select([sql.users.c.passwd]).where(
+                sql.users.c.name == user)).fetchone()
+        if res:
+            return res[0] == passwd
+        return False
+        
     def save_message(self, msg):
         now = int(time.time())
         for group in msg.groups:

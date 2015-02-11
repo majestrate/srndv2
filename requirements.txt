@@ -1,8 +1,5 @@
-#cffi
+cffi
 sqlalchemy
 pynacl
 pysodium
-#pygments
-#Pillow
 psycopg2
-#jinja2

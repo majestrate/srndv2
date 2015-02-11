@@ -17,3 +17,14 @@ def test_article_invalid():
     assert not util.is_valid_article_id('>admin@lel.tld<')
     assert not util.is_valid_article_id(':DDDD-benis')
     assert not util.is_valid_article_id('<@lol.tld>')
+
+
+def test_parse_addr():
+    inet6 = '[::1]:119'
+    inet4 = '127.0.0.1:119'
+    inet6 = util.parse_addr(inet6)
+    inet4 = util.parse_addr(inet4)
+    assert inet6[0] == '[::1]'
+    assert inet6[1] == 119
+    assert inet4[0] == '127.0.0.1'
+    assert inet4[1] == 119

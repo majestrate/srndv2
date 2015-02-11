@@ -116,8 +116,8 @@ class FileSystemArticleStore(BaseArticleStore):
         res = self.db.connection.execute(
             sql.select([sql.func.count(sql.articles.c.post_id)]).where(
                 sql.articles.c.newsgroup == group)).scalar()
-        
-        return res, first, first + res
+        return res, first, first + res -1
+
             
     def __del__(self):
         self.db.close()

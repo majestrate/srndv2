@@ -94,12 +94,14 @@ class Outfeed:
         self.settings = conf['settings']
         self.feed_config = conf['config']
         self.log = logging.getLogger('outfeed-%s-%s' % self.addr)
-        self._postq = queue.Queue()
+        self.feed = None
+        
 
 
     def add_article(self, article_id):
         self.log.debug('add article: {}'.format(article_id))
-        self._postq.put(article_id)
+        if self.feed:
+            self.feed.send_article(article_id)
 
     @asyncio.coroutine
     def proxy_connect(self, proxy_type):
@@ -152,9 +154,4 @@ class Outfeed:
                 self.log.info('connected')
                 self.feed = nntp.Connection(self.daemon, r, w)
                 asyncio.async(self.feed.run())
-                while self._run:
-                    try:
-                        article_id = self._postq.get(timeout=1)
-                        self.send_article(article_id)
-                    except queue.Empty:
-                        pass
+                

@@ -97,6 +97,7 @@ class Connection:
         self.db.connect()
         self.group = None
         self.mode = None
+        self.post = False
         self.authorized = True
 
     @asyncio.coroutine
@@ -353,15 +354,7 @@ class Connection:
             return False
         else:
             _ = yield from self.sendline('POST')
-            _ = self.readline()
-            with self.daemon.store.open_article(article_id, True) as f:
-                while True:
-                    line = f.readline()
-                    if len(line) == 0:
-                        self.send(b'.\r\n')
-                        return True
-                    _ = yield from self.send(line)
-
+            self.post = True
 
     def close(self):
         if self in self.daemon.feeds:
@@ -438,15 +431,29 @@ class Connection:
             if len(line) == 0:
                 self._run = False
                 break
+            if self.post:
+                if line.startswith('340 '):
+                    self.log.debug('posting...{}'.format(line))
+                    with self.daemon.store.open_article(article_id, True) as f:
+                        while True:
+                            line = f.readline()
+                            if len(line) == 0:
+                                self.send(b'.\r\n')
+                                self.post = False
+                                break
+                            _ = yield from self.send(line)
 
-            commands = line.strip('\r\n').split()
-
-            self.log.debug('commands {}'.format(commands))
-
-            if commands:
-                meth = 'handle_{}'.format(commands[0].upper())
-                args = len(commands) > 1 and commands[1:] or list()
-                if hasattr(self, meth):
-                    yield from getattr(self, meth)(args)
                 else:
-                    yield from self.send_response(503, '{} not implemented'.format(commands[0]))
+                    self.log.error(line)
+            else:
+                commands = line.strip('\r\n').split()
+
+                self.log.debug('commands {}'.format(commands))
+
+                if commands:
+                    meth = 'handle_{}'.format(commands[0].upper())
+                    args = len(commands) > 1 and commands[1:] or list()
+                    if hasattr(self, meth):
+                        yield from getattr(self, meth)(args)
+                    else:
+                        yield from self.send_response(503, '{} not implemented'.format(commands[0]))

@@ -123,8 +123,8 @@ class Outfeed:
                 _ = yield from w.drain()
                 self.log,debug('get response')
                 data = yield from r.readexactly(4)
-                self.log,debug('got response')
                 success = data == b'\x05\x00\x00\x03'
+                self.log.debug('got response success is {}'.format(success))
                 dlen = yield from r.readexactly(1)
                 self.log.debug('read host')
                 _ = yield from r.readexactly(dlen[0] + 2)

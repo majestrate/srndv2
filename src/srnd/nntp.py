@@ -101,10 +101,10 @@ class Connection:
         self.authorized = True
 
     @asyncio.coroutine
-    def sendline(self, line):
+    def sendline(self, data):
         if not isinstance(data, bytes):
             data = data.encode('utf-8')
-        yield from self.send(line+b'\r\n')
+        yield from self.send(data + b'\r\n')
  
     @asyncio.coroutine
     def send(self, data):

@@ -278,9 +278,12 @@ class Connection:
         checks if article exists
         """
         aid = args[0]
-        
-        if self.daemon.store.article_banned(aid) or not aid.endswith('POSTED_dropper.SRNd') or not util.is_valid_article_id(aid):
-            yield from self.send_response(437, '{} this article is banned'.format(aid))
+         
+        if self.daemon.store.article_banned(aid) or not util.is_valid_article_id(aid):
+            if aid.endswith('POSTED_dropper.SRNd'):
+                yield from self.send_response(238, '{} article wanted plz gib'.format(aid))
+            else:
+                yield from self.send_response(437, '{} this article is banned'.format(aid))
         elif self.daemon.store.has_article(aid):
             yield from self.send_response(435, '{} we have this article'.format(aid))
         else:

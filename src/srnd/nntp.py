@@ -343,14 +343,14 @@ class Connection:
                             self.send(line.replace('\n', '\r\n'))
             return False
         else:
-            self.sendline('POST')
+            _ = yield from self.sendline('POST')
             with self.daemon.store.open_article(article_id, True) as f:
                 while True:
                     line = f.readline()
                     if len(line) == 0:
                         self.send(b'.\r\n')
                         return True
-                    self.send(line)
+                    _ = yield from self.send(line)
 
 
     @asyncio.coroutine

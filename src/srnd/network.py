@@ -34,6 +34,7 @@ class NNTPD:
         self.feeds = list()
 
     def add_article(self, article_id):
+        self.log.debug('article added {}'.format(article_id))
         for feed in self.feeds:
             feed.add_article(article_id)
         

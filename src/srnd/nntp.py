@@ -154,7 +154,8 @@ class Connection:
             line = ''
             with self.daemon.store.open_article(article_id) as f:
                 while True:
-                    line = yield from self.r.readline()
+                    line = yield from self.readline()
+                    self.log.debug('read line: {}'.format(line))
                     if line == b'.\r\n':
                         break
                     if line.startswith(b'Path:'):

@@ -311,7 +311,7 @@ class Connection:
                 m = message.Message(args[0])
                 m.load(f)
                 self.daemon.store.save_message(m)
-                
+            yield from self.daemon.add_article(args[0])
         self.log.info("recv'd article {}".format(args[0]))
         if self.daemon.store.has_article(args[0]):
             yield from self.send_response(239, args[0])

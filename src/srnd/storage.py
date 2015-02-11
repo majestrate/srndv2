@@ -92,6 +92,7 @@ class FileSystemArticleStore(BaseArticleStore):
         return False
         
     def save_message(self, msg):
+        self.log.info('save message {}'.format(msg.message_id))
         now = int(time.time())
         for group in msg.groups:
             if not self.has_group(group):

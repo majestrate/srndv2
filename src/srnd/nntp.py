@@ -95,6 +95,7 @@ class Connection:
         self.db = sql.SQL()
         self.db.connect()
         self.group = None
+        self.mode = None
         self.authorized = True
 
     @asyncio.coroutine
@@ -322,6 +323,7 @@ class Connection:
         send an article
         return True on success
         """
+        self.log.info('send article {}'.format(article_id))
         if self.mode == 'stream':
             _ = yield from self.sendline('CHECK {}'.format(article_id))
             data = yield from self.r.readline()
@@ -375,16 +377,20 @@ class Connection:
                 self.w.close()
                 return
             # send caps
-            self.sendline('CAPACITIES')
+            yield from self.sendline('CAPABILITIES')
             line = yield from self.r.readline()
             caps = list()
             while len(line) > 0 and line != b'.\r\n':
                 caps.append(line.decode('utf-8')[:-2])
-            if 'STREAM' in caps:
-                yield from self.sendline('MODE STREAM')
+                line = yield from self.r.readline()
+                self.log.debug('got line {}'.format(line))
+            self.log.debug('endcaps {}'.format(caps))
+            if 'STREAMING' in caps:
+                _ = yield from self.sendline('MODE STREAM')
                 resp =  yield from self.r.readline()
                 resp = resp.decode('utf-8')
                 if resp.startswith('203 '):
+                    self.log.info('enable streaming')
                     self.enable_stream()
         while self._run: 
             try:

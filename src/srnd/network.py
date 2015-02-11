@@ -101,7 +101,7 @@ class Outfeed:
     def add_article(self, article_id):
         self.log.debug('add article: {}'.format(article_id))
         if self.feed:
-            _ = yield from self.feed.send_article(article_id)
+            asyncio.async(self.feed.send_article(article_id))
 
     @asyncio.coroutine
     def proxy_connect(self, proxy_type):

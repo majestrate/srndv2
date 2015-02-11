@@ -146,8 +146,9 @@ class Outfeed:
         self.log.info('attempt connection')
         if 'proxy-type' in self.settings:
             ptype = self.settings['proxy-type']
-            r, w = yield from self.proxy_connect(ptype)
-            return r, w
+            pair = yield from self.proxy_connect(ptype)
+            if pair:
+                return pair[0], pair[1]
         else:
             r, w = yield from asyncio.open_connection(self.addr[0], self.addr[1])
             return r, w    

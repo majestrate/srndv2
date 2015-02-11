@@ -371,7 +371,8 @@ class Connection:
     @asyncio.coroutine
     def readline(self):
         self.log.debug('readline')
-        yield from self.r.readline()
+        d = yield from self.r.readline()
+        return d
 
     @asyncio.coroutine
     def run(self):

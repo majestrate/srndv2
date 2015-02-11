@@ -138,8 +138,14 @@ class Outfeed:
                 else:
                     self.log.error('failed to connect to outfeed')
         elif proxy_type == 'None' or proxy_type is None:
-            r ,w = yield from asyncio.open_connection(self.addr[0], self.addr[1])
-            return r, w
+            try:
+                r ,w = yield from asyncio.open_connection(self.addr[0], self.addr[1])
+            except Exception as e:
+                self.log.error('cannot connect: {}'.format(e))
+                yield from asyncio.sleep(1)
+                return None
+            else:
+                return r, w
         else:
             self.log.error('proxy type not supported: {}'.format(proxy_type))
 
@@ -166,5 +172,7 @@ class Outfeed:
                     self.log.info('connected')
                     self.feed = nntp.Connection(self.daemon, r, w)
                     asyncio.async(self.feed.run())
+                else:
+                    self.log.debug('did not connect')
             else:
                 _ = yield from asyncio.sleep(1)

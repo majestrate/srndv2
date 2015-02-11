@@ -109,34 +109,22 @@ class Outfeed:
 
     @asyncio.coroutine
     def proxy_connect(self, proxy_type):
-        if proxy_type == 'socks5':
+        if proxy_type == 'socks4a':
             phost = self.settings['proxy-host']
             pport = int(self.settings['proxy-port'])
             r, w = yield from asyncio.open_connection(phost, pport)
-            # socks 5 handshake
-            w.write(b'\x05\x01\x00')
+            # socks 4a handshake
+            req = b'\x04\0x01' + struct.pack('>H', self.addr[1]) + b'\x00\x00\x00\x01srndv2\x00' + self.addr[0].encode('ascii') +b'\x00'
+            self.log.debug('connect out...')
+            w.write(req)
             _ = yield from w.drain()
-            data = yield from r.readexactly(2)
-            self.log.debug('got handshake')
-            # socks 5 request
-            if data == b'\x05\x00':
-                self.log.debug('handshake okay')
-                req = b'\x05\x01\x00\x03' + self.addr[0].encode('ascii') + struct.pack('>H', self.addr[1])
-                w.write(req)
-                _ = yield from w.drain()
-                self.log.debug('get response')
-                data = yield from r.readexactly(2)
-                success = data == b'\x05\x00'
-                self.log.debug('got response success is {}'.format(success))
-                _ = yield from r.readexactly(2)
-                dlen = yield from r.readexactly(1)
-                self.log.debug('read host')
-                _ = yield from r.readexactly(dlen[0] + 2)
-                if success:
-                    self.log.info('connected')
-                    return r, w
-                else:
-                    self.log.error('failed to connect to outfeed')
+            data = yield from r.readexactly(8)
+            success = data[1] == ord('\x5a'):
+            self.log.debug('got handshake sucess {}'.format(success))
+            if success:
+                return r, w
+            w.close()
+            return None
         elif proxy_type == 'None' or proxy_type is None:
             try:
                 r ,w = yield from asyncio.open_connection(self.addr[0], self.addr[1])

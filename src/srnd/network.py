@@ -124,6 +124,7 @@ class Outfeed:
                 data = yield from r.readexactly(4)
                 success = data == b'\x05\x00\x00\x03'
                 dlen = yield from r.readexactly(1)
+                self.log.debug('read host')
                 _ = yield from r.readexactly(dlen[0] + 2)
                 if success:
                     self.log.info('connected')

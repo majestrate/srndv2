@@ -132,12 +132,12 @@ class Outfeed:
                 _ = yield from r.readexactly(dlen[0] + 2)
                 if success:
                     self.log.info('connected')
-                    yield r, w
+                    return r, w
                 else:
                     self.log.error('failed to connect to outfeed')
         elif proxy_type == 'None' or proxy_type is None:
             r ,w = yield from asyncio.open_connection(self.addr[0], self.addr[1])
-            yield r, w
+            return r, w
         else:
             self.log.error('proxy type not supported: {}'.format(proxy_type))
 

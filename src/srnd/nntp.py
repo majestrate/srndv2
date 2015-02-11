@@ -112,7 +112,11 @@ class Connection:
         if not isinstance(data, bytes):
             data = data.encode('utf-8')
         self.w.write(data)
-        yield from self.w.drain()
+        try:
+            _ = yield from self.w.drain()
+        except Exception as e:
+            self.log.error(e)
+            self.close()
         data = None
 
     def enable_stream(self):
@@ -238,7 +242,7 @@ class Connection:
     @asyncio.coroutine
     def handle_QUIT(self, args):
         yield from self.send_response(205, 'kthnxbai')
-        self.w.close()
+        self.close()
         
     @asyncio.coroutine
     def handle_MODE(self, args):
@@ -353,6 +357,11 @@ class Connection:
                     _ = yield from self.send(line)
 
 
+    def close(self):
+        if self in self.daemon.feeds:
+            self.daemon.feeds.remove(self)
+        self.w.close()
+
     @asyncio.coroutine
     def run(self):
         """
@@ -374,7 +383,7 @@ class Connection:
                 self.log.error('cannot post')
                 self.sendline('QUIT')
                 yield from self.r.readline()
-                self.w.close()
+                self.close()
                 return
             # send caps
             yield from self.sendline('CAPABILITIES')

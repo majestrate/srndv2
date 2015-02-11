@@ -334,27 +334,8 @@ class Connection:
             return
         else:
             self.log.info('send article {}'.format(article_id))
-        if self.mode == 'stream':
-            _ = yield from self.sendline('CHECK {}'.format(article_id))
-            data = self.readline()
-            line = data.decode('utf-8')
-            if line.startswith('238 '):
-                _ = yield from self.sendline('TAKETHIS {}'.format(article_id))
-                with self.daemon.store.open_article(article_id, True) as f:
-                    while True:
-                        line = f.readline()
-                        if len(line) == 0:
-                            line = self.readline()
-                            line = line.decode('utf-8')
-                            return line.startswith('239 ')
-                        if line.endswith('\r\n'):
-                            self.send(line)
-                        elif line.endswith('\n'):
-                            self.send(line.replace('\n', '\r\n'))
-            return False
-        else:
             _ = yield from self.sendline('POST')
-            self.post = True
+            self.post = article_id
 
     def close(self):
         if self in self.daemon.feeds:
@@ -434,12 +415,12 @@ class Connection:
             if self.post:
                 if line.startswith('340 '):
                     self.log.debug('posting...{}'.format(line))
-                    with self.daemon.store.open_article(article_id, True) as f:
+                    with self.daemon.store.open_article(self.post, True) as f:
                         while True:
                             line = f.readline()
                             if len(line) == 0:
                                 self.send(b'.\r\n')
-                                self.post = False
+                                self.post = None
                                 break
                             _ = yield from self.send(line)
 

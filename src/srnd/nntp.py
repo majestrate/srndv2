@@ -408,13 +408,13 @@ class Connection:
                 self.log.error(traceback.format_exc())
                 self.close()
                 self._run = False
-                break
+                return
 
             self.log.debug('got line: {}'.format(line))
 
             if len(line) == 0:
                 self._run = False
-                break
+                return
             if self.post:
                 if line.startswith('238 '):
                     self.log.debug('they do not have {}'.format(line))
@@ -430,7 +430,8 @@ class Connection:
                                 self.post = None
                                 break
                             _ = yield from self.send(line)
-
+                    line = yield from self.readline()
+                    self.log.debug(line)
                 else:
                     self.log.error(line)
             else:

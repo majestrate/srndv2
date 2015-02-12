@@ -461,7 +461,7 @@ class Connection:
                 self._run = False
                 return
             if self.post:
-                if line.startswith(b'238 '):
+                if line.startswith('238 '):
                     self.log.debug('they do not have {}'.format(line))
                     yield from self.sendline('TAKETHIS {}'.format(self.post))
                     with self.daemon.store.open_article(self.post, True) as f:

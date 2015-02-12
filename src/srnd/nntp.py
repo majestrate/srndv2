@@ -101,7 +101,6 @@ class Connection:
         self.group = None
         self.mode = None
         self.post = False
-        self.sending = False
         self.authorized = True
 
     @asyncio.coroutine
@@ -361,7 +360,6 @@ class Connection:
             self.log.debug('do not send on inbound connection')
             return
         else:
-            self.sending = True
             self.log.info('send article {}'.format(article_id))
             _ = yield from self.sendline('CHECK {}'.format(article_id))
             self.post = article_id

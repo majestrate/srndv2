@@ -91,6 +91,7 @@ class Connection:
         self.log = logging.getLogger('nntp-connection-{}'.format(name))
         self.daemon = daemon
         self.r, self.w = r, w
+        self.timeout = 30
         self.ib = incoming is True
         self.state = 'initial'
         self._run = False
@@ -106,7 +107,7 @@ class Connection:
     def sendline(self, data):
         if not isinstance(data, bytes):
             data = data.encode('utf-8')
-        yield from self.send(data + b'\r\n')
+        yield from asyncio.wait_for(self.send(data + b'\r\n'), self.timeout)
  
     @asyncio.coroutine
     def send(self, data):
@@ -349,7 +350,9 @@ class Connection:
             self.post = article_id
 
     def close(self):
+        self.log.info('closing connection')
         if self in self.daemon.feeds:
+            self.log.info('remove from feeds')
             self.daemon.feeds.remove(self)
         self.w.close()
         

@@ -356,7 +356,11 @@ class Connection:
     @asyncio.coroutine
     def readline(self):
         self.log.debug('readline')
-        d = yield from self.r.readline()
+        try:
+            d = yield from self.r.readline()
+        except Exception as e:
+            self.log.error(traceback.format_exc())
+            self.close()
         return d
 
     @asyncio.coroutine

@@ -475,7 +475,7 @@ class Connection:
                                 self.log.debug(line)
                                 self.post = None
                                 break
-                            self.send(line)
+                            yield from self.send(line)
                     line = yield from self.readline()
                     self.log.debug(line)
             else:

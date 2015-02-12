@@ -155,19 +155,14 @@ class Connection:
             line = ''
             got_ref = False
             with self.daemon.store.open_article(article_id) as f:
+                f.write(b'References: \r\n')
+                f.write('Message-ID: {}\n'.format(article_id).encode('ascii'))
+                f.write('Path: {}\n'.format(self.daemon.name).encode('ascii'))
                 while True:
                     line = yield from self.readline()
                     self.log.debug('read line: {}'.format(line))
-                    if line == b'\r\n':
-                        if not got_ref:
-                            f.write(b'References: \r\n')
-                        f.write('Message-ID: {}\n'.format(article_id).encode('ascii'))
-                        f.write('Path: {}\n'.format(self.daemon.name).encode('ascii'))
-                    elif line == b'.\r\n':
+                    if line == b'.\r\n':
                         break
-                    if line.startswith(b'Path:'):
-                        # inject path header
-                        line = b'Path: '+self.daemon.ame.encode('ascii') + b'!' + line[6:] 
                     line = line.replace(b'\r\n', b'\n')
                     f.write(line)
                     if line.startswith(b'References:'):

@@ -418,7 +418,13 @@ class Connection:
         while self._run: 
             try:
                 line = yield from self.readline()
-                line = line.decode('utf-8')
+                if line:
+                    line = line.decode('utf-8')
+                else:
+                    self.log.error('no line read')
+                    self._run = False
+                    self.close()
+                    return
             except Exception as e:
                 self.log.error(traceback.format_exc())
                 self.close()

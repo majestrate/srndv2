@@ -87,7 +87,7 @@ class Connection:
         no data is sent or received before this
         """
         if incoming:
-            name = 'inbound' + name
+            name = 'inbound-' + name
         self.log = logging.getLogger('nntp-connection-{}'.format(name))
         self.daemon = daemon
         self.r, self.w = r, w

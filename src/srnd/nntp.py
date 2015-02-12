@@ -461,6 +461,7 @@ class Connection:
                 self._run = False
                 return
             if self.post:
+                line = yield from self.readline()
                 if line.startswith('238 '):
                     self.log.debug('they do not have {}'.format(line))
                     yield from self.sendline('TAKETHIS {}'.format(self.post))
@@ -476,7 +477,6 @@ class Connection:
                                 self.post = None
                                 break
                             yield from self.send(line)
-                    line = yield from self.readline()
                     self.log.debug(line)
             else:
                 commands = line.strip('\r\n').split()

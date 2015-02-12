@@ -41,7 +41,7 @@ def load_feed_config(fname='feeds.ini'):
     if not os.path.exists(fname):
         # generate default config
         config['feed-some.onion:119'] = dict()
-        config['feed-some.onion:119']['proxy-type'] = 'socks5'
+        config['feed-some.onion:119']['proxy-type'] = 'socks4a'
         config['feed-some.onion:119']['proxy-host'] = '127.0.0.1'
         config['feed-some.onion:119']['proxy-port'] = '9050'
         config['some.onion:119'] = dict()

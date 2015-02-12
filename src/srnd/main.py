@@ -18,7 +18,7 @@ def main():
         lvl = logging.DEBUG
     else:
         lvl = logging.INFO
-    logging.basicConfig(level=lvl, format=' %(levelname)s %(asctime)s %(filename)s:%(lineno)d %(name)s %(message)s')
+    logging.basicConfig(level=lvl, format=' %(levelname)s\t%(asctime)s %(filename)s:%(lineno)d %(name)s %(message)s')
 
     srnd_conf = conf['srnd']
     store_conf = conf['store']

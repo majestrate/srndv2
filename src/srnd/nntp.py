@@ -120,7 +120,7 @@ class Connection:
         self.w.write(data)
         try:
             _ = yield from self.w.drain()
-        except asyncio.ConnectionResetError as e:
+        except ConnectionResetError as e:
             self.log.info('connection reset while sending')
             self.close()
         except Exception as e:
@@ -364,7 +364,7 @@ class Connection:
         self.log.debug('readline')
         try:
             d = yield from self.r.readline()
-        except asyncio.ConnectionResetError as e:
+        except ConnectionResetError as e:
             self.log.info('connection reset while reading')
             self.close()
         except Exception as e:

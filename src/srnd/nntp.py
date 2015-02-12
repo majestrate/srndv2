@@ -475,8 +475,6 @@ class Connection:
                             self.w.write(line.encode('utf-8'))
                     line = yield from self.readline()
                     self.log.debug(line)
-                else:
-                    self.log.error(line)
             else:
                 commands = line.strip('\r\n').split()
 

@@ -51,6 +51,11 @@ class BaseArticleStore:
         """
         return False
 
+    def delete_article(self, article_uid):
+        """
+        delete an article from storage
+        """
+
     def get_group_info(self, newsgroup):
         """
         return tuple number, min_posts, max_posts
@@ -124,8 +129,11 @@ class FileSystemArticleStore(BaseArticleStore):
     def has_article(self, article_id):
         assert util.is_valid_article_id(article_id)
         return os.path.exists(os.path.join(self.base_dir, article_id))
-            
-
+        
+    def delete_article(self, article_id):
+        if self.has_article(article_id):
+            os.unlink(os.path.join(self.base_dir, article_id))
+        
     def get_group_info(self, group):
         self.log.info('get group info for {}'.format(group))
         # TODO optimize

@@ -86,9 +86,9 @@ class Message:
         """
         if f is None:
             with open(self.fname) as f:
-                self._load(f)
+                return self._load(f)
         else:
-            self._load(f)
+            return self._load(f)
 
     def _check_header(self, hdr):
         """
@@ -160,6 +160,7 @@ class Message:
             self._line = fd.readline()
         if not hdr_found:
             self.log.error('{} malformed article'.format(self.message_id))
+            return False
         if self.sig is not None and self.pubkey != '':
             self.log.info('got signature with length {} and content {}'.format(len(self.sig), self.sig))
             self.log.info('got public key with length {} and content {}'.format(len(self.pubkey), self.pubkey))
@@ -192,7 +193,7 @@ class Message:
                 self.log.info('valid signature :3')
             except Exception as e:
                 self.log.error('failed to validate: {}'.format(e))
-
+        return True
         # read body
         #_parser.feed(fd.read())
         #self._result = _parser.close()

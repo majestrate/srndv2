@@ -173,12 +173,18 @@ class Connection:
                     f.write(line)
                     if line.startswith(b'References:'):
                         got_ref = True
+            res = False
             with self.daemon.store.open_article(article_id, True) as f:
                 m = message.Message(article_id)
-                m.load(f)
+                res = m.load(f)
+            if res:
                 self.daemon.store.save_message(m)
-            yield from self.send_response(240, 'article posted, boohyeah')
-            yield from self.daemon.add_article(article_id)
+                yield from self.send_response(240, 'article posted, boohyeah')
+                yield from self.daemon.add_article(article_id)
+            else:                    
+                self.log.error('invalid post')
+                yield from self.send_response(441, 'posting failed')
+
         else:
             yield from self.send_response(440, 'posting not allowed')
 
@@ -320,16 +326,22 @@ class Connection:
                     line = yield from self.r.readline()
                 except ValueError as e:
                     self.log.error('bad line for article {}: {}'.format(args[0], e))
-        if not has:            
+        if not has:
+            m = None
+            res = False
             with self.daemon.store.open_article(args[0], True) as f:
                 m = message.Message(args[0])
-                m.load(f)
+                res = m.load(f)
+            if res:
                 self.daemon.store.save_message(m)
-            yield from self.daemon.add_article(args[0])
-        self.log.info("recv'd article {}".format(args[0]))
+                yield from self.daemon.add_article(args[0])
+            else:
+                self.daemon.store.delete_article(args[0])
         if self.daemon.store.has_article(args[0]):
+            self.log.info("recv'd article {}".format(args[0]))
             yield from self.send_response(239, args[0])
         else:
+            self.log.warning('failed transfer for {}'.format(args[0]))
             yield from self.send_response(439, args[0])
         
     @asyncio.coroutine

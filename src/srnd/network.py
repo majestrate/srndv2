@@ -94,9 +94,10 @@ class Outfeed:
     def __init__(self, addr, daemon, conf):
         self.addr = util.parse_addr(addr)
         self.daemon = daemon
+        self.name = '%s-%s' % self.addr
         self.settings = conf['settings']
         self.feed_config = conf['config']
-        self.log = logging.getLogger('outfeed-%s-%s' % self.addr)
+        self.log = logging.getLogger('outfeed-{}'.format(self.name))
         self.feed = None
         
 
@@ -159,7 +160,7 @@ class Outfeed:
                 if pair:
                     r, w = pair
                     self.log.info('connected')
-                    self.feed = nntp.Connection(self.daemon, r, w)
+                    self.feed = nntp.Connection(self.daemon, r, w, name=self.name)
                     asyncio.async(self.feed.run())
                 else:
                     self.log.debug('did not connect')

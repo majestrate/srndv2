@@ -81,12 +81,12 @@ class Connection:
         '200 ayyyy lmao overchan nntpd, post it faget',
     )
 
-    def __init__(self, daemon, r, w, incoming=None):
+    def __init__(self, daemon, r, w, incoming=None, name='anon'):
         """
         pass in a reader and writer that is connected to an endpoint
         no data is sent or received before this
         """
-        self.log = logging.getLogger('nntp-connection')
+        self.log = logging.getLogger('nntp-connection-{}'.format(name))
         self.daemon = daemon
         self.r, self.w = r, w
         self.ib = incoming is True

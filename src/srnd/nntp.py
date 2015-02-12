@@ -361,7 +361,8 @@ class Connection:
         except Exception as e:
             self.log.error(traceback.format_exc())
             self.close()
-        return d
+        else:
+            return d
 
     @asyncio.coroutine
     def run(self):

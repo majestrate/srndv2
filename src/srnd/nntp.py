@@ -378,6 +378,7 @@ class Connection:
         self.log.debug('readline')
         try:
             d = yield from self.r.readline()
+            self.log.debug(d)
         except ConnectionResetError as e:
             self.log.info('connection reset while reading')
             self.close()

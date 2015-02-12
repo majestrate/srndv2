@@ -101,6 +101,7 @@ class Connection:
         self.group = None
         self.mode = None
         self.post = False
+        self.sending = False
         self.authorized = True
 
     @asyncio.coroutine
@@ -314,7 +315,7 @@ class Connection:
         """
         has = self.daemon.store.has_article(args[0])
         with self.daemon.store.open_article(args[0]) as f:
-            line = yield from self.r.readline()
+            line = yield from self.readline()
             while line != b'.\r\n':
                 line = line.replace(b'\r', b'')
                 if not has:
@@ -323,7 +324,7 @@ class Connection:
                         line = b'Path: '+self.daemon.instance_name.encode('ascii') + b'!' + line[6:] 
                     f.write(line)
                 try:
-                    line = yield from self.r.readline()
+                    line = yield from self.readline()
                 except ValueError as e:
                     self.log.error('bad line for article {}: {}'.format(args[0], e))
         if not has:
@@ -360,6 +361,7 @@ class Connection:
             self.log.debug('do not send on inbound connection')
             return
         else:
+            self.sending = True
             self.log.info('send article {}'.format(article_id))
             _ = yield from self.sendline('CHECK {}'.format(article_id))
             self.post = article_id
@@ -460,7 +462,7 @@ class Connection:
             if self.post:
                 if line.startswith('238 '):
                     self.log.debug('they do not have {}'.format(line))
-                    self.w.write('TAKETHIS {}\r\n'.format(self.post).encode('ascii'))
+                    yield from self.sendline('TAKETHIS {}'.format(self.post))
                     with self.daemon.store.open_article(self.post, True) as f:
                         while True:
                             line = f.readline()
@@ -472,7 +474,7 @@ class Connection:
                                 self.log.debug(line)
                                 self.post = None
                                 break
-                            self.w.write(line.encode('utf-8'))
+                            self.send(line)
                     line = yield from self.readline()
                     self.log.debug(line)
             else:

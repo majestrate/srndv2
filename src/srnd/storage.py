@@ -139,7 +139,10 @@ class FileSystemArticleStore(BaseArticleStore):
         count = self.db.connection.execute(
             sql.select([sql.newsgroups.c.article_count]).where(
                 sql.newsgroups.c.name == group)).fetchone()[0]
-        return count, 0, count
+        if count > 0:
+            return count, 1, count
+        else:
+            return 0, 0, 0
             
     def __del__(self):
         self.db.close()

@@ -86,6 +86,8 @@ class Connection:
         pass in a reader and writer that is connected to an endpoint
         no data is sent or received before this
         """
+        if incoming:
+            name = 'inbound' + name
         self.log = logging.getLogger('nntp-connection-{}'.format(name))
         self.daemon = daemon
         self.r, self.w = r, w

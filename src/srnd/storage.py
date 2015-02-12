@@ -98,10 +98,9 @@ class FileSystemArticleStore(BaseArticleStore):
         
     def save_message(self, msg):
         self.log.info('save message {}'.format(msg.message_id))
-        now = int(time.time())
         for group in msg.groups:
             if not self.has_group(group):
-                self.db.connection.execute(sql.newsgroups.insert(),{'name': group,'updated':now})
+                self.db.connection.execute(sql.newsgroups.insert(),{'name': group})
         msg.save(self.db.connection)
 
     def get_all_groups(self):
@@ -137,16 +136,10 @@ class FileSystemArticleStore(BaseArticleStore):
     def get_group_info(self, group):
         self.log.info('get group info for {}'.format(group))
         # TODO optimize
-        res = self.db.connection.execute(
-            sql.select([sql.articles.c.post_id]).where(
-                sql.articles.c.newsgroup == group).order_by(sql.asc(sql.articles.c.posted_at)).limit(1)).fetchone()
-        first = res[0]
-
-        res = self.db.connection.execute(
-            sql.select([sql.func.count(sql.articles.c.post_id)]).where(
-                sql.articles.c.newsgroup == group)).scalar()
-        return res, first, first + res -1
-
+        count = self.db.connection.execute(
+            sql.select([sql.newsgroups.c.article_count]).where(
+                sql.newsgroups.c.name == group)).fetchone()[0]
+        return count, 0, count
             
     def __del__(self):
         self.db.close()

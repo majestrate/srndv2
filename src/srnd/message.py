@@ -76,9 +76,29 @@ class Message:
         """
         save to database
         """
-        con.execute(
-            sql.articles.insert(),
-            self.dicts())
+        if self.message_id:
+            con.execute(
+                sql.articles.insert(),
+                self.dicts())
+            vals = list()
+            for group in self.groups:
+                count = con.execute(
+                    sql.select([sql.newsgroups.c.article_count]).where(
+                        sql.newsgroups.c.name == group)
+                ).fetchone()[0]
+                vals.append({
+                    'post_id': count + 1, 
+                    'newsgroup' : group, 
+                    'article_id': self.message_id})
+                con.execute(sql.newsgroups.update().values(
+                    updated = datetime.utcnow(),
+                    article_count = count + 1).where(
+                        sql.newsgroups.c.name == group)
+                        )
+            con.execute(
+                sql.article_posts.insert(), vals)
+        else:
+            raise Exception("article invalid, no article_id")
 
     def load(self, f=None):
         """

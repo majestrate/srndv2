@@ -201,8 +201,8 @@ class Connection:
     @asyncio.coroutine
     def handle_HEAD(self, args):
         res = self.db.connection.execute(
-            sql.select([sql.articles.c.message_id]).where(
-                sql.articles.c.post_id == args[0] and sql.articles.c.newsgroup == self.group)).fetchone()
+            sql.select([sql.article_posts.c.article_id]).where(
+                sql.article_posts.c.post_id == args[0] and sql.article_posts.c.newsgroup == self.group)).fetchone()
         if res:
             article_id = res[0]
             yield from self.send_response(221, '{} {} headers get, text follows'.format(args[0], article_id))
@@ -220,8 +220,8 @@ class Connection:
     @asyncio.coroutine
     def handle_ARTICLE(self, args):
         res = self.db.connection.execute(
-            sql.select([sql.articles.c.message_id]).where(
-                sql.articles.c.post_id == args[0] and sql.articles.c.newsgroup == self.group)).fetchone()
+            sql.select([sql.article_posts.c.article_id]).where(
+                sql.article_posts.c.post_id == args[0] and sql.article_posts.c.newsgroup == self.group)).fetchone()
         if res:
             article_id = res[0]
             yield from self.send_response(220, '{} {} atricle get, text follows'.format(args[0], article_id))

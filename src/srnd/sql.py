@@ -13,14 +13,17 @@ users = Table("users", _metadata,
               Column("uid", Integer, primary_key=True))
 
 newsgroups = Table("newsgroups", _metadata,
-                   Column("updated", Integer),
-                   Column("first", Integer),
-                   Column("last", Integer),
+                   Column("updated", DateTime, default=func.now()),
+                   Column("article_count", Integer, default=0),
                    Column("name", Text, unique=True, primary_key=True))
+
+article_posts = Table("article_posts", _metadata,
+                      Column("post_id", Integer),
+                      Column("newsgroup", String),
+                      Column("article_id", String))
 
 articles = Table("articles", _metadata,
                  Column("newsgroup", Text),
-                 Column("post_id", Integer, autoincrement=1, primary_key=True),
                  Column("message_id", Text, primary_key=True),
                  Column("message", Text),
                  Column("posted_at", Integer),

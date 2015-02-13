@@ -333,8 +333,6 @@ class Connection:
                     if line.startswith(b'Path:'):
                         # inject path header
                         line = b'Path: '+self.daemon.instance_name.encode('ascii') + b'!' + line[6:]
-                    elif line.startswith(b'Newsgroups:'):
-                        newsgroup = line.decode('utf-8').replace('\r\n','').split(' ')[1].split(',')
                     f.write(line)
                 try:
                     line = yield from self.readline()
@@ -348,7 +346,7 @@ class Connection:
                 parsed = m.load(f)
             if parsed:
                 self.daemon.store.save_message(m)
-                self.daemon.got_article(args[0], newsgroups)
+                self.daemon.got_article(args[0], m.groups)
             else: # delete if failed to parse
                 self.daemon.store.delete_article(args[0])
         if self.daemon.store.has_article(args[0]):

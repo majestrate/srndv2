@@ -69,7 +69,7 @@ class FeedPolicy:
         
     def allow_newsgroup(self, newsgroup):
         for rule in self.rules:
-            if rule.match(newsgroup):
+            if rule.allows_newsgroup(newsgroup):
                 return True
         return False
 

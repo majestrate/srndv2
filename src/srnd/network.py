@@ -139,7 +139,7 @@ class Outfeed:
         """
         while len(self.sendq) > 0:
             article_id = self.sendq.pop(0)
-            yield from self.feed.send_article(article_id))
+            yield from self.feed.send_article(article_id)
 
     @asyncio.coroutine
     def proxy_connect(self, proxy_type):

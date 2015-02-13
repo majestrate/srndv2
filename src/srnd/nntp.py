@@ -194,14 +194,14 @@ class Connection:
                     f.write(line)
                     if line.startswith(b'References:'):
                         got_ref = True
-            res = False
+            parsed = False
             with self.daemon.store.open_article(article_id, True) as f:
                 m = message.Message(article_id)
-                res = m.load(f)
-            if res:
+                parsed = m.load(f)
+            if parsed:
                 self.daemon.store.save_message(m)
                 yield from self.send_response(240, 'article posted, boohyeah')
-                self.daemon.got_article(article_id)
+                self.daemon.got_article(article_id, m.groups)
             else:                    
                 self.log.error('invalid post')
                 yield from self.send_response(441, 'posting failed')

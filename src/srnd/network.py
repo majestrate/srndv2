@@ -33,6 +33,7 @@ class NNTPD:
         self.feed_config = feed_config
         self.store = storage.FileSystemArticleStore(self, store_config)
         self.feeds = list()
+        self.default_feed_polciy = nntp.FeedPolicy(['overchan.*','ctl'])
 
     def got_article(self, article_id, groups):
         """

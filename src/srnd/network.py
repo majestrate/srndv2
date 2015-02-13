@@ -169,7 +169,7 @@ class Outfeed:
                 if pair:
                     r, w = pair
                     self.log.info('connected')
-                    self.feed = nntp.Connection(self.daemon, r, w, name=self.name)
+                    self.feed = nntp.Connection(self.daemon, self.policy, r, w, name=self.name)
                     asyncio.async(self.feed.run())
                 else:
                     self.log.debug('did not connect')

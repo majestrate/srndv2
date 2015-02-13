@@ -9,81 +9,35 @@ import time
 from . import util
 from . import sql
 
-class BaseArticleStore:
-    """
-    base class for article storage
-    stores news articles
-    """
-
-    def has_article(self, article_id):
-        """
-        return true if we have an article
-        """
-        return False
-
-    def save_message(self, msg):
-        """
-        save a message
-        """
-
-    @contextlib.contextmanager
-    def open_article(self, article_id):
-        """
-        open an article so someone can do stuff
-        """
-        yield
-
-    def article_banned(self, article_id):
-        """
-        return true if this article is banned
-        """
-        return False
-
-    def has_group(self, newsgroup):
-        """
-        return true if we carry this newsgroup
-        """
-        return False
-        
-    def group_banned(self, newsgroup):
-        """
-        return true if this news group is locally banned
-        """
-        return False
-
-    def delete_article(self, article_uid):
-        """
-        delete an article from storage
-        """
-
-    def get_group_info(self, newsgroup):
-        """
-        return tuple number, min_posts, max_posts
-        """
-        return 0, 0, 0
-        
-    def get_all_groups(self):
-        """
-        return a list of tuples group, last_post, first_post, posting(bool)
-        """
-        return list()
-
-    def check_user_login(self, user, passwd):
-        return False
-
-class FileSystemArticleStore(BaseArticleStore):
+class FileSystemArticleStore:
     """
     article store that stores articles on the filesystem
     """
 
     def __init__(self, daemon, conf):
-        super().__init__()
         self.daemon = daemon
         self.base_dir = conf['base_dir']
         util.ensure_dir(self.base_dir)
         self.db = sql.SQL()
         self.db.connect()
         self.log = logging.getLogger('fs-storage')
+
+    def yield_all_articles(self):
+        """
+        yield every article we have
+        """
+        for f in os.listdir(self.base_dir):
+            groups = list()
+            for group in self.get_groups_for_article(f):
+                groups.append(group)
+            yield tuple([f, groups])
+
+    def get_groups_for_article(self, article_id):
+        query = self.db.connection.execute(
+            sql.select([sql.article_posts.c.newsgroup]).where(
+                sql.article_posts.c.article_id == article_id))
+        for res in query.fetchall():
+            yield res[0]
 
     def check_user_login(self, user, passwd):
         """

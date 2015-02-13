@@ -28,6 +28,7 @@ class NNTPD:
         self.bindhost = daemon_conf['bind_host']
         self.bindport = daemon_conf['bind_port']
         self.name = daemon_conf['instance_name']
+        self.sync_on_start = daemon_conf['sync_on_start'] == '1'
         self.instance_name = self.name
         # TODO: move to use as parameter
         self.feed_config = feed_config
@@ -47,7 +48,7 @@ class NNTPD:
                         if feed.article_queued(article_id):
                             self.log.debug('article queued already')
                         else:
-                            feed.queue_send_article(article_id)
+                            feed.queue_article(article_id)
         else:
             self.log.warning('no newsgroups for {}'.format(article_id))
         
@@ -66,6 +67,10 @@ class NNTPD:
         self.serv = self.loop.run_until_complete(coro)
         print('nntpd serving on {}'.format(self.serv.sockets[0].getsockname()))
         self.create_outfeeds()
+        if self.sync_on_start:
+            for article_id, groups in self.store.yield_all_articles():
+                self.got_article(article_id, groups)
+            
 
     def create_outfeeds(self):
         feeds = dict()
@@ -109,16 +114,32 @@ class Outfeed:
         self.policy = nntp.FeedPolicy.from_conf(conf['config'])
         self.log = logging.getLogger('outfeed-{}'.format(self.name))
         self.feed = None
+        self.sendq = list()
     
     def article_queued(self, article_id):
-        return self.feed.article_queued(article_id)
+        """
+        return true if we already queued this article for sending
+        """
+        return article_id in self.sendq
 
+    def queue_article(self, article_id):
+        """
+        queue article for sending
+        """
+        if self.article_queued(article_id):
+            self.log.debug('already queued {}'.format(article_id))
+        else:
+            self.sendq.append(article_id)
+        
 
-    @asyncio.coroutine
-    def add_article(self, article_id):
-        self.log.debug('add article: {}'.format(article_id))
-        if self.feed:
-            yield from self.feed.send_article(article_id)
+    def send_queued_articles(self):
+        """
+        send all queued articles
+        """
+        loop = asyncio.get_event_loop()
+        while len(self.sendq) > 0:
+            article_id = self.sendq.pop(0)
+            loop.run_until_complete(self.feed.send_article(article_id))
 
     @asyncio.coroutine
     def proxy_connect(self, proxy_type):

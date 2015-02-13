@@ -52,25 +52,21 @@ class Message:
         self._result = None
 
 
-    def dicts(self):
-        ret = list()
-        for group in self.groups:
-            ret.append({
-                'message_id': self.message_id,
-                'messgae': self.message,
-                'subject': self.subject,
-                'name': self.sender,
-                'posted_at': self.sent,
-                'pubkey': self.pubkey,
-                'sig': self.sig,
-                'references': self.parent,
-                'filename' : self.image_name,
-                'email': self.email,
-                'imagehash': self.image_hash,
-                'posthash' : self.hash_message_uid,
-                'newsgroup' : group
-            })
-        return ret
+    def dict(self):
+        return {
+            'message_id': self.message_id,
+            'messgae': self.message,
+            'subject': self.subject,
+            'name': self.sender,
+            'posted_at': self.sent,
+            'pubkey': self.pubkey,
+            'sig': self.sig,
+            'references': self.parent,
+            'filename' : self.image_name,
+            'email': self.email,
+            'imagehash': self.image_hash,
+            'posthash' : self.hash_message_uid,
+        }
 
     def save(self, con):
         """
@@ -79,7 +75,7 @@ class Message:
         if self.message_id:
             con.execute(
                 sql.articles.insert(),
-                self.dicts())
+                [self.dict()])
             vals = list()
             for group in self.groups:
                 count = con.execute(

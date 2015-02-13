@@ -113,16 +113,6 @@ class Connection:
         self.mode = None
         self.post = False
         self.authorized = True
-        self._article_sendq = list()
-        
-    def article_queued(self, article_id):
-        """
-        return true if we already have this article queued for sending
-        """
-        return article_id in self._article_sendq
-
-    def queue_send_article(self, article_id):
-        self._article_sendq.append(article_id)
 
     @asyncio.coroutine
     def sendline(self, data):

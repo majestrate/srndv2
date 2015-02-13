@@ -23,7 +23,6 @@ article_posts = Table("article_posts", _metadata,
                       Column("article_id", String))
 
 articles = Table("articles", _metadata,
-                 Column("newsgroup", Text),
                  Column("message_id", Text, primary_key=True),
                  Column("message", Text),
                  Column("posted_at", Integer),

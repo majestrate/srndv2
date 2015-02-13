@@ -26,6 +26,7 @@ def load_config(fname='srnd.ini'):
         config['srnd']['instance_name'] = '{}.srndv2.tld'.format(os.environ['USER'])
         config['srnd']['bind_host'] = '::1'
         config['srnd']['bind_port'] = '1199'
+        config['srnd']['sync_on_start'] = '1'
         with open(fname, 'w') as f:
             config.write(f)
     config.read(fname)

@@ -348,7 +348,7 @@ class Connection:
                 parsed = m.load(f)
             if parsed:
                 self.daemon.store.save_message(m)
-                self.daemon.got_artcle(args[0], newsgroups)
+                self.daemon.got_article(args[0], newsgroups)
             else: # delete if failed to parse
                 self.daemon.store.delete_article(args[0])
         if self.daemon.store.has_article(args[0]):

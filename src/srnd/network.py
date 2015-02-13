@@ -132,14 +132,14 @@ class Outfeed:
             self.sendq.append(article_id)
         
 
+    @asyncio.coroutine
     def send_queued_articles(self):
         """
         send all queued articles
         """
-        loop = asyncio.get_event_loop()
         while len(self.sendq) > 0:
-            article_id = self.sendq.pop(0)
-            loop.run_until_complete(self.feed.send_article(article_id))
+            article_id self.sendq.pop(0)
+            yield from self.feed.send_article(article_id))
 
     @asyncio.coroutine
     def proxy_connect(self, proxy_type):
@@ -195,7 +195,7 @@ class Outfeed:
                     self.log.info('connected')
                     self.feed = nntp.Connection(self.daemon, self.policy, r, w, name=self.name)
                     asyncio.async(self.feed.run())
-                    self.send_queued_articles()
+                    yield from self.send_queued_articles()
                 else:
                     self.log.debug('did not connect')
             else:

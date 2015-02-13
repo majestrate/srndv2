@@ -346,12 +346,12 @@ class Connection:
                 parsed = m.load(f)
             if parsed:
                 self.daemon.store.save_message(m)
+                self.daemon.got_article(args[0], m.groups)
             else: # delete if failed to parse
                 self.daemon.store.delete_article(args[0])
         if self.daemon.store.has_article(args[0]):
             self.log.info("recv'd article {}".format(args[0]))
             yield from self.send_response(239, args[0])
-            self.daemon.got_article(args[0], m.groups)
         else:
             self.log.warning('failed transfer for {}'.format(args[0]))
             yield from self.send_response(439, args[0])

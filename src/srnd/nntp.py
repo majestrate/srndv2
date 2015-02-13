@@ -506,4 +506,5 @@ class Connection:
                     if hasattr(self, meth):
                         yield from getattr(self, meth)(args)
                     else:
-                        yield from self.send_response(503, '{} not implemented'.format(commands[0]))
+                        self.log.debug('unknown command')
+                        

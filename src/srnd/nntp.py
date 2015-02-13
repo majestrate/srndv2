@@ -416,9 +416,6 @@ class Connection:
                 _ = yield from self.sendline(line)
         else:
             try:
-                if len(self._article_sendq) > 0:
-                    aid = self._article_sendq.pop(0)
-                    _ = yield from self.send_article(aid)
                 line = yield from self.readline()
                 if line is None:
                     self.log.error('no data read')

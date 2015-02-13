@@ -109,7 +109,9 @@ class Outfeed:
         self.policy = nntp.FeedPolicy.from_conf(conf['config'])
         self.log = logging.getLogger('outfeed-{}'.format(self.name))
         self.feed = None
-        
+    
+    def article_queued(self, article_id):
+        return self.feed.article_queued(article_id)
 
 
     @asyncio.coroutine

@@ -195,7 +195,9 @@ class Outfeed:
                     self.log.info('connected')
                     self.feed = nntp.Connection(self.daemon, self.policy, r, w, name=self.name)
                     asyncio.async(self.feed.run())
-                    yield from self.send_queued_articles()
+                    while self._run:
+                        yield from asyncio.sleep(1)
+                        yield from self.send_queued_articles()
                 else:
                     self.log.debug('did not connect')
             else:

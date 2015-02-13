@@ -32,6 +32,9 @@ class FileSystemArticleStore:
                 groups.append(group)
             yield tuple([f, groups])
 
+    def article_banned(self, article_id):
+        return False
+
     def get_groups_for_article(self, article_id):
         query = self.db.connection.execute(
             sql.select([sql.article_posts.c.newsgroup]).where(

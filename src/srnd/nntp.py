@@ -15,6 +15,7 @@ from . import util
 class PolicyRule:
     """
     string / regexp based rule matcher
+    TODO: use this with feeds
     """
 
     def __init__(self, rule):
@@ -52,6 +53,15 @@ class FeedPolicy:
     dictactes what groups are carried and accepted
     """
 
+    @staticmethod
+    def from_conf(conf):
+        rule_strs = list()
+        for k in conf:
+            if conf[k] == '1':
+                rule_strs.append(k)
+        return FeedPolicy(rule_strs)
+
+        
     def __init__(self, rule_strs):
         self.rules = list()
         for rule in rule_strs:
@@ -61,6 +71,7 @@ class FeedPolicy:
         for rule in self.rules:
             if rule.match(newsgroup):
                 return True
+        return False
 
 class Connection:
     """
@@ -81,7 +92,7 @@ class Connection:
         '200 ayyyy lmao overchan nntpd, post it faget',
     )
 
-    def __init__(self, daemon, r, w, incoming=None, name='anon'):
+    def __init__(self, daemon, policy, r, w, incoming=None, name='anon'):
         """
         pass in a reader and writer that is connected to an endpoint
         no data is sent or received before this
@@ -102,6 +113,16 @@ class Connection:
         self.mode = None
         self.post = False
         self.authorized = True
+        self._article_sendq = list()
+        
+    def article_queued(self, article_id):
+        """
+        return true if we already have this article queued for sending
+        """
+        return article_id in self._article_sendq
+
+    def queue_send_article(self, article_id):
+        self._article_sendq.append(article_id)
 
     @asyncio.coroutine
     def sendline(self, data):
@@ -180,7 +201,7 @@ class Connection:
             if res:
                 self.daemon.store.save_message(m)
                 yield from self.send_response(240, 'article posted, boohyeah')
-                yield from self.daemon.add_article(article_id)
+                self.daemon.got_article(article_id)
             else:                    
                 self.log.error('invalid post')
                 yield from self.send_response(441, 'posting failed')
@@ -312,6 +333,7 @@ class Connection:
         handle TAKETHIS command
         takes 1 article
         """
+        newsgroups = None
         has = self.daemon.store.has_article(args[0])
         with self.daemon.store.open_article(args[0]) as f:
             line = yield from self.readline()
@@ -320,7 +342,9 @@ class Connection:
                 if not has:
                     if line.startswith(b'Path:'):
                         # inject path header
-                        line = b'Path: '+self.daemon.instance_name.encode('ascii') + b'!' + line[6:] 
+                        line = b'Path: '+self.daemon.instance_name.encode('ascii') + b'!' + line[6:]
+                    elif line.startswith(b'Newsgroups:'):
+                        newsgroup = line.decode('utf-8').replace('\r\n','').split(' ')[1].split(',')
                     f.write(line)
                 try:
                     line = yield from self.readline()
@@ -328,14 +352,14 @@ class Connection:
                     self.log.error('bad line for article {}: {}'.format(args[0], e))
         if not has:
             m = None
-            res = False
+            parsed = False
             with self.daemon.store.open_article(args[0], True) as f:
                 m = message.Message(args[0])
-                res = m.load(f)
-            if res:
+                parsed = m.load(f)
+            if parsed:
                 self.daemon.store.save_message(m)
-                yield from self.daemon.add_article(args[0])
-            else:
+                self.daemon.got_artcle(args[0], newsgroups)
+            else: # delete if failed to parse
                 self.daemon.store.delete_article(args[0])
         if self.daemon.store.has_article(args[0]):
             self.log.info("recv'd article {}".format(args[0]))
@@ -402,6 +426,9 @@ class Connection:
                 _ = yield from self.sendline(line)
         else:
             try:
+                if len(self._article_sendq) > 0:
+                    aid = self._article_sendq.pop(0)
+                    _ = yield from self.send_article(aid)
                 line = yield from self.readline()
                 if line is None:
                     self.log.error('no data read')
@@ -431,8 +458,14 @@ class Connection:
                     resp = yield from self.readline()
                     resp = resp.decode('utf-8')
                     if resp.startswith('203 '):
-                        self.log.info('enable streaming')
+                        self.log.info('enabled streaming')
                         self.enable_stream()
+                else:
+                    self.log.info('feed does not support streaming, closing')
+                    self.sendline('QUIT')
+                    self.close()
+                    self._run = False
+                    return
             except Exception as e:
                 self.log.error(traceback.format_exc())
                 self.close()

@@ -34,11 +34,21 @@ class NNTPD:
         self.store = storage.FileSystemArticleStore(self, store_config)
         self.feeds = list()
 
-    @asyncio.coroutine
-    def add_article(self, article_id):
+    def got_article(self, article_id, groups):
+        """
+        a feed got an article
+        """
         self.log.debug('article added {}'.format(article_id))
-        for feed in self.feeds:
-            yield from feed.add_article(article_id)
+        if groups:
+            for feed in self.feeds:
+                for group in groups:
+                    if feed.policy.allow_newsgroup(group):
+                        if feed.article_queued(article_id):
+                            self.log.debug('article queued already')
+                        else:
+                            feed.queue_send_article(article_id)
+        else:
+            self.log.warning('no newsgroups for {}'.format(article_id))
         
     def generate_id(self):
         now = int(time.time())
@@ -76,7 +86,7 @@ class NNTPD:
         we got an inbound connection
         """
         self.log.info('inbound connection made')
-        conn = nntp.Connection(self, r, w, True)
+        conn = nntp.Connection(self, self.default_feed_policy, r, w, True)
         asyncio.async(conn.run())
         #self.feeds(
 
@@ -86,7 +96,6 @@ class NNTPD:
         """
         self.serv.close()
         self.loop.run_until_complete(self.serv.wait_closed())
-        
 
 
 class Outfeed:
@@ -96,7 +105,7 @@ class Outfeed:
         self.daemon = daemon
         self.name = '%s-%s' % self.addr
         self.settings = conf['settings']
-        self.feed_config = conf['config']
+        self.policy = nntp.FeedPolicy.from_conf(conf['config'])
         self.log = logging.getLogger('outfeed-{}'.format(self.name))
         self.feed = None
         

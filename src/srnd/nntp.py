@@ -508,3 +508,7 @@ class Connection:
                     else:
                         self.log.debug('unknown command')
                         
+
+    def handle_438(self, args):
+        article_id = args[0]
+        self.log.debug('got 438 for {}'.format(article_id))

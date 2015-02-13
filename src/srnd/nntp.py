@@ -327,7 +327,7 @@ class Connection:
         has = self.daemon.store.has_article(args[0])
         with self.daemon.store.open_article(args[0]) as f:
             line = yield from self.readline()
-            while line != b'.\r\n':
+            while line and line != b'.\r\n':
                 line = line.replace(b'\r', b'')
                 if not has:
                     if line.startswith(b'Path:'):

@@ -1,7 +1,7 @@
 //
 // daemon.go
 //
-package srnd
+package main
 
 import (
 	"log"

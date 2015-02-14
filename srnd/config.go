@@ -2,7 +2,7 @@
 // config.go
 //
 
-package srnd
+package main
 
 import (
 	"github.com/alyu/configparser"

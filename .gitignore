@@ -4,3 +4,5 @@
 *.db
 venv
 src/articles
+articles
+SRNd

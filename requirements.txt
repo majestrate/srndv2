@@ -1,5 +1,0 @@
-cffi
-sqlalchemy
-pynacl
-pysodium
-psycopg2

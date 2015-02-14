@@ -1,6 +1,0 @@
-
-* add sync_on_start option for feeds
-* different sync policies for different feeds
-* retransmit messages if not sent
-* reconnect if connections drop
-* fix sqlite for demo usages

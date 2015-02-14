@@ -112,13 +112,13 @@ func (self *NNTPDaemon) persistFeed(conf FeedConfig) {
 					continue
 				}
 			}
-
-
+			nntp := self.newConnection(conn, false)
+			nntp.HandleOutbound(self)
 		}
 	}
 }
 
-// TODO implement
+// run daemon
 func (self *NNTPDaemon) Run() {	
 	err := self.Bind()
 	if err != nil {
@@ -129,7 +129,8 @@ func (self *NNTPDaemon) Run() {
 
 	// we are now running
 	self.running = true
-
+	
+	// persist outfeeds
 	for idx := range self.conf.feeds {
 		go self.persistFeed(self.conf.feeds[idx])
 	}

@@ -31,6 +31,7 @@ func (self *NNTPConnection) HandleOutbound(d *NNTPDaemon) {
 	// they allow posting
 	// send capabilities command
 	self.SendLine("CAPABILITIES")
+	
 	// get capabilites
 	for {
 		line = strings.ToLower(self.ReadLine())
@@ -40,16 +41,31 @@ func (self *NNTPConnection) HandleOutbound(d *NNTPDaemon) {
 		}
 		if line == "streaming" {
 			self.info.supportsStream = true
+		} else if line == "postihavestreaming" {
+			self.info.supportsStream = true
 		}
 	}
 
 	// if they support streaming and allow posting continue
 	// otherwise quit
-	if self.info.supportsStream && self.info.allowsPosting {
-		
+	if ! ( self.info.supportsStream && self.info.allowsPosting ) {
+		self.Quit()
+		return
+	}
+	self.SendLine("MODE STREAM")
+	line = self.ReadLine()
+	if strings.HasPrefix("203 ", line) {
+		self.info.mode = "stream"
+		log.Println("streaming mode activated")
 	} else {
 		self.Quit()
+		return
 	}
+	// mainloop
+	for  {
+		line = self.ReadLine()
+	}
+
 }
 
 // handle inbound connection
@@ -91,7 +107,8 @@ func (self *NNTPConnection) ReadLine() string {
 	if err != nil {
 		return ""
 	}
-	line = strings.Trim(line, "\r")
+	line = strings.Replace(line, "\n", "", -1)
+	line = strings.Replace(line, "\r", "", -1)
 	if self.debug {
 		log.Println(self.conn.RemoteAddr(), "recv line", line)
 	}

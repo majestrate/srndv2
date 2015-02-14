@@ -1,4 +1,4 @@
 all:
-	go build -o SRNd srnd/*.go
+	go build -o SRNd src/*.go
 clean:
 	rm -f SRNd

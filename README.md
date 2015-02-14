@@ -15,4 +15,4 @@ donate: bitcoin 15yuMzuueV8y5vPQQ39ZqQVz5Ey98DNrjE
 
 ## dependancies
 
-    go get github.com/alyu/configpaser
+    go get github.com/majestrate/configparser

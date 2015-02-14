@@ -6,11 +6,10 @@ import (
 
 
 func main() {
+	log.Println("starting up SRNd")
 	var daemon NNTPDaemon
-	err := daemon.LoadConfig("srnd.ini")
-	if err != nil {
-		log.Println("could not load config", err)
-	} else {
+	if daemon.Init() {
 		daemon.Run()
 	}
+	log.Println("SRNd done")
 }

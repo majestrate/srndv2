@@ -1,6 +1,8 @@
 //
 // api.go
 //
+package srnd
+
 
 import (
 	"log"

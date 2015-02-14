@@ -1,15 +1,16 @@
 package main
 
 import (
-	"srnd/daemon"
+	"github.com/majestrate/srnd"
+	"log"
 )
 
 
 func main() {
-	var daemon := srnd.MakeDaemon()
+	var daemon srnd.NNTPDaemon
 	err := daemon.LoadConfig("srnd.ini")
 	if err != nil {
-		fmt.Println("could not load config", err)
+		log.Println("could not load config", err)
 	} else {
 		daemon.Run()
 	}

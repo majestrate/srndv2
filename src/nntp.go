@@ -5,6 +5,8 @@ package main
 
 import (
 	"bufio"
+	"bytes"
+	"io/ioutil"
 	"log"
 	"net"
 	"strings"
@@ -23,11 +25,13 @@ type NNTPConnection struct {
 	inbound bool
 	debug bool
 	info *ConnectionInfo
+	policy *FeedPolicy
+	sendFeed chan NNTPMessage
 }
 
 func (self *NNTPConnection) HandleOutbound(d *NNTPDaemon) {
 	line := self.ReadLine()
-	self.info.allowsPosting = strings.HasPrefix("200 ", line)
+	self.info.allowsPosting = strings.HasPrefix(line, "200 ")
 	// they allow posting
 	// send capabilities command
 	self.SendLine("CAPABILITIES")
@@ -35,26 +39,30 @@ func (self *NNTPConnection) HandleOutbound(d *NNTPDaemon) {
 	// get capabilites
 	for {
 		line = strings.ToLower(self.ReadLine())
-		if line == "." {
+		if line == ".\r\n" {
 			// done reading capabilities
 			break
 		}
-		if line == "streaming" {
+		if line == "streaming\r\n" {
 			self.info.supportsStream = true
-		} else if line == "postihavestreaming" {
+		} else if line == "postihavestreaming\r\n" {
 			self.info.supportsStream = true
 		}
 	}
 
 	// if they support streaming and allow posting continue
 	// otherwise quit
-	if ! ( self.info.supportsStream && self.info.allowsPosting ) {
+	if ! self.info.supportsStream || ! self.info.allowsPosting {
+		if self.debug {
+			log.Println(self.info.supportsStream, self.info.allowsPosting)
+		}
+
 		self.Quit()
 		return
 	}
 	self.SendLine("MODE STREAM")
 	line = self.ReadLine()
-	if strings.HasPrefix("203 ", line) {
+	if strings.HasPrefix(line, "203 ") {
 		self.info.mode = "stream"
 		log.Println("streaming mode activated")
 	} else {
@@ -63,13 +71,65 @@ func (self *NNTPConnection) HandleOutbound(d *NNTPDaemon) {
 	}
 	// mainloop
 	for  {
+		// poll for new message
+		message := <- self.sendFeed
+		// check if we allow it
+		if ! self.policy.AllowsNewsgroup(message.Newsgroup) {
+			if self.debug {
+				log.Println("not federating article", message.MessageID, "beause it's in", message.Newsgroup)
+			}
+			continue
+		}
+		// send check
+		self.Send("CHECK ")
+		self.SendLine(message.MessageID)
 		line = self.ReadLine()
+		if strings.HasPrefix(line, "238 ") {
+			// accepted
+			// send it
+			self.Send("TAKETHIS ")
+			self.SendLine(message.MessageID)
+			// load file
+			data, err := ioutil.ReadFile(d.store.GetFilename(message.MessageID))
+			if err != nil {
+				log.Fatal("failed to read article", message.MessageID)
+			}
+			// split into lines
+			parts := bytes.Split([]byte{'\n'}, data)
+			// for each line send it
+			for idx := range parts {
+				
+				ba := parts[idx]
+				ba = ba[:len(ba)-2]
+				self.SendBytes(ba)
+				self.SendLine("")
+			}
+			// send delimiter
+			self.SendLine(".")
+			// check for success / fail
+			line := self.ReadLine()
+			if strings.HasPrefix(line, "239 ") {
+				log.Println("Article", message.MessageID, "sent")
+			} else {
+				log.Println("Article", message.MessageID, "failed to send", line)
+			}
+			// continue
+			continue
+		} else if strings.HasPrefix(line, "435 ") {
+			// already have it
+			if self.debug {
+				log.Println(message.MessageID, "already owned")
+			}
+		} else if strings.HasPrefix(line, "437 ") {
+			// article banned
+			log.Println(message.MessageID, "was banned")
+		}
 	}
-
 }
 
 // handle inbound connection
 func (self *NNTPConnection) HandleInbound(d *NNTPDaemon) {
+	self.info.mode = "STREAM"
 	log.Println("Incoming nntp connection from", self.conn.RemoteAddr())
 	// send welcome
 	self.SendLine("200 ayy lmao we are SRNd2, posting allowed")
@@ -78,10 +138,76 @@ func (self *NNTPConnection) HandleInbound(d *NNTPDaemon) {
     if len(line) == 0 {
 			break
 		}
-		commands := strings.Split(line, " ")
-		cmd := strings.ToLower(commands[0])
+		// parse line
+
+		_line := strings.Replace(line, "\n", "", -1)
+		_line = strings.Replace(_line, "\r", "", -1)
+		commands := strings.Split(_line, " ")
+		cmd := strings.ToUpper(commands[0])
+
+		// capabilities command
 		if cmd == "CAPABILITIES" {
 			self.sendCapabilities()
+		} else if cmd == "MODE" { // mode switch
+			if len(commands) == 2 {
+				mode := strings.ToUpper(commands[1])
+				if mode == "READER" {
+					self.SendLine("501 no reader mode")
+				} else if mode == "STREAM" {
+					self.info.mode = mode
+					self.SendLine("203 stream as desired")
+				} else {
+					self.SendLine("501 unknown mode")
+				}
+			} else {
+				self.SendLine("500 syntax error")
+			}
+		} else if self.info.mode == "STREAM" { // we are in stream mode
+			if cmd == "TAKETHIS" {
+				if len(commands) == 2 {
+					article := commands[1]
+					if ValidMessageID(article) {
+						file := d.store.OpenFile(article)
+						for {
+							line := self.ReadLine()
+							// unexpected close
+							if len(line) == 0 {
+								log.Fatal(self.conn.RemoteAddr(), "unexpectedly closed connection")
+							}
+							// done reading
+							if line == ".\r\n" {
+								break
+							} else {
+								line = strings.Replace(line, "\r", "", -1)
+								file.Write([]byte(line))
+							}
+						}
+						file.Close()
+						// the send was good
+						// tell them
+						self.SendLine("239 "+article)
+						d.infeed <- article
+					}
+				}
+			}
+			if cmd == "CHECK" {
+				if len(commands) == 2 {
+					if ! ValidMessageID(commands[1]) {
+						self.SendLine("501 bad message id")
+						continue
+					}
+					article := commands[1]
+					if d.store.HasArticle(article) {
+						self.Send("435 ")
+						self.Send(commands[1])
+						self.SendLine(" we have this article")
+					} else {
+						self.Send("238 ")
+						self.Send(commands[1])
+						self.SendLine(" we want this article please give it")
+					}
+				}
+			}
 		}
 	}
 	self.Close()
@@ -89,8 +215,9 @@ func (self *NNTPConnection) HandleInbound(d *NNTPDaemon) {
 
 func (self *NNTPConnection) sendCapabilities() {
 	self.SendLine("101 we can do stuff")
+	self.SendLine("VERSION 2")
+	self.SendLine("IMPLEMENTATION srndv2 better than SRNd")
 	self.SendLine("STREAMING")
-	self.SendLine("POST")
 	self.SendLine(".")
 }
 
@@ -107,8 +234,8 @@ func (self *NNTPConnection) ReadLine() string {
 	if err != nil {
 		return ""
 	}
-	line = strings.Replace(line, "\n", "", -1)
-	line = strings.Replace(line, "\r", "", -1)
+	//line = strings.Replace(line, "\n", "", -1)
+	//line = strings.Replace(line, "\r", "", -1)
 	if self.debug {
 		log.Println(self.conn.RemoteAddr(), "recv line", line)
 	}
@@ -120,7 +247,18 @@ func (self *NNTPConnection) SendLine(line string) {
 	if self.debug {
 		log.Println(self.conn.RemoteAddr(), "send line", line)
 	}
-	self.conn.Write([]byte(line+"\r\n"))
+	self.Send(line+"\r\n")
+}
+
+// send data
+func (self *NNTPConnection) Send(data string) {
+	
+	self.conn.Write([]byte(data))
+}
+
+// send data
+func (self *NNTPConnection) SendBytes(data []byte) {
+	self.conn.Write(data)
 }
 
 // close the connection

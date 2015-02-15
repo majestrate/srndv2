@@ -10,7 +10,7 @@ import (
 type NNTPMessage struct {
 	MessageID string
 	Reference string
-	Newsgrops string
+	Newsgroup string
 	From string
 	Subject string
 	PubKey string

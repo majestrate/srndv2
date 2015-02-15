@@ -16,12 +16,14 @@ type NNTPDaemon struct {
 	instance_name string
 	bind_addr string
 	conf *SRNdConfig
+	store *ArticleStore
 	api_caller *API
 	listener net.Listener
 	debug bool
 	sync_on_start bool
 	running bool
-	broadcast chan NNTPMessage
+	feeds map[NNTPConnection]bool
+	infeed chan string
 }
 
 func (self *NNTPDaemon) End() {
@@ -31,8 +33,9 @@ func (self *NNTPDaemon) End() {
 // register a new connection
 // can be either inbound or outbound
 func (self *NNTPDaemon) newConnection(conn net.Conn, inbound bool) NNTPConnection {
-	return NNTPConnection{conn, bufio.NewReader(conn), inbound, self.debug, new(ConnectionInfo)}
-
+	feed := NNTPConnection{conn, bufio.NewReader(conn), inbound, self.debug, new(ConnectionInfo), new(FeedPolicy), make(chan NNTPMessage)}
+	self.feeds[feed] = ! inbound
+	return feed
 }
 
 func (self *NNTPDaemon) persistFeed(conf FeedConfig) {
@@ -114,6 +117,7 @@ func (self *NNTPDaemon) persistFeed(conf FeedConfig) {
 			}
 			nntp := self.newConnection(conn, false)
 			nntp.HandleOutbound(self)
+			delete(self.feeds, nntp)
 		}
 	}
 }
@@ -134,7 +138,14 @@ func (self *NNTPDaemon) Run() {
 	for idx := range self.conf.feeds {
 		go self.persistFeed(self.conf.feeds[idx])
 	}
-	
+	go self.mainloop()
+	for {
+		message := <- self.infeed
+		log.Println("We got a message", message)
+	}
+}
+
+func (self *NNTPDaemon) mainloop() {	
 	for {
 		// accept
 		conn, err := self.listener.Accept()
@@ -143,8 +154,13 @@ func (self *NNTPDaemon) Run() {
 		}
 		// make a new inbound nntp connection handler 
 		nntp := self.newConnection(conn, true)
-		go nntp.HandleInbound(self)
+		go self.RunConnection(nntp)
 	}
+}
+
+func (self *NNTPDaemon) RunConnection(nntp NNTPConnection) {
+	nntp.HandleInbound(self)
+	delete(self.feeds, nntp)
 }
 
 // bind to address
@@ -169,6 +185,10 @@ func (self *NNTPDaemon) Init() bool {
 		log.Println("cannot load config")
 		return false
 	}
+	self.infeed = make(chan string, 20)
+	self.feeds = make(map[NNTPConnection]bool)
+	self.store = new(ArticleStore)
+	self.store.directory = self.conf.store["base_dir"]
 	self.sync_on_start = self.conf.daemon["sync_on_start"] == "1"
 	self.bind_addr = self.conf.daemon["bind"]
 	self.debug = self.conf.daemon["log"] == "debug"

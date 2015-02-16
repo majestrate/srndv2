@@ -33,7 +33,7 @@ func (self *NNTPDaemon) End() {
 // register a new connection
 // can be either inbound or outbound
 func (self *NNTPDaemon) newConnection(conn net.Conn, inbound bool) NNTPConnection {
-	feed := NNTPConnection{conn, bufio.NewReader(conn), inbound, self.debug, new(ConnectionInfo), new(FeedPolicy), make(chan NNTPMessage)}
+	feed := NNTPConnection{conn, bufio.NewReader(conn), inbound, self.debug, new(ConnectionInfo), new(FeedPolicy), make(chan *NNTPMessage)}
 	self.feeds[feed] = ! inbound
 	return feed
 }
@@ -139,9 +139,19 @@ func (self *NNTPDaemon) Run() {
 		go self.persistFeed(self.conf.feeds[idx])
 	}
 	go self.mainloop()
+
+	// loop over messages
 	for {
 		message := <- self.infeed
 		log.Println("We got a message", message)
+		// load message
+		nntp := self.store.GetMessage(message, false)
+		// send to all outfeeds
+		for feed , use := range self.feeds {
+			if use {
+				feed.send <- nntp
+			}
+		}
 	}
 }
 

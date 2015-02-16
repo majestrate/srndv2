@@ -26,7 +26,7 @@ type NNTPConnection struct {
 	debug bool
 	info *ConnectionInfo
 	policy *FeedPolicy
-	sendFeed chan NNTPMessage
+	send chan *NNTPMessage
 }
 
 func (self *NNTPConnection) HandleOutbound(d *NNTPDaemon) {
@@ -72,7 +72,7 @@ func (self *NNTPConnection) HandleOutbound(d *NNTPDaemon) {
 	// mainloop
 	for  {
 		// poll for new message
-		message := <- self.sendFeed
+		message := <- self.send
 		// check if we allow it
 		if ! self.policy.AllowsNewsgroup(message.Newsgroup) {
 			if self.debug {

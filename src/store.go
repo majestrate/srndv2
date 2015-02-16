@@ -31,3 +31,24 @@ func (self *ArticleStore) HasArticle(messageID string) bool {
 func (self *ArticleStore) GetFilename(messageID string) string {
 	return filepath.Join(self.directory, messageID)
 }
+
+func (self *ArticleStore) GetMessage(messageID string, loadBody bool) *NNTPMessage {
+	fname := self.GetFilename(messageID)
+	file, err := os.Open(fname)
+	if err != nil {
+		log.Fatal("cannot open",fname)
+		return nil
+	}
+	message := new(NNTPMessage)
+ 	success := message.LoadHeaders(file)
+	file.Close()
+	file, err = os.Open(fname)
+	if err == nil && loadBody {
+		success = message.LoadBody(file)
+	}
+	if success {
+		return message
+	}
+	log.Println("failed to load file", fname)
+	return nil
+}

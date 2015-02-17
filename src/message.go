@@ -71,9 +71,13 @@ func (self *NNTPMessage) LoadHeaders(file *os.File) bool {
 		} else if strings.HasPrefix(lowline, "from: ") {
 			line = line[6:llen-1]
 			llen = len(line)
-			idx = strings.Index(line, " ")
-			self.Name = line[:idx]
-			self.Email = line[idx+2:llen-1]
+			idx = strings.LastIndex(line, " ")
+			if 1 + idx < llen {
+				self.Name = line[:idx]
+				self.Email = line[idx+2:llen-1]
+			} else {
+				self.Name = line
+			}
 		} else if strings.HasPrefix(lowline, "x-pubkey-ed25519: ") {
 			self.PubKey = line[18:llen-1] 
 		} else if strings.HasPrefix(lowline, "x-signature-ed25519-sha512: ") {

@@ -30,11 +30,12 @@ type NNTPConnection struct {
 }
 
 func (self *NNTPConnection) HandleOutbound(d *NNTPDaemon) {
+	var err error
 	line := self.ReadLine()
 	self.info.allowsPosting = strings.HasPrefix(line, "200 ")
 	// they allow posting
 	// send capabilities command
-	self.SendLine("CAPABILITIES")
+	err = self.SendLine("CAPABILITIES")
 	
 	// get capabilites
 	for {
@@ -60,7 +61,10 @@ func (self *NNTPConnection) HandleOutbound(d *NNTPDaemon) {
 		self.Quit()
 		return
 	}
-	self.SendLine("MODE STREAM")
+	err = self.SendLine("MODE STREAM")
+	if err != nil {
+		return 	
+	}
 	line = self.ReadLine()
 	if strings.HasPrefix(line, "203 ") {
 		self.info.mode = "stream"
@@ -80,14 +84,14 @@ func (self *NNTPConnection) HandleOutbound(d *NNTPDaemon) {
 		} 
 		log.Println("send article")
 		// send check
-		self.Send("CHECK ")
-		self.SendLine(message.MessageID)
+		err = self.Send("CHECK ")
+		err = self.SendLine(message.MessageID)
 		line = self.ReadLine()
 		if strings.HasPrefix(line, "238 ") {
 			// accepted
 			// send it
-			self.Send("TAKETHIS ")
-			self.SendLine(message.MessageID)
+			err = self.Send("TAKETHIS ")
+			err = self.SendLine(message.MessageID)
 			// load file
 			data, err := ioutil.ReadFile(d.store.GetFilename(message.MessageID))
 			if err != nil {
@@ -98,11 +102,16 @@ func (self *NNTPConnection) HandleOutbound(d *NNTPDaemon) {
 			// for each line send it
 			for idx := range parts {
 				ba := parts[idx]
-				self.SendBytes(ba)
-				self.Send("\r\n")
+				err = self.SendBytes(ba)
+				err = self.Send("\r\n")
 			}
 			// send delimiter
-			self.SendLine(".")
+			err = self.SendLine(".")
+			if err != nil {
+				log.Println("failed to send")
+				self.Quit()
+				return
+			}
 			// check for success / fail
 			line := self.ReadLine()
 			if strings.HasPrefix(line, "239 ") {
@@ -121,18 +130,28 @@ func (self *NNTPConnection) HandleOutbound(d *NNTPDaemon) {
 			// article banned
 			log.Println(message.MessageID, "was banned")
 		}
+		if err != nil {
+			self.Quit()
+			log.Println("failure in outfeed", err)	
+		}
 	}
 }
 
 // handle inbound connection
 func (self *NNTPConnection) HandleInbound(d *NNTPDaemon) {
+	var err error
 	self.info.mode = "STREAM"
 	log.Println("Incoming nntp connection from", self.conn.RemoteAddr())
 	// send welcome
 	self.SendLine("200 ayy lmao we are SRNd2, posting allowed")
 	for {
+		if err != nil {
+			log.Println("failure in infeed", err)
+			self.Quit()
+			return
+		}
 		line := self.ReadLine()
-    if len(line) == 0 {
+    	if len(line) == 0 {
 			break
 		}
 		// parse line
@@ -240,22 +259,23 @@ func (self *NNTPConnection) ReadLine() string {
 }
 
 // send a line
-func (self *NNTPConnection) SendLine(line string) {
+func (self *NNTPConnection) SendLine(line string) error {
 	if self.debug {
 		log.Println(self.conn.RemoteAddr(), "send line", line)
 	}
-	self.Send(line+"\r\n")
+	return self.Send(line+"\r\n")
 }
 
 // send data
-func (self *NNTPConnection) Send(data string) {
-	
-	self.conn.Write([]byte(data))
+func (self *NNTPConnection) Send(data string) error {
+	_, err := self.conn.Write([]byte(data))
+	return err
 }
 
 // send data
-func (self *NNTPConnection) SendBytes(data []byte) {
-	self.conn.Write(data)
+func (self *NNTPConnection) SendBytes(data []byte) error {
+	_ , err := self.conn.Write(data)
+	return err
 }
 
 // close the connection

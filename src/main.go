@@ -1,15 +1,15 @@
 package main
 
 import (
-	"log"
+  "log"
 )
 
 
 func main() {
-	log.Println("starting up SRNd")
-	var daemon NNTPDaemon
-	if daemon.Init() {
-		daemon.Run()
-	}
-	log.Println("SRNd done")
+  log.Println("starting up SRNd")
+  var daemon NNTPDaemon
+  if daemon.Init() {
+    daemon.Run()
+  }
+  log.Println("SRNd done")
 }

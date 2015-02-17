@@ -54,7 +54,7 @@ func (self *NNTPMessage) LoadHeaders(file *os.File) bool {
 		if strings.HasPrefix(lowline, "newsgroups: ") {
 			newsgroups:= line[12:llen-1]
 			idx = strings.Index(newsgroups, ",")
-			if idx != 0 {
+			if idx != -1 {
 				newsgroups = newsgroups[:idx]
 			}
 			self.Newsgroup = newsgroups

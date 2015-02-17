@@ -32,8 +32,8 @@ func (self *NNTPDaemon) End() {
 
 // register a new connection
 // can be either inbound or outbound
-func (self *NNTPDaemon) newConnection(conn net.Conn, inbound bool) NNTPConnection {
-	feed := NNTPConnection{conn, bufio.NewReader(conn), inbound, self.debug, new(ConnectionInfo), new(FeedPolicy), make(chan *NNTPMessage)}
+func (self *NNTPDaemon) newConnection(conn net.Conn, inbound bool, policy *FeedPolicy) NNTPConnection {
+	feed := NNTPConnection{conn, bufio.NewReader(conn), inbound, self.debug, new(ConnectionInfo), policy, make(chan *NNTPMessage)}
 	self.feeds[feed] = ! inbound
 	return feed
 }
@@ -115,7 +115,8 @@ func (self *NNTPDaemon) persistFeed(conf FeedConfig) {
 					continue
 				}
 			}
-			nntp := self.newConnection(conn, false)
+			policy := &conf.policy
+			nntp := self.newConnection(conn, false, policy)
 			nntp.HandleOutbound(self)
 			delete(self.feeds, nntp)
 		}
@@ -163,7 +164,7 @@ func (self *NNTPDaemon) mainloop() {
 			log.Fatal(err)
 		}
 		// make a new inbound nntp connection handler 
-		nntp := self.newConnection(conn, true)
+		nntp := self.newConnection(conn, true, nil)
 		go self.RunConnection(nntp)
 	}
 }
@@ -199,6 +200,7 @@ func (self *NNTPDaemon) Init() bool {
 	self.feeds = make(map[NNTPConnection]bool)
 	self.store = new(ArticleStore)
 	self.store.directory = self.conf.store["base_dir"]
+	self.store.Init()
 	self.sync_on_start = self.conf.daemon["sync_on_start"] == "1"
 	self.bind_addr = self.conf.daemon["bind"]
 	self.debug = self.conf.daemon["log"] == "debug"

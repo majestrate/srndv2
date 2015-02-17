@@ -17,6 +17,17 @@ func CheckFile(fname string) bool {
 	return true
 }
 
+// ensure a directory exists
+func EnsureDir(dirname string) {
+	stat, err := os.Stat(dirname)
+	if os.IsNotExist(err) {
+		os.Mkdir(dirname, 0755)
+	} else if ! stat.IsDir() {
+		os.Remove(dirname)
+		os.Mkdir(dirname, 0755)
+	}
+}
+
 // TODO make this work better
 func ValidMessageID(id string) bool {
 	

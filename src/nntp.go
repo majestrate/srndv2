@@ -94,14 +94,12 @@ func (self *NNTPConnection) HandleOutbound(d *NNTPDaemon) {
 				log.Fatal("failed to read article", message.MessageID)
 			}
 			// split into lines
-			parts := bytes.Split([]byte{'\n'}, data)
+			parts := bytes.Split(data,[]byte{'\n'})
 			// for each line send it
 			for idx := range parts {
-				
 				ba := parts[idx]
-				ba = ba[:len(ba)-2]
 				self.SendBytes(ba)
-				self.SendLine("")
+				self.Send("\r\n")
 			}
 			// send delimiter
 			self.SendLine(".")

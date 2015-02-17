@@ -14,6 +14,10 @@ type ArticleStore struct {
 	directory string
 }
 
+func (self *ArticleStore) Init() {
+	EnsureDir(self.directory)
+}
+
 func (self *ArticleStore) OpenFile(messageID string) *os.File {
 	fname := self.GetFilename(messageID)
 	file, err := os.Create(fname)

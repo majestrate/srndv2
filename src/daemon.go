@@ -148,9 +148,11 @@ func (self *NNTPDaemon) Run() {
     // load message
     nntp := self.store.GetMessage(message, false)
     // send to all outfeeds
-    for feed , use := range self.feeds {
-      if use {
-        feed.send <- nntp
+    if nntp != nil {
+      for feed , use := range self.feeds {
+        if use {
+          feed.send <- nntp
+        }
       }
     }
   }

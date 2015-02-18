@@ -141,11 +141,6 @@ func (self *NNTPDaemon) Run() {
   }
   go self.mainloop()
   
-  if self.sync_on_start {
-    log.Println("syncing on start")
-    go self.syncAll()
-  }
-  
   // loop over messages
   for {
     message := <- self.infeed
@@ -158,17 +153,6 @@ func (self *NNTPDaemon) Run() {
       }
     }
   }
-}
-
-func (self *NNTPDaemon) syncAll() {
-  self.store.IterateAllArticles(func(messageID string) {
-    msg := self.store.GetMessage(messageID, false)
-    for feed , use := range self.feeds {
-      if use {
-        feed.send <- msg
-     }
-    }
-  }) 
 }
 
 func (self *NNTPDaemon) mainloop() {	

@@ -77,13 +77,17 @@ func (self *NNTPConnection) HandleOutbound(d *NNTPDaemon) {
   if d.sync_on_start {
     d.store.IterateAllArticles(func(messageID string) bool {
       msg := d.store.GetMessage(messageID, false)
-      er := self.sendMessage(msg, d)
-      return er != nil
+      err = self.sendMessage(msg, d)
+      return err != nil
     }) 
   }
   
   // mainloop
   for  {
+    if err != nil {
+      // error from previous
+      break
+    }
     // poll for new message
     message := <- self.send
     err = self.sendMessage(message, d)

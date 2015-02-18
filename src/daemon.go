@@ -140,6 +140,9 @@ func (self *NNTPDaemon) Run() {
   for idx := range self.conf.feeds {
     go self.persistFeed(self.conf.feeds[idx])
   }
+
+  self.syncAll()
+  
   go self.mainloop()
   
   // loop over messages
@@ -156,6 +159,25 @@ func (self *NNTPDaemon) Run() {
       }
     }
   }
+}
+
+func (self *NNTPDaemon) syncAll() {
+  var err error
+  if self.sync_on_start {
+    log.Println("sync all feeds")
+    self.store.IterateAllArticles(func(messageID string) bool {
+      msg := self.store.GetMessage(messageID, false)
+      if msg != nil {
+        for feed, use := range self.feeds {
+            if use {
+              err = feed.SendMessage(msg, self)
+            }
+        }
+      }
+      return err != nil
+    }) 
+  }
+   
 }
 
 func (self *NNTPDaemon) mainloop() {	

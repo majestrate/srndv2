@@ -73,17 +73,6 @@ func (self *NNTPConnection) HandleOutbound(d *NNTPDaemon) {
     self.Quit()
     return
   }
-  
-  if d.sync_on_start {
-    d.store.IterateAllArticles(func(messageID string) bool {
-      msg := d.store.GetMessage(messageID, false)
-      if msg != nil {
-        err = self.sendMessage(msg, d)
-      }
-      return err != nil
-    }) 
-  }
-  
   // mainloop
   for  {
     if err != nil {
@@ -92,7 +81,7 @@ func (self *NNTPConnection) HandleOutbound(d *NNTPDaemon) {
     }
     // poll for new message
     message := <- self.send
-    err = self.sendMessage(message, d)
+    err = self.SendMessage(message, d)
     if err != nil {
       log.Println(err)
       break
@@ -100,7 +89,7 @@ func (self *NNTPConnection) HandleOutbound(d *NNTPDaemon) {
   }
 }
 
-func (self *NNTPConnection) sendMessage(message *NNTPMessage, d *NNTPDaemon) error {
+func (self *NNTPConnection) SendMessage(message *NNTPMessage, d *NNTPDaemon) error {
   var err error
   var line string
   // check if we allow it

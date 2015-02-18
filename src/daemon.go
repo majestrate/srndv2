@@ -204,6 +204,7 @@ func (self *NNTPDaemon) Init() bool {
   self.sync_on_start = self.conf.daemon["sync_on_start"] == "1"
   self.bind_addr = self.conf.daemon["bind"]
   self.debug = self.conf.daemon["log"] == "debug"
+  self.instance_name = self.conf.daemon["instance_name"]
   if self.debug {
     log.Println("debug mode activated")
   }

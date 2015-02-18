@@ -99,6 +99,8 @@ func (self *NNTPConnection) HandleOutbound(d *NNTPDaemon) {
       data, err := ioutil.ReadFile(d.store.GetFilename(message.MessageID))
       if err != nil {
         log.Fatal("failed to read article", message.MessageID)
+        self.Quit()
+        return
       }
       // split into lines
       parts := bytes.Split(data,[]byte{'\n'})
@@ -136,6 +138,7 @@ func (self *NNTPConnection) HandleOutbound(d *NNTPDaemon) {
     if err != nil {
       self.Quit()
       log.Println("failure in outfeed", err)	
+      return
     }
   }
 }

@@ -174,8 +174,9 @@ func (self *NNTPDaemon) syncAll() {
             }
         }
       }
-      return err != nil
+      return false
     }) 
+    log.Println("sync done")
   }
    
 }

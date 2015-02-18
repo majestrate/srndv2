@@ -46,7 +46,7 @@ func (self *ArticleStore) CreateFile(messageID string) *os.File {
   fname := self.GetFilename(messageID)
   file, err := os.Create(fname)
   if err != nil {
-    log.Fatal("cannot open file", fname)
+    //log.Fatal("cannot open file", fname)
     return nil
   }
   return file
@@ -69,7 +69,7 @@ func (self *ArticleStore) GetMessage(messageID string, loadBody bool) *NNTPMessa
   fname := self.GetFilename(messageID)
   file, err := os.Open(fname)
   if err != nil {
-    log.Fatal("cannot open",fname)
+    //log.Fatal("cannot open",fname)
     return nil
   }
   message := new(NNTPMessage)

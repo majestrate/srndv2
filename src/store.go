@@ -10,12 +10,29 @@ import (
   "path/filepath"
 )
 
+type StoreIteratorHook func(string)
+
 type ArticleStore struct {
   directory string
 }
 
 func (self *ArticleStore) Init() {
   EnsureDir(self.directory)
+}
+
+func (self *ArticleStore) IterateAllArticles(hook StoreIteratorHook) error {
+  f , err := os.Open(self.directory)
+  if err != nil {
+    return err
+  }
+  var names []string
+  names, err = f.Readdirnames(-1)
+  for idx := range names {
+    fname := names[idx]
+    hook(fname)
+  }
+  f.Close()
+  return nil
 }
 
 func (self *ArticleStore) OpenFile(messageID string) *os.File {

@@ -11,7 +11,7 @@ import (
   "net"
   "strings"
 )
-
+  
 type ConnectionInfo struct {
   mode string
   newsgroup string

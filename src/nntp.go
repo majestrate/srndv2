@@ -111,14 +111,12 @@ func (self *NNTPConnection) sendMessage(message *NNTPMessage, d *NNTPDaemon) err
     return nil
   }
   // send check
-  err = self.Send("CHECK ")
-  err = self.SendLine(message.MessageID)
+  err = self.SendLine("CHECK "+message.MessageID)
   line = self.ReadLine()
   if strings.HasPrefix(line, "238 ") {
     // accepted
     // send it
-    err = self.Send("TAKETHIS ")
-    err = self.SendLine(message.MessageID)
+    err = self.SendLine("TAKETHIS "+message.MessageID)
     if err != nil {
       log.Println("error in outfeed", err)
       return  err
@@ -224,6 +222,9 @@ func (self *NNTPConnection) HandleInbound(d *NNTPDaemon) {
               if len(line) == 0 {
                 log.Fatal(self.conn.RemoteAddr(), "unexpectedly closed connection")
               }
+              if strings.HasPrefix(line, "Path: ") {
+                line = "Path: " + d.instance_name + "!" + line[6:]
+              }
               // done reading
               if line == ".\r\n" {
                 break
@@ -248,13 +249,9 @@ func (self *NNTPConnection) HandleInbound(d *NNTPDaemon) {
           }
           article := commands[1]
           if d.store.HasArticle(article) {
-            self.Send("435 ")
-            self.Send(commands[1])
-            self.SendLine(" we have this article")
+            self.SendLine("435 "+commands[1]+" we have this article")
           } else {
-            self.Send("238 ")
-            self.Send(commands[1])
-            self.SendLine(" we want this article please give it")
+            self.SendLine("238 "+commands[1]+" we want this article please give it")
           }
         }
       }

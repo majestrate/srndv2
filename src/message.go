@@ -74,7 +74,7 @@ func (self *NNTPMessage) LoadHeaders(file *os.File) bool {
       idx = strings.LastIndex(line, " ")
       if 1 + idx < llen {
         self.Name = line[:idx]
-        self.Email = line[idx+2:llen-1]
+        self.Email = line[idx+1:llen-1]
       } else {
         self.Name = line
       }

@@ -77,7 +77,9 @@ func (self *NNTPConnection) HandleOutbound(d *NNTPDaemon) {
   if d.sync_on_start {
     d.store.IterateAllArticles(func(messageID string) bool {
       msg := d.store.GetMessage(messageID, false)
-      err = self.sendMessage(msg, d)
+      if msg != nil {
+        err = self.sendMessage(msg, d)
+      }
       return err != nil
     }) 
   }
@@ -237,6 +239,7 @@ func (self *NNTPConnection) HandleInbound(d *NNTPDaemon) {
             // the send was good
             // tell them
             self.SendLine("239 "+article)
+            log.Println(self.conn.RemoteAddr(), "got article", article)
             d.infeed <- article
           }
         }

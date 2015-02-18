@@ -202,6 +202,9 @@ func (self *NNTPDaemon) Init() bool {
   self.store.directory = self.conf.store["base_dir"]
   self.store.Init()
   self.sync_on_start = self.conf.daemon["sync_on_start"] == "1"
+  if self.sync_on_start {
+    log.Println("sync on start") 
+  }
   self.bind_addr = self.conf.daemon["bind"]
   self.debug = self.conf.daemon["log"] == "debug"
   self.instance_name = self.conf.daemon["instance_name"]

@@ -73,73 +73,91 @@ func (self *NNTPConnection) HandleOutbound(d *NNTPDaemon) {
     self.Quit()
     return
   }
+  
+  if d.sync_on_start {
+    d.store.IterateAllArticles(func(messageID string) {
+      msg := d.store.GetMessage(messageID, false)
+      self.sendMessage(msg, d)
+    }) 
+  }
+  
   // mainloop
   for  {
     // poll for new message
     message := <- self.send
-    // check if we allow it
-    if self.policy == nil {
-      // we have no policy so reject
-      continue 
-    }
-    if ! self.policy.AllowsNewsgroup(message.Newsgroup) {
-      log.Println("not federating article", message.MessageID, "beause it's in", message.Newsgroup)
-      continue
-    }
-    // send check
-    err = self.Send("CHECK ")
+    self.sendMessage(message, d)
+  }
+}
+
+func (self *NNTPConnection) sendMessage(message *NNTPMessage, d *NNTPDaemon) {
+  var err error
+  var line string
+  // check if we allow it
+  if self.policy == nil {
+    // we have no policy so reject
+    return
+  }
+  if ! self.policy.AllowsNewsgroup(message.Newsgroup) {
+    log.Println("not federating article", message.MessageID, "beause it's in", message.Newsgroup)
+    return
+  }
+  // send check
+  err = self.Send("CHECK ")
+  err = self.SendLine(message.MessageID)
+  line = self.ReadLine()
+  if strings.HasPrefix(line, "238 ") {
+    // accepted
+    // send it
+    err = self.Send("TAKETHIS ")
     err = self.SendLine(message.MessageID)
-    line = self.ReadLine()
-    if strings.HasPrefix(line, "238 ") {
-      // accepted
-      // send it
-      err = self.Send("TAKETHIS ")
-      err = self.SendLine(message.MessageID)
-      // load file
-      data, err := ioutil.ReadFile(d.store.GetFilename(message.MessageID))
-      if err != nil {
-        log.Fatal("failed to read article", message.MessageID)
-        self.Quit()
-        return
-      }
-      // split into lines
-      parts := bytes.Split(data,[]byte{'\n'})
-      // for each line send it
-      for idx := range parts {
-        ba := parts[idx]
-        err = self.SendBytes(ba)
-        err = self.Send("\r\n")
-      }
-      // send delimiter
-      err = self.SendLine(".")
-      if err != nil {
-        log.Println("failed to send")
-        self.Quit()
-        return
-      }
-      // check for success / fail
-      line := self.ReadLine()
-      if strings.HasPrefix(line, "239 ") {
-        log.Println("Article", message.MessageID, "sent")
-      } else {
-        log.Println("Article", message.MessageID, "failed to send", line)
-      }
-      // continue
-      continue
-    } else if strings.HasPrefix(line, "435 ") {
-      // already have it
-      if self.debug {
-        log.Println(message.MessageID, "already owned")
-      }
-    } else if strings.HasPrefix(line, "437 ") {
-      // article banned
-      log.Println(message.MessageID, "was banned")
-    }
     if err != nil {
+      log.Println("error in outfeed", err)
+      return  
+    }
+    // load file
+    data, err := ioutil.ReadFile(d.store.GetFilename(message.MessageID))
+    if err != nil {
+      log.Fatal("failed to read article", message.MessageID)
       self.Quit()
-      log.Println("failure in outfeed", err)	
       return
     }
+    // split into lines
+    parts := bytes.Split(data,[]byte{'\n'})
+    // for each line send it
+    for idx := range parts {
+      ba := parts[idx]
+      err = self.SendBytes(ba)
+      err = self.Send("\r\n")
+    }
+    // send delimiter
+    err = self.SendLine(".")
+    if err != nil {
+      log.Println("failed to send")
+      self.Quit()
+      return
+    }
+    // check for success / fail
+    line := self.ReadLine()
+    if strings.HasPrefix(line, "239 ") {
+      log.Println("Article", message.MessageID, "sent")
+    } else {
+      log.Println("Article", message.MessageID, "failed to send", line)
+    }
+    // done
+    return
+  } else if strings.HasPrefix(line, "435 ") {
+    // already have it
+    if self.debug {
+      log.Println(message.MessageID, "already owned")
+    }
+  } else if strings.HasPrefix(line, "437 ") {
+    // article banned
+    log.Println(message.MessageID, "was banned")
+  }
+  if err != nil {
+    self.Quit()
+    log.Println("failure in outfeed", err)	
+    return
   }
 }
 

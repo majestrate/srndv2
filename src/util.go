@@ -30,7 +30,7 @@ func EnsureDir(dirname string) {
 
 // TODO make this work better
 func ValidMessageID(id string) bool {
-  if len(id) == 0 {
+  if len(id) <= 4 {
     return false 
   }
   if id[0] != '<' || id[len(id)-1] != '>' {

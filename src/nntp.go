@@ -221,7 +221,7 @@ func (self *NNTPConnection) HandleInbound(d *NNTPDaemon) {
         if len(commands) == 2 {
           article := commands[1]
           if ValidMessageID(article) {
-            file := d.store.OpenFile(article)
+            file := d.store.CreateFile(article)
             var rewrote_path bool
             for {
               line := self.ReadLine()

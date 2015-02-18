@@ -113,7 +113,7 @@ func (self *NNTPConnection) sendMessage(message *NNTPMessage, d *NNTPDaemon) err
     return nil
   }
   if ! self.policy.FederateNewsgroup(message.Newsgroup) {
-    log.Println("dont federate article", message.messageID, "disallowed by feed policy")
+    log.Println("dont federate article", message.MessageID, "disallowed by feed policy")
     return nil
   }
   // send check

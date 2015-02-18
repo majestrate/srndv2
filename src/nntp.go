@@ -78,11 +78,14 @@ func (self *NNTPConnection) HandleOutbound(d *NNTPDaemon) {
     // poll for new message
     message := <- self.send
     // check if we allow it
+    if self.policy == nil {
+      // we have no policy so reject
+      continue 
+    }
     if ! self.policy.AllowsNewsgroup(message.Newsgroup) {
       log.Println("not federating article", message.MessageID, "beause it's in", message.Newsgroup)
       continue
-    } 
-    log.Println("send article")
+    }
     // send check
     err = self.Send("CHECK ")
     err = self.SendLine(message.MessageID)

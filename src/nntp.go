@@ -75,9 +75,10 @@ func (self *NNTPConnection) HandleOutbound(d *NNTPDaemon) {
   }
   
   if d.sync_on_start {
-    d.store.IterateAllArticles(func(messageID string) {
+    d.store.IterateAllArticles(func(messageID string) bool {
       msg := d.store.GetMessage(messageID, false)
-      self.sendMessage(msg, d)
+      er := self.sendMessage(msg, d)
+      return er != nil
     }) 
   }
   
@@ -85,21 +86,25 @@ func (self *NNTPConnection) HandleOutbound(d *NNTPDaemon) {
   for  {
     // poll for new message
     message := <- self.send
-    self.sendMessage(message, d)
+    err = self.sendMessage(message, d)
+    if err != nil {
+      log.Println(err)
+      break
+    }
   }
 }
 
-func (self *NNTPConnection) sendMessage(message *NNTPMessage, d *NNTPDaemon) {
+func (self *NNTPConnection) sendMessage(message *NNTPMessage, d *NNTPDaemon) error {
   var err error
   var line string
   // check if we allow it
   if self.policy == nil {
     // we have no policy so reject
-    return
+    return nil
   }
   if ! self.policy.AllowsNewsgroup(message.Newsgroup) {
     log.Println("not federating article", message.MessageID, "beause it's in", message.Newsgroup)
-    return
+    return nil
   }
   // send check
   err = self.Send("CHECK ")
@@ -112,14 +117,14 @@ func (self *NNTPConnection) sendMessage(message *NNTPMessage, d *NNTPDaemon) {
     err = self.SendLine(message.MessageID)
     if err != nil {
       log.Println("error in outfeed", err)
-      return  
+      return  err
     }
     // load file
     data, err := ioutil.ReadFile(d.store.GetFilename(message.MessageID))
     if err != nil {
       log.Fatal("failed to read article", message.MessageID)
       self.Quit()
-      return
+      return err
     }
     // split into lines
     parts := bytes.Split(data,[]byte{'\n'})
@@ -134,7 +139,7 @@ func (self *NNTPConnection) sendMessage(message *NNTPMessage, d *NNTPDaemon) {
     if err != nil {
       log.Println("failed to send")
       self.Quit()
-      return
+      return err
     }
     // check for success / fail
     line := self.ReadLine()
@@ -144,7 +149,7 @@ func (self *NNTPConnection) sendMessage(message *NNTPMessage, d *NNTPDaemon) {
       log.Println("Article", message.MessageID, "failed to send", line)
     }
     // done
-    return
+    return nil
   } else if strings.HasPrefix(line, "435 ") {
     // already have it
     if self.debug {
@@ -157,8 +162,9 @@ func (self *NNTPConnection) sendMessage(message *NNTPMessage, d *NNTPDaemon) {
   if err != nil {
     self.Quit()
     log.Println("failure in outfeed", err)	
-    return
+    return err
   }
+  return nil
 }
 
 // handle inbound connection

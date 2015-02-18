@@ -10,7 +10,7 @@ import (
   "path/filepath"
 )
 
-type StoreIteratorHook func(string)
+type StoreIteratorHook func (fname string) bool
 
 type ArticleStore struct {
   directory string
@@ -29,7 +29,9 @@ func (self *ArticleStore) IterateAllArticles(hook StoreIteratorHook) error {
   names, err = f.Readdirnames(-1)
   for idx := range names {
     fname := names[idx]
-    hook(fname)
+    if hook(fname) {
+      break
+    }
   }
   f.Close()
   return nil

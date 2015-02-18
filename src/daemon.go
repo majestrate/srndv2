@@ -118,6 +118,7 @@ func (self *NNTPDaemon) persistFeed(conf FeedConfig) {
       policy := &conf.policy
       nntp := self.newConnection(conn, false, policy)
       nntp.HandleOutbound(self)
+      log.Println("remove outfeed")
       delete(self.feeds, nntp)
     }
   }

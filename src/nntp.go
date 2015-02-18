@@ -218,13 +218,14 @@ func (self *NNTPConnection) HandleInbound(d *NNTPDaemon) {
           article := commands[1]
           if ValidMessageID(article) {
             file := d.store.OpenFile(article)
+            var rewrote_path bool
             for {
               line := self.ReadLine()
               // unexpected close
               if len(line) == 0 {
                 log.Fatal(self.conn.RemoteAddr(), "unexpectedly closed connection")
               }
-              if strings.HasPrefix(line, "Path: ") {
+              if ! rewrote_path && strings.HasPrefix(line, "Path: ") {
                 line = "Path: " + d.instance_name + "!" + line[6:]
               }
               // done reading

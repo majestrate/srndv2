@@ -196,7 +196,7 @@ func (self *NNTPDaemon) Init() bool {
     log.Println("cannot load config")
     return false
   }
-  self.infeed = make(chan string, 20)
+  self.infeed = make(chan string, 200)
   self.feeds = make(map[NNTPConnection]bool)
   self.store = new(ArticleStore)
   self.store.directory = self.conf.store["base_dir"]

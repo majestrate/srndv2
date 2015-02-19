@@ -10,6 +10,10 @@ import (
   "strings"
 )
 
+func DelFile(fname string) {
+  os.Remove(fname)
+}
+
 func CheckFile(fname string) bool {
   if _, err := os.Stat(fname) ; os.IsNotExist(err) {
     return false

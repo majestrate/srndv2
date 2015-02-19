@@ -17,11 +17,16 @@ type FeedConfig struct {
   proxy_addr string
 }
 
+type APIConfig struct {
+  srndAddr string
+  frontendAddr string
+}
 type SRNdConfig struct { 
   daemon map[string]string
   store map[string]string
   database map[string]string
   feeds []FeedConfig
+  api APIConfig
 }
 
 // check for config files
@@ -41,6 +46,27 @@ func CheckConfig() {
       log.Fatal("cannot generate feeds.ini", err)
     }
   }
+  if ! CheckFile("api.ini") {
+    log.Println("no api.ini, creating...")
+    err := GenAPIConfig()
+    if err != nil {
+      log.Fatal("cannot generate api.ini") 
+    }
+  }
+}
+
+// generate default api.ini
+func GenAPIConfig() error {
+  conf := configparser.NewConfiguration()
+  
+  sect := conf.NewSection("srnd")
+  sect.Add("socket", "srnd.sock")
+  
+  sect = conf.NewSection("api-beyond")
+  sect.Add("socket", "beyond.sock")
+  sect.Add("enable", "0")
+  
+  return configparser.Save(conf, "api.ini")
 }
 
 // generate default feeds.ini
@@ -142,41 +168,52 @@ func ReadConf() *SRNdConfig {
   var num_sections int
   num_sections = len(sections)
   
-  if num_sections == 0 {
-    log.Fatal("no feeds in feeds.ini")
+  if num_sections > 0 {
+    sconf.feeds = make([]FeedConfig, num_sections)
+    idx := 0
+
+    // load feeds
+    for _, sect := range sections {
+      var fconf FeedConfig
+      // check for proxy settings
+      val := sect.ValueOf("proxy-type")
+      if len(val) > 0 && strings.ToLower(val) != "none" {
+        fconf.proxy_type = strings.ToLower(val)
+        proxy_host := sect.ValueOf("proxy-host")
+        proxy_port := sect.ValueOf("proxy-port")
+        fconf.proxy_addr = strings.Trim(proxy_host, " ") + ":" + strings.Trim(proxy_port, " ")
+      }
+
+      // load feed polcies
+      sect_name :=  sect.Name()[5:]
+      fconf.addr = strings.Trim(sect_name, " ")
+      feed_sect, err := conf.Section(sect_name)
+      if err != nil {
+        log.Fatal("no section", sect_name, "in feeds.ini")
+      }
+      opts := feed_sect.Options()
+      fconf.policy.rules = make(map[string]string)
+      for k, v := range opts {
+        fconf.policy.rules[k] = v
+      }
+      sconf.feeds[idx] = fconf
+      idx += 1
+    }
   }
-
-  sconf.feeds = make([]FeedConfig, num_sections)
-
-  idx := 0
-
-  // load feeds
-  for _, sect := range sections {
-    var fconf FeedConfig
-    // check for proxy settings
-    val := sect.ValueOf("proxy-type")
-    if len(val) > 0 && strings.ToLower(val) != "none" {
-      fconf.proxy_type = strings.ToLower(val)
-      proxy_host := sect.ValueOf("proxy-host")
-      proxy_port := sect.ValueOf("proxy-port")
-      fconf.proxy_addr = strings.Trim(proxy_host, " ") + ":" + strings.Trim(proxy_port, " ")
-    }
-
-    // load feed polcies
-    sect_name :=  sect.Name()[5:]
-    fconf.addr = strings.Trim(sect_name, " ")
-    feed_sect, err := conf.Section(sect_name)
-    if err != nil {
-      log.Fatal("no section", sect_name, "in feeds.ini")
-    }
-    opts := feed_sect.Options()
-    fconf.policy.rules = make(map[string]string)
-    for k, v := range opts {
-      fconf.policy.rules[k] = v
-    }
-    sconf.feeds[idx] = fconf
-    idx += 1
+  
+  fname = "api.ini"
+  
+  conf, err = configparser.Read(fname)
+  
+  if err != nil {
+    log.Fatal("failed to open api.ini")
+    return nil
   }
-
+  var sect *configparser.Section
+  
+  sect, err = conf.Section("srnd")
+  sconf.api.srndAddr = sect.ValueOf("srnd-socket")
+  sconf.api.frontendAddr = sect.ValueOf("frontend-socket")
+  
   return &sconf
 }

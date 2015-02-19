@@ -17,7 +17,7 @@ type NNTPDaemon struct {
   bind_addr string
   conf *SRNdConfig
   store *ArticleStore
-  api_caller *API
+  api *SRNdAPI
   listener net.Listener
   debug bool
   sync_on_start bool
@@ -141,9 +141,13 @@ func (self *NNTPDaemon) Run() {
     go self.persistFeed(self.conf.feeds[idx])
   }
 
-  self.syncAll()
-  
+  self.syncAllFeeds()
+
+  // start accepting incoming connections
   go self.mainloop()
+  
+  // start api 
+  go self.api.Mainloop()
   
   // loop over messages
   for {
@@ -161,7 +165,7 @@ func (self *NNTPDaemon) Run() {
   }
 }
 
-func (self *NNTPDaemon) syncAll() {
+func (self *NNTPDaemon) syncAllFeeds() {
   var err error
   if self.sync_on_start {
     log.Println("sync all feeds")
@@ -223,9 +227,14 @@ func (self *NNTPDaemon) Init() bool {
   }
   self.infeed = make(chan string, 200)
   self.feeds = make(map[NNTPConnection]bool)
+  
   self.store = new(ArticleStore)
   self.store.directory = self.conf.store["base_dir"]
   self.store.Init()
+  
+  self.api = new(SRNdAPI)
+  self.api.Init(self)
+  
   self.sync_on_start = self.conf.daemon["sync_on_start"] == "1"
   if self.sync_on_start {
     log.Println("sync on start") 

@@ -17,7 +17,7 @@ type SRNdAPI struct {
   listener net.Listener
   config *APIConfig
   daemon *NNTPDaemon
-  client *io.ReadWriteCloser
+  client *bufio.Writer
 }
 
 type API_File struct {
@@ -27,17 +27,8 @@ type API_File struct {
   data string
 }
 
-type API_Article struct {
-  id string
-  newsgroup string
-  op bool
-  thread string
-  frontend string
-  sage bool
-  subject string
-  comment string
-  files []API_File
-}
+// api message for incoming to daemon
+type API_InMessage map[string]interface{} 
 
 
 func (self *SRNdAPI) Init(d *NNTPDaemon) {
@@ -64,16 +55,37 @@ func (self *SRNdAPI) Mainloop() {
       log.Println("failure to accept incoming api connection", err)
       break
     }
-    go self.handleClient(conn)
+    log.Println("new api connection")
+    self.handleClient(conn)
+    self.client = nil
+    log.Println("api connection done")
   }
 }
 
 // handle an incoming json object
-func (self *SRNdAPI) handleJSON(raw []byte, j map[string]interface{}) {
-  please, ok := j["please"]
-  if ok {
-    log.Println("please ", please)
-    
+func (self *SRNdAPI) handleMessage(m API_InMessage) {
+  please, ok := m["please"]
+  var val interface{}
+  if ! ok {
+    log.Println("invalid api command")
+    return
+  }
+  if please == "socket" {
+    val = m["socket"]
+    var socket string
+    switch val.(type) {
+      case string:
+        socket = val.(string)
+      default:
+        log.Println("wtf", val)
+    }
+    conn, err := net.Dial("unix", socket)
+    if err != nil {
+      log.Println("api error", err)
+      return
+    }
+    log.Println("api client socket set to", socket)
+    self.client = bufio.NewWriter(conn)
   }
 }
 
@@ -81,20 +93,29 @@ func (self *SRNdAPI) handleJSON(raw []byte, j map[string]interface{}) {
 func (self *SRNdAPI) handleClient(incoming io.ReadWriteCloser) {
   
   reader := bufio.NewReader(incoming)
-  
+  var buff bytes.Buffer
+  var message API_InMessage
   for {
-    var j map[string]interface{}
-    var buff bytes.Buffer
-    line, err := reader.ReadBytes(10)
+    line, err := reader.ReadBytes('\n')
+    if err != nil {
+      break
+    }
+    // eof
+    if len(line) == 0 {
+      break
+    }
     if line[0] == '.' {
+      log.Println("api got command")
       // marshal buffer to json
       raw := buff.Bytes()
-      err = json.Unmarshal(raw, j)
+      buff.Reset()
+      err = json.Unmarshal(raw, &message)
       // handle json 
       // drop connection if json is invalid
       if err == nil {
-        self.handleJSON(raw, j)
+        self.handleMessage(message)
       } else {
+        log.Println("api got bad json:",err)
         break
       }
     } else {
@@ -102,4 +123,5 @@ func (self *SRNdAPI) handleClient(incoming io.ReadWriteCloser) {
     }
   }
   incoming.Close()
+  log.Println("api connection closed")
 }

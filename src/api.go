@@ -20,28 +20,6 @@ type SRNdAPI struct {
   client net.Conn
 }
 
-type API_File struct {
-  mime string
-  extension string
-  name string
-  data string
-}
-
-// api message for articles
-type API_Article struct {
-  please string
-  id string
-  newsgroup string
-  op bool
-  thread string
-  name string
-  sage bool
-  key string
-  subject string
-  comment string
-  files []API_File
-}
-
 // api message for incoming to daemon
 type API_InMessage map[string]interface{} 
 
@@ -84,13 +62,13 @@ func (self *SRNdAPI) write_Client(obj interface{}) error {
   // marshal json to bytes
   raw, err := json.Marshal(obj)
   if err != nil {
+    log.Println("error marshaling json", err)
     return err
   }
   
   // write bytes to buffer with delimeter
   buff.Write(raw)
   buff.WriteString("\n.\n")
-  
   // write out to client
   _, err = self.client.Write(buff.Bytes())
   return err
@@ -108,8 +86,7 @@ func (self *SRNdAPI) handle_Socket(socket string) {
 }
 
 func (self *SRNdAPI) sendMessage(message *NNTPMessage) error {
-  msg := message.APIMessage()
-  return self.write_Client(msg)
+  return self.write_Client(message)
 }
 
 func (self *SRNdAPI) handle_SyncNewsgroup(newsgroup string) error {
@@ -119,8 +96,9 @@ func (self *SRNdAPI) handle_SyncNewsgroup(newsgroup string) error {
     msg := store.GetMessage(article_id, true)
     if msg == nil {
       log.Println("could not load message", article_id)
-      return true
+      return false
     }
+    //log.Println("loaded", article_id)
     err = self.sendMessage(msg)
     return err != nil
   })
@@ -134,10 +112,15 @@ func (self *SRNdAPI) handle_SyncAllNewsgroups() error {
     msg := store.GetMessage(article_id, true)
     if msg == nil {
       log.Println("could not load message", article_id)
+      return false
+    }
+    log.Println("loaded", article_id)
+    err = self.sendMessage(msg)
+    if err != nil {
+      log.Println("error sending message", err)
       return true
     }
-    err = self.sendMessage(msg)
-    return err != nil
+    return false
   })
   return err
 }
@@ -155,12 +138,11 @@ func (self *SRNdAPI) handleMessage(m API_InMessage) {
     self.handle_Socket(val.(string))
   } else if please == "sync" {
     val = m["newsgroups"]
-    var newsgroups []string
-    newsgroups = val.([]string)
+    newsgroups := val.([]interface{})
     if len(newsgroups) > 0 {
       for idx := range newsgroups {
         group := newsgroups[idx]
-        err := self.handle_SyncNewsgroup(group)
+        err := self.handle_SyncNewsgroup(group.(string))
         if err != nil {
           log.Println("error syncing", group, err)
         }

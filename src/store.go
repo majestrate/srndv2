@@ -79,6 +79,9 @@ func (self *ArticleStore) IterateAllArticles(hook StoreIteratorHook) error {
   names, err = f.Readdirnames(-1)
   for idx := range names {
     fname := names[idx]
+    if IsDir(self.GetFilename(fname)) {
+      continue
+    }
     if hook(fname) {
       break
     }
@@ -119,12 +122,8 @@ func (self *ArticleStore) GetMessage(messageID string, loadBody bool) *NNTPMessa
     return nil
   }
   message := new(NNTPMessage)
-  success := message.LoadHeaders(file)
+  success := message.Load(file, loadBody)
   file.Close()
-  file, err = os.Open(fname)
-  if err == nil && loadBody {
-    success = message.LoadBody(file)
-  }
   if success {
     return message
   }

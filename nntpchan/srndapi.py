@@ -7,6 +7,7 @@ import json
 import os
 import socket
 import threading
+import traceback
 import logging
 import queue
 
@@ -56,13 +57,19 @@ class SRNdAPI(threading.Thread):
         while True:
             try:
                 line = f.readline()
-            except:
+            except Exception as e:
+                self.log.error(e)
                 return
             else:
                 if line == '':
                     break
                 if line == '.\n':
-                    self.got(json.loads(buff))
+                    try:
+                        self.got(json.loads(buff))
+                    except:
+                        traceback.print_exc()
+                    finally:
+                        buff = ''
                 else:
                     buff += line
                 

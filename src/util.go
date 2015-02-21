@@ -21,6 +21,14 @@ func CheckFile(fname string) bool {
   return true
 }
 
+func IsDir(dirname string) bool {
+  stat, err := os.Stat(dirname)
+  if err != nil {
+    log.Fatal(err)
+  }
+  return stat.IsDir()
+}
+
 // ensure a directory exists
 func EnsureDir(dirname string) {
   stat, err := os.Stat(dirname)

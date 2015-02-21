@@ -28,31 +28,37 @@ class Frontend(srndapi.SRNdAPI):
         """
         we got an incoming object
         """
-        if obj['please'] == 'post':
+        self.log.info("got {}".format(obj["Please"]))
+        if obj["Please"] == "post":
             self.got_post(obj)
             
     def put_file(self, file_obj):
         """
         put a file onto the disk
         """
+        self.log.info("putfile")
             
     def got_post(self, obj):
         """
         we got a post
         """
-        for f in obj['files']:
-            self.put_file(f)
-        postid = obj['id']
+        self.log.info("we got a post")
+        if obj['Attachments']:
+            for f in obj['Attachments']:
+                self.put_file(f)
+        postid = obj['MessageID']
         post = models.Article(postid)
+        self.log.info("loading...")
         for attr in obj.keys():
-            if attr in ('please', 'op', 'files'):
+            if attr in ('Please', 'OP', 'Attachments'):
                 continue
             val = obj[attr]
-            if val and len(val) > 0:
-                setattr(post, attr, val)
-        
-        post.save(self.sql)
-            
+            if val:
+                if isinstance(val, bool):
+                    setattr(post, attr, val)
+                elif len(val) > 0:
+                    setattr(post, attr, val)
+        self.log.info("saved")
             
             
         

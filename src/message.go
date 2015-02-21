@@ -5,21 +5,27 @@ package main
 
 import (
   "bufio"
+  "bytes"
   "database/sql"
+  "io"
   "log"
+  "mime"
+  "mime/multipart"
   "os"
+  "path/filepath"
   "strings"
   "time"
 )
 
 type NNTPAttachment struct {
-  mime string
-  name string
-  extension string
-  data string
+  Mime string
+  Name string
+  Extension string
+  Data string
 }
 
 type NNTPMessage struct {
+  Please string
   MessageID string
   Reference string
   Newsgroup string
@@ -36,8 +42,9 @@ type NNTPMessage struct {
   Attachments []NNTPAttachment
 }
 
-// load headers from file
-func (self *NNTPMessage) LoadHeaders(file *os.File) bool {
+// load from file
+func (self *NNTPMessage) Load(file *os.File, loadBody bool) bool {
+  self.Please = "post"
   reader := bufio.NewReader(file)
   var idx int
   for {
@@ -94,43 +101,77 @@ func (self *NNTPMessage) LoadHeaders(file *os.File) bool {
       self.ContentType = line[14:llen-1]
     }
   }
+  if !loadBody || self.Newsgroup == "ano.paste" {
+    return true
+  }
+  var bodybuff bytes.Buffer
+  _, err := bodybuff.ReadFrom(reader)
+  if err != nil {
+    log.Println(self.MessageID, "failed to load body", err) 
+  }
+  if self.ContentType == "" {
+    self.Message = bodybuff.String()
+    return true
+  }
   
-  return true
-    
-}
-
-// load body
-// TODO: implement
-func (self *NNTPMessage) LoadBody(file *os.File) bool {
-  return false
-}
-
-// convert to api message
-func (self *NNTPMessage) APIMessage() API_Article {
-  var msg API_Article
-  msg.id = self.MessageID
-  msg.newsgroup = self.Newsgroup
-  msg.op = len(self.Reference) == 0
-  msg.thread = self.Reference
-  msg.sage = strings.ToLower(self.Email) == "sage"
-  msg.key = self.PubKey
-  msg.subject = self.Subject
-  msg.comment = self.Message
-  if len(self.Attachments) > 0 {
-    msg.files = make([]API_File, len(self.Attachments))
-    for idx := range(self.Attachments) {
-      attchment := self.Attachments[idx]
-      msg.files[idx].mime = attchment.mime
-      msg.files[idx].name = attchment.name
-      msg.files[idx].data = attchment.data
-      msg.files[idx].extension = attchment.extension
+  mediaType, params, err := mime.ParseMediaType(self.ContentType)
+  if err != nil {
+    log.Println(self.MessageID, "error loading body", err)
+    return false
+  }
+  bodyreader := bytes.NewReader(bodybuff.Bytes())
+  parts := make([]NNTPAttachment, 32)
+  idx = 0
+  if strings.HasPrefix(mediaType, "multipart/") {
+    mr := multipart.NewReader(bodyreader, params["boundary"])
+    for {
+      var buff bytes.Buffer
+      if idx >= 32 {
+        log.Println("too many parts in", self.MessageID)
+        return false
+      }
+      part, err := mr.NextPart()
+      if err == io.EOF {
+        break
+      }
+      if err != nil {
+        log.Println("failed to read multipart message in", self.MessageID, err)
+        return true
+      }
+      fname := part.FileName()
+      parts[idx].Name = fname
+      parts[idx].Extension = filepath.Ext(fname)
+      parts[idx].Mime = part.Header.Get("Content-Type")
+      _, err = buff.ReadFrom(part)
+      if err != nil {
+        log.Println("failed to load attachment for", self.MessageID, err)
+        return false
+      }
+      parts[idx].Data = buff.String()
+      idx += 1
+    }
+    if idx > 0 {
+      self.Attachments = make([]NNTPAttachment, idx)
+      for idx = range(self.Attachments) {
+        self.Attachments[idx] = parts[idx]
+      }
+    }
+  } else {
+    for {
+      line, err := reader.ReadString('\n')
+      if err == io.EOF {
+        return true
+      } 
+      if err != nil {
+        log.Println("failed to load message", self.MessageID, err)
+      }
+      self.Message += line
     }
   }
-  return msg
+  return true
 }
 
 // add to database
-
 func (self *NNTPMessage) Save(database *sql.DB) {
   var userid string
   err := database.QueryRow(`INSERT INTO nntp_posts(

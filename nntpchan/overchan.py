@@ -28,7 +28,7 @@ class Frontend(srndapi.SRNdAPI):
         """
         we got an incoming object
         """
-        self.log.info("got {}".format(obj["Please"]))
+        self.log.info("got {}".format(obj))
         if obj["Please"] == "post":
             self.got_post(obj)
             
@@ -54,7 +54,7 @@ class Frontend(srndapi.SRNdAPI):
                 continue
             val = obj[attr]
             if val:
-                if isinstance(val, bool):
+                if isinstance(val, bool) or isinstance(val, int):
                     setattr(post, attr, val)
                 elif len(val) > 0:
                     setattr(post, attr, val)

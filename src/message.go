@@ -32,9 +32,9 @@ type NNTPMessage struct {
   Name string
   Email string
   Subject string
-  PubKey string
+  Key string
   Signature string
-  Posted time.Time
+  Posted int64
   Message string
   Path string
   ContentType string
@@ -76,26 +76,26 @@ func (self *NNTPMessage) Load(file *os.File, loadBody bool) bool {
       self.Subject = line[9:llen-1]
     } else if strings.HasPrefix(lowline, "path: ") {
       self.Path = line[6:llen-1]
-    } else if strings.HasPrefix(lowline, "reference: ") {
-      self.Reference = line[11:llen-1]
+    } else if strings.HasPrefix(lowline, "references: ") {
+      self.Reference = line[12:llen-1]
     } else if strings.HasPrefix(lowline, "from: ") {
       line = line[6:llen-1]
       llen = len(line)
       idx = strings.LastIndex(line, " ")
-      if idx < llen && idx > 0 {
+      if idx + 2 < llen && idx > 0 {
         self.Name = line[:idx]
-        self.Email = line[idx+1:llen-1]
+        self.Email = line[idx+2:llen-1]
       } else {
         self.Name = line
       }
     } else if strings.HasPrefix(lowline, "x-pubkey-ed25519: ") {
-      self.PubKey = line[18:llen-1] 
+      self.Key = line[18:llen-1] 
     } else if strings.HasPrefix(lowline, "x-signature-ed25519-sha512: ") {
       self.Signature = line[28:llen-1]
     } else if strings.HasPrefix(lowline, "date: ") {
       date, err := time.Parse(time.RFC1123Z, line[6:llen-1])
       if err == nil {
-        self.Posted = date
+        self.Posted = date.Unix()
       }
     } else if strings.HasPrefix(lowline, "content-type: ") {
       self.ContentType = line[14:llen-1]
@@ -119,6 +119,10 @@ func (self *NNTPMessage) Load(file *os.File, loadBody bool) bool {
     log.Println(self.MessageID, "error loading body", err)
     return false
   }
+  semi_idx := strings.Index(self.ContentType, ";")
+  if semi_idx > 0 {
+    self.ContentType = self.ContentType[:semi_idx]
+  }
   bodyreader := bytes.NewReader(bodybuff.Bytes())
   parts := make([]NNTPAttachment, 32)
   idx = 0
@@ -141,7 +145,12 @@ func (self *NNTPMessage) Load(file *os.File, loadBody bool) bool {
       fname := part.FileName()
       parts[idx].Name = fname
       parts[idx].Extension = filepath.Ext(fname)
-      parts[idx].Mime = part.Header.Get("Content-Type")
+      mime := part.Header.Get("Content-Type")
+      semi_idx = strings.Index(mime, ";")
+      if semi_idx > 0 {
+        mime = mime[:semi_idx]
+      }
+      parts[idx].Mime = mime
       _, err = buff.ReadFrom(part)
       if err != nil {
         log.Println("failed to load attachment for", self.MessageID, err)
@@ -157,16 +166,9 @@ func (self *NNTPMessage) Load(file *os.File, loadBody bool) bool {
       }
     }
   } else {
-    for {
-      line, err := reader.ReadString('\n')
-      if err == io.EOF {
-        return true
-      } 
-      if err != nil {
-        log.Println("failed to load message", self.MessageID, err)
-      }
-      self.Message += line
-    }
+  
+    self.Message = bodybuff.String()
+    
   }
   return true
 }
@@ -177,7 +179,7 @@ func (self *NNTPMessage) Save(database *sql.DB) {
   err := database.QueryRow(`INSERT INTO nntp_posts(
     messageID, newsgroup, subject, pubkey, message, parent)
     VALUES( $1, $2, $3, $4, $5, $6) 
-    RETURNING id`, self.MessageID, self.Newsgroup, self.Subject, self.PubKey, self.Message, self.Reference).Scan(&userid)
+    RETURNING id`, self.MessageID, self.Newsgroup, self.Subject, self.Key, self.Message, self.Reference).Scan(&userid)
   if err != nil {
     log.Println("failed to save post to database", err)
     return

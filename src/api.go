@@ -114,7 +114,7 @@ func (self *SRNdAPI) handle_SyncAllNewsgroups() error {
       log.Println("could not load message", article_id)
       return false
     }
-    log.Println("loaded", article_id)
+    //log.Println("loaded", article_id)
     err = self.sendMessage(msg)
     if err != nil {
       log.Println("error sending message", err)

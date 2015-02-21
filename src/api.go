@@ -17,14 +17,29 @@ type SRNdAPI struct {
   listener net.Listener
   config *APIConfig
   daemon *NNTPDaemon
-  client *bufio.Writer
+  client net.Conn
 }
 
 type API_File struct {
   mime string
   extension string
-  filename string
+  name string
   data string
+}
+
+// api message for articles
+type API_Article struct {
+  please string
+  id string
+  newsgroup string
+  op bool
+  thread string
+  name string
+  sage bool
+  key string
+  subject string
+  comment string
+  files []API_File
 }
 
 // api message for incoming to daemon
@@ -62,6 +77,55 @@ func (self *SRNdAPI) Mainloop() {
   }
 }
 
+// write a json object to the client with the delimiter
+func (self *SRNdAPI) write_Client(obj interface{}) error {
+  
+  var buff bytes.Buffer
+  // marshal json to bytes
+  raw, err := json.Marshal(obj)
+  if err != nil {
+    return err
+  }
+  
+  // write bytes to buffer with delimeter
+  buff.Write(raw)
+  buff.WriteString("\n.\n")
+  
+  // write out to client
+  _, err = self.client.Write(buff.Bytes())
+  return err
+}
+
+func (self *SRNdAPI) handle_Socket(socket string) {
+  
+  conn, err := net.Dial("unix", socket)
+  if err != nil {
+    log.Println("api error", err)
+    return
+  }
+  log.Println("api client socket set to", socket)
+  self.client = conn
+}
+
+func (self *SRNdAPI) sendMessage(message *NNTPMessage) error {
+  msg := message.APIMessage()
+  return self.write_Client(msg)
+}
+
+func (self *SRNdAPI) handle_SyncNewsgroup(newsgroup string) error {
+  var err error
+  store := self.daemon.store
+  store.iterAllForNewsgroup(newsgroup, func (article_id string) error {
+    msg := store.GetMessage(article_id, true)
+    if msg == nil {
+      return nil
+    }
+    err = self.sendMessage(msg)
+    return err
+  })
+  return err
+}
+
 // handle an incoming json object
 func (self *SRNdAPI) handleMessage(m API_InMessage) {
   please, ok := m["please"]
@@ -72,20 +136,22 @@ func (self *SRNdAPI) handleMessage(m API_InMessage) {
   }
   if please == "socket" {
     val = m["socket"]
-    var socket string
-    switch val.(type) {
-      case string:
-        socket = val.(string)
-      default:
-        log.Println("wtf", val)
+    self.handle_Socket(val.(string))
+  } else if please == "sync" {
+    val = m["newsgroups"]
+    var newsgroups []string
+    newsgroups = val.([]string)
+    if len(newsgroups) > 0 {
+      for idx := range newsgroups {
+        group := newsgroups[idx]
+        err := self.handle_SyncNewsgroup(group)
+        if err != nil {
+          log.Println("error syncing", group, err)
+        }
+      }
+    } else {
+      self.handle_SyncAllNewsgroups()
     }
-    conn, err := net.Dial("unix", socket)
-    if err != nil {
-      log.Println("api error", err)
-      return
-    }
-    log.Println("api client socket set to", socket)
-    self.client = bufio.NewWriter(conn)
   }
 }
 

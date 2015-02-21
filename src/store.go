@@ -5,9 +5,11 @@
 package main
 
 import (
+  "database/sql"
   "log"
   "os"
   "path/filepath"
+	_ "github.com/lib/pq"
 )
 // iterator hook function
 // return true on error
@@ -15,11 +17,18 @@ type StoreIteratorHook func (fname string) bool
 
 type ArticleStore struct {
   directory string
+  db_url string
+  database *sql.DB
 }
 
 // initialize article store
 func (self *ArticleStore) Init() {
+  var err error
   EnsureDir(self.directory)
+  self.database, err = sql.Open("postgres", self.db_url)
+  if err != nil {
+    log.Fatal("failed to open database connection", err) 
+  }
 }
 
 // iterate over the articles in this article store

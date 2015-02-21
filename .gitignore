@@ -2,6 +2,7 @@
 *~
 *.ini
 *.db
+*.json
 venv
 src/articles
 articles

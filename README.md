@@ -16,6 +16,7 @@ donate: bitcoin 15yuMzuueV8y5vPQQ39ZqQVz5Ey98DNrjE
 ## dependancies
 
     go get github.com/majestrate/configparser
+    go get github.com/lib/pq
 
 ## Notes 
 

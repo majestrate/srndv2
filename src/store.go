@@ -5,11 +5,9 @@
 package main
 
 import (
-  "database/sql"
   "log"
   "os"
   "path/filepath"
-	_ "github.com/lib/pq"
 )
 // iterator hook function
 // return true on error
@@ -17,18 +15,57 @@ type StoreIteratorHook func (fname string) bool
 
 type ArticleStore struct {
   directory string
-  db_url string
-  database *sql.DB
+  database *Database
 }
 
 // initialize article store
 func (self *ArticleStore) Init() {
-  var err error
   EnsureDir(self.directory)
-  self.database, err = sql.Open("postgres", self.db_url)
+}
+
+func (self *ArticleStore) StoreArticle(newsgroup string, article string) error {
+  var err error
+  group := filepath.Clean(newsgroup)
+  apath := filepath.Clean(article)
+  fpath := filepath.Join(self.directory, group)
+  fpath, err = filepath.Abs(fpath)
+  EnsureDir(fpath)
+  newpath := filepath.Join(fpath, apath)
   if err != nil {
-    log.Fatal("failed to open database connection", err) 
+    log.Println("failed to make symlinks", err)
+    return err
   }
+  if CheckFile(newpath) {
+    log.Println("already symlinked", newpath)
+    return nil
+  }
+  err = os.Symlink("../"+apath, newpath)
+  if err != nil {
+    log.Println("failed to symlink", err) 
+  } else {
+    log.Println("stored article", article, "in" , newsgroup)
+  }
+  return err
+}
+
+func (self *ArticleStore) IterateAllForNewsgroup(newsgroup string, hook StoreIteratorHook) error {
+  
+  group := filepath.Clean(newsgroup)
+  
+  fpath := filepath.Join(self.directory, group)
+  f, err := os.Open(fpath)
+  if err != nil {
+    return err
+  }
+  var names []string 
+  names, err = f.Readdirnames(-1)
+  for idx := range(names) {
+    fname := names[idx]
+    if hook(fname) {
+      break
+    }
+  }
+  return err
 }
 
 // iterate over the articles in this article store

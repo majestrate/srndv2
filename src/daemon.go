@@ -18,6 +18,7 @@ type NNTPDaemon struct {
   conf *SRNdConfig
   store *ArticleStore
   api *SRNdAPI
+  database *Database
   listener net.Listener
   debug bool
   sync_on_start bool
@@ -41,7 +42,7 @@ func (self *NNTPDaemon) newConnection(conn net.Conn, inbound bool, policy *FeedP
 func (self *NNTPDaemon) persistFeed(conf FeedConfig) {
   for {
     if self.running {
-      time.Sleep(1 * time.Second)
+      
       var conn net.Conn
       var err error
       proxy_type := strings.ToLower(conf.proxy_type)
@@ -122,6 +123,7 @@ func (self *NNTPDaemon) persistFeed(conf FeedConfig) {
       delete(self.feeds, nntp)
     }
   }
+  time.Sleep(1 * time.Second)
 }
 
 // run daemon
@@ -154,6 +156,7 @@ func (self *NNTPDaemon) Run() {
     message := <- self.infeed
     // load message
     nntp := self.store.GetMessage(message, false)
+    self.store.StoreArticle(nntp.Newsgroup, nntp.MessageID)
     // send to all outfeeds
     if nntp != nil {
       for feed , use := range self.feeds {
@@ -227,6 +230,19 @@ func (self *NNTPDaemon) Init() bool {
   }
   self.infeed = make(chan string, 200)
   self.feeds = make(map[NNTPConnection]bool)
+  
+  self.database = new(Database)
+  
+  db_host := self.conf.database["host"]
+  db_port := self.conf.database["port"]
+  db_user := self.conf.database["user"]
+  db_passwd := self.conf.database["password"]
+  
+  err := self.database.Init(db_host, db_port, db_user, db_passwd)
+  if err != nil {
+    log.Println("failed to initialize database", err)
+    return false
+  }
   
   self.store = new(ArticleStore)
   self.store.directory = self.conf.store["base_dir"]

@@ -14,7 +14,7 @@ from . import config
 
 _meta = MetaData()
 
-posts = Table('posts', _meta, 
+posts = Table('frontend_posts', _meta, 
             Column('article_id', Text),
             Column('id', GUID, primary_key=True),
             Column('newsgroup', Text, nullable=False),
@@ -23,12 +23,12 @@ posts = Table('posts', _meta,
             Column('subject', Text),
             Column('comment', Text))
               
-files = Table('files', _meta,
+files = Table('frotend_files', _meta,
             Column('file_id', GUID, primary_key=True),
             Column('filename', Text, nullable=False),
             Column('filepath', Text, nullable=False),
             Column('digest', Text, nullable=False),
-            Column('parent_id', GUID, ForeignKey('posts.id'), nullable=False))
+            Column('parent_id', GUID, ForeignKey('frontend_posts.id'), nullable=False))
 
 
 

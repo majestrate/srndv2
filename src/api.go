@@ -115,13 +115,29 @@ func (self *SRNdAPI) sendMessage(message *NNTPMessage) error {
 func (self *SRNdAPI) handle_SyncNewsgroup(newsgroup string) error {
   var err error
   store := self.daemon.store
-  store.iterAllForNewsgroup(newsgroup, func (article_id string) error {
+  store.IterateAllForNewsgroup(newsgroup, func (article_id string) bool {
     msg := store.GetMessage(article_id, true)
     if msg == nil {
-      return nil
+      log.Println("could not load message", article_id)
+      return true
     }
     err = self.sendMessage(msg)
-    return err
+    return err != nil
+  })
+  return err
+}
+
+func (self *SRNdAPI) handle_SyncAllNewsgroups() error {
+  var err error 
+  store := self.daemon.store
+  store.IterateAllArticles(func (article_id string) bool {
+    msg := store.GetMessage(article_id, true)
+    if msg == nil {
+      log.Println("could not load message", article_id)
+      return true
+    }
+    err = self.sendMessage(msg)
+    return err != nil
   })
   return err
 }

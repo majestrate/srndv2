@@ -5,6 +5,7 @@ package main
 
 import (
   "bufio"
+  "database/sql"
   "log"
   "os"
   "strings"
@@ -131,6 +132,14 @@ func (self *NNTPMessage) APIMessage() API_Article {
 // add to database
 
 func (self *NNTPMessage) Save(database *sql.DB) {
-  database.Query(`INSERT INTO nntp_posts(
-    messageID, newsgroup, subject, pubkey, message, parent,
+  var userid string
+  err := database.QueryRow(`INSERT INTO nntp_posts(
+    messageID, newsgroup, subject, pubkey, message, parent)
+    VALUES( $1, $2, $3, $4, $5, $6) 
+    RETURNING id`, self.MessageID, self.Newsgroup, self.Subject, self.PubKey, self.Message, self.Reference).Scan(&userid)
+  if err != nil {
+    log.Println("failed to save post to database", err)
+    return
+  }
+  log.Println("inserted post with UUID", userid)
 }

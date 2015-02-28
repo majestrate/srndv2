@@ -113,6 +113,7 @@ func (self *NNTPDaemon) persistFeed(conf FeedConfig) {
           log.Println("connected to", conf.addr)
         } else {
           log.Println("failed to connect to", conf.addr)
+					time.Sleep(5)
           continue
         }
       }

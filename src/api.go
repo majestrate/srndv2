@@ -17,6 +17,10 @@ type SRNdAPI struct {
   listener net.Listener
   config *APIConfig
   daemon *NNTPDaemon
+}
+
+type SRNdAPI_Handler struct {
+  daemon *NNTPDaemon
   client net.Conn
 }
 
@@ -49,14 +53,15 @@ func (self *SRNdAPI) Mainloop() {
       break
     }
     log.Println("new api connection")
-    self.handleClient(conn)
-    self.client = nil
-    log.Println("api connection done")
+    handler := new(SRNdAPI_Handler)
+    handler.daemon = self.daemon
+    handler.client = conn
+    go handler.handleClient(conn)
   }
 }
 
 // write a json object to the client with the delimiter
-func (self *SRNdAPI) write_Client(obj interface{}) error {
+func (self *SRNdAPI_Handler) write_Client(obj interface{}) error {
   
   var buff bytes.Buffer
   // marshal json to bytes
@@ -74,7 +79,7 @@ func (self *SRNdAPI) write_Client(obj interface{}) error {
   return err
 }
 
-func (self *SRNdAPI) handle_Socket(socket string) {
+func (self *SRNdAPI_Handler) handle_Socket(socket string) {
   
   conn, err := net.Dial("unix", socket)
   if err != nil {
@@ -85,11 +90,11 @@ func (self *SRNdAPI) handle_Socket(socket string) {
   self.client = conn
 }
 
-func (self *SRNdAPI) sendMessage(message *NNTPMessage) error {
+func (self *SRNdAPI_Handler) sendMessage(message *NNTPMessage) error {
   return self.write_Client(message)
 }
 
-func (self *SRNdAPI) handle_SyncNewsgroup(newsgroup string) error {
+func (self *SRNdAPI_Handler) handle_SyncNewsgroup(newsgroup string) error {
   var err error
   store := self.daemon.store
   store.IterateAllForNewsgroup(newsgroup, func (article_id string) bool {
@@ -105,7 +110,7 @@ func (self *SRNdAPI) handle_SyncNewsgroup(newsgroup string) error {
   return err
 }
 
-func (self *SRNdAPI) handle_SyncAllNewsgroups() error {
+func (self *SRNdAPI_Handler) handle_SyncAllNewsgroups() error {
   var err error 
   store := self.daemon.store
   store.IterateAllArticles(func (article_id string) bool {
@@ -126,7 +131,7 @@ func (self *SRNdAPI) handle_SyncAllNewsgroups() error {
 }
 
 // handle an incoming json object
-func (self *SRNdAPI) handleMessage(m API_InMessage) {
+func (self *SRNdAPI_Handler) handleMessage(m API_InMessage) {
   please, ok := m["please"]
   var val interface{}
   if ! ok {
@@ -154,7 +159,7 @@ func (self *SRNdAPI) handleMessage(m API_InMessage) {
 }
 
 // handle a client connection
-func (self *SRNdAPI) handleClient(incoming io.ReadWriteCloser) {
+func (self *SRNdAPI_Handler) handleClient(incoming io.ReadWriteCloser) {
   
   reader := bufio.NewReader(incoming)
   var buff bytes.Buffer

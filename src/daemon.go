@@ -145,20 +145,21 @@ func (self *NNTPDaemon) Run() {
   for idx := range self.conf.feeds {
     go self.persistFeed(self.conf.feeds[idx])
   }
-
+  // start api 
+  go self.api.Mainloop()
+  
   self.syncAllFeeds()
 
   // start accepting incoming connections
   go self.mainloop()
   
-  // start api 
-  go self.api.Mainloop()
+  
   
   // loop over messages
   for {
-    message := <- self.infeed
+    messageID := <- self.infeed
     // load message
-    nntp := self.store.GetMessage(message, false)
+    nntp := self.store.GetMessage(messageID, false)
     self.store.StoreArticle(nntp.Newsgroup, nntp.MessageID)
     // send to all outfeeds
     if nntp != nil {

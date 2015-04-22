@@ -13,7 +13,6 @@ from . import srndapi
 from . import util
 
 import logging
-import flask
 
 class Frontend(srndapi.SRNdAPI):
     """
@@ -28,7 +27,6 @@ class Frontend(srndapi.SRNdAPI):
         """
         we got an incoming object
         """
-        self.log.info("got {}".format(obj))
         if obj["Please"] == "post":
             self.got_post(obj)
             
@@ -71,7 +69,7 @@ class Frontend(srndapi.SRNdAPI):
         self.please('sync', newsgroups=newsgroups)
         
     def genID(self):
-        return '<{}.{}@{}>'.format(util.random_string(), util.now(), self.name)
+        return '<{}.{}@{}>'.format(util.random_string(10), util.now(), self.name)
         
     def post(self, newsgroup, parent, name, email, subject, comment, key=None):
         """
@@ -80,15 +78,16 @@ class Frontend(srndapi.SRNdAPI):
         obj = dict()
         if not newsgroup.startswith('overchan.'):
             return 'invalid newsgroup'
-        obj['id'] = self.genID()
-        obj['newsgroup'] = newsgroup
-        obj['parent'] = parent
-        obj['name'] = name
-        obj['email'] = email
-        obj['subject'] = subject
-        obj['comment'] = comment
-        obj['key'] = key
-        self.please('post', obj)
+        obj['MessageID'] = self.genID()
+        obj['Newsgroup'] = newsgroup
+        obj['Reference'] = parent
+        obj['Name'] = name
+        obj['Email'] = email
+        obj['Subject'] = subject
+        obj['Comment'] = comment
+        obj['Key'] = key
+        obj['Posted'] = util.now()
+        self.please('post', **obj)
         
     def register_api(self, api):
         self.log.info('registering with api...')
@@ -98,25 +97,7 @@ class Frontend(srndapi.SRNdAPI):
 
 frontend = Frontend()
 
-app = flask.Flask(__name__)
-
-@app.route('/')
-def handle_index():
-    return flask.render_template('index.html', page_title=frontend.name)
-    
-@app.route('/thread/<string:thread_id>')
-def handle_thread(thread_id):
-    if not frontend.has_thread(thread_id):
-        flask.abort(404)
-    posts = frontend.get_thread(thread_id)
-    if len(posts) > 1:
-        replies = posts[1:]
-    else:
-        replies = list()
-    return flask.render_template('thread.html', op=posts[0], replies=replies)
-    
 def run():
     frontend.start()
     frontend.connect()
-    frontend.sync()
-    app.run()
+    frontend.post("overchan.test", None, "anon's name", "fake@gay.net", "subject here", "testing")

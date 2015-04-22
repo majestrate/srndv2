@@ -150,7 +150,7 @@ func (self *NNTPConnection) SendMessage(message *NNTPMessage, d *NNTPDaemon) err
   } else if strings.HasPrefix(line, "435 ") {
     // already have it
     if self.debug {
-      log.Println(message.MessageID, "already owned")
+      log.Println(message.MessageID, "already owned by remote")
     }
   } else if strings.HasPrefix(line, "437 ") {
     // article banned
@@ -177,12 +177,13 @@ func (self *NNTPConnection) HandleInbound(d *NNTPDaemon) {
       self.Quit()
       return
     }
+    // read line and break if needed
     line := self.ReadLine()
-      if len(line) == 0 {
+    if len(line) == 0 {
       break
     }
+    
     // parse line
-
     _line := strings.Replace(line, "\n", "", -1)
     _line = strings.Replace(_line, "\r", "", -1)
     commands := strings.Split(_line, " ")
@@ -193,13 +194,17 @@ func (self *NNTPConnection) HandleInbound(d *NNTPDaemon) {
       self.sendCapabilities()
     } else if cmd == "MODE" { // mode switch
       if len(commands) == 2 {
+        // get mode
         mode := strings.ToUpper(commands[1])
+        // mode reader not implemented
         if mode == "READER" {
           self.SendLine("501 no reader mode")
         } else if mode == "STREAM" {
+          // mode stream is implemented
           self.info.mode = mode
           self.SendLine("203 stream as desired")
         } else {
+          // other modes not implemented
           self.SendLine("501 unknown mode")
         }
       } else {
@@ -218,6 +223,8 @@ func (self *NNTPConnection) HandleInbound(d *NNTPDaemon) {
               if len(line) == 0 {
                 log.Fatal(self.conn.RemoteAddr(), "unexpectedly closed connection")
               }
+              // rewrite path header
+              // add us to the path
               if ! rewrote_path && strings.HasPrefix(line, "Path: ") {
                 line = "Path: " + d.instance_name + "!" + line[6:]
               }
@@ -225,7 +232,7 @@ func (self *NNTPConnection) HandleInbound(d *NNTPDaemon) {
               if line == ".\r\n" {
                 break
               } else {
-                line = strings.Replace(line, "\r", "", -1)
+                line = strings.Replace(line, "\r\n", "\n", -1)
                 file.Write([]byte(line))
               }
             }
@@ -234,21 +241,31 @@ func (self *NNTPConnection) HandleInbound(d *NNTPDaemon) {
             // tell them
             self.SendLine("239 "+article)
             log.Println(self.conn.RemoteAddr(), "got article", article)
+
+            // inform daemon
             d.infeed <- article
           }
         }
       }
+      // check command
       if cmd == "CHECK" {
         if len(commands) == 2 {
-          if ! ValidMessageID(commands[1]) {
+          // check syntax
+          // send error if needed
+          article := commands[1]
+          if ! ValidMessageID(article) {
             self.SendLine("501 bad message id")
             continue
           }
-          article := commands[1]
+          // do we already have this article?
           if d.store.HasArticle(article) {
-            self.SendLine("435 "+commands[1]+" we have this article")
+            // ya, we got it already
+            // tell them to not send it
+            self.SendLine("435 "+article+" we have this article")
           } else {
-            self.SendLine("238 "+commands[1]+" we want this article please give it")
+            // nope, we do not have it
+            // tell them to send it
+            self.SendLine("238 "+article+" we want this article please give it")
           }
         }
       }

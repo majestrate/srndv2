@@ -8,6 +8,8 @@ import (
   "bufio"
   "bytes"
   "encoding/json"
+  "errors"
+  "fmt"
   "io"
   "log"
   "net"
@@ -22,11 +24,80 @@ type SRNdAPI struct {
 type SRNdAPI_Handler struct {
   daemon *NNTPDaemon
   client net.Conn
+  name string
 }
 
 // api message for incoming to daemon
 type API_InMessage map[string]interface{} 
 
+func (self API_InMessage) GetString(key string) string {
+  if self[key] == nil {
+    return ""
+  }
+  return fmt.Sprintf("%s", self[key])
+}
+
+func (self API_InMessage) GetLong(key string) int64 {
+  return int64(self[key].(float64))
+}
+
+func (self API_InMessage) GetBool(key string) bool {
+  return self.GetString(key) == "true"
+}
+
+func (self API_InMessage) IsPost() bool {
+  return self.GetString("Please") == "post"
+}
+
+func (self API_InMessage) GetArray(key string) []interface{} {
+  if self[key] == nil {
+    return nil
+  }
+  return self[key].([]interface{})
+}
+
+
+func (self API_InMessage) GetFiles() []NNTPAttachment {
+  // get array of files
+  files := self.GetArray("Files")
+  // count files
+  filecount := len(files)
+  var postfiles []NNTPAttachment
+  // if we have files put them in it
+  if filecount > 0 {
+    postfiles = make([]NNTPAttachment, filecount)
+    for idx := range(postfiles) {
+      file := files[idx].(map[string]string)
+      // parse file
+      postfiles[idx].Mime = file["Mime"]
+      postfiles[idx].Extension = file["Extension"]
+      postfiles[idx].Name = file["Name"]
+      postfiles[idx].Data = file["Data"]
+    }
+  }
+  return postfiles
+}
+
+// convert this api message into a post message because strong typing
+func (self API_InMessage) ToNNTP() NNTPMessage {
+  var post NNTPMessage
+  post.MessageID = self.GetString("MessageID")
+  post.Newsgroup = self.GetString("Newsgroup")
+  post.OP = self.GetBool("OP")
+  post.Sage = self.GetBool("Sage")
+  post.Reference = self.GetString("Reference")
+  post.Posted = self.GetLong("Posted")
+  post.Key = self.GetString("Key")
+  post.Subject = self.GetString("Subject")
+  post.Message = self.GetString("Comment")
+  post.Name = self.GetString("Name")
+  post.Email = self.GetString("Email")
+  post.Attachments = self.GetFiles()
+  if len(post.Attachments) == 0 {
+    post.ContentType = "text/plain; encoding=UTF-8"
+  }
+  return post
+}
 
 func (self *SRNdAPI) Init(d *NNTPDaemon) {
   var err error
@@ -80,7 +151,7 @@ func (self *SRNdAPI_Handler) write_Client(obj interface{}) error {
 }
 
 func (self *SRNdAPI_Handler) handle_Socket(socket string) {
-  
+  self.name = socket
   conn, err := net.Dial("unix", socket)
   if err != nil {
     log.Println("api error", err)
@@ -103,10 +174,31 @@ func (self *SRNdAPI_Handler) handle_SyncNewsgroup(newsgroup string) error {
       log.Println("could not load message", article_id)
       return false
     }
-    //log.Println("loaded", article_id)
     err = self.sendMessage(msg)
     return err != nil
   })
+  return err
+}
+
+func (self *SRNdAPI_Handler) handle_Post(msg API_InMessage) error {
+  store := self.daemon.store
+  feed := self.daemon.infeed
+  post := msg.ToNNTP()
+  // set path header as from us
+  post.Path = fmt.Sprintf("%s!%s", self.daemon.instance_name, self.name)
+
+  if store.HasArticle(post.MessageID) {
+    return errors.New("already have article "+post.MessageID)
+  }
+
+  err := store.StorePost(&post)
+  if err == nil {
+    log.Println("Got New Post From",self.name)
+    // inform daemon in feed
+    feed <- post.MessageID
+  } else {
+    log.Println("error while posting", err)
+  }
   return err
 }
 
@@ -114,12 +206,12 @@ func (self *SRNdAPI_Handler) handle_SyncAllNewsgroups() error {
   var err error 
   store := self.daemon.store
   store.IterateAllArticles(func (article_id string) bool {
+    // load entire body
     msg := store.GetMessage(article_id, true)
     if msg == nil {
       log.Println("could not load message", article_id)
       return false
     }
-    //log.Println("loaded", article_id)
     err = self.sendMessage(msg)
     if err != nil {
       log.Println("error sending message", err)
@@ -130,9 +222,9 @@ func (self *SRNdAPI_Handler) handle_SyncAllNewsgroups() error {
   return err
 }
 
-// handle an incoming json object
-func (self *SRNdAPI_Handler) handleMessage(m API_InMessage) {
-  please, ok := m["please"]
+// handle an incoming json object control message
+func (self *SRNdAPI_Handler) handle_Control(m API_InMessage) {
+  please, ok := m["Please"]
   var val interface{}
   if ! ok {
     log.Println("invalid api command")
@@ -182,9 +274,18 @@ func (self *SRNdAPI_Handler) handleClient(incoming io.ReadWriteCloser) {
       // handle json 
       // drop connection if json is invalid
       if err == nil {
-        self.handleMessage(message)
+        if message.IsPost() {
+          // we got a post from the frontend
+          err = self.handle_Post(message)
+          if err != nil {
+            log.Println("failed to handle post: ", err)
+          }
+        } else {
+          // we got a control message from the frontend
+          self.handle_Control(message)
+        }
       } else {
-        log.Println("api got bad json:",err)
+        log.Println("api got bad json: ",err)
         break
       }
     } else {

@@ -5,13 +5,24 @@
 package main
 
 import (
+  "encoding/base64"
   "log"
   "os"
   "strings"
 )
 
+func B64Decode(data string) []byte {
+  ba, err := base64.URLEncoding.DecodeString(data)
+  if err != nil {
+    log.Fatal(err)
+  }
+  return ba
+}
+
 func DelFile(fname string) {
-  os.Remove(fname)
+  if CheckFile(fname) {
+    os.Remove(fname)
+  }
 }
 
 func CheckFile(fname string) bool {

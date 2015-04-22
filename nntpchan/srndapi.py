@@ -16,6 +16,7 @@ class SRNdAPI(threading.Thread):
     def __init__(self, addr, name):
         threading.Thread.__init__(self)
         self.log = logging.getLogger('SRNdAPI-{}'.format(name))
+        self.name = name
         self.addr = addr
         self.serv = socket.socket(socket.AF_UNIX)
         self.sock = socket.socket(socket.AF_UNIX)
@@ -29,13 +30,12 @@ class SRNdAPI(threading.Thread):
         self.sendlock.acquire()
         if j is not None:
             d = json.dumps(j)
-            print (d)
             self.sock.send(d+'\n.\n')
         self.sendlock.release()
             
-    def please(self, name, **kwds):
-        self.log.debug('please {}'.format(name))
-        kwds['please'] = name
+    def please(self, cmd, **kwds):
+        self.log.debug('please {} --> {}'.format(cmd, kwds))
+        kwds['Please'] = cmd
         self.send(kwds)
         
     def connect(self):

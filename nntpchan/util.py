@@ -19,7 +19,10 @@ def random_string(length=8):
     """
     random string of ascii 
     """
-    return random.choice(string.ascii_letters)
+    r = ''
+    for _ in range(length):
+        r += random.choice(string.ascii_letters)
+    return r
     
 def now():
     """

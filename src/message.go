@@ -6,11 +6,15 @@ package main
 import (
   "bufio"
   "bytes"
+  "crypto/rand"
   "database/sql"
+  "encoding/base64"
+  "fmt"
   "io"
   "log"
   "mime"
   "mime/multipart"
+  "net/textproto"
   "os"
   "path/filepath"
   "strings"
@@ -39,7 +43,84 @@ type NNTPMessage struct {
   Path string
   ContentType string
   Sage bool
+  OP bool
   Attachments []NNTPAttachment
+}
+
+func (self *NNTPMessage) WriteTo(writer io.Writer) error {
+  var r [30]byte
+  io.ReadFull(rand.Reader, r[:])
+  boundary := fmt.Sprintf("%x", r[:])
+
+  // mime header
+  io.WriteString(writer, "Mime-Version: 1.0\n")
+  
+  // content type header
+  // overwrite if we have attachments
+  if len(self.Attachments) > 0 {
+    self.ContentType = fmt.Sprintf("multipart/mixed; boundary=\"%s\"", boundary)
+  }
+  io.WriteString(writer, fmt.Sprintf("Content-Type: %s\n", self.ContentType))
+  
+  // from header
+  // TODO: sanitize this
+  name := self.Name
+  email := self.Email
+  io.WriteString(writer, fmt.Sprintf("From: %s <%s>\n", name, email))
+  // date header
+  date := time.Unix(self.Posted, 0).UTC()
+  io.WriteString(writer, fmt.Sprintf("Date: %s\n", date.Format(time.RFC1123Z)))
+
+  // newsgroups header
+  io.WriteString(writer, fmt.Sprintf("Newsgroups: %s\n", self.Newsgroup))
+  // subject header
+  io.WriteString(writer, fmt.Sprintf("Subject: %s\n", self.Subject))
+  // message id header
+  io.WriteString(writer, fmt.Sprintf("Message-ID: %s\n", self.MessageID))
+  // references header
+  io.WriteString(writer, fmt.Sprintf("References: %s\n", self.Reference))
+  // path header
+  io.WriteString(writer, fmt.Sprintf("Path: %s\n", self.Path))
+
+  // TODO: sign/verify
+
+  // header done
+  io.WriteString(writer, "\n")
+  
+  // do we have attachments?
+  if len(self.Attachments) > 0 {
+    // ya we have files
+    io.WriteString(writer, "SRNDv2 Multipart UGUU\n")
+    mwriter := multipart.NewWriter(writer)
+    mwriter.SetBoundary(boundary)
+    // message
+    hdr := make(textproto.MIMEHeader)
+    hdr.Set("Content-Type", "text/plain; charset=UTF-8")
+    hdr.Set("Content-Transfer-Encoding", "8bit")
+    part, _ := mwriter.CreatePart(hdr)
+    io.WriteString(part, self.Message)
+    // files
+    for idx := range(self.Attachments) {
+      att := self.Attachments[idx]
+      hdr := make(textproto.MIMEHeader)
+      hdr.Set("Content-Type", att.Mime)
+      hdr.Set("Content-Disposition", "attachment")
+      hdr.Add("Content-Disposition", fmt.Sprintf("filename=\"%s\"", att.Name))
+      hdr.Set("Content-Transfer-Encoding", "base64")
+      part, _ := mwriter.CreatePart(hdr)
+      // decode attachment to binary
+      var tmpbuff bytes.Buffer
+      tmpbuff.WriteString(att.Data)
+      dec := base64.NewDecoder(base64.URLEncoding, &tmpbuff)
+      // write it to our mime message
+      io.Copy(part, dec)
+    }
+  } else {
+    // nope we have no files
+    // write out a plain response
+    io.WriteString(writer, self.Message)
+  }
+  return nil
 }
 
 // load from file

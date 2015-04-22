@@ -5,6 +5,7 @@
 package main
 
 import (
+  "errors"
   "log"
   "os"
   "path/filepath"
@@ -99,6 +100,17 @@ func (self *ArticleStore) CreateFile(messageID string) *os.File {
     return nil
   }
   return file
+}
+
+// store article from frontend
+func (self *ArticleStore) StorePost(post *NNTPMessage) error {
+  file := self.CreateFile(post.MessageID)
+  if file == nil {
+    return errors.New("cannot open file for post "+post.MessageID)
+  }
+  post.WriteTo(file)
+  file.Close()
+  return nil
 }
 
 // return true if we have an article

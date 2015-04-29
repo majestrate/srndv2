@@ -27,11 +27,19 @@ donate: bitcoin 15yuMzuueV8y5vPQQ39ZqQVz5Ey98DNrjE
     go get github.com/majestrate/srndv2
     cd $GOPATH/src/github.com/majestrate/srndv2
 
+    # get git submodules
+    git submodule init
+    git submodule update
+
     # clean any previous builds
     ./clean
     # build everything
     # this builds libsodium too so it could take a bit
     ./build
+
+## rebuilding
+
+    ./build nosodium
 
 ## Notes 
 

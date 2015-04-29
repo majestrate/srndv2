@@ -6,32 +6,30 @@ srndv2 api base
 import json
 import os
 import socket
-import threading
 import traceback
 import logging
 import queue
 
-class SRNdAPI(threading.Thread):
+class SRNdAPI:
     
-    def __init__(self, addr, name):
-        threading.Thread.__init__(self)
+    def __init__(self, loop, addr, name):
         self.log = logging.getLogger('SRNdAPI-{}'.format(name))
         self.name = name
         self.addr = addr
         self.serv = socket.socket(socket.AF_UNIX)
         self.sock = socket.socket(socket.AF_UNIX)
+        self.loop = loop
+        
+    def bind(self):
         if os.path.exists(self.addr):
             os.unlink(self.addr)
         self.serv.bind(self.addr)
         self.serv.listen(5)
-        self.sendlock = threading.Lock()
         
     def send(self, j):
-        self.sendlock.acquire()
         if j is not None:
             d = json.dumps(j)
             self.sock.send(d+'\n.\n')
-        self.sendlock.release()
             
     def please(self, cmd, **kwds):
         self.log.debug('please {} --> {}'.format(cmd, kwds))
@@ -50,41 +48,51 @@ class SRNdAPI(threading.Thread):
     
     def got(self, obj):
         pass
+
+
+    def _handle_serv(self, sock, fd, events):
+        """
+        handle socket events from srnd
+        """
+        ## handle accept() gymnastics
+        try:
+            conn, addr = sock.accept()
+        except socket.error as e:
+            if e.args[0] not in (errno.EWOULDBLOCK, errno.EAGAIN):
+                raise
+            return
+        ## set non blocking
+        conn.setblocking(0)
+
+        ## add event listener
+        cb = funcutils.partial(self._handle_srnd_sock, conn)
+        self.loop.add_handler(conn.fileno(), cb, io_loop.READ)
+
+    def _handle_srnd_sock(self, sock, fd, events):
+        """
+        handle a connection from srnd
+        """
+
+        
+    def _handle_sock(self, sock, fd, events):
+        """
+        handle socket events to srnd
+        """
     
-    def client(self, sock):
-        f = sock.makefile()
-        buff = ''
-        while True:
-            try:
-                line = f.readline()
-            except Exception as e:
-                self.log.error(e)
-                return
-            else:
-                if line == '':
-                    break
-                if line == '.\n':
-                    try:
-                        self.got(json.loads(buff))
-                    except:
-                        traceback.print_exc()
-                    finally:
-                        buff = ''
-                else:
-                    buff += line
-                
     def run(self):
-        while True:
-            try:
-                pair = self.serv.accept()
-                if pair:
-                    sock, addr = pair
-                    self.client(sock)
-                else:
-                    return
-            except:
-                return
-    
+        """
+        run the daemon
+        """
+        self.bind()
+        self._setup_sock(self.serv, self._handle_serv)
+        self._setup_sock(self.sock, self._handle_sock)
+        
+    def _setup_sock(self, sock, handler):
+        sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+        sock.setblocking(0)
+        cb = functools.partial(handler, sock)
+        self.loop.add_handler(sock.fileno(), cb, io_loop.READ)
+        
     def __del__(self):
         self.close()
         

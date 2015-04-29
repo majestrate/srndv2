@@ -12,17 +12,46 @@ from . import models
 from . import srndapi
 from . import util
 
+from tornado import web
+
 import logging
+import os
+
+
+class WebHandler(web.RequestHandler):
+    def initialize(self, srndapi):
+        self.api = srndapi
+
+        
+
+class NewsgroupHandler(WebHandler):
+
+    def get(self, newsgroup):
+        """
+        """
+
+        
+class ThreadHandler(WebHandler):
+
+    def get(self, thread):
+        """
+        """
+class PostHandler(WebHandler):
+
+    def post(self):
+        """
+        """
+        
 
 class Frontend(srndapi.SRNdAPI):
     """
     srndv2 overchan+postman reference implementation
     """
-    def __init__(self):
+    def __init__(self, loop):
         name = 'overchan.srndv2.tld'
-        srndapi.SRNdAPI.__init__(self, name+'.sock', name)
+        srndapi.SRNdAPI.__init__(self,loop, name+'.sock', name)
         self.sql = database.open()
-        
+    
     def got(self, obj):
         """
         we got an incoming object
@@ -94,10 +123,3 @@ class Frontend(srndapi.SRNdAPI):
 
     def has_thread(self, thread_id):
         pass
-
-frontend = Frontend()
-
-def run():
-    frontend.start()
-    frontend.connect()
-    frontend.post("overchan.test", None, "anon's name", "fake@gay.net", "subject here", "testing")

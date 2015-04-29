@@ -14,6 +14,7 @@ import string
 import threading
 import time
 
+sleep = time.sleep
 
 def random_string(length=8):
     """

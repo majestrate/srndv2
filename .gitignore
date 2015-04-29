@@ -7,3 +7,9 @@ venv
 src/articles
 articles
 SRNd
+build.dir
+\#*
+.\#*
+_obj
+*.log
+*.la

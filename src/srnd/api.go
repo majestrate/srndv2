@@ -1,7 +1,7 @@
 //
 // api.go
 //
-package main
+package srnd
 
 
 import (

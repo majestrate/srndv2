@@ -1,7 +1,7 @@
 //
 // message.go
 //
-package main
+package srnd
 
 import (
   "bufio"
@@ -45,6 +45,7 @@ type NNTPMessage struct {
   Sage bool
   OP bool
   Attachments []NNTPAttachment
+  Moderation ModMessage
 }
 
 func (self *NNTPMessage) WriteTo(writer io.Writer) error {
@@ -71,6 +72,12 @@ func (self *NNTPMessage) WriteTo(writer io.Writer) error {
   date := time.Unix(self.Posted, 0).UTC()
   io.WriteString(writer, fmt.Sprintf("Date: %s\n", date.Format(time.RFC1123Z)))
 
+  // write key / sig headers
+  if len(self.Key) > 0 && len(self.Signature) > 0 {
+    io.WriteString(writer, fmt.Sprintf("X-pubkey-ed25519: %s\n", self.Key))
+    io.WriteString(writer, fmt.Sprintf("X-signature-ed25519-sha512: %s\n", self.Signature))
+  }
+  
   // newsgroups header
   io.WriteString(writer, fmt.Sprintf("Newsgroups: %s\n", self.Newsgroup))
   // subject header

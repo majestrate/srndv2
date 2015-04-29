@@ -1,0 +1,38 @@
+#!/bin/bash
+set -e
+root=$(dirname $(readlink -e $0))
+log=$root/sodium.log
+if [ "$1" == "nosodium" ] ; then
+    echo "not building sodium"
+else
+    echo "building libsodium"
+    echo "This will take a bit"
+    mkdir -p $root/build.dir
+    cd $root/deps/libsodium
+    
+    echo "sodium autogen..."
+    echo "--- begin autogen" >> $log
+    ./autogen.sh &>> $log
+    echo "--- end autogen" >> $log
+    
+    cd $root/build.dir
+
+    echo "sodium configure..."
+    echo "--- begin configure" >> $log
+    $root/deps/libsodium/configure &>> $log
+    echo "--- end configure" >> $log
+    
+    echo "build sodium..."
+    echo "--- begin make" >> $log
+    make &>>  $log
+    echo "--- end make" >> $log
+    
+    cp $root/build.dir/src/libsodium/libsodium.la $root
+fi
+cd $root
+echo "build nacl..."
+go build $root/src/nacl/*.go
+echo "build srnd core..."
+go build $root/src/srnd/*.go
+echo "build snrd main..."
+go build -o $root/SRNd $root/main.go

@@ -1,7 +1,7 @@
 //
 // database.go
 //
-package main
+package srnd
 
 import (
   "database/sql"

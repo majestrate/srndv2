@@ -2,7 +2,7 @@
 // store.go
 //
 
-package main
+package srnd
 
 import (
   "errors"

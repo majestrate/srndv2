@@ -1,7 +1,7 @@
 //
 // daemon.go
 //
-package main
+package srnd
 
 import (
   "bufio"
@@ -34,7 +34,7 @@ func (self *NNTPDaemon) End() {
 // register a new connection
 // can be either inbound or outbound
 func (self *NNTPDaemon) newConnection(conn net.Conn, inbound bool, policy *FeedPolicy) NNTPConnection {
-  feed := NNTPConnection{conn, bufio.NewReader(conn), inbound, self.debug, new(ConnectionInfo), policy, make(chan *NNTPMessage)}
+  feed := NNTPConnection{conn, bufio.NewReader(conn), inbound, self.debug, new(ConnectionInfo), policy, make(chan *NNTPMessage, 64)}
   self.feeds[feed] = ! inbound
   return feed
 }
@@ -129,6 +129,23 @@ func (self *NNTPDaemon) persistFeed(conf FeedConfig) {
   time.Sleep(1 * time.Second)
 }
 
+// sync every article to all feeds
+func (self *NNTPDaemon) syncAll() {
+  log.Println("sync all feeds")
+  self.store.IterateAllArticles(func(messageID string) bool {
+    msg := self.store.GetMessage(messageID, false)
+    if msg != nil {
+      for feed, use := range self.feeds {
+        if use {
+          feed.send <- msg
+        }
+      }
+    }
+    return false
+  }) 
+  log.Println("sync all feeds done")   
+}
+
 // run daemon
 func (self *NNTPDaemon) Run() {	
   err := self.Bind()
@@ -147,21 +164,22 @@ func (self *NNTPDaemon) Run() {
   }
   // start api 
   go self.api.Mainloop()
-  
-  self.syncAllFeeds()
 
   // start accepting incoming connections
   go self.mainloop()
   
-  
-  
+  if self.sync_on_start {
+    go self.syncAll()
+  }
   // loop over messages
   for {
     messageID := <- self.infeed
     // load message
-    nntp := self.store.GetMessage(messageID, false)
+    nntp := self.store.GetMessage(messageID, true)
+    // register symlink
+    // TODO: move this?
     self.store.StoreArticle(nntp.Newsgroup, nntp.MessageID)
-    // send to all outfeeds
+    // queue to all outfeeds
     if nntp != nil {
       for feed , use := range self.feeds {
         if use {
@@ -172,25 +190,6 @@ func (self *NNTPDaemon) Run() {
   }
 }
 
-func (self *NNTPDaemon) syncAllFeeds() {
-  var err error
-  if self.sync_on_start {
-    log.Println("sync all feeds")
-    self.store.IterateAllArticles(func(messageID string) bool {
-      msg := self.store.GetMessage(messageID, false)
-      if msg != nil {
-        for feed, use := range self.feeds {
-            if use {
-              err = feed.SendMessage(msg, self)
-            }
-        }
-      }
-      return false
-    }) 
-    log.Println("sync done")
-  }
-   
-}
 
 func (self *NNTPDaemon) mainloop() {	
   for {
@@ -201,11 +200,11 @@ func (self *NNTPDaemon) mainloop() {
     }
     // make a new inbound nntp connection handler 
     nntp := self.newConnection(conn, true, nil)
-    go self.RunConnection(nntp)
+    go self.RunInbound(nntp)
   }
 }
 
-func (self *NNTPDaemon) RunConnection(nntp NNTPConnection) {
+func (self *NNTPDaemon) RunInbound(nntp NNTPConnection) {
   nntp.HandleInbound(self)
   delete(self.feeds, nntp)
 }

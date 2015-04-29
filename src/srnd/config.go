@@ -2,7 +2,7 @@
 // config.go
 //
 
-package main
+package srnd
 
 import (
   "github.com/majestrate/configparser"

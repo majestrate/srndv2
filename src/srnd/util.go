@@ -2,7 +2,7 @@
 // util.go
 //
 
-package main
+package srnd
 
 import (
   "encoding/base64"

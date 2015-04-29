@@ -1,7 +1,7 @@
 //
 // policy.go
 //
-package main
+package srnd
 
 import (
   "log"

@@ -1,7 +1,7 @@
 //
 // nntp.go
 //
-package main
+package srnd
 
 import (
   "bufio"

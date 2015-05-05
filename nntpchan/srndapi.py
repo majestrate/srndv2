@@ -97,6 +97,7 @@ class SRNdAPI:
         except Exception as e:
             self.log.error(e)
         else:
+            self.log.debug("got {}".format(j))
             # process message
             self.got(j)
             # read next message

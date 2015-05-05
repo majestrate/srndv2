@@ -245,14 +245,27 @@ func (self *NNTPMessage) Load(file *os.File, loadBody bool) bool {
         return false
       }
       parts[idx].Data = buff.String()
+
+      if parts[idx].Mime == "text/plain" {
+        self.Message += parts[idx].Data
+        parts[idx].Data = ""
+      } 
+      
       idx += 1
+
     }
-    if idx > 0 {
-      self.Attachments = make([]NNTPAttachment, idx)
-      for idx = range(self.Attachments) {
-        self.Attachments[idx] = parts[idx]
+    
+    self.Attachments = make([]NNTPAttachment, idx)
+
+    counter := 0
+    for i := range(parts) {
+      part := parts[i]
+      if len(part.Data) > 0 {
+        self.Attachments[counter] = parts[i]
+        counter ++        
       }
     }
+    self.Attachments = self.Attachments[:idx-counter]
   } else {
   
     self.Message = bodybuff.String()

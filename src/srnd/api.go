@@ -15,17 +15,22 @@ import (
   "net"
 )
 
-type SRNdAPI struct {
-  listener net.Listener
-  config *APIConfig
-  daemon *NNTPDaemon
-}
 
 type SRNdAPI_Handler struct {
+
   daemon *NNTPDaemon
   client net.Conn
   name string
 }
+
+type SRNdAPI struct {
+  listener net.Listener
+  config *APIConfig
+  daemon *NNTPDaemon
+  infeed chan *NNTPMessage
+  senders []*SRNdAPI_Handler
+}
+
 
 // api message for incoming to daemon
 type API_InMessage map[string]interface{} 
@@ -114,9 +119,32 @@ func (self *SRNdAPI) Init(d *NNTPDaemon) {
     return
   }
   self.daemon = d
+  self.infeed = make(chan *NNTPMessage, 16)
+  // 8 api handlers initially
+  self.senders = make([]*SRNdAPI_Handler, 8)
+}
+
+
+// tell all senders about a new post from backend
+func (self *SRNdAPI) informSenders(msg *NNTPMessage) {
+  log.Println("api got message", msg.MessageID)
+  for idx := range(self.senders) {
+    sender := self.senders[idx]
+    if sender != nil {
+      sender.sendMessage(msg)
+    }
+  }
 }
 
 func (self *SRNdAPI) Mainloop() {
+  go func () {
+    for {
+      select {
+      case msg := <- self.infeed:
+        self.informSenders(msg)
+      }
+    }
+  }()
   for {
     conn, err := self.listener.Accept()
     if err != nil {
@@ -127,8 +155,38 @@ func (self *SRNdAPI) Mainloop() {
     handler := new(SRNdAPI_Handler)
     handler.daemon = self.daemon
     handler.client = conn
-    go handler.handleClient(conn)
+    go func() {
+      self.RegisterSender(handler)
+      handler.handleClient(conn)
+      self.DeRegisterSender(handler)
+    }()
   }
+}
+
+// register as sender for sending nntp messages to
+func (self *SRNdAPI) RegisterSender(sender *SRNdAPI_Handler) {
+  // find a nil slot
+  for idx := range(self.senders) {
+    // put it into that empty slot
+    if self.senders[idx] == nil {
+      self.senders[idx] = sender
+      return
+    }
+  }
+  // if we can't find an empty slot make the array bigger
+  self.senders = append(self.senders, sender)
+}
+
+func (self *SRNdAPI) DeRegisterSender(sender *SRNdAPI_Handler) {
+  // find it and set it to nil in the array
+  for idx := range(self.senders) {
+    if self.senders[idx] == sender {
+      self.senders[idx] = nil
+      return
+    }
+  }
+  // we didn't find it
+  log.Println("did not deregister sender, not registered?")
 }
 
 // write a json object to the client with the delimiter
@@ -252,7 +310,6 @@ func (self *SRNdAPI_Handler) handle_Control(m API_InMessage) {
 
 // handle a client connection
 func (self *SRNdAPI_Handler) handleClient(incoming io.ReadWriteCloser) {
-  
   reader := bufio.NewReader(incoming)
   var buff bytes.Buffer
   var message API_InMessage

@@ -187,6 +187,8 @@ func (self *NNTPDaemon) Run() {
         }
       }
     }
+    // tell api
+    self.api.infeed <- nntp
   }
 }
 

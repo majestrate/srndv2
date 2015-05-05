@@ -16,6 +16,7 @@ from tornado import web
 
 import logging
 import os
+import base64
 
 
 class WebHandler(web.RequestHandler):
@@ -84,8 +85,13 @@ class Frontend(srndapi.SRNdAPI):
         """
         put a file onto the disk
         """
-        self.log.info("putfile")
-            
+        fname = os.path.join("img", "{}{}".format(util.now(), file_obj["Extension"]))
+        self.log.info("putfile {}".format(fname))
+        d = file_obj["Data"]
+        d = base64.b64decode(d)
+        with open(fname, 'w') as f:
+            f.write(d)
+        
     def got_post(self, obj):
         """
         we got a post
@@ -96,7 +102,6 @@ class Frontend(srndapi.SRNdAPI):
                 self.put_file(f)
         postid = obj['MessageID']
         post = models.Article(postid)
-        self.log.info("loading...")
         for attr in obj.keys():
             if attr in ('Please', 'OP', 'Attachments'):
                 continue
@@ -106,9 +111,12 @@ class Frontend(srndapi.SRNdAPI):
                     setattr(post, attr, val)
                 elif len(val) > 0:
                     setattr(post, attr, val)
-        self.log.info("saved")
-            
-            
+
+    def find_thread(self, msgid):
+        """
+        find a thread with the root post given the hashed post id
+        """
+        
         
     def sync(self, newsgroups=None):
         if newsgroups is None:

@@ -261,7 +261,7 @@ func (self *NNTPConnection) HandleInbound(d *NNTPDaemon) {
           if d.store.HasArticle(article) {
             // ya, we got it already
             // tell them to not send it
-            self.SendLine("435 "+article+" we have this article")
+            self.SendLine("438 "+article+" we have this article")
           } else {
             // nope, we do not have it
             // tell them to send it

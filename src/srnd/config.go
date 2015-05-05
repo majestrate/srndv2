@@ -72,7 +72,7 @@ func GenAPIConfig() error {
 // generate default feeds.ini
 func GenFeedsConfig() error {
   conf := configparser.NewConfiguration()
-  
+  /*
   sect := conf.NewSection("feed-some.onion:119")
   sect.Add("proxy-type", "socks4a")
   sect.Add("proxy-host", "127.0.0.1")
@@ -82,7 +82,7 @@ func GenFeedsConfig() error {
   sect.Add("overchan.*", "1")
   sect.Add("ano.paste", "0")
   sect.Add("ctl", "1")
-
+  */
   return configparser.Save(conf, "feeds.ini")
 }
 
@@ -212,8 +212,7 @@ func ReadConf() *SRNdConfig {
   var sect *configparser.Section
   
   sect, err = conf.Section("srnd")
-  sconf.api.srndAddr = sect.ValueOf("srnd-socket")
-  sconf.api.frontendAddr = sect.ValueOf("frontend-socket")
+  sconf.api.srndAddr = sect.ValueOf("socket")
   
   return &sconf
 }

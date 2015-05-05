@@ -22,7 +22,20 @@ class WebHandler(web.RequestHandler):
     def initialize(self, srndapi):
         self.api = srndapi
 
-        
+
+class IndexHandler(WebHandler):
+    def get(self):
+        self.write("""
+        <html>
+        <body>
+        <form action="/post" method="POST">
+        <input name="newsgroup" type="hidden" value="overchan.test" />
+        <input name="message" type="text" />
+        <input type="submit" value="post" />
+        </form>
+        </body>
+        </html>
+        """)
 
 class NewsgroupHandler(WebHandler):
 
@@ -36,20 +49,28 @@ class ThreadHandler(WebHandler):
     def get(self, thread):
         """
         """
+        
 class PostHandler(WebHandler):
 
     def post(self):
         """
         """
-        
+        newsgroup = self.get_argument("newsgroup")
+        parent = self.get_argument("parent", default="")
+        name = self.get_argument("name", default="Anonymous")
+        email =  self.get_argument("email", default="anon@nowhere.tld")
+        subject = self.get_argument("subject", default="None")
+        message = self.get_argument("message")
+        msg = self.api.post(newsgroup, parent, name, email, subject, message)
+        self.write(msg)
 
 class Frontend(srndapi.SRNdAPI):
     """
     srndv2 overchan+postman reference implementation
     """
-    def __init__(self, loop):
-        name = 'overchan.srndv2.tld'
-        srndapi.SRNdAPI.__init__(self,loop, name+'.sock', name)
+    def __init__(self, loop, name):
+        srndapi.SRNdAPI.__init__(self, loop, name+".sock", name)
+        self.name = name
         self.sql = database.open()
     
     def got(self, obj):
@@ -117,6 +138,7 @@ class Frontend(srndapi.SRNdAPI):
         obj['Key'] = key
         obj['Posted'] = util.now()
         self.please('post', **obj)
+        return "posted"
         
     def register_api(self, api):
         self.log.info('registering with api...')

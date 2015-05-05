@@ -9,50 +9,102 @@ import socket
 import traceback
 import logging
 import queue
+import functools
+import errno
+
+from tornado import iostream
 
 class SRNdAPI:
+
+    
+    log = logging.getLogger('SRNdAPI')
     
     def __init__(self, loop, addr, name):
-        self.log = logging.getLogger('SRNdAPI-{}'.format(name))
-        self.name = name
-        self.addr = addr
-        self.serv = socket.socket(socket.AF_UNIX)
-        self.sock = socket.socket(socket.AF_UNIX)
+        self._name = name
+        self._addr = addr
+        self._serv = socket.socket(socket.AF_UNIX)
+        self._sock = socket.socket(socket.AF_UNIX)
         self.loop = loop
-        
+        self._sendq = queue.Queue()
+        self._stream = iostream.IOStream(self._sock)
+        self._serv_stream = None
+        self._setup_sock(self._serv, self._handle_serv)
+                
     def bind(self):
-        if os.path.exists(self.addr):
-            os.unlink(self.addr)
-        self.serv.bind(self.addr)
-        self.serv.listen(5)
+        """
+        bind socket for listening for events from srnd
+        """
+        if os.path.exists(self._addr):
+            os.unlink(self._addr)
+        self._serv.bind(self._addr)
+        self._serv.listen(5)
         
     def send(self, j):
+        """
+        send a single message to srnd
+        """
         if j is not None:
             d = json.dumps(j)
-            self.sock.send(d+'\n.\n')
+            d += "\n.\n"
+            self._stream.write(d)
             
     def please(self, cmd, **kwds):
+        """
+        send a please command
+        """
         self.log.debug('please {} --> {}'.format(cmd, kwds))
         kwds['Please'] = cmd
         self.send(kwds)
+
+    def _connected_to_srnd(self):
+        """
+        called after connected to SRNd
+        """
+        self.log.info('connected!!!')
+        # send please socket command
+        self.please('socket', socket=self._addr)
         
-    def connect(self):
-        self.log.info('connecting to daemon')
-        self.sock.connect("srnd.sock")
-        self.please('socket', socket=self.addr)
+    def connect(self, sock="srnd.sock"):
+        """
+        connect to srnd
+        """
+        self.log.info('connecting to daemon at {}'.format(sock))
+        self._stream.connect(sock, self._connected_to_srnd)
+
         
     def close(self):
+        """
+        close all connections
+        """
         self.log.info('closing')
-        self.sock.close()
-        self.serv.close()
-    
+        self._sock.close()
+        self._serv.close()
+        if os.path.exists(self._addr):
+            os.unlink(self._addr)
+        
     def got(self, obj):
+        """
+        called when we got a message from srnd
+        """
         pass
 
-
+    def _got_raw_from_srnd(self, data):
+        """
+        we got a raw message from srnd
+        """
+        try:
+            j = json.loads(data[:-3])
+        except Exception as e:
+            self.log.error(e)
+        else:
+            # process message
+            self.got(j)
+            # read next message
+            self._read_next_from_srnd()
+        
     def _handle_serv(self, sock, fd, events):
         """
-        handle socket events from srnd
+        handle incoming connection from srnd
         """
         ## handle accept() gymnastics
         try:
@@ -63,35 +115,26 @@ class SRNdAPI:
             return
         ## set non blocking
         conn.setblocking(0)
-
-        ## add event listener
-        cb = funcutils.partial(self._handle_srnd_sock, conn)
-        self.loop.add_handler(conn.fileno(), cb, io_loop.READ)
-
+        self._serv_stream = iostream.IOStream(conn)
+        self._read_next_from_srnd()
+        
+    def _read_next_from_srnd(self):
+        """
+        read the next message from srnd
+        """
+        self._serv_stream.read_until("\n.\n", self._got_raw_from_srnd)
+        
     def _handle_srnd_sock(self, sock, fd, events):
         """
         handle a connection from srnd
         """
-
-        
-    def _handle_sock(self, sock, fd, events):
-        """
-        handle socket events to srnd
-        """
     
-    def run(self):
-        """
-        run the daemon
-        """
-        self.bind()
-        self._setup_sock(self.serv, self._handle_serv)
-        self._setup_sock(self.sock, self._handle_sock)
-        
     def _setup_sock(self, sock, handler):
         sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
         sock.setblocking(0)
         cb = functools.partial(handler, sock)
-        self.loop.add_handler(sock.fileno(), cb, io_loop.READ)
+        self.loop.add_handler(sock.fileno(), cb, self.loop.READ)
+
         
     def __del__(self):
         self.close()

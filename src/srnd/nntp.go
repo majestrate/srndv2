@@ -147,7 +147,7 @@ func (self *NNTPConnection) SendMessage(message *NNTPMessage, d *NNTPDaemon) err
     }
     // done
     return nil
-  } else if strings.HasPrefix(line, "435 ") {
+  } else if strings.HasPrefix(line, "438 ") {
     // already have it
     if self.debug {
       log.Println(message.MessageID, "already owned by remote")

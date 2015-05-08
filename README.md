@@ -48,6 +48,11 @@ donate: bitcoin 15yuMzuueV8y5vPQQ39ZqQVz5Ey98DNrjE
     ./SRNd
 
 
+
+## frontend notes
+
+   pip install --user -r requirements.txt
+
 ## Notes
 
 When receiving many articles (i.e. durring initial sync with a network with over

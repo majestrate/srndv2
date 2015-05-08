@@ -21,6 +21,10 @@ type SRNdAPI_Handler struct {
   daemon *NNTPDaemon
   client net.Conn
   name string
+  // send articles to frontend
+  send chan *NNTPMessage
+  // load articles to be sent
+  load chan string
 }
 
 type SRNdAPI struct {
@@ -155,6 +159,8 @@ func (self *SRNdAPI) Mainloop() {
     handler := new(SRNdAPI_Handler)
     handler.daemon = self.daemon
     handler.client = conn
+    handler.load = make(chan string, 16)
+    handler.send = make(chan *NNTPMessage, 16)
     go func() {
       self.RegisterSender(handler)
       handler.handleClient(conn)
@@ -223,19 +229,9 @@ func (self *SRNdAPI_Handler) sendMessage(message *NNTPMessage) error {
   return self.write_Client(message)
 }
 
-func (self *SRNdAPI_Handler) handle_SyncNewsgroup(newsgroup string) error {
-  var err error
+func (self *SRNdAPI_Handler) handle_SyncNewsgroup(newsgroup string) {
   store := self.daemon.store
-  store.IterateAllForNewsgroup(newsgroup, func (article_id string) bool {
-    msg := store.GetMessage(article_id, true)
-    if msg == nil {
-      log.Println("could not load message", article_id)
-      return false
-    }
-    err = self.sendMessage(msg)
-    return err != nil
-  })
-  return err
+  store.IterateAllForNewsgroup(newsgroup, self.load)
 }
 
 func (self *SRNdAPI_Handler) handle_Post(msg API_InMessage) error {
@@ -253,31 +249,16 @@ func (self *SRNdAPI_Handler) handle_Post(msg API_InMessage) error {
   if err == nil {
     log.Println("Got New Post From",self.name)
     // inform daemon in feed
-    feed <- post.MessageID
+    feed <- &post
   } else {
     log.Println("error while posting", err)
   }
   return err
 }
 
-func (self *SRNdAPI_Handler) handle_SyncAllNewsgroups() error {
-  var err error 
+func (self *SRNdAPI_Handler) handle_SyncAllNewsgroups()  {
   store := self.daemon.store
-  store.IterateAllArticles(func (article_id string) bool {
-    // load entire body
-    msg := store.GetMessage(article_id, true)
-    if msg == nil {
-      log.Println("could not load message", article_id)
-      return false
-    }
-    err = self.sendMessage(msg)
-    if err != nil {
-      log.Println("error sending message", err)
-      return true
-    }
-    return false
-  })
-  return err
+  store.IterateAllArticles(self.load)
 }
 
 // handle an incoming json object control message
@@ -297,10 +278,7 @@ func (self *SRNdAPI_Handler) handle_Control(m API_InMessage) {
     if len(newsgroups) > 0 {
       for idx := range newsgroups {
         group := newsgroups[idx]
-        err := self.handle_SyncNewsgroup(group.(string))
-        if err != nil {
-          log.Println("error syncing", group, err)
-        }
+        self.handle_SyncNewsgroup(group.(string))
       }
     } else {
       self.handle_SyncAllNewsgroups()
@@ -308,8 +286,21 @@ func (self *SRNdAPI_Handler) handle_Control(m API_InMessage) {
   }
 }
 
+// poll send chan for new messages to send to frontend
+func (self *SRNdAPI_Handler) pollChans() {
+  for {
+    select {
+    case msg := <- self.send: 
+      self.sendMessage(msg)
+    case msgid := <- self.load:
+      self.send <- self.daemon.store.GetMessage(msgid, true)
+    }
+  }
+}
+
 // handle a client connection
 func (self *SRNdAPI_Handler) handleClient(incoming io.ReadWriteCloser) {
+  go self.pollChans()
   reader := bufio.NewReader(incoming)
   var buff bytes.Buffer
   var message API_InMessage

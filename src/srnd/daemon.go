@@ -24,7 +24,11 @@ type NNTPDaemon struct {
   sync_on_start bool
   running bool
   feeds map[NNTPConnection]bool
-  infeed chan string
+  infeed chan *NNTPMessage
+  // channel to load messages to infeed given their message id
+  infeed_load chan string
+  // channel for broadcasting a message to all feeds given their message id
+  send_all_feeds chan string
 }
 
 func (self *NNTPDaemon) End() {
@@ -132,17 +136,7 @@ func (self *NNTPDaemon) persistFeed(conf FeedConfig) {
 // sync every article to all feeds
 func (self *NNTPDaemon) syncAll() {
   log.Println("sync all feeds")
-  self.store.IterateAllArticles(func(messageID string) bool {
-    msg := self.store.GetMessage(messageID, false)
-    if msg != nil {
-      for feed, use := range self.feeds {
-        if use {
-          feed.send <- msg
-        }
-      }
-    }
-    return false
-  }) 
+  self.store.IterateAllArticles(self.send_all_feeds)
   log.Println("sync all feeds done")   
 }
 
@@ -173,22 +167,27 @@ func (self *NNTPDaemon) Run() {
   }
   // loop over messages
   for {
-    messageID := <- self.infeed
-    // load message
-    nntp := self.store.GetMessage(messageID, true)
-    // register symlink
-    // TODO: move this?
-    self.store.StoreArticle(nntp.Newsgroup, nntp.MessageID)
-    // queue to all outfeeds
-    if nntp != nil {
+    select {
+    case msgid := <- self.send_all_feeds:
+      nntp := self.store.GetMessage(msgid, true)
       for feed , use := range self.feeds {
         if use {
           feed.send <- nntp
         }
       }
+      break
+    case nntp := <- self.infeed:
+      // register article
+      self.database.RegisterArticle(nntp)
+      // queue to all outfeeds
+      self.send_all_feeds <- nntp.MessageID
+      // tell api
+      self.api.infeed <- nntp
+      break
+    case msgid := <- self.infeed_load:
+      self.infeed <- self.store.GetMessage(msgid, true)
+      break
     }
-    // tell api
-    self.api.infeed <- nntp
   }
 }
 
@@ -233,7 +232,9 @@ func (self *NNTPDaemon) Init() bool {
     log.Println("cannot load config")
     return false
   }
-  self.infeed = make(chan string, 200)
+  self.infeed = make(chan *NNTPMessage, 16)
+  self.infeed_load = make(chan string, 16)
+  self.send_all_feeds = make(chan string, 16)
   self.feeds = make(map[NNTPConnection]bool)
   
   self.database = new(Database)
@@ -251,6 +252,7 @@ func (self *NNTPDaemon) Init() bool {
   
   self.store = new(ArticleStore)
   self.store.directory = self.conf.store["base_dir"]
+  self.store.database = self.database
   self.store.Init()
   
   self.api = new(SRNdAPI)

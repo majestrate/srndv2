@@ -10,9 +10,6 @@ import (
   "os"
   "path/filepath"
 )
-// iterator hook function
-// return true on error
-type StoreIteratorHook func (fname string) bool
 
 type ArticleStore struct {
   directory string
@@ -24,71 +21,15 @@ func (self *ArticleStore) Init() {
   EnsureDir(self.directory)
 }
 
-func (self *ArticleStore) StoreArticle(newsgroup string, article string) error {
-  var err error
+// send every article's message id down a channel for a given newsgroup
+func (self *ArticleStore) IterateAllForNewsgroup(newsgroup string, recv chan string) {
   group := filepath.Clean(newsgroup)
-  apath := filepath.Clean(article)
-  fpath := filepath.Join(self.directory, group)
-  fpath, err = filepath.Abs(fpath)
-  EnsureDir(fpath)
-  newpath := filepath.Join(fpath, apath)
-  if err != nil {
-    log.Println("failed to make symlinks", err)
-    return err
-  }
-  if CheckFile(newpath) {
-    log.Println("already symlinked", newpath)
-    return nil
-  }
-  err = os.Symlink("../"+apath, newpath)
-  if err != nil {
-    log.Println("failed to symlink", err) 
-  } else {
-    log.Println("stored article", article, "in" , newsgroup)
-  }
-  return err
+  self.database.GetAllArticlesInGroup(group, recv)
 }
 
-func (self *ArticleStore) IterateAllForNewsgroup(newsgroup string, hook StoreIteratorHook) error {
-  
-  group := filepath.Clean(newsgroup)
-  
-  fpath := filepath.Join(self.directory, group)
-  f, err := os.Open(fpath)
-  if err != nil {
-    return err
-  }
-  var names []string 
-  names, err = f.Readdirnames(-1)
-  for idx := range(names) {
-    fname := names[idx]
-    if hook(fname) {
-      break
-    }
-  }
-  return err
-}
-
-// iterate over the articles in this article store
-// call a hookfor each article passing in the messageID
-func (self *ArticleStore) IterateAllArticles(hook StoreIteratorHook) error {
-  f , err := os.Open(self.directory)
-  if err != nil {
-    return err
-  }
-  var names []string
-  names, err = f.Readdirnames(-1)
-  for idx := range names {
-    fname := names[idx]
-    if IsDir(self.GetFilename(fname)) {
-      continue
-    }
-    if hook(fname) {
-      break
-    }
-  }
-  f.Close()
-  return nil
+// send every article's message id down a channel
+func (self *ArticleStore) IterateAllArticles(recv chan string) {
+  self.database.GetAllArticles(recv)
 }
 
 // create a file for this article
@@ -103,6 +44,7 @@ func (self *ArticleStore) CreateFile(messageID string) *os.File {
 }
 
 // store article from frontend
+// don't register 
 func (self *ArticleStore) StorePost(post *NNTPMessage) error {
   file := self.CreateFile(post.MessageID)
   if file == nil {
@@ -115,7 +57,7 @@ func (self *ArticleStore) StorePost(post *NNTPMessage) error {
 
 // return true if we have an article
 func (self *ArticleStore) HasArticle(messageID string) bool {
-  return CheckFile(self.GetFilename(messageID))
+  return self.database.HasArticle(messageID)
 }
 
 // get the filename for this article

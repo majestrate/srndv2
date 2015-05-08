@@ -5,7 +5,9 @@
 package srnd
 
 import (
+  "crypto/sha1"
   "encoding/base64"
+  "fmt"
   "log"
   "os"
   "strings"
@@ -67,4 +69,9 @@ func ValidMessageID(id string) bool {
     return false
   }
   return true
+}
+
+
+func HashMessageID(msgid string) string {
+  return fmt.Sprintf("%x", sha1.Sum([]byte(msgid)))
 }

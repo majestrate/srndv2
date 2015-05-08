@@ -16,7 +16,7 @@ def main():
     args = ap.parse_args()
     
     loglvl = args.debug and logging.DEBUG or logging.INFO
-    logging.basicConfig(level=loglvl)
+    logging.basicConfig(level=loglvl, format="%(created)d %(levelname)s %(name)s %(message)s")
 
     loop = ioloop.IOLoop.instance()
 
@@ -25,9 +25,7 @@ def main():
     context = {'srndapi': frontend}
     
     app = web.Application([
-        (r"/", overchan.IndexHandler, context),
-        (r"/newsgroup/(.*)", overchan.NewsgroupHandler, context),
-        (r"/thread/(.*)", overchan.ThreadHandler, context),
+        (r"/mod", overchan.ModHandler, context),
         (r"/post", overchan.PostHandler, context),
     ])
 

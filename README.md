@@ -22,6 +22,7 @@ donate: bitcoin 15yuMzuueV8y5vPQQ39ZqQVz5Ey98DNrjE
     # get dependancies
     go get github.com/majestrate/configparser
     go get github.com/lib/pq
+    go get github.com/go-sql-driver/mysql
 
     # get source code
     go get github.com/majestrate/srndv2

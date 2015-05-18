@@ -8,6 +8,7 @@ import (
   "crypto/sha1"
   "encoding/base64"
   "fmt"
+  "io"
   "log"
   "os"
   "strings"
@@ -74,4 +75,21 @@ func ValidMessageID(id string) bool {
 
 func HashMessageID(msgid string) string {
   return fmt.Sprintf("%x", sha1.Sum([]byte(msgid)))
+}
+
+
+type lineWriter struct {
+  io.Writer
+  wr io.Writer
+  delim []byte
+}
+
+func NewLineWriter(wr io.Writer, delim string) io.Writer {
+  return lineWriter{wr, wr, []byte(delim)}
+}
+
+func (self lineWriter) Write(data []byte) (n int, err error) {
+  n, err = self.wr.Write(data)
+  self.wr.Write(self.delim)
+  return n, err
 }

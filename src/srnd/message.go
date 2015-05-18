@@ -15,7 +15,6 @@ import (
   "mime"
   "mime/multipart"
   "net/textproto"
-  "os"
   "path/filepath"
   "strings"
   "time"
@@ -48,56 +47,59 @@ type NNTPMessage struct {
   Moderation ModMessage
 }
 
-func (self *NNTPMessage) WriteTo(writer io.Writer) error {
+func (self *NNTPMessage) WriteTo(w io.WriteCloser, delim string) (err error) {
   var r [30]byte
   io.ReadFull(rand.Reader, r[:])
   boundary := fmt.Sprintf("%x", r[:])
 
-  // mime header
-  io.WriteString(writer, "Mime-Version: 1.0\n")
+  writer := NewLineWriter(w, delim)
   
+  // mime header
+  io.WriteString(writer, "Mime-Version: 1.0")
   // content type header
   // overwrite if we have attachments
   if len(self.Attachments) > 0 {
     self.ContentType = fmt.Sprintf("multipart/mixed; boundary=\"%s\"", boundary)
   }
-  io.WriteString(writer, fmt.Sprintf("Content-Type: %s\n", self.ContentType))
-  
+  io.WriteString(writer, fmt.Sprintf("Content-Type: %s", self.ContentType))
   // from header
   // TODO: sanitize this
   name := self.Name
   email := self.Email
-  io.WriteString(writer, fmt.Sprintf("From: %s <%s>\n", name, email))
+  io.WriteString(writer, fmt.Sprintf("From: %s <%s>", name, email))
   // date header
   date := time.Unix(self.Posted, 0).UTC()
-  io.WriteString(writer, fmt.Sprintf("Date: %s\n", date.Format(time.RFC1123Z)))
-
+  io.WriteString(writer, fmt.Sprintf("Date: %s", date.Format(time.RFC1123Z)))
   // write key / sig headers
   if len(self.Key) > 0 && len(self.Signature) > 0 {
-    io.WriteString(writer, fmt.Sprintf("X-pubkey-ed25519: %s\n", self.Key))
-    io.WriteString(writer, fmt.Sprintf("X-signature-ed25519-sha512: %s\n", self.Signature))
+    io.WriteString(writer, fmt.Sprintf("X-pubkey-ed25519: %s", self.Key))
+    io.WriteString(writer, fmt.Sprintf("X-signature-ed25519-sha512: %s", self.Signature))
   }
   
   // newsgroups header
-  io.WriteString(writer, fmt.Sprintf("Newsgroups: %s\n", self.Newsgroup))
+  io.WriteString(writer, fmt.Sprintf("Newsgroups: %s", self.Newsgroup))
   // subject header
-  io.WriteString(writer, fmt.Sprintf("Subject: %s\n", self.Subject))
+  io.WriteString(writer, fmt.Sprintf("Subject: %s", self.Subject))
   // message id header
-  io.WriteString(writer, fmt.Sprintf("Message-ID: %s\n", self.MessageID))
+  io.WriteString(writer, fmt.Sprintf("Message-ID: %s", self.MessageID))
+
   // references header
-  io.WriteString(writer, fmt.Sprintf("References: %s\n", self.Reference))
+  io.WriteString(writer, fmt.Sprintf("References: %s", self.Reference))
   // path header
-  io.WriteString(writer, fmt.Sprintf("Path: %s\n", self.Path))
+  io.WriteString(writer, fmt.Sprintf("Path: %s", self.Path))
 
   // TODO: sign/verify
 
   // header done
-  io.WriteString(writer, "\n")
+  _, err = io.WriteString(writer, "")
+  if err != nil {
+    return err
+  }
   
   // do we have attachments?
   if len(self.Attachments) > 0 {
     // ya we have files
-    io.WriteString(writer, "SRNDv2 Multipart UGUU\n")
+    io.WriteString(writer, "SRNDv2 Multipart UGUU")
     mwriter := multipart.NewWriter(writer)
     mwriter.SetBoundary(boundary)
     // message
@@ -125,20 +127,20 @@ func (self *NNTPMessage) WriteTo(writer io.Writer) error {
   } else {
     // nope we have no files
     // write out a plain response
-    io.WriteString(writer, self.Message)
+    _, err = io.WriteString(writer, self.Message)
   }
-  return nil
+  return err
 }
 
 // load from file
-func (self *NNTPMessage) Load(file *os.File, loadBody bool) bool {
+func (self *NNTPMessage) Load(file io.Reader, loadBody bool) bool {
   self.Please = "post"
   reader := bufio.NewReader(file)
   var idx int
   for {
     line, err := reader.ReadString('\n')
     if err != nil {
-      log.Println("failed to read message", file.Name())
+      log.Println("failed to read message", err)
       return false
     }
     // we are done reading headers

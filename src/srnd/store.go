@@ -13,7 +13,7 @@ import (
 
 type ArticleStore struct {
   directory string
-  database *Database
+  database Database
 }
 
 // initialize article store
@@ -50,7 +50,7 @@ func (self *ArticleStore) StorePost(post *NNTPMessage) error {
   if file == nil {
     return errors.New("cannot open file for post "+post.MessageID)
   }
-  post.WriteTo(file)
+  post.WriteTo(file, "\n")
   file.Close()
   return nil
 }

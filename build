@@ -30,8 +30,8 @@ else
     cp $root/build.dir/src/libsodium/libsodium.la $root
 fi
 cd $root
-echo "build nacl..."
-go build $root/src/nacl/*.go
+#echo "build nacl..."
+#go build $root/src/nacl/*.go
 echo "build srnd core..."
 go build $root/src/srnd/*.go
 echo "build snrd main..."

@@ -12,24 +12,7 @@ type FeedPolicy struct {
   rules map[string]string
 }
 
-func (self *FeedPolicy) FederateNewsgroup(newsgroup string) bool {
-  var k string
-  for k = range self.rules {
-    if k[0] == '!' {
-      continue
-    }
-    match , err := regexp.MatchString(k, newsgroup)
-    if err != nil {
-      log.Fatal(err) 
-    }
-    if match {
-      return self.rules[k] == "1"
-    }
-  }
-  // cynical, reject unknown
-  return false
-}
-
+// do we allow this newsgroup?
 func (self *FeedPolicy) AllowsNewsgroup(newsgroup string) bool {
   var k string
   for k = range self.rules {
@@ -51,3 +34,4 @@ func (self *FeedPolicy) AllowsNewsgroup(newsgroup string) bool {
   }
   return false
 }
+

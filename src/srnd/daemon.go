@@ -2,13 +2,12 @@
 // daemon.go
 //
 package srnd
-
 import (
-  "bufio"
   "log"
   "net"
   "strconv"
   "strings"
+  "net/textproto"
   "time"
 )
 
@@ -18,7 +17,7 @@ type NNTPDaemon struct {
   conf *SRNdConfig
   store *ArticleStore
   api *SRNdAPI
-  database *Database
+  database Database
   listener net.Listener
   debug bool
   sync_on_start bool
@@ -38,7 +37,7 @@ func (self *NNTPDaemon) End() {
 // register a new connection
 // can be either inbound or outbound
 func (self *NNTPDaemon) newConnection(conn net.Conn, inbound bool, policy *FeedPolicy) NNTPConnection {
-  feed := NNTPConnection{conn, bufio.NewReader(conn), inbound, self.debug, new(ConnectionInfo), policy, make(chan *NNTPMessage, 64)}
+  feed := NNTPConnection{conn, textproto.NewConn(conn), inbound, self.debug, new(ConnectionInfo), policy, make(chan *NNTPMessage, 64),  make(chan string, 512)}
   self.feeds[feed] = ! inbound
   return feed
 }
@@ -136,8 +135,18 @@ func (self *NNTPDaemon) persistFeed(conf FeedConfig) {
 // sync every article to all feeds
 func (self *NNTPDaemon) syncAll() {
   log.Println("sync all feeds")
-  self.store.IterateAllArticles(self.send_all_feeds)
-  log.Println("sync all feeds done")   
+  chnl := make(chan string, 128)
+  go self.store.IterateAllArticles(chnl)
+  for {
+    select {
+    case msgid := <- chnl:
+      for feed, use := range self.feeds {
+        if use {
+          feed.sync <- msgid
+        }
+      }
+    }
+  }
 }
 
 // run daemon
@@ -182,7 +191,7 @@ func (self *NNTPDaemon) Run() {
       // queue to all outfeeds
       self.send_all_feeds <- nntp.MessageID
       // tell api
-      self.api.infeed <- nntp
+      //self.api.infeed <- nntp
       break
     case msgid := <- self.infeed_load:
       self.infeed <- self.store.GetMessage(msgid, true)
@@ -237,18 +246,20 @@ func (self *NNTPDaemon) Init() bool {
   self.send_all_feeds = make(chan string, 16)
   self.feeds = make(map[NNTPConnection]bool)
   
-  self.database = new(Database)
   
   db_host := self.conf.database["host"]
   db_port := self.conf.database["port"]
   db_user := self.conf.database["user"]
   db_passwd := self.conf.database["password"]
+
+  self.database = NewDatabase(self.conf.database["type"])
   
   err := self.database.Init(db_host, db_port, db_user, db_passwd)
   if err != nil {
     log.Println("failed to initialize database", err)
     return false
   }
+  self.database.CreateTables()
   
   self.store = new(ArticleStore)
   self.store.directory = self.conf.store["base_dir"]

@@ -2,6 +2,8 @@
 set -e
 root=$(dirname $(readlink -e $0))
 log=$root/sodium.log
+cd $root
+
 if [ "$1" == "nosodium" ] ; then
     echo "not building sodium"
 else
@@ -30,8 +32,17 @@ else
     cp $root/build.dir/src/libsodium/libsodium.la $root
 fi
 cd $root
-#echo "build nacl..."
-#go build $root/src/nacl/*.go
+echo "getting go dependancies"
+echo "--> configparser"
+go get github.com/majestrate/configparser
+echo "--> pq"
+go get github.com/lib/pq
+echo "--> mysql"
+go get github.com/go-sql-driver/mysql
+echo "--> mustache"
+go get github.com/hoisie/mustache
+echo "build nacl..."
+go build $root/src/nacl/*.go
 echo "build srnd core..."
 go build $root/src/srnd/*.go
 echo "build snrd main..."

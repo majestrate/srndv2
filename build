@@ -8,14 +8,13 @@ fi
 
 root=$(dirname $(readlink -e $0))
 log=$root/sodium.log
-cd $root
 
 if [ "$1" == "nosodium" ] ; then
     echo "not building sodium"
 else
     echo "building libsodium"
     echo "This will take a bit"
-    mkdir -p $root/build.dir
+    mkdir -p $root/build.dir/prefix
     cd $root/deps/libsodium
     
     echo "sodium autogen..."
@@ -27,15 +26,18 @@ else
 
     echo "sodium configure..."
     echo "--- begin configure" >> $log
-    $root/deps/libsodium/configure &>> $log
+    $root/deps/libsodium/configure --prefix=$root/build.dir/prefix &>> $log
     echo "--- end configure" >> $log
     
     echo "build sodium..."
     echo "--- begin make" >> $log
     make &>>  $log
     echo "--- end make" >> $log
+    echo "--- begin make install" >> $log
+    make install &>>  $log
+    echo "--- end make install" >> $log
     
-    cp $root/build.dir/src/libsodium/libsodium.la $root
+    cp $root/build.dir/src/libsodium/libsodium.la $root/build.dir
 fi
 cd $root
 echo "getting go dependancies"

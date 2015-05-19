@@ -16,12 +16,15 @@ type NNTPDaemon struct {
   bind_addr string
   conf *SRNdConfig
   store *ArticleStore
-  api *SRNdAPI
   database Database
   listener net.Listener
   debug bool
   sync_on_start bool
   running bool
+  // http frontend
+  frontend Frontend
+
+  // nntp feeds map, feed, isoutbound
   feeds map[NNTPConnection]bool
   infeed chan *NNTPMessage
   // channel to load messages to infeed given their message id
@@ -33,6 +36,7 @@ type NNTPDaemon struct {
 func (self *NNTPDaemon) End() {
   self.listener.Close()
 }
+
 
 // register a new connection
 // can be either inbound or outbound
@@ -165,22 +169,45 @@ func (self *NNTPDaemon) Run() {
   for idx := range self.conf.feeds {
     go self.persistFeed(self.conf.feeds[idx])
   }
-  // start api 
-  go self.api.Mainloop()
 
   // start accepting incoming connections
-  go self.mainloop()
+  go self.acceptloop()
   
   if self.sync_on_start {
     go self.syncAll()
   }
-  // loop over messages
+  // if we have no frontend this does nothing
+  if self.frontend != nil {
+    go self.pollfrontend()
+  }
+  self.pollfeeds()
+
+}
+
+
+func (self *NNTPDaemon) pollfrontend() {
+  for {
+    
+    select {
+    case nntp := <- self.frontend.NewPostsChan():
+      // new post from frontend
+      // ammend path
+      nntp.Path = self.instance_name + "!" + nntp.Path
+      // tell infeed that we got one
+      self.infeed <- nntp
+      break
+    }
+  }
+}
+
+func (self *NNTPDaemon) pollfeeds() {
   for {
     select {
     case msgid := <- self.send_all_feeds:
-      nntp := self.store.GetMessage(msgid, true)
+      // send all feeds 
+      nntp := self.store.GetMessage(msgid)
       for feed , use := range self.feeds {
-        if use {
+        if use && feed.policy.AllowsNewsgroup(nntp.Newsgroup) {
           feed.send <- nntp
         }
       }
@@ -188,20 +215,26 @@ func (self *NNTPDaemon) Run() {
     case nntp := <- self.infeed:
       // register article
       self.database.RegisterArticle(nntp)
+      // store article
+      self.store.StorePost(nntp)
       // queue to all outfeeds
       self.send_all_feeds <- nntp.MessageID
-      // tell api
-      //self.api.infeed <- nntp
+      
       break
     case msgid := <- self.infeed_load:
-      self.infeed <- self.store.GetMessage(msgid, true)
+      // load temp message
+      // this deletes the temp file
+      nntp := self.store.ReadTempMessage(msgid)
+      // rewrite path header
+      nntp.Path = self.instance_name +"!" + nntp.Path
+      // offer infeed
+      self.infeed <- nntp
       break
     }
   }
 }
 
-
-func (self *NNTPDaemon) mainloop() {	
+func (self *NNTPDaemon) acceptloop() {	
   for {
     // accept
     conn, err := self.listener.Accept()
@@ -262,12 +295,10 @@ func (self *NNTPDaemon) Init() bool {
   self.database.CreateTables()
   
   self.store = new(ArticleStore)
-  self.store.directory = self.conf.store["base_dir"]
+  self.store.directory = self.conf.store["store_dir"]
+  self.store.temp = self.conf.store["incoming_dir"]
   self.store.database = self.database
   self.store.Init()
-  
-  self.api = new(SRNdAPI)
-  self.api.Init(self)
   
   self.sync_on_start = self.conf.daemon["sync_on_start"] == "1"
   if self.sync_on_start {
@@ -278,6 +309,14 @@ func (self *NNTPDaemon) Init() bool {
   self.instance_name = self.conf.daemon["instance_name"]
   if self.debug {
     log.Println("debug mode activated")
+  }
+
+  
+  // do we enable the frontend?
+  if self.conf.frontend["enable"] == "1" {
+    log.Printf("frontend %s enabled", self.conf.frontend["name"]) 
+    self.frontend = NewHTTPFrontend(self.conf.frontend["bind"], self.conf.frontend["name"]) 
+    go self.frontend.Mainloop()
   }
   
   return true

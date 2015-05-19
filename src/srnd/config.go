@@ -26,7 +26,7 @@ type SRNdConfig struct {
   store map[string]string
   database map[string]string
   feeds []FeedConfig
-  api APIConfig
+  frontend map[string]string
 }
 
 // check for config files
@@ -46,68 +46,62 @@ func CheckConfig() {
       log.Fatal("cannot generate feeds.ini", err)
     }
   }
-  if ! CheckFile("api.ini") {
-    log.Println("no api.ini, creating...")
-    err := GenAPIConfig()
-    if err != nil {
-      log.Fatal("cannot generate api.ini") 
-    }
-  }
 }
 
-// generate default api.ini
-func GenAPIConfig() error {
-  conf := configparser.NewConfiguration()
-  
-  sect := conf.NewSection("srnd")
-  sect.Add("socket", "srnd.sock")
-  
-  sect = conf.NewSection("api-beyond")
-  sect.Add("socket", "beyond.sock")
-  sect.Add("enable", "0")
-  
-  return configparser.Save(conf, "api.ini")
-}
 
 // generate default feeds.ini
 func GenFeedsConfig() error {
   conf := configparser.NewConfiguration()
-  /*
-  sect := conf.NewSection("feed-some.onion:119")
+  sect := conf.NewSection("10.0.0.1:119")
   sect.Add("proxy-type", "socks4a")
   sect.Add("proxy-host", "127.0.0.1")
   sect.Add("proxy-port", "9050")
 
-  sect = conf.NewSection("some.onion:119")
+  sect = conf.NewSection("10.0.0.1:119")
   sect.Add("overchan.*", "1")
   sect.Add("ano.paste", "0")
   sect.Add("ctl", "1")
-  */
+ 
   return configparser.Save(conf, "feeds.ini")
 }
 
 // generate default srnd.ini
 func GenSRNdConfig() error {
   conf := configparser.NewConfiguration()
-  
-  sect := conf.NewSection("srnd")
+
+  // nntp related section
+  sect := conf.NewSection("nntp")
 
   sect.Add("instance_name", "test.srndv2.tld")
   sect.Add("bind", "127.0.0.1:1199")
   sect.Add("sync_on_start", "1")
-  sect.Add("log", "info")
-  
-  sect = conf.NewSection("store")
 
-  sect.Add("base_dir", "articles")
+  // article store section
+  sect = conf.NewSection("articles")
 
+  sect.Add("store_dir", "articles")
+  sect.Add("incoming_dir", "incomming")
+
+  // database backend config
   sect = conf.NewSection("database")
 
   sect.Add("type", "postgres")
+  // change this to infinity to use with infinity-next
+  sect.Add("schema", "srnd")
   sect.Add("host", "127.0.0.1")
   sect.Add("port", "5432")
   sect.Add("user", "root")
   sect.Add("password", "root")
+  
+  // baked in static html frontend
+  sect = conf.NewSection("frontend")
+  sect.Add("enable", "1")
+  sect.Add("bind", "127.0.0.1:18000")
+  sect.Add("name", "web.srndv2.test")
+  sect.Add("generate", "1")
+  sect.Add("webroot", "web/root")
+  sect.Add("templates", "web/templates")
+  
 
   return configparser.Save(conf, "srnd.ini")
 }
@@ -126,9 +120,9 @@ func ReadConf() *SRNdConfig {
   }
   var sconf SRNdConfig;
 
-  s, err = conf.Section("srnd")
+  s, err = conf.Section("nntp")
   if err != nil {
-    log.Println("no section srnd in srnd.ini")
+    log.Println("no section 'nntp' in srnd.ini")
     return nil
   }
 
@@ -136,20 +130,46 @@ func ReadConf() *SRNdConfig {
 
   s, err = conf.Section("database")
   if err != nil {
-    log.Println("no section database in srnd.ini")
+    log.Println("no section 'database' in srnd.ini")
     return nil
   }
 
   sconf.database = s.Options()
   
-  s, err = conf.Section("store")
+  s, err = conf.Section("articles")
   if err != nil {
-    log.Println("no section store in srnd.ini")
+    log.Println("no section 'articles' in srnd.ini")
     return nil
   }
 
   sconf.store = s.Options()
 
+
+  // frontend config
+  
+  s, err = conf.Section("frontend")
+
+  
+  if err != nil {
+    log.Println("no frontend section in srnd.ini, disabling frontend")
+    sconf.frontend = make(map[string]string)   
+    sconf.frontend["enable"] = "0"
+  } else {
+    log.Println("frontend configured in srnd.ini")
+    sconf.frontend = s.Options()
+    _ , ok := sconf.frontend["enable"]
+    if ! ok {
+      // default to "0"
+      sconf.frontend["enable"] = "0"
+    }
+    enable , _ := sconf.frontend["enable"]
+    if enable == "1" {
+      log.Println("frontend enabled in srnd.ini")
+    } else {
+      log.Println("frontend not enabled in srnd.ini, disabling frontend")
+    }
+  }
+  
   // begin load feeds.ini
 
   fname = "feeds.ini"
@@ -200,19 +220,8 @@ func ReadConf() *SRNdConfig {
       idx += 1
     }
   }
+
   
-  fname = "api.ini"
-  
-  conf, err = configparser.Read(fname)
-  
-  if err != nil {
-    log.Fatal("failed to open api.ini")
-    return nil
-  }
-  var sect *configparser.Section
-  
-  sect, err = conf.Section("srnd")
-  sconf.api.srndAddr = sect.ValueOf("socket")
   
   return &sconf
 }

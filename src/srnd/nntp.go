@@ -114,7 +114,7 @@ func (self *NNTPConnection) HandleOutbound(d *NNTPDaemon) {
         return
       }
       if code == 238 && ValidMessageID(line) {
-        self.send <- d.store.GetMessage(line, true)
+        self.send <- d.store.GetMessage(line)
       } else if code == 438 {
         continue
       } else {
@@ -217,16 +217,9 @@ func (self *NNTPConnection) HandleInbound(d *NNTPDaemon) {
         if len(commands) == 2 {
           article := commands[1]
           if ValidMessageID(article) {
-            file := d.store.CreateFile(article)
-            var rewrote_path bool
+            file := d.store.CreateTempFile(article)
             for {
-              line := self.ReadLine()
-              
-              // rewrite path header
-              // add us to the path
-              if ! rewrote_path && strings.HasPrefix(line, "Path: ") {
-                line = "Path: " + d.instance_name + "!" + line[6:]
-              }
+              line := self.ReadLine()  
               // done reading
               if line == "." {
                 break

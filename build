@@ -54,8 +54,8 @@ go get github.com/lib/pq
 echo "--> mysql"
 go get github.com/go-sql-driver/mysql
 echo "--> mustache"
-go get github.com/hoisie/mustache\
-   
+go get github.com/hoisie/mustache
+
 echo "build srnd core..."
 go build $root/src/srnd/*.go
 echo "build snrd main..."

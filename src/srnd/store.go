@@ -6,6 +6,7 @@ package srnd
 
 import (
   "errors"
+  "io"
   "log"
   "os"
   "path/filepath"
@@ -13,12 +14,14 @@ import (
 
 type ArticleStore struct {
   directory string
+  temp string
   database Database
 }
 
 // initialize article store
 func (self *ArticleStore) Init() {
   EnsureDir(self.directory)
+  EnsureDir(self.temp)
 }
 
 // send every article's message id down a channel for a given newsgroup
@@ -33,17 +36,28 @@ func (self *ArticleStore) IterateAllArticles(recv chan string) {
 }
 
 // create a file for this article
-func (self *ArticleStore) CreateFile(messageID string) *os.File {
+func (self *ArticleStore) CreateFile(messageID string) io.WriteCloser {
   fname := self.GetFilename(messageID)
   file, err := os.Create(fname)
   if err != nil {
-    //log.Fatal("cannot open file", fname)
+    log.Println("cannot open file", fname)
     return nil
   }
   return file
 }
 
-// store article from frontend
+// create a temp file for inboud articles
+func (self *ArticleStore) CreateTempFile(messageID string) io.WriteCloser {
+  fname := self.GetTempFilename(messageID)
+  file, err := os.Create(fname)
+  if err != nil {
+    log.Println("cannot open file", fname)
+    return nil
+  }
+  return file
+}
+
+// store article, save it in the storage folder
 // don't register 
 func (self *ArticleStore) StorePost(post *NNTPMessage) error {
   file := self.CreateFile(post.MessageID)
@@ -65,22 +79,40 @@ func (self *ArticleStore) GetFilename(messageID string) string {
   return filepath.Join(self.directory, messageID)
 }
 
-// load a file into a message
-// pass true to load the body too
-// return nil on failure
-func (self *ArticleStore) GetMessage(messageID string, loadBody bool) *NNTPMessage {
-  fname := self.GetFilename(messageID)
+// get the filename for this article
+func (self *ArticleStore) GetTempFilename(messageID string) string {
+  return filepath.Join(self.temp, messageID)
+}
+
+// loads temp message and deletes old article
+func (self *ArticleStore) ReadTempMessage(messageID string) *NNTPMessage {
+  fname := self.GetTempFilename(messageID)
+  nntp := self.readfile(fname)
+  defer DelFile(fname)
+  return nntp
+}
+
+// read a file give filepath
+func (self *ArticleStore) readfile(fname string) *NNTPMessage {
+  
   file, err := os.Open(fname)
   if err != nil {
-    //log.Fatal("cannot open",fname)
+    log.Println("store cannot open file",fname)
     return nil
   }
   message := new(NNTPMessage)
-  success := message.Load(file, loadBody)
+  success := message.Load(file, true)
   file.Close()
   if success {
     return message
   }
+  
   log.Println("failed to load file", fname)
   return nil
+}
+
+// load an article
+// return nil on failure
+func (self *ArticleStore) GetMessage(messageID string) *NNTPMessage {
+  return self.readfile(self.GetFilename(messageID))
 }

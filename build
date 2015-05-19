@@ -1,5 +1,11 @@
 #!/bin/bash
 set -e
+
+if [ "x$GOPATH" == "x" ] ; then
+    echo "please set the $GOPATH variable"
+    exit 1
+fi
+
 root=$(dirname $(readlink -e $0))
 log=$root/sodium.log
 cd $root

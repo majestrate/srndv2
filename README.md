@@ -19,11 +19,6 @@ donate: bitcoin 15yuMzuueV8y5vPQQ39ZqQVz5Ey98DNrjE
     export GOPATH=$HOME/go
     mkdir -p $GOPATH
 
-    # get dependancies
-    go get github.com/majestrate/configparser
-    go get github.com/lib/pq
-    go get github.com/go-sql-driver/mysql
-
     # get source code
     go get github.com/majestrate/srndv2
     cd $GOPATH/src/github.com/majestrate/srndv2
@@ -48,12 +43,7 @@ donate: bitcoin 15yuMzuueV8y5vPQQ39ZqQVz5Ey98DNrjE
     # this will generate base config files if they aren't present
     ./SRNd
 
-
-
-## frontend notes
-
-   pip install --user -r requirements.txt
-
+   
 ## Notes
 
 When receiving many articles (i.e. durring initial sync with a network with over

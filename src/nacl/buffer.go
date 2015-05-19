@@ -1,5 +1,6 @@
 package nacl
 
+// #cgo pkg-config: libsodium
 // unsigned char * deref_uchar(void * ptr) { return (unsigned char*) ptr; }
 import "C"
 

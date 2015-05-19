@@ -1,5 +1,6 @@
 package nacl
 
+// #cgo pkg-config: libsodium
 import "C"
 
 

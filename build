@@ -40,6 +40,12 @@ else
     cp $root/build.dir/src/libsodium/libsodium.la $root/build.dir
 fi
 cd $root
+
+export PKG_CONFIG_PATH=$root/build.dir/prefix/lib/pkgconfig
+
+echo "build nacl..."
+go build $root/src/nacl/*.go
+
 echo "getting go dependancies"
 echo "--> configparser"
 go get github.com/majestrate/configparser
@@ -48,9 +54,8 @@ go get github.com/lib/pq
 echo "--> mysql"
 go get github.com/go-sql-driver/mysql
 echo "--> mustache"
-go get github.com/hoisie/mustache
-echo "build nacl..."
-go build $root/src/nacl/*.go
+go get github.com/hoisie/mustache\
+   
 echo "build srnd core..."
 go build $root/src/srnd/*.go
 echo "build snrd main..."

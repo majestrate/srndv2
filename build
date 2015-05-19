@@ -2,7 +2,7 @@
 set -e
 
 if [ "x$GOPATH" == "x" ] ; then
-    echo "please set the $GOPATH variable"
+    echo 'please set the $GOPATH variable'
     exit 1
 fi
 

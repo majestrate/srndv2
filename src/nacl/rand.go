@@ -1,10 +1,5 @@
 package nacl
 
-
-
-
-// #cgo pkg-config: sodium
-//
 import "C"
 
 

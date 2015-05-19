@@ -1,10 +1,6 @@
 package nacl
 
-// #cgo pkg-config: sodium
-//
 // unsigned char * deref_uchar(void * ptr) { return (unsigned char*) ptr; }
-// 
-//
 import "C"
 
 import (

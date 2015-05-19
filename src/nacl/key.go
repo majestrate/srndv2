@@ -2,11 +2,10 @@
 package nacl
 
 
-// #cgo LDFLAGS: -lsodium -Lbuild.dir/src/libsodium
-// #cgo CFLAGS: -Ideps/libsodium/src/libsodium/include
+// #cgo LDFLAGS: -lsodium -Lbuild.dir/prefix/lib
+// #cgo CFLAGS: -Ibuild.dir/prefix/include
 // #include "sodium.h"
 import "C"
-
 import (
   "encoding/hex"
   "fmt"

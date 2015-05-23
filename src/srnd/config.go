@@ -80,11 +80,12 @@ func GenSRNdConfig() error {
   sect = conf.NewSection("articles")
 
   sect.Add("store_dir", "articles")
-  sect.Add("incoming_dir", "incomming")
+  sect.Add("incoming_dir", "articles")
 
   // database backend config
   sect = conf.NewSection("database")
 
+  // change this to mysql to use with mariadb or mysql
   sect.Add("type", "postgres")
   // change this to infinity to use with infinity-next
   sect.Add("schema", "srnd")
@@ -98,9 +99,9 @@ func GenSRNdConfig() error {
   sect.Add("enable", "1")
   sect.Add("bind", "127.0.0.1:18000")
   sect.Add("name", "web.srndv2.test")
-  sect.Add("generate", "1")
-  sect.Add("webroot", "web/root")
-  sect.Add("templates", "web/templates")
+  sect.Add("webroot", "webroot")
+  sect.Add("prefix", "/")
+  sect.Add("templates", "contrib/templates/default")
   
 
   return configparser.Save(conf, "srnd.ini")

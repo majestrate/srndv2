@@ -236,6 +236,7 @@ func (self *NNTPConnection) HandleInbound(d *NNTPDaemon) {
 
             // inform daemon
             d.infeed_load <- article
+            log.Println("daemon feed article")
           }
         }
       }

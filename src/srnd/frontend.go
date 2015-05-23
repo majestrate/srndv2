@@ -6,9 +6,11 @@
 package srnd
 
 import (
+  "fmt"
   "io"
   "log"
   "net/http"
+  "path/filepath"
 )
 
 // frontend interface for any type of frontend
@@ -74,10 +76,23 @@ func MuxFrontends(fronts ...Frontend) Frontend {
 
 type httpFrontend struct {
   Frontend
-  
+
+  daemon *NNTPDaemon
   postchan chan *NNTPMessage
   bindaddr string
   name string
+
+  webroot_dir string
+  template_dir string
+
+  prefix string
+  regenThreadChan chan string
+  regenGroupChan chan string
+}
+
+func (self httpFrontend) getFilenameForThread(root_post_id string) string {
+  fname := fmt.Sprintf("thread-%s.html", ShortHashMessageID(root_post_id))
+  return filepath.Join(self.webroot_dir, fname)
 }
 
 func (self httpFrontend) Bind() {
@@ -97,7 +112,68 @@ func (self httpFrontend) ServeHTTP(wr http.ResponseWriter, req *http.Request) {
   self.loghttp(req, 200)
 }
 
+
+func (self httpFrontend) regenerateBoard(newsgroup string) {
+  if self.daemon.database.GroupHasPosts(newsgroup) {
+    self.daemon.database.GetGroupThreads(newsgroup, self.regenThreadChan)
+  }
+}
+
+func (self httpFrontend) regenerateThread(rootMessageID string) {
+  var replies []string
+  if self.daemon.database.ThreadHasReplies(rootMessageID) {
+    replies = self.daemon.database.GetThreadReplies(rootMessageID, 0)
+  } else {
+    replies = nil
+  }
+  msg := self.daemon.store.GetMessage(rootMessageID)
+  if msg == nil {
+    log.Printf("failed to fetch root post %s, regen cancelled", rootMessageID)
+    return
+  }
+
+  post := PostModelFromMessage(msg)
+  
+  thread := NewThreadModel(post)
+  if replies != nil {
+    for _, msgid := range replies {
+      msg = self.daemon.store.GetMessage(msgid)
+      post = PostModelFromMessage(msg)
+      thread.AddPost(post)
+    }
+  }
+  // render the thread
+  fname := self.getFilenameForThread(rootMessageID)
+  wr, err := OpenFileWriter(fname)
+  if err != nil {
+    log.Printf("failed to open %s, %s", fname, err)
+    return
+  }
+  err = thread.RenderTo(wr)
+  wr.Close()
+  if err != nil {
+    log.Printf("failed to render %s, %s", fname, err)
+  }
+}
+
+// select loop for regenerating pages
+func (self httpFrontend) pollregen() {
+  for {
+    select {
+    case msgid := <- self.regenThreadChan:
+      go self.regenerateThread(msgid)
+
+    }
+  }
+}
+
 func (self httpFrontend) Mainloop() {
+  EnsureDir(self.webroot_dir)
+  if ! CheckFile(self.template_dir) {
+    log.Fatalf("no such template folder %s", self.template_dir)
+  }
+  // poll for regenerate thread
+  go self.pollregen()
   // start webserver here
   log.Printf("frontend %s binding to %s", self.name, self.bindaddr)
   err := http.ListenAndServe(self.bindaddr, self)
@@ -108,10 +184,16 @@ func (self httpFrontend) Mainloop() {
 
 
 // create a new http based frontend
-func NewHTTPFrontend(bindaddr, name string) Frontend {
+func NewHTTPFrontend(daemon *NNTPDaemon, config map[string]string) Frontend {
   var front httpFrontend
-  front.bindaddr = bindaddr
-  front.name = name
+  front.daemon = daemon
+  front.bindaddr = config["bind"]
+  front.name = config["name"]
+  front.webroot_dir = config["webroot"]
+  front.template_dir = config["templates"]
+  front.prefix = config["prefix"]
   front.postchan = make(chan *NNTPMessage, 16)
+  front.regenThreadChan = make(chan string, 16)
+  front.regenGroupChan = make(chan string, 8)
   return front
 }

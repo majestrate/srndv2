@@ -66,6 +66,7 @@ func (self *ArticleStore) StorePost(post *NNTPMessage) error {
   }
   post.WriteTo(file, "\n")
   file.Close()
+  log.Printf("stored post %s", post.MessageID)
   return nil
 }
 

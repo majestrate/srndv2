@@ -12,26 +12,34 @@ import (
 )
 
 type PostgresDatabase struct {
+  Database
   conn *sql.DB
   db_str string
 }
 
-func (self *PostgresDatabase) Init(db_host, db_port, db_user, db_password string) error {
-  self.db_str = fmt.Sprintf("user=%s password=%s host=%s port=%s", db_user, db_password, db_host, db_port)
-  return nil
+func NewPostgresDatabase(host, port, user, password string) Database {
+  db := new(PostgresDatabase)
+  db.db_str = fmt.Sprintf("user=%s password=%s host=%s port=%s", user, password, host, port)
+  db.conn = db.Conn()
+  return db
+}
+
+func (self PostgresDatabase) Login() string {
+  return self.db_str
 }
 
 
 // finalize all transactions 
 // close database connections
-func (self *PostgresDatabase) Close() {
+func (self PostgresDatabase) Close() {
   self.Conn().Close()
 }
 
-func (self *PostgresDatabase) Conn() *sql.DB {
+func (self PostgresDatabase) Conn() *sql.DB {
   if self.conn == nil {
+    log.Println("connecting to database")
     var err error
-    self.conn, err = sql.Open("postgres", self.db_str)
+    self.conn, err = sql.Open("postgres", self.Login())
     if err != nil {
       log.Fatalf("cannot open connection to db: %s", err)
     }
@@ -41,7 +49,7 @@ func (self *PostgresDatabase) Conn() *sql.DB {
 
 // create all tables
 // will panic on fail
-func (self *PostgresDatabase) CreateTables() {
+func (self PostgresDatabase) CreateTables() {
   tables := make(map[string]string)
 
 
@@ -73,7 +81,7 @@ func (self *PostgresDatabase) CreateTables() {
 
 
 // check if a newsgroup exists
-func (self *PostgresDatabase) HasNewsgroup(group string) bool {
+func (self PostgresDatabase) HasNewsgroup(group string) bool {
   stmt, err := self.Conn().Prepare("SELECT COUNT(name) FROM Newsgroups WHERE name = $1")
   if err != nil {
     log.Println("failed to prepare query to check for newsgroup", group, err)
@@ -86,7 +94,7 @@ func (self *PostgresDatabase) HasNewsgroup(group string) bool {
 }
 
 // check if an article exists
-func (self *PostgresDatabase) HasArticle(message_id string) bool {
+func (self PostgresDatabase) HasArticle(message_id string) bool {
   stmt, err := self.Conn().Prepare("SELECT COUNT(message_id) FROM Articles WHERE message_id = $1")
   if err != nil {
     log.Println("failed to prepare query to check for article", message_id, err)
@@ -99,7 +107,7 @@ func (self *PostgresDatabase) HasArticle(message_id string) bool {
 }
 
 // register a new newsgroup
-func (self *PostgresDatabase) RegisterNewsgroup(group string) {
+func (self PostgresDatabase) RegisterNewsgroup(group string) {
   stmt, err := self.Conn().Prepare("INSERT INTO Newsgroups (name, last_post) VALUES($1, $2)")
   if err != nil {
     log.Println("failed to prepare query to register newsgroup", group, err)
@@ -113,7 +121,7 @@ func (self *PostgresDatabase) RegisterNewsgroup(group string) {
 }
 
 // register a message with the database
-func (self *PostgresDatabase) RegisterArticle(message *NNTPMessage) {
+func (self PostgresDatabase) RegisterArticle(message *NNTPMessage) {
   if ! self.HasNewsgroup(message.Newsgroup) {
     self.RegisterNewsgroup(message.Newsgroup)
   }
@@ -141,7 +149,7 @@ func (self *PostgresDatabase) RegisterArticle(message *NNTPMessage) {
 
 // get all articles in a newsgroup
 // send result down a channel
-func (self *PostgresDatabase) GetAllArticlesInGroup(group string, recv chan string) {
+func (self PostgresDatabase) GetAllArticlesInGroup(group string, recv chan string) {
   stmt, err := self.Conn().Prepare("SELECT message_id FROM Articles WHERE message_newsgroup = $1")
   if err != nil {
     log.Printf("failed to prepare query for getting all articles in %s: %s", group, err)
@@ -162,7 +170,7 @@ func (self *PostgresDatabase) GetAllArticlesInGroup(group string, recv chan stri
 
 // get all articles 
 // send result down a channel
-func (self *PostgresDatabase) GetAllArticles(recv chan string) {
+func (self PostgresDatabase) GetAllArticles(recv chan string) {
   stmt, err := self.Conn().Prepare("SELECT message_id FROM Articles")
   if err != nil {
     log.Printf("failed to prepare query for getting all articles: %s", err)

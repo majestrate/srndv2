@@ -43,7 +43,11 @@ donate: bitcoin 15yuMzuueV8y5vPQQ39ZqQVz5Ey98DNrjE
     # this will generate base config files if they aren't present
     ./SRNd
 
-   
+
+## configuration
+
+    see config.md
+
 ## Notes
 
 When receiving many articles (i.e. durring initial sync with a network with over

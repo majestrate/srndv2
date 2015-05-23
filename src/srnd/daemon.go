@@ -153,6 +153,7 @@ func (self *NNTPDaemon) syncAll() {
   }
 }
 
+
 // run daemon
 func (self *NNTPDaemon) Run() {	
   err := self.Bind()
@@ -204,11 +205,17 @@ func (self *NNTPDaemon) pollfeeds() {
   for {
     select {
     case msgid := <- self.send_all_feeds:
-      // send all feeds 
+      // send all feeds
       nntp := self.store.GetMessage(msgid)
-      for feed , use := range self.feeds {
-        if use && feed.policy.AllowsNewsgroup(nntp.Newsgroup) {
-          feed.send <- nntp
+      if nntp == nil {
+        log.Printf("failed to load %s for federation", msgid)
+      } else {
+        for feed , use := range self.feeds {
+          if use && feed.policy != nil {
+            if feed.policy.AllowsNewsgroup(nntp.Newsgroup) {
+              feed.send <- nntp
+            }
+          }
         }
       }
       break
@@ -274,9 +281,9 @@ func (self *NNTPDaemon) Init() bool {
     log.Println("cannot load config")
     return false
   }
-  self.infeed = make(chan *NNTPMessage, 16)
-  self.infeed_load = make(chan string, 16)
-  self.send_all_feeds = make(chan string, 16)
+  self.infeed = make(chan *NNTPMessage, 64)
+  self.infeed_load = make(chan string, 256)
+  self.send_all_feeds = make(chan string, 64)
   self.feeds = make(map[NNTPConnection]bool)
   
   
@@ -285,13 +292,7 @@ func (self *NNTPDaemon) Init() bool {
   db_user := self.conf.database["user"]
   db_passwd := self.conf.database["password"]
 
-  self.database = NewDatabase(self.conf.database["type"])
-  
-  err := self.database.Init(db_host, db_port, db_user, db_passwd)
-  if err != nil {
-    log.Println("failed to initialize database", err)
-    return false
-  }
+  self.database = NewDatabase(self.conf.database["type"], self.conf.database["schema"], db_host, db_port, db_user, db_passwd)
   self.database.CreateTables()
   
   self.store = new(ArticleStore)
@@ -315,7 +316,7 @@ func (self *NNTPDaemon) Init() bool {
   // do we enable the frontend?
   if self.conf.frontend["enable"] == "1" {
     log.Printf("frontend %s enabled", self.conf.frontend["name"]) 
-    self.frontend = NewHTTPFrontend(self.conf.frontend["bind"], self.conf.frontend["name"]) 
+    self.frontend = NewHTTPFrontend(self, self.conf.frontend) 
     go self.frontend.Mainloop()
   }
   

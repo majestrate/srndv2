@@ -72,11 +72,15 @@ func ValidMessageID(id string) bool {
   return true
 }
 
-
+// message id hash
 func HashMessageID(msgid string) string {
   return fmt.Sprintf("%x", sha1.Sum([]byte(msgid)))
 }
-
+// short message id hash
+// >>hash
+func ShortHashMessageID(msgid string) string {
+  return HashMessageID(msgid)[:10]
+}
 
 type lineWriter struct {
   io.Writer
@@ -92,4 +96,8 @@ func (self lineWriter) Write(data []byte) (n int, err error) {
   n, err = self.wr.Write(data)
   self.wr.Write(self.delim)
   return n, err
+}
+
+func OpenFileWriter(fname string) (io.WriteCloser, error) {
+  return os.OpenFile(fname, os.O_WRONLY, 0644)
 }

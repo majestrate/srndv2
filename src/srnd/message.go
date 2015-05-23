@@ -8,7 +8,6 @@ import (
   "bytes"
   "crypto/rand"
   "database/sql"
-  "encoding/base64"
   "fmt"
   "io"
   "log"
@@ -117,13 +116,11 @@ func (self *NNTPMessage) WriteTo(w io.WriteCloser, delim string) (err error) {
       hdr.Add("Content-Disposition", fmt.Sprintf("filename=\"%s\"", att.Name))
       hdr.Set("Content-Transfer-Encoding", "base64")
       part, _ := mwriter.CreatePart(hdr)
-      // decode attachment to binary
-      var tmpbuff bytes.Buffer
-      tmpbuff.WriteString(att.Data)
-      dec := base64.NewDecoder(base64.URLEncoding, &tmpbuff)
       // write it to our mime message
-      io.Copy(part, dec)
+      io.WriteString(part, att.Data)
+      
     }
+    mwriter.Close()
   } else {
     // nope we have no files
     // write out a plain response

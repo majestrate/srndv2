@@ -188,7 +188,6 @@ func (self *NNTPDaemon) Run() {
 
 func (self *NNTPDaemon) pollfrontend() {
   for {
-    
     select {
     case nntp := <- self.frontend.NewPostsChan():
       // new post from frontend
@@ -197,6 +196,16 @@ func (self *NNTPDaemon) pollfrontend() {
       // tell infeed that we got one
       self.infeed <- nntp
       break
+    case msgid := <- self.infeed_load:
+      // load temp message
+      // this deletes the temp file
+      nntp := self.store.ReadTempMessage(msgid)
+      // rewrite path header
+      nntp.Path = self.instance_name +"!" + nntp.Path
+      // offer infeed
+      self.infeed <- nntp
+      break
+
     }
   }
 }
@@ -231,15 +240,6 @@ func (self *NNTPDaemon) pollfeeds() {
         log.Printf("%s has invalid signature", nntp.MessageID)
       }
       
-      break
-    case msgid := <- self.infeed_load:
-      // load temp message
-      // this deletes the temp file
-      nntp := self.store.ReadTempMessage(msgid)
-      // rewrite path header
-      nntp.Path = self.instance_name +"!" + nntp.Path
-      // offer infeed
-      self.infeed <- nntp
       break
     }
   }

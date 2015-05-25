@@ -222,10 +222,9 @@ func (self *NNTPDaemon) pollfeeds() {
     case nntp := <- self.infeed:
       // register article
       self.database.RegisterArticle(nntp)
-      // store article
-      self.store.StorePost(nntp)
-
       if nntp.VerifySignature() {
+        // store article
+        self.store.StorePost(nntp)
         // queue to all outfeeds
         self.send_all_feeds <- nntp.MessageID
       } else {

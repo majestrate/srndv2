@@ -11,20 +11,20 @@ import (
 
 
 func testSign(bufflen int, keys *KeyPair) {
-  log.Printf("Test %dKB sign/verify...", bufflen)
+  log.Printf("Test %d sign/verify...", bufflen)
   msg := RandBytes(bufflen)
-  sig := CryptoSign(msg.Data(), keys.sk.Data())
-  if ! CryptoVerify(msg.Data(), sig, keys.pk.Data()) {
+  defer msg.Free()
+  sig := CryptoSignDetached(msg.Data(), keys.sk.Data())
+  if ! CryptoVerifyDetached(msg.Data(), sig, keys.pk.Data()) {
     log.Fatal("Failed")
   }
-  msg.Free()
 }
 
 // test all crypto functions
 func TestAll() {
   log.Println("Begin Crypto test")
   
-  bufflen := 32
+  bufflen := 128
 
   b := RandBytes(bufflen)
   defer b.Free()
@@ -36,6 +36,8 @@ func TestAll() {
   for n := 1 ; n < 16 ; n++ {
     testSign(n * 1024, keys)
   }
+  
+  
   log.Println("Crypto Test Done")
 }
 
@@ -44,7 +46,7 @@ func TestAll() {
 func init() {
   status := C.sodium_init()
   if status == -1 {
-    log.Fatal("failed to initialize libsodium, status", status)
+    log.Fatalf("failed to initialize libsodium status=%d", status)
   }
   version_ptr := C.sodium_version_string()
   

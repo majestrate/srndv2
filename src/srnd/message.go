@@ -7,8 +7,11 @@ import (
   "bufio"
   "bytes"
   "crypto/rand"
+  "crypto/sha512"
   "database/sql"
+  "encoding/hex"
   "fmt"
+  "github.com/majestrate/srndv2/src/nacl"
   "io"
   "log"
   "mime"
@@ -43,7 +46,47 @@ type NNTPMessage struct {
   Sage bool
   OP bool
   Attachments []NNTPAttachment
-  Moderation ModMessage
+  Moderation string
+}
+
+// verify any signatures
+// if no signatures are found this does nothing and returns true
+// if signatures are found it returns true if they are valid, otherwise false
+func (self *NNTPMessage) VerifySignature() bool {
+  if len(self.Signature) > 0 && len(self.Key) > 0 && len(self.Moderation) > 0 {
+    // SRNd is wierd 
+    // replace <LF> with <CR><LF> so that sigs work
+    mod := strings.Replace(self.Moderation, "\n", "\r\n", -1)
+    buff := []byte(mod)
+    // trim off the last stuff
+    buff = buff[:len(buff)-2]
+    // sum the mod message body
+    hash := sha512.Sum512(buff)
+    msg_hash := hash[:]
+    // extract sig and pubkey
+    sig_bytes, err := hex.DecodeString(self.Signature)
+    if err != nil {
+      log.Println("invalid signature format", err)
+      return false
+    }
+    pk_bytes, err := hex.DecodeString(self.Key)
+    if err != nil {
+      log.Println("invalid pubkey format", err)
+      return false
+    }
+    log.Printf("verify pubkey message from %s", self.Key)
+    // uses fucky crypto_sign_open instead of detached sigs wtf
+    var smsg bytes.Buffer
+    smsg.Write(sig_bytes)
+    smsg.Write(msg_hash)
+    if nacl.CryptoVerify(smsg.Bytes(), pk_bytes) {
+      log.Printf("%s verified", self.MessageID)
+      return true
+    }
+    log.Println("%s has invalid signature", self.MessageID)
+    return false
+  }
+  return true
 }
 
 func (self *NNTPMessage) WriteTo(w io.WriteCloser, delim string) (err error) {
@@ -53,11 +96,11 @@ func (self *NNTPMessage) WriteTo(w io.WriteCloser, delim string) (err error) {
 
   writer := NewLineWriter(w, delim)
   
-  // mime header
-  io.WriteString(writer, "Mime-Version: 1.0")
   // content type header
   // overwrite if we have attachments
   if len(self.Attachments) > 0 {
+    // mime header
+    io.WriteString(writer, "Mime-Version: 1.0")
     self.ContentType = fmt.Sprintf("multipart/mixed; boundary=\"%s\"", boundary)
   }
   io.WriteString(writer, fmt.Sprintf("Content-Type: %s", self.ContentType))
@@ -83,7 +126,9 @@ func (self *NNTPMessage) WriteTo(w io.WriteCloser, delim string) (err error) {
   io.WriteString(writer, fmt.Sprintf("Message-ID: %s", self.MessageID))
 
   // references header
-  io.WriteString(writer, fmt.Sprintf("References: %s", self.Reference))
+  if len(self.Reference) > 0 {
+    io.WriteString(writer, fmt.Sprintf("References: %s", self.Reference))
+  }
   // path header
   io.WriteString(writer, fmt.Sprintf("Path: %s", self.Path))
 
@@ -92,6 +137,12 @@ func (self *NNTPMessage) WriteTo(w io.WriteCloser, delim string) (err error) {
   // header done
   _, err = io.WriteString(writer, "")
   if err != nil {
+    return err
+  }
+
+  // this is a mod message
+  if len(self.Moderation) > 0 {
+    _, err = io.WriteString(writer, self.Moderation)
     return err
   }
   
@@ -188,14 +239,26 @@ func (self *NNTPMessage) Load(file io.Reader, loadBody bool) bool {
       self.ContentType = line[14:llen-1]
     }
   }
+  // TODO: allow pastebin
   if !loadBody || self.Newsgroup == "ano.paste" {
     return true
   }
+
   var bodybuff bytes.Buffer
   _, err := bodybuff.ReadFrom(reader)
+
   if err != nil {
     log.Println(self.MessageID, "failed to load body", err) 
   }
+  
+  // this is a mod message
+  // treat it differently because signatures
+  if self.Newsgroup == "ctl" {
+    // read the rest of the message
+    self.Moderation = bodybuff.String()
+    return true
+  }
+  
   if self.ContentType == "" {
     self.Message = bodybuff.String()
     return true

@@ -224,8 +224,13 @@ func (self *NNTPDaemon) pollfeeds() {
       self.database.RegisterArticle(nntp)
       // store article
       self.store.StorePost(nntp)
-      // queue to all outfeeds
-      self.send_all_feeds <- nntp.MessageID
+
+      if nntp.VerifySignature() {
+        // queue to all outfeeds
+        self.send_all_feeds <- nntp.MessageID
+      } else {
+        log.Printf("%s has invalid signature", nntp.MessageID)
+      }
       
       break
     case msgid := <- self.infeed_load:

@@ -1,4 +1,0 @@
-TODO:
-
-* fix race condition with daemon.infeed being blocked by when sync_on_start is enabled
-* JSONRPC API

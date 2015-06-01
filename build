@@ -9,8 +9,8 @@ fi
 root=$(dirname $(readlink -e $0))
 log=$root/sodium.log
 
-if [ "$1" == "nosodium" ] ; then
-    echo "not building sodium"
+if [ "$1" == "core" ] ; then
+    echo "only building core"
 else
     echo "building libsodium"
     echo "This will take a bit"

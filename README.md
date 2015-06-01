@@ -35,7 +35,7 @@ donate: bitcoin 15yuMzuueV8y5vPQQ39ZqQVz5Ey98DNrjE
 
 ## rebuilding
 
-    ./build nosodium
+    ./build core
 
 
 ## initial run

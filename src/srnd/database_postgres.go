@@ -79,6 +79,89 @@ func (self PostgresDatabase) CreateTables() {
 }
 
 
+func (self PostgresDatabase) GetThreadReplies(rootpost string, limit int) []string {
+  var rows *sql.Rows
+  var err error
+  if limit > 0 {
+    stmt, err := self.Conn().Prepare("SELECT message_id FROM Articles WHERE message_ref_id = $1 LIMIT $2")
+    if err == nil {
+      defer stmt.Close()
+      rows, err = stmt.Query(rootpost, limit)
+    }
+  } else {
+    stmt, err := self.Conn().Prepare("SELECT message_id FROM Articles WHERE message_ref_id = $1")
+    if err == nil {
+      defer stmt.Close()
+      rows, err = stmt.Query(rootpost)
+    }
+    
+  }
+  if err != nil {
+    log.Println("failed to get thread replies", rootpost, err)
+    return nil
+  }
+  
+  if rows == nil {
+    return nil
+  }
+
+  var repls []string
+    
+  for rows.Next() {
+    var msgid string
+    rows.Scan(&msgid)
+    repls = append(repls, msgid)
+  }
+  log.Printf("thread has %d replies", len(repls))
+  return repls
+  
+}
+
+func (self PostgresDatabase) ThreadHasReplies(rootpost string) bool {
+  log.Println("checking for replies for", rootpost)
+  stmt, err := self.Conn().Prepare("SELECT COUNT(message_id) FROM Articles WHERE message_ref_id = $1")
+  if err != nil {
+    log.Println("failed to prepare query to check for thread replies", rootpost, err)
+    return false
+  }
+  defer stmt.Close()
+  var count int64
+  stmt.QueryRow(rootpost).Scan(&count)
+  log.Printf("we have %d replies", count)
+  return count > 0
+}
+
+func (self PostgresDatabase) GetGroupThreads(group string, recv chan string) {
+  stmt, err := self.Conn().Prepare("SELECT message_id FROM Articles WHERE message_newsgroup = $1 AND message_ref_id = '' ")
+  if err != nil {
+    log.Println("failed to prepare query to check for board threads", group, err)
+    return
+  }
+  defer stmt.Close()
+  rows, err := stmt.Query(group)
+  if err != nil {
+    log.Println("failed to execute query to check for board threads", group, err)
+  }
+  for rows.Next() {
+    var msgid string
+    rows.Scan(&msgid)
+    recv <- msgid
+  }
+}
+
+
+func (self PostgresDatabase) GroupHasPosts(group string) bool {
+  stmt, err := self.Conn().Prepare("SELECT COUNT(message_id) FROM Articles WHERE message_newsgroup = $1")
+  if err != nil {
+    log.Println("failed to prepare query to check for newsgroup posts", group, err)
+    return false
+  }
+  defer stmt.Close()
+  var count int64
+  stmt.QueryRow(group).Scan(&count)
+  return count > 0
+}
+
 
 // check if a newsgroup exists
 func (self PostgresDatabase) HasNewsgroup(group string) bool {

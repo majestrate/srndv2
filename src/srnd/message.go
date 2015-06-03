@@ -52,7 +52,7 @@ type NNTPMessage struct {
 // verify any signatures
 // if no signatures are found this does nothing and returns true
 // if signatures are found it returns true if they are valid, otherwise false
-func (self *NNTPMessage) VerifySignature() bool {
+func (self *NNTPMessage) Verify() bool {
   if len(self.Signature) > 0 && len(self.Key) > 0 && len(self.Moderation) > 0 {
     // SRNd is wierd 
     // replace <LF> with <CR><LF> so that sigs work
@@ -87,6 +87,25 @@ func (self *NNTPMessage) VerifySignature() bool {
     return false
   }
   return true
+}
+
+// offer all moderation actions for this message to mod engine's feed
+// does not check for sig validity
+func (self *NNTPMessage) DoModeration(mod Moderation) {
+  if self.Newsgroup != "ctl" {
+    return
+  }
+  if len(self.Key) == 0 || len(self.Signature) == 0 {
+    return
+  }
+  if len(self.Moderation) > 0 && mod.AllowPubkey(self.Key) {
+    lines := strings.Split(self.Moderation, "\n")
+    for _, line := range lines {
+      if len(line) > 0 {
+        mod.feed <- line
+      }
+    }
+  }
 }
 
 func (self *NNTPMessage) WriteTo(w io.WriteCloser, delim string) (err error) {

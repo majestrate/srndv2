@@ -99,5 +99,5 @@ func (self lineWriter) Write(data []byte) (n int, err error) {
 }
 
 func OpenFileWriter(fname string) (io.WriteCloser, error) {
-  return os.OpenFile(fname, os.O_WRONLY, 0644)
+  return os.Create(fname)
 }

@@ -21,22 +21,20 @@
       </span>
       <time 
     </label>
-    <a href="{{PostURL}}" onclick="">
-      No. {{PostHash}}
-    </a>
+    <a href="{{PostURL}}" onclick="">No. {{PostHash}}</a>
   </p>
   <div class="files">
-    {{#Attachment}}
+    {{#Attachments}}
       <a class="file" href="{{Source}}">
         <img class="file-thumbnail" src="{{Thumbnail}}" alt="{{Filename}}" />
       </a>
-    {{/Attachment}}
+    {{/Attachments}}
   </div>
   {{#OP}}
-    <div class="thread_reply_body">
+  <div class="thread_reply_body">
   {{/OP}}
   {{^OP}}
-    <div class="thread_op_body">
+  <div class="thread_op_body">
   {{/OP}}
   {{{RenderBody}}}
   </div>

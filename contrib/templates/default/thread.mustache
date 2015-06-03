@@ -1,0 +1,26 @@
+<html>
+  <head>
+    <style type="text/css" src="{{thread.Prefix}}static/site.css" />
+    <style type="text/css" src="{{thread.Prefix}}static/user.css" />
+    <title> {{thread.OP.Subject}} </title>
+  </head>
+  <body>
+    <!-- postform -->
+    <div id="postform_container">
+      <iframe src="{{thread.Prefix}}generate/postform?board={{thread.Board}}" width=400 height=200>
+      </iframe>
+    </div>
+    <hr />
+    <div class="thread" id="thread_{{thread.OP.PostHash}}">
+      <div class="thread_header">
+      </div>
+      {{{thread.OP.RenderPost}}}
+      <br />
+      {{# repls}}
+        {{{RenderPost}}}
+        <br />
+      {{/ repls}}
+    </div>
+    <hr/>
+    </body>
+</html>

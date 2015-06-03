@@ -17,6 +17,7 @@ type NNTPDaemon struct {
   conf *SRNdConfig
   store *ArticleStore
   database Database
+  mod Moderation
   listener net.Listener
   debug bool
   sync_on_start bool
@@ -31,6 +32,8 @@ type NNTPDaemon struct {
   infeed_load chan string
   // channel for broadcasting a message to all feeds given their message id
   send_all_feeds chan string
+  // channel for sending moderation events as strings
+  mod_feed chan string
 }
 
 func (self *NNTPDaemon) End() {
@@ -210,7 +213,24 @@ func (self *NNTPDaemon) pollfrontend() {
   }
 }
 
+// poll mod feed for mod events
+// parse and execute events
+func (self *NNTPDaemon) pollmodfeed() {
+  for {
+    select {
+    case modline := <- self.mod_feed:
+      ev := ParseModEvent(modline)
+      if ev != nil {
+        log.Printf("handle mod event %s", modline)
+        // execute mod event
+        ev.Execute(self)
+      }
+    }
+  }
+}
+
 func (self *NNTPDaemon) pollfeeds() {
+  chnl := self.frontend.PostsChan()
   for {
     select {
     case msgid := <- self.send_all_feeds:
@@ -231,11 +251,16 @@ func (self *NNTPDaemon) pollfeeds() {
     case nntp := <- self.infeed:
       // register article
       self.database.RegisterArticle(nntp)
-      if nntp.VerifySignature() {
+      // check for validity
+      if nntp.Verify() {
         // store article
         self.store.StorePost(nntp)
+        // tell frontend
+        chnl <- nntp
         // queue to all outfeeds
         self.send_all_feeds <- nntp.MessageID
+        // do any moderation events
+        nntp.DoModeration(self.mod)
       } else {
         log.Printf("%s has invalid signature", nntp.MessageID)
       }
@@ -316,6 +341,8 @@ func (self *NNTPDaemon) Init() bool {
     log.Println("debug mode activated")
   }
 
+  // initialize moderation engine
+  self.mod.Init(self)
   
   // do we enable the frontend?
   if self.conf.frontend["enable"] == "1" {

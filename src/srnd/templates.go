@@ -16,18 +16,9 @@ type BaseModel interface {
 
   // render to a writer
   RenderTo(wr io.Writer) error
-  
+
 }
 
-// board interface
-type BoardModel interface {
-
-  BaseModel
-  
-  RenderNavbar() string
-  Frontend() string
-  Name() string
-}
 
 // for attachments
 type AttachmentModel interface {
@@ -52,7 +43,11 @@ type PostModel interface {
   Subject() string
   Name() string
   OP() bool
-  Attachment() AttachmentModel
+  Attachments() []AttachmentModel
+  Board() string
+  
+  RenderBody() string
+  RenderPost() string
   
 }
 
@@ -63,5 +58,16 @@ type ThreadModel interface {
   
   OP() PostModel
   Replies() []PostModel
-  AddPost(post PostModel)
+  Board() string
+}
+
+// board interface
+type BoardModel interface {
+
+  BaseModel
+  
+  RenderNavbar() string
+  Frontend() string
+  Name() string
+  Threads() []ThreadModel
 }

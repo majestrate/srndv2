@@ -1,8 +1,8 @@
 
 package nacl
 
-// #cgo pkg-config: libsodium
 // #include <sodium.h>
+// #cgo pkg-config: libsodium
 import "C"
 import (
   "encoding/hex"
@@ -30,7 +30,7 @@ func (self *KeyPair) Public() []byte {
 }
 
 // generate a keypair
-func GenKeypair() *KeyPair {
+func GenSignKeypair() *KeyPair {
   sk_len := C.crypto_sign_secretkeybytes()
   sk := malloc(sk_len)
   pk_len := C.crypto_sign_publickeybytes()
@@ -39,17 +39,17 @@ func GenKeypair() *KeyPair {
   if res == 0 {
     return &KeyPair{pk,sk}
   }
-  log.Println("nacl.GenKeypair() failed to generate keypair")
+  log.Println("nacl.GenSignKeypair() failed to generate keypair")
   pk.Free()
   sk.Free()
   return nil
 }
 
 // get public key from secret key
-func GetPubkey(sk []byte) []byte {
+func GetSignPubkey(sk []byte) []byte {
   sk_len := C.crypto_sign_secretkeybytes()
   if C.size_t(len(sk)) != sk_len {
-    log.Printf("nacl.GetPubkey() invalid secret key size %d != %d", len(sk), sk_len)
+    log.Printf("nacl.GetSignPubkey() invalid secret key size %d != %d", len(sk), sk_len)
     return nil
   }
   
@@ -59,11 +59,11 @@ func GetPubkey(sk []byte) []byte {
 
   skbuff := NewBuffer(sk)
   defer skbuff.Free()
+  //XXX: hack
+  res := C.crypto_sign_seed_keypair(pkbuff.uchar(), skbuff.uchar(), skbuff.uchar())
   
-  res := C.crypto_sign_ed25519_sk_to_pk(pkbuff.uchar(), skbuff.uchar())
-
   if res != 0 {
-    log.Printf("nacl.GetPubkey() failed to get public key from secret key: %d", res)
+    log.Printf("nacl.GetSignPubkey() failed to get public key from secret key: %d", res)
     return nil
   }
   
@@ -71,10 +71,10 @@ func GetPubkey(sk []byte) []byte {
 }
 
 // load keypair from secret key
-func LoadKey(sk []byte) *KeyPair {
-  pk := GetPubkey(sk)
+func LoadSignKey(sk []byte) *KeyPair {
+  pk := GetSignPubkey(sk)
   if pk == nil {
-    log.Println("nacl.LoadKey() failed to load keypair")
+    log.Println("nacl.LoadSignKey() failed to load keypair")
     return nil
   }
   pkbuff := NewBuffer(pk)
@@ -83,10 +83,10 @@ func LoadKey(sk []byte) *KeyPair {
 }
 
 // make keypair from seed
-func SeedKey(seed []byte) *KeyPair {
+func SeedSignKey(seed []byte) *KeyPair {
   seed_len := C.crypto_sign_seedbytes()
   if C.size_t(len(seed)) != seed_len {
-    log.Println("nacl.SeedKey() invalid seed size", len(seed))
+    log.Println("nacl.SeedSignKey() invalid seed size", len(seed))
     return nil
   }
   seedbuff := NewBuffer(seed)
@@ -97,7 +97,81 @@ func SeedKey(seed []byte) *KeyPair {
   skbuff := malloc(sk_len)
   res := C.crypto_sign_seed_keypair(pkbuff.uchar(), skbuff.uchar(), seedbuff.uchar())
   if res != 0 {
-    log.Println("nacl.LoadKey cannot derive keys from seed", res)
+    log.Println("nacl.SeedSignKey cannot derive keys from seed", res)
+    pkbuff.Free()
+    skbuff.Free()
+    return nil
+  }
+  return &KeyPair{pkbuff, skbuff}
+}
+
+func GenBoxKeypair() *KeyPair {
+  sk_len := C.crypto_box_secretkeybytes()
+  sk := malloc(sk_len)
+  pk_len := C.crypto_box_publickeybytes()
+  pk := malloc(pk_len)
+  res := C.crypto_box_keypair(pk.uchar(), sk.uchar())
+  if res == 0 {
+    return &KeyPair{pk,sk}
+  }
+  log.Println("nacl.GenBoxKeyPair() failed to generate keypair")
+  pk.Free()
+  sk.Free()
+  return nil  
+}
+
+
+// get public key from secret key
+func GetBoxPubkey(sk []byte) []byte {
+  sk_len := C.crypto_box_secretkeybytes()
+  if C.size_t(len(sk)) != sk_len {
+    log.Printf("nacl.GetBoxPubkey() invalid secret key size %d != %d", len(sk), sk_len)
+    return nil
+  }
+  
+  pk_len := C.crypto_box_publickeybytes()
+  pkbuff := malloc(pk_len)
+  defer pkbuff.Free()
+
+  skbuff := NewBuffer(sk)
+  defer skbuff.Free()
+
+  // compute the public key
+  C.crypto_scalarmult_base(pkbuff.uchar(), skbuff.uchar())
+  
+  return pkbuff.Bytes()
+}
+
+// load keypair from secret key
+func LoadBoxKey(sk []byte) *KeyPair {
+  pk := GetBoxPubkey(sk)
+  if pk == nil {
+    log.Println("nacl.LoadBoxKey() failed to load keypair")
+    return nil
+  }
+  pkbuff := NewBuffer(pk)
+  skbuff := NewBuffer(sk)
+  return &KeyPair{pkbuff, skbuff}
+}
+
+// make keypair from seed
+func SeedBoxKey(seed []byte) *KeyPair {
+  seed_len := C.crypto_box_seedbytes()
+  if C.size_t(len(seed)) != seed_len {
+    log.Println("nacl.SeedBoxKey() invalid seed size", len(seed))
+    return nil
+  }
+  seedbuff := NewBuffer(seed)
+  defer seedbuff.Free()
+  pk_len := C.crypto_box_publickeybytes()
+  sk_len := C.crypto_box_secretkeybytes()
+  pkbuff := malloc(pk_len)
+  skbuff := malloc(sk_len)
+  res := C.crypto_box_seed_keypair(pkbuff.uchar(), skbuff.uchar(), seedbuff.uchar())
+  if res != 0 {
+    pkbuff.Free()
+    skbuff.Free()
+    log.Println("nacl.SeedBoxKey cannot derive keys from seed:", res)
     return nil
   }
   return &KeyPair{pkbuff, skbuff}

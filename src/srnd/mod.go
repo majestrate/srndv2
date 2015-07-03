@@ -11,6 +11,7 @@ import (
 
 // moderation engine
 type Moderation struct {
+  // channel to send commands down line by line
   feed chan string
   daemon *NNTPDaemon
 }
@@ -25,10 +26,48 @@ func (self Moderation) AllowPubkey(key string) bool {
   return false
 }
 
-// moderation event
-type ModEvent struct {
-  Action string
-  MessageID string
+
+type ModEvent interface {
+  // turn it into a string for putting into an article
+  String() string
+  // what type of mod event
+  Action() string
+  // what reason for the event
+  Reason() string
+  // what is the event acting on
+  Target() string
+  // scope of the event, regex of newsgroup
+  Scope() string
+  // when this mod event expires, unix nano
+  Expires() int64
+}
+
+type simpleModEvent string
+
+func (self simpleModEvent) String() string {
+  return string(self)
+}
+
+func (self simpleModEvent) Action() string {
+  return strings.Split(string(self), " ")[0]
+}
+
+func (self simpleModEvent) Reason() string {
+  return ""
+}
+
+func (self simpleModEvent) Target() string {
+  return strings.Split(string(self), " ")[1]
+}
+
+func (self simpleModEvent) Scope() string {
+  // TODO: hard coded
+  return "overchan.*"
+}
+
+func (self simpleModEvent) Expires() int64 {
+  // no expiration
+  return -1
 }
 
 // moderation message
@@ -37,26 +76,17 @@ type ModMessage struct {
   Events []ModEvent
 }
 
-func (self ModEvent) String() string {
-  return fmt.Sprintf("%s %s", self.Action, self.MessageID)
-}
-
-func (self *ModEvent) Execute(d *NNTPDaemon) {
-
-}
-
 func (self ModMessage) String() string {
   body := "Content-Type: text/plain; charset=UTF-8\n"
   body += fmt.Sprintf("Date: %s\n", self.Date.Format(time.RFC1123Z))
-  for idx := range(self.Events) {
-    body += fmt.Sprintf("%s\n", self.Events[idx].String())
+  for _, ev := range(self.Events) {
+    body += ev.String()
   }
   return body
 }
 
 
 
-func ParseModEvent(line string) *ModEvent {
-  parts := strings.Split(line, " ")
-  return &ModEvent{parts[0], parts[1]}
+func ParseModEvent(line string) ModEvent {
+  return simpleModEvent(line)
 }

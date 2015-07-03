@@ -5,13 +5,16 @@
 package srnd
 
 import (
+  "github.com/majestrate/srndv2/src/nacl"
   "crypto/sha1"
   "encoding/base64"
+  "encoding/hex"
   "fmt"
   "io"
   "log"
   "os"
   "strings"
+  "time"
 )
 
 func B64Decode(data string) []byte {
@@ -100,4 +103,13 @@ func (self lineWriter) Write(data []byte) (n int, err error) {
 
 func OpenFileWriter(fname string) (io.WriteCloser, error) {
   return os.Create(fname)
+}
+
+// make a random string
+func randStr(length int) string {
+  return hex.EncodeToString(nacl.RandBytes(length))[:length]
+}
+
+func timeNow() int64 {
+  return time.Now().UnixNano()
 }

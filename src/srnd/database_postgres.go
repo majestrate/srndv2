@@ -69,6 +69,16 @@ func (self PostgresDatabase) CreateTables() {
                           time_obtained INTEGER NOT NULL,
                           FOREIGN KEY(message_newsgroup) REFERENCES Newsgroups(name)
                         )`
+
+  // table for storing nntp article post content
+  tables["ArticlePosts"] = `(
+                              message_id VARCHAR(255),
+                              name TEXT NOT NULL,
+                              subject TEXT NOT NULL,
+                              path TEXT NOT NULL,
+                              time_posted INTEGER NOT NULL,
+                              message TEXT NOT NULL
+                            )`
   
   for k, v := range(tables) {
     _, err := self.Conn().Exec(fmt.Sprintf("CREATE TABLE IF NOT EXISTS %s%s", k, v))
@@ -78,18 +88,42 @@ func (self PostgresDatabase) CreateTables() {
   }
 }
 
+func (self PostgresDatabase) GetAllNewsgroups() []string {
+  var rows *sql.Rows
+  var err error
+  stmt, err := self.Conn().Prepare("SELECT name FROM Newsgroups")
+  if err == nil {
+    defer stmt.Close()
+    rows, err = stmt.Query() 
+  }
+  if err != nil {
+    log.Println("failed to get all newsgroups", err)
+    return nil
+  }
+  
+  var groups []string
+  
+  if rows != nil {
+    for rows.Next() {
+      var group string
+      rows.Scan(&group)
+      groups = append(groups, group)
+    }
+  }
+  return groups
+}
 
 func (self PostgresDatabase) GetThreadReplies(rootpost string, limit int) []string {
   var rows *sql.Rows
   var err error
   if limit > 0 {
-    stmt, err := self.Conn().Prepare("SELECT message_id FROM Articles WHERE message_ref_id = $1 LIMIT $2")
+    stmt, err := self.Conn().Prepare("SELECT message_id FROM Articles WHERE message_ref_id = $1 ORDER BY time_obtained LIMIT $2")
     if err == nil {
       defer stmt.Close()
       rows, err = stmt.Query(rootpost, limit)
     }
   } else {
-    stmt, err := self.Conn().Prepare("SELECT message_id FROM Articles WHERE message_ref_id = $1")
+    stmt, err := self.Conn().Prepare("SELECT message_id FROM Articles WHERE message_ref_id = $1 ORDER BY time_obtained")
     if err == nil {
       defer stmt.Close()
       rows, err = stmt.Query(rootpost)
@@ -208,6 +242,7 @@ func (self PostgresDatabase) RegisterArticle(message *NNTPMessage) {
   if ! self.HasNewsgroup(message.Newsgroup) {
     self.RegisterNewsgroup(message.Newsgroup)
   }
+  // insert article metadata
   stmt, err := self.Conn().Prepare("INSERT INTO Articles (message_id, message_id_hash, message_newsgroup, time_obtained, message_ref_id) VALUES($1, $2, $3, $4, $5)")
   if err != nil {
     log.Println("failed to prepare query to register article", message.MessageID, err)
@@ -219,6 +254,7 @@ func (self PostgresDatabase) RegisterArticle(message *NNTPMessage) {
   if err != nil {
     log.Println("failed to register article", err)
   }
+  // update newsgroup
   stmt, err = self.Conn().Prepare("UPDATE Newsgroups SET last_post = $1 WHERE name = $2")
   if err != nil {
     log.Println("cannot prepare query to update newsgroup last post", err)
@@ -227,6 +263,16 @@ func (self PostgresDatabase) RegisterArticle(message *NNTPMessage) {
   _, err = stmt.Exec(now, message.Newsgroup)
   if err != nil {
     log.Println("cannot execute query to update newsgroup last post", err)
+  }
+  // insert article post
+  stmt, err = self.Conn().Prepare("INSERT INTO ArticlePosts(message_id, name, subject, path, time_posted, message) VALUES($1, $2, $3, $4, $5, $6)")
+  if err != nil {
+    log.Println("cannot prepare query to insert article post", err)
+    
+  }
+  _, err = stmt.Exec(message.MessageID, message.Name, message.Subject, message.Path, message.Posted, message.Message)
+  if err != nil {
+    log.Println("cannot insert article post", err)
   }
 }
 

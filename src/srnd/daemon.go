@@ -32,8 +32,6 @@ type NNTPDaemon struct {
   infeed_load chan string
   // channel for broadcasting a message to all feeds given their message id
   send_all_feeds chan string
-  // channel for sending moderation events as strings
-  mod_feed chan string
 }
 
 func (self *NNTPDaemon) End() {
@@ -198,33 +196,19 @@ func (self *NNTPDaemon) pollfrontend() {
       nntp.Path = self.instance_name + "!" + nntp.Path
       // tell infeed that we got one
       self.infeed <- nntp
-      break
     case msgid := <- self.infeed_load:
       // load temp message
       // this deletes the temp file
       nntp := self.store.ReadTempMessage(msgid)
+      if nntp == nil {
+        log.Println("invalid message", msgid)
+        break
+      }
       // rewrite path header
       nntp.Path = self.instance_name +"!" + nntp.Path
       // offer infeed
       self.infeed <- nntp
-      break
 
-    }
-  }
-}
-
-// poll mod feed for mod events
-// parse and execute events
-func (self *NNTPDaemon) pollmodfeed() {
-  for {
-    select {
-    case modline := <- self.mod_feed:
-      ev := ParseModEvent(modline)
-      if ev != nil {
-        log.Printf("handle mod event %s", modline)
-        // execute mod event
-        ev.Execute(self)
-      }
     }
   }
 }
@@ -260,7 +244,7 @@ func (self *NNTPDaemon) pollfeeds() {
         // queue to all outfeeds
         self.send_all_feeds <- nntp.MessageID
         // do any moderation events
-        nntp.DoModeration(self.mod)
+        nntp.DoModeration(&self.mod)
       } else {
         log.Printf("%s has invalid signature", nntp.MessageID)
       }

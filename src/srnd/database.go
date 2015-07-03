@@ -31,8 +31,15 @@ type Database interface {
   // get all active threads on a board
   // send each thread's root's message_id down a channel
   GetGroupThreads(newsgroup string, send chan string)
-  
+
+  // get a postmodel from the database for this message_id
+  GetPost(message_id string) PostModel
+    
+  // underlying database connection
   Conn() *sql.DB
+
+  // get every newsgroup we know of
+  GetAllNewsgroups() []string
 }
 
 func NewDatabase(db_type, schema, host, port, user, password string) Database  {

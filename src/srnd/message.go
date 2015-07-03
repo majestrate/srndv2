@@ -8,7 +8,6 @@ import (
   "bytes"
   "crypto/rand"
   "crypto/sha512"
-  "database/sql"
   "encoding/hex"
   "fmt"
   "github.com/majestrate/srndv2/src/nacl"
@@ -46,18 +45,18 @@ type NNTPMessage struct {
   Sage bool
   OP bool
   Attachments []NNTPAttachment
-  Moderation string
+  Signed string
 }
 
 // verify any signatures
 // if no signatures are found this does nothing and returns true
 // if signatures are found it returns true if they are valid, otherwise false
 func (self *NNTPMessage) Verify() bool {
-  if len(self.Signature) > 0 && len(self.Key) > 0 && len(self.Moderation) > 0 {
+  if len(self.Signature) > 0 && len(self.Key) > 0 && len(self.Signed) > 0 {
     // SRNd is wierd 
     // replace <LF> with <CR><LF> so that sigs work
-    mod := strings.Replace(self.Moderation, "\n", "\r\n", -1)
-    buff := []byte(mod)
+    msg := strings.Replace(self.Signed, "\n", "\r\n", -1)
+    buff := []byte(msg)
     // trim off the last stuff
     buff = buff[:len(buff)-2]
     // sum the mod message body
@@ -91,16 +90,17 @@ func (self *NNTPMessage) Verify() bool {
 
 // offer all moderation actions for this message to mod engine's feed
 // does not check for sig validity
-func (self *NNTPMessage) DoModeration(mod Moderation) {
+func (self *NNTPMessage) DoModeration(mod *Moderation) {
   if self.Newsgroup != "ctl" {
     return
   }
   if len(self.Key) == 0 || len(self.Signature) == 0 {
     return
   }
-  if len(self.Moderation) > 0 && mod.AllowPubkey(self.Key) {
-    lines := strings.Split(self.Moderation, "\n")
-    for _, line := range lines {
+  if len(self.Signed) > 0 && mod.AllowPubkey(self.Key) {
+    // TODO: implement parsing of signed mod messages
+    for _, line := range strings.Split(self.Signed, "\n") {
+      // feed the mod line
       if len(line) > 0 {
         mod.feed <- line
       }
@@ -160,8 +160,8 @@ func (self *NNTPMessage) WriteTo(w io.WriteCloser, delim string) (err error) {
   }
 
   // this is a mod message
-  if len(self.Moderation) > 0 {
-    _, err = io.WriteString(writer, self.Moderation)
+  if len(self.Signed) > 0 {
+    _, err = io.WriteString(writer, self.Signed)
     return err
   }
   
@@ -201,7 +201,6 @@ func (self *NNTPMessage) WriteTo(w io.WriteCloser, delim string) (err error) {
 
 // load from file
 func (self *NNTPMessage) Load(file io.Reader, loadBody bool) bool {
-  self.Please = "post"
   reader := bufio.NewReader(file)
   var idx int
   for {
@@ -269,15 +268,14 @@ func (self *NNTPMessage) Load(file io.Reader, loadBody bool) bool {
   if err != nil {
     log.Println(self.MessageID, "failed to load body", err) 
   }
-  
-  // this is a mod message
-  // treat it differently because signatures
-  if self.Newsgroup == "ctl" {
-    // read the rest of the message
-    self.Moderation = bodybuff.String()
-    return true
+  // treat signed messages differently
+  if len(self.Key) > 0 && len(self.Signature) > 0 {
+    self.Signed = bodybuff.String()
+    // TODO: parse signed message body too
+    log.Println("signed post parsing not implemented")
+    return false
   }
-  
+
   if self.ContentType == "" {
     self.Message = bodybuff.String()
     return true
@@ -353,18 +351,4 @@ func (self *NNTPMessage) Load(file io.Reader, loadBody bool) bool {
     
   }
   return true
-}
-
-// add to database
-func (self *NNTPMessage) Save(database *sql.DB) {
-  var userid string
-  err := database.QueryRow(`INSERT INTO nntp_posts(
-    messageID, newsgroup, subject, pubkey, message, parent)
-    VALUES( $1, $2, $3, $4, $5, $6) 
-    RETURNING id`, self.MessageID, self.Newsgroup, self.Subject, self.Key, self.Message, self.Reference).Scan(&userid)
-  if err != nil {
-    log.Println("failed to save post to database", err)
-    return
-  }
-  log.Println("inserted post with UUID", userid)
 }

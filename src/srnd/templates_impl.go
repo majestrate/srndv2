@@ -7,13 +7,11 @@ package srnd
 import (
   "github.com/hoisie/mustache"
   "io"
-  "log"
   "path/filepath"
+  "strings"
 )
 
 type post struct {
-  PostModel
-
   board string
   name string
   subject string
@@ -24,8 +22,6 @@ type post struct {
 }
 
 type attachment struct {
-  AttachmentModel
-  
   thumbnail string
   source string
   filename string
@@ -63,6 +59,18 @@ func (self post) TemplateDir() string {
   return filepath.Join("contrib", "templates", "default")
 }
 
+func (self post) MessageID() string  {
+  return self.message_id
+}
+
+func (self post) Frontend() string {
+  idx := strings.LastIndex(self.path, "!")
+  if idx == -1 {
+    return self.path
+  }
+  return self.path[idx+1:]
+}
+
 func (self post) Board() string {
   return self.board
 }
@@ -94,6 +102,10 @@ func (self post) Prefix() string {
   return "/" 
 }
 
+func (self post) RenderTo(wr io.Writer) error {
+  _, err := io.WriteString(wr, self.RenderPost())
+  return err
+}
 
 func (self post) RenderPost() string {
   fname := filepath.Join(self.TemplateDir(), "post.mustache")
@@ -120,14 +132,18 @@ func (self thread) Board() string {
   return self.posts[0].Board()
 }
 
+// get our default template dir
+func defaultTemplateDir() string {
+  return  filepath.Join("contrib", "templates", "default")
+}
+
 func (self thread) TemplateDir() string {
-  return filepath.Join("contrib", "templates", "default")
+  return defaultTemplateDir()
 }
 
 func (self thread) RenderTo(wr io.Writer) error {
   fname := filepath.Join(self.TemplateDir(), "thread.mustache")
   rpls := self.Replies()
-  log.Println(rpls)
   data := mustache.RenderFile(fname, map[string]interface{} { "thread": self, "repls" : rpls})
   io.WriteString(wr, data)
   return nil
@@ -148,4 +164,8 @@ func NewThreadModel(posts []PostModel) ThreadModel {
   th := thread{}
   th.posts = posts
   return th
+}
+
+func templateRender(fname string, obj interface{}) string {
+  return mustache.RenderFile(fname, obj)
 }

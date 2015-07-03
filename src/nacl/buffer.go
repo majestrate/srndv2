@@ -1,7 +1,7 @@
 package nacl
 
-// #cgo pkg-config: libsodium
 // #include <sodium.h>
+// #cgo pkg-config: libsodium
 //
 // unsigned char * deref_uchar(void * ptr) { return (unsigned char*) ptr; }
 //
@@ -82,6 +82,7 @@ func (self *Buffer) String() string {
   return hex.EncodeToString(self.Data())
 }
 
+// zero out memory and then free
 func (self *Buffer) Free() {
   C.sodium_memzero(self.ptr, self.size)
   C.free(self.ptr)

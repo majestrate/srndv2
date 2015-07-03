@@ -1,16 +1,24 @@
 package nacl
 
-// #cgo pkg-config: libsodium
 // #include <sodium.h>
+// #cgo pkg-config: libsodium
 import "C"
 
 
 
-func RandBytes(size int) *Buffer {
+func randbytes(size C.size_t) *Buffer {
+
+  buff := malloc(size)
+  C.randombytes_buf(buff.ptr, size)
+  return buff
+
+}
+
+func RandBytes(size int) []byte {
   if size > 0 {
-    buff := Malloc(size)
-    C.randombytes_buf(buff.ptr, buff.size)
-    return buff
+    buff := randbytes(C.size_t(size))
+    defer buff.Free()
+    return buff.Bytes()
   }
   return nil
 }

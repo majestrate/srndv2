@@ -1,22 +1,59 @@
 package nacl
 
-// #cgo pkg-config: libsodium
 // #include <sodium.h>
+// #cgo pkg-config: libsodium
 import "C"
 
 import (
+  "bytes"
   "log"
 )
 
+// return how many bytes overhead does CryptoBox have
+func CryptoBoxOverhead() int {
+  return int(C.crypto_box_macbytes())
+}
 
+// size of crypto_box public keys
+func CryptoBoxPubKeySize() int {
+  return int(C.crypto_box_publickeybytes())
+}
+
+// size of crypto_box private keys
+func CryptoBoxPrivKeySize() int {
+  return int(C.crypto_box_secretkeybytes())
+}
+
+// size of crypto_sign public keys
+func CryptoSignPubKeySize() int {
+  return int(C.crypto_sign_publickeybytes())
+}
+
+// size of crypto_sign private keys
+func CryptoSignPrivKeySize() int {
+  return int(C.crypto_sign_secretkeybytes())
+}
 
 func testSign(bufflen int, keys *KeyPair) {
   log.Printf("Test %d sign/verify...", bufflen)
   msg := RandBytes(bufflen)
-  defer msg.Free()
-  sig := CryptoSignDetached(msg.Data(), keys.sk.Data())
-  if ! CryptoVerifyDetached(msg.Data(), sig, keys.pk.Data()) {
+  sig := CryptoSignDetached(msg, keys.sk.Data())
+  if ! CryptoVerifyDetached(msg, sig, keys.pk.Data()) {
     log.Fatal("Failed")
+  }
+}
+
+func testBox(bufflen int, tokey, fromkey *KeyPair) {
+  log.Printf("Test %d box/box_open...", bufflen)
+  msg := RandBytes(bufflen)
+  nounce := NewBoxNounce()
+  box := CryptoBox(msg, nounce, tokey.Public(), fromkey.Secret())
+  if box == nil {
+    log.Fatal("CryptoBox() failed")
+  }
+  msg_open := CryptoBoxOpen(box, nounce, tokey.Secret(), fromkey.Public())
+  if ! bytes.Equal(msg, msg_open) {
+    log.Fatalf("CryptoBoxOpen() failed: %d vs %d", len(msg), len(msg_open))
   }
 }
 
@@ -27,14 +64,22 @@ func TestAll() {
   bufflen := 128
 
   b := RandBytes(bufflen)
-  defer b.Free()
-  if b.Length() != bufflen {
+  if len(b) != bufflen {
     log.Fatal("nacl.RandBytes() failed length test")
   }
-  keys := GenKeypair()
-  defer keys.Free()
+  
   for n := 1 ; n < 16 ; n++ {
-    testSign(n * 1024, keys)
+    key := GenSignKeypair()
+    defer key.Free()
+    testSign(n * 1024, key)
+  }
+  
+  for n := 1 ; n < 16 ; n++ {
+    tokey := GenBoxKeypair()
+    fromkey := GenBoxKeypair()
+    defer tokey.Free()
+    defer fromkey.Free()
+    testBox(n * 1024, tokey, fromkey)
   }
   
   

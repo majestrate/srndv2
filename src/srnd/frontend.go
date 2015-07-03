@@ -95,6 +95,7 @@ func MuxFrontends(fronts ...Frontend) Frontend {
 type httpFrontend struct {
   Frontend
 
+  httpmux *http.ServeMux
   daemon *NNTPDaemon
   postchan chan *NNTPMessage
   recvpostchan chan *NNTPMessage
@@ -131,11 +132,17 @@ func (self httpFrontend) loghttp(req *http.Request, code int) {
   log.Printf("%s -- %s %s -- %d", self.name, req.Method, req.URL.Path, code)
 }
 
-func (self httpFrontend) ServeHTTP(wr http.ResponseWriter, req *http.Request) {
-  io.WriteString(wr, "works")
-  self.loghttp(req, 200)
-}
 
+// regen every newsgroup
+func (self httpFrontend) regenAll() {
+  log.Println("regen all on http frontend")
+  groups := self.daemon.database.GetAllNewsgroups()
+  if groups != nil {
+    for _, group := range groups {
+      self.regenerateBoard(group)
+    }
+  }
+}
 
 func (self httpFrontend) regenerateBoard(newsgroup string) {
   if self.daemon.database.GroupHasPosts(newsgroup) {
@@ -209,6 +216,54 @@ func (self httpFrontend) pollregen() {
   }
 }
 
+func (self httpFrontend) renderPostForm(wr io.Writer, board, ref string) {
+  // get form template path
+  fname := filepath.Join(defaultTemplateDir(), "postform.mustache")
+  // template param
+  param := make(map[string]string)
+  param["post_url"] = self.prefix + board
+  param["reference"] = ref
+  param["newsgroup"] = "overchan." + board
+  param["button"] = "post it nigguh"
+  // TODO: implement captcha
+  param["captcha_id"] = ""
+  param["captcha_img"] = ""
+  // render and write
+  io.WriteString(wr, templateRender(fname, param))
+}
+
+func (self httpFrontend) handle_postform(wr http.ResponseWriter, r *http.Request, board string) {
+  // make the message
+  nntp := new(NNTPMessage)
+  // generate message id
+  nntp.MessageID = fmt.Sprintf("<%s%d@%s>", randStr(12), timeNow(), self.name)
+}
+
+
+
+// handle posting / postform
+func (self httpFrontend) handle_poster(wr http.ResponseWriter, r *http.Request) {
+  path := r.URL.Path
+  var board string
+  // extract board
+  if strings.Count(path, "/") > 1 {
+    board = strings.Split(path,"/")[2]
+  }
+  // this is a POST request
+  if r.Method == "POST" {
+    self.handle_postform(wr, r, board)
+  } else if r.Method == "GET" {
+    // get method
+    // generate post form
+    if len(board) > 0 {
+      self.renderPostForm(wr, board, "")
+    } else {
+      wr.WriteHeader(404)
+      io.WriteString(wr, "No Such board")
+    }
+  }
+}
+
 func (self httpFrontend) Mainloop() {
   EnsureDir(self.webroot_dir)
   if ! CheckFile(self.template_dir) {
@@ -219,9 +274,21 @@ func (self httpFrontend) Mainloop() {
   go self.pollregen()
   // poll channels
   go self.poll()
+
+  // trigger regen
+  go self.regenAll()
+  
   // start webserver here
   log.Printf("frontend %s binding to %s", self.name, self.bindaddr)
-  err := http.ListenAndServe(self.bindaddr, self)
+  // set up handler mux
+  self.httpmux = http.NewServeMux()
+  // register handlers for mux
+  // webroot handler
+  self.httpmux.Handle("/", http.FileServer(http.Dir(self.webroot_dir)))
+  // post handler
+  self.httpmux.HandleFunc("/post/", self.handle_poster)
+  
+  err := http.ListenAndServe(self.bindaddr, self.httpmux)
   if err != nil {
     log.Fatalf("failed to bind frontend %s %s", self.name, err)
   }

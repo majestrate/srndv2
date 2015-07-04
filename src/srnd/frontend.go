@@ -306,10 +306,17 @@ func (self httpFrontend) handle_postform(wr http.ResponseWriter, r *http.Request
   nntp.MessageID = fmt.Sprintf("<%s%d@%s>", randStr(12), timeNow(), self.name)
   // TODO: hardcoded newsgroup prefix
   nntp.Newsgroup = board
-  nntp.Name = nntpSanitize(name)
-  // anonymized email address :^)
-  nntp.Email = "anon@urmum.tld"
-  nntp.Subject = nntpSanitize(subject)
+  if len(name) > 0 {
+    nntp.Name = nntpSanitize(name)
+    nntp.Email = nntp.Name
+  } else {
+    nntp.Name = "Anonymous"
+  }
+  if len(subject) > 0 {
+    nntp.Subject = nntpSanitize(subject)
+  } else {
+    nntp.Subject = "None"
+  }
   nntp.Path = self.name
   nntp.Posted = timeNow()
   nntp.Message = nntpSanitize(message)

@@ -197,7 +197,7 @@ func (self *NNTPDaemon) pollfrontend() {
       // store it temp
       file := self.store.CreateTempFile(nntp.MessageID)
       if file != nil {
-        nntp.WriteTo(file)
+        nntp.WriteTo(file, "\r\n")
         file.Close()
         // tell infeed that we got one
         self.infeed <- nntp

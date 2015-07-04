@@ -111,6 +111,7 @@ func (self *NNTPConnection) HandleOutbound(d *NNTPDaemon) {
     code, line, err = self.txtconn.ReadCodeLine(-1)
     if err != nil {
       log.Println("error reading response code", err)
+      return
     }
     code = int(code)
     commands := strings.Split(line, " ")

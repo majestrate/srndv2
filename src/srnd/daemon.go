@@ -194,8 +194,14 @@ func (self *NNTPDaemon) pollfrontend() {
       // new post from frontend
       // ammend path
       nntp.Path = self.instance_name + "!" + nntp.Path
-      // tell infeed that we got one
-      self.infeed <- nntp
+      // store it temp
+      file := self.store.CreateTempFile(nntp.MessageID)
+      if file != nil {
+        nntp.WriteTo(file)
+        file.Close()
+        // tell infeed that we got one
+        self.infeed <- nntp
+      }
     case msgid := <- self.infeed_load:
       // load temp message
       // this deletes the temp file

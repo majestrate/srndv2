@@ -43,6 +43,7 @@ type PostModel interface {
   Frontend() string
   Subject() string
   Name() string
+  Date() string
   OP() bool
   Attachments() []AttachmentModel
   Board() string

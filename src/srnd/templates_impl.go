@@ -9,6 +9,7 @@ import (
   "io"
   "path/filepath"
   "strings"
+  "time"
 )
 
 type post struct {
@@ -19,6 +20,7 @@ type post struct {
   message_id string
   path string
   op bool
+  posted int64
 }
 
 type attachment struct {
@@ -47,6 +49,7 @@ func PostModelFromMessage(nntp *NNTPMessage) PostModel {
   p.path = nntp.Path
   p.message_id = nntp.MessageID
   p.board = nntp.Newsgroup
+  p.posted = nntp.Posted
   p.op = nntp.OP
   return p
 }
@@ -57,6 +60,10 @@ func (self post) ShortHash() string {
 
 func (self post) OP() bool {
   return self.op
+}
+
+func (self post) Date() string {
+  return time.Unix(self.posted, 0).Format(time.ANSIC)
 }
 
 func (self post) TemplateDir() string {

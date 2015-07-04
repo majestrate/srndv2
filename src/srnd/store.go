@@ -32,7 +32,9 @@ func (self *ArticleStore) IterateAllForNewsgroup(newsgroup string, recv chan str
 
 // send every article's message id down a channel
 func (self *ArticleStore) IterateAllArticles(recv chan string) {
-  self.database.GetAllArticles(recv)
+  for _, result := range self.database.GetAllArticles() {
+    recv <- result[0]
+  }
 }
 
 // create a file for this article

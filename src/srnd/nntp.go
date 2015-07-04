@@ -10,6 +10,7 @@ import (
   "net"
   "net/textproto"
   "strings"
+  "time"
 )
   
 type ConnectionInfo struct {
@@ -30,6 +31,8 @@ type NNTPConnection struct {
   send chan *NNTPMessage
   // channel for senging sync messages
   sync chan string
+  // if true we are reading data
+  reading bool
 }
 
 // ask if they need this article
@@ -93,39 +96,38 @@ func (self *NNTPConnection) HandleOutbound(d *NNTPDaemon) {
     self.Quit()
     return
   }
-  // mainloop
-  for  {
-    // poll
-    select {
-    case msgid := <- self.sync:
-      // do we want to ask for sync?
-      self.askSync(msgid)
-    case message := <- self.send:
-      // did we get a new message to send?
-      err = self.SendMessage(message, d)
+  log.Println("outfeed enter mainloop")
+
+  go func() {
+    for {
+      msg_id := <- self.sync
+      for self.reading {
+        time.Sleep(10 * time.Millisecond)
+      }
+      self.askSync(msg_id)
+    }
+  }()
+  for {
+    code, line, err = self.txtconn.ReadCodeLine(-1)
+    if err != nil {
+      log.Println("error reading response code", err)
+    }
+    code = int(code)
+    commands := strings.Split(line, " ")
+    if code == 238 && len(commands) > 1 && ValidMessageID(commands[0]) {
+      msg := d.store.GetMessage(commands[0])
+      err = self.SendMessage(msg, d)
       if err != nil {
-        log.Println("error sending message", err)
+        log.Println("failed to send message", err)
+        self.Quit()
         return
       }
-    default:
       code, line, err = self.txtconn.ReadCodeLine(-1)
-      if err != nil {
-        log.Println("error reading response code", err)
-        return
-      }
-      code = int(code)
-      commands := strings.Split(line, " ")
-      if code == 238 && len(commands) > 1 && ValidMessageID(commands[0]) {
-        self.send <- d.store.GetMessage(commands[0])
-      } else if code == 438 {
-        continue
-      } else if code == 239 {
-        // it got sent
-        log.Println("we sent", commands[0])
-      } else {
-        log.Printf("invalid response from outbound feed: '%d %s'", code, line)
-      }
-      
+      //TODO: log 239
+    } else if code == 438 {
+      continue
+    } else {
+      log.Printf("invalid response from outbound feed: '%d %s'", code, line)
     }
   }
 }
@@ -135,6 +137,7 @@ func (self *NNTPConnection) SendMessage(message *NNTPMessage, d *NNTPDaemon) err
   var err error
   var line string
   var code int
+  self.reading = true
   err = self.txtconn.PrintfLine("TAKETHIS %s", message.MessageID)
   if err != nil {
     log.Println("error in outfeed", err)
@@ -149,6 +152,7 @@ func (self *NNTPConnection) SendMessage(message *NNTPMessage, d *NNTPDaemon) err
   }
   // check for success / fail
   code, line, err = self.txtconn.ReadCodeLine(-1)
+  self.reading = false
   if err != nil {
     log.Printf("failed to read response while sending %s: %s", message.MessageID, err)
     return err
@@ -168,6 +172,9 @@ func (self *NNTPConnection) SendMessage(message *NNTPMessage, d *NNTPDaemon) err
 
 // handle inbound connection
 func (self *NNTPConnection) HandleInbound(d *NNTPDaemon) {
+
+  
+  // intitiate handshake
   var err error
   self.info.mode = "STREAM"
   log.Println("Incoming nntp connection from", self.conn.RemoteAddr())

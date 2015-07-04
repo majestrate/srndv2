@@ -8,6 +8,8 @@ import (
   "log"
 )
 
+type ArticleEntry [2]string
+
 type Database interface {
   Login() string
   CreateTables()
@@ -16,7 +18,7 @@ type Database interface {
   RegisterNewsgroup(group string)
   RegisterArticle(article *NNTPMessage)
   GetAllArticlesInGroup(group string, send chan string)
-  GetAllArticles(send chan string)
+  GetAllArticles() []ArticleEntry
 
   // return true if this thread has any replies
   ThreadHasReplies(root_message_id string) bool

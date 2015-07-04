@@ -299,21 +299,23 @@ func (self PostgresDatabase) GetAllArticlesInGroup(group string, recv chan strin
 
 // get all articles 
 // send result down a channel
-func (self PostgresDatabase) GetAllArticles(recv chan string) {
-  stmt, err := self.Conn().Prepare("SELECT message_id FROM Articles")
+func (self PostgresDatabase) GetAllArticles() []ArticleEntry {
+  stmt, err := self.Conn().Prepare("SELECT message_id, message_newsgroup FROM Articles")
   if err != nil {
     log.Printf("failed to prepare query for getting all articles: %s", err)
-    return
+    return nil
   }
   defer stmt.Close()
   rows, err := stmt.Query()
   if err != nil {
     log.Printf("Failed to execute quert for getting all articles: %s", err)
-    return
+    return nil
   }
+  var articles []ArticleEntry
   for rows.Next() {
-    var msgid string
-    rows.Scan(&msgid)
-    recv <- msgid
+    var entry ArticleEntry
+    rows.Scan(&entry[0], &entry[1])
+    articles = append(articles, entry)
   }
+  return articles
 }

@@ -141,18 +141,14 @@ func (self httpFrontend) regenAll() {
   groups := self.daemon.database.GetAllNewsgroups()
   if groups != nil {
     for _, group := range groups {
-      // tell them to regen this group
-      self.regenGroupChan <- group
+      // send every thread for this group down the regen thread channel
+      self.daemon.database.GetGroupThreads(group, self.regenThreadChan)
     }
   }
 }
 
 func (self httpFrontend) regenerateBoard(newsgroup string) {
-  // if we have this group...
-  if self.daemon.database.GroupHasPosts(newsgroup) {
-    // ... send every thread for this newsgroup down the regen thread chan
-    self.daemon.database.GetGroupThreads(newsgroup, self.regenThreadChan)
-  }
+  // don't regen anything
 }
 
 // regnerate a thread given the messageID of the root post
@@ -237,22 +233,6 @@ func (self httpFrontend) pollregen() {
       self.regenerateBoard(board)
     }
   }
-}
-
-func (self httpFrontend) renderPostForm(wr io.Writer, board, ref string) {
-  // get form template path
-  fname := filepath.Join(defaultTemplateDir(), "postform.mustache")
-  // template param
-  param := make(map[string]string)
-  param["post_url"] = self.prefix + board
-  param["reference"] = ref
-  param["newsgroup"] = "overchan." + board
-  param["button"] = "post it nigguh"
-  // TODO: implement captcha
-  param["captcha_id"] = ""
-  param["captcha_img"] = ""
-  // render and write
-  io.WriteString(wr, templateRender(fname, param))
 }
 
 func (self httpFrontend) handle_postform(wr http.ResponseWriter, r *http.Request, board string) {

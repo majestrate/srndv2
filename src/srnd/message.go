@@ -327,7 +327,6 @@ func (self *NNTPMessage) Load(file io.Reader, loadBody bool) bool {
 
       if parts[idx].Mime == "text/plain" {
         self.Message += parts[idx].Data
-        parts[idx].Data = ""
       } 
       
       idx += 1

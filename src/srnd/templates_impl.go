@@ -51,6 +51,10 @@ func PostModelFromMessage(nntp *NNTPMessage) PostModel {
   return p
 }
 
+func (self post) ShortHash() string {
+  return ShortHashMessageID(self.message_id)
+}
+
 func (self post) OP() bool {
   return self.op
 }
@@ -144,7 +148,8 @@ func (self thread) TemplateDir() string {
 func (self thread) RenderTo(wr io.Writer) error {
   fname := filepath.Join(self.TemplateDir(), "thread.mustache")
   rpls := self.Replies()
-  data := mustache.RenderFile(fname, map[string]interface{} { "thread": self, "repls" : rpls})
+  postform := self.renderPostForm(self.Board(), self.posts[0].MessageID())
+  data := mustache.RenderFile(fname, map[string]interface{} { "thread": self, "repls" : rpls, "form" : postform})
   io.WriteString(wr, data)
   return nil
 }
@@ -168,4 +173,11 @@ func NewThreadModel(posts []PostModel) ThreadModel {
 
 func templateRender(fname string, obj interface{}) string {
   return mustache.RenderFile(fname, obj)
+}
+
+
+func (self thread) renderPostForm(board, op_msg_id string) string {
+  // TODO: prefix
+  url := "/post/" + board
+  return mustache.RenderFile(filepath.Join(defaultTemplateDir(), "postform.mustache"), map[string]string { "post_url" : url, "reference" : op_msg_id , "button" : "Reply" } )
 }

@@ -38,6 +38,7 @@ type PostModel interface {
   
   MessageID() string
   PostHash() string
+  ShortHash() string
   PostURL() string
   Frontend() string
   Subject() string

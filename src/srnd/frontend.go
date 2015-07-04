@@ -6,6 +6,7 @@
 package srnd
 
 import (
+  "bytes"
   "fmt"
   "io"
   "log"
@@ -136,34 +137,43 @@ func (self httpFrontend) loghttp(req *http.Request, code int) {
 // regen every newsgroup
 func (self httpFrontend) regenAll() {
   log.Println("regen all on http frontend")
+  // get all groups
   groups := self.daemon.database.GetAllNewsgroups()
   if groups != nil {
     for _, group := range groups {
-      self.regenerateBoard(group)
+      // tell them to regen this group
+      self.regenGroupChan <- group
     }
   }
 }
 
 func (self httpFrontend) regenerateBoard(newsgroup string) {
+  // if we have this group...
   if self.daemon.database.GroupHasPosts(newsgroup) {
+    // ... send every thread for this newsgroup down the regen thread chan
     self.daemon.database.GetGroupThreads(newsgroup, self.regenThreadChan)
   }
 }
 
+// regnerate a thread given the messageID of the root post
 func (self httpFrontend) regenerateThread(rootMessageID string) {
   var replies []string
+  // get replies
   if self.daemon.database.ThreadHasReplies(rootMessageID) {
-    replies = self.daemon.database.GetThreadReplies(rootMessageID, 0)
+    replies = append(replies, self.daemon.database.GetThreadReplies(rootMessageID, 0)...)
   }
+  // get the root post
   msg := self.daemon.store.GetMessage(rootMessageID)
   if msg == nil {
     log.Printf("failed to fetch root post %s, regen cancelled", rootMessageID)
     return
   }
 
+  // make post model for root post
   post := PostModelFromMessage(msg)
   posts := []PostModel{post}
-  
+
+  // make post model for all replies
   for _, msgid := range replies {
     msg = self.daemon.store.GetMessage(msgid)
     if msg == nil {
@@ -173,20 +183,25 @@ func (self httpFrontend) regenerateThread(rootMessageID string) {
     post = PostModelFromMessage(msg)
     posts = append(posts, post)
   }
+  
+  // make thread model
   thread := NewThreadModel(posts)
-  // render the thread
+  // get filename for thread
   fname := self.getFilenameForThread(rootMessageID)
+  // open writer for file
   wr, err := OpenFileWriter(fname)
   if err != nil {
     log.Println(err)
     return
   }
+  // render the thread
   err = thread.RenderTo(wr)
   wr.Close()
-  if err != nil {
+  if err == nil {
+    log.Printf("regenerated file %s", fname)
+  } else {
     log.Printf("failed to render %s", err)
   }
-  log.Printf("regenerated file %s", fname)
 }
 
 func (self httpFrontend) poll() {
@@ -195,23 +210,31 @@ func (self httpFrontend) poll() {
   for {
     select {
     case nntp := <- chnl:
+      // get root post and tell frontend to regen that thread
       if len(nntp.Reference) > 0 {
         self.regenThreadChan <- nntp.Reference
       } else {
         self.regenThreadChan <- nntp.MessageID
       }
-      // todo: regen board pages
-      break
+      // regen the newsgroup we're in
+      // TODO: smart regen
+      self.regenGroupChan <- nntp.Newsgroup
     }
   }
 }
+
 // select loop for channels
 func (self httpFrontend) pollregen() {
   for {
     select {
+      
+      // listen for regen thread requests
     case msgid := <- self.regenThreadChan:
       self.regenerateThread(msgid)
-      break
+      
+      // listen for regen board requests
+    case board := <- self.regenGroupChan:
+      self.regenerateBoard(board)
     }
   }
 }
@@ -233,10 +256,103 @@ func (self httpFrontend) renderPostForm(wr io.Writer, board, ref string) {
 }
 
 func (self httpFrontend) handle_postform(wr http.ResponseWriter, r *http.Request, board string) {
+
+  // default values
+  // TODO: set content type for attachments
+  content_type := "text/plain"
+  ref := ""
+  name := "anonymous"
+  email := ""
+  subject := "None"
+  message := ""
+  // mime part handler
+  var part_buff bytes.Buffer
+  mp_reader, err := r.MultipartReader()
+  if err != nil {
+    errmsg := fmt.Sprintf("httpfrontend post handler parse multipart POST failed: %s", err)
+    log.Println(errmsg)
+    wr.WriteHeader(500)
+    io.WriteString(wr, errmsg)
+    return
+  }
+  for {
+    part, err := mp_reader.NextPart()
+    if err == nil {
+      // we got a part
+      // read the body first
+      io.Copy(&part_buff, part)
+      // get the name of the part
+      partname := part.FormName()
+      // check for values we want
+      if partname == "email" {
+        email = part_buff.String()
+      } else if partname == "subject" {
+        subject = part_buff.String()
+      } else if partname == "name" {
+        name = part_buff.String()
+      } else if partname == "message" {
+        message = part_buff.String()
+      } else if partname == "reference" {
+        ref = part_buff.String()
+      }
+      
+      // we done
+      // reset buffer for reading parts
+      part_buff.Reset()
+      // close our part
+      part.Close()
+    } else {
+      if err != io.EOF {
+        errmsg := fmt.Sprintf("httpfrontend post handler error reading multipart: %s", err)
+        log.Println(errmsg)
+        wr.WriteHeader(500)
+        io.WriteString(wr, errmsg)
+        return
+      }
+      break
+    }
+  }
+
+  if len(message) == 0 {
+    wr.WriteHeader(200)
+    fname := filepath.Join(defaultTemplateDir(), "post_fail.mustache")
+    io.WriteString(wr, templateRender(fname, map[string]string { "reason" : "no message" }))
+    return
+  }
+  
   // make the message
   nntp := new(NNTPMessage)
   // generate message id
   nntp.MessageID = fmt.Sprintf("<%s%d@%s>", randStr(12), timeNow(), self.name)
+  // TODO: hardcoded newsgroup prefix
+  nntp.Newsgroup = board
+  nntp.Name = nntpSanitize(name)
+  // anonymized email address :^)
+  nntp.Email = "anon@urmum.tld"
+  nntp.Subject = nntpSanitize(subject)
+  nntp.Path = self.name
+  nntp.Posted = timeNow()
+  nntp.Message = nntpSanitize(message)
+  nntp.ContentType = content_type
+  nntp.Sage = strings.HasPrefix(strings.ToLower(email), "sage")
+  // set reference
+  if ValidMessageID(ref) {
+    nntp.Reference = ref
+  }
+  nntp.OP = len(ref) == 0
+  
+  // send message off to daemon
+  self.postchan <- nntp
+
+  // send success reply
+  wr.WriteHeader(200)
+  msg_id := nntp.Reference
+  if len(msg_id) == 0 {
+    msg_id = nntp.MessageID
+  }
+  url := fmt.Sprintf("%sthread-%s.html", self.prefix, ShortHashMessageID(msg_id))
+  fname := filepath.Join(defaultTemplateDir(), "post_success.mustache")
+  io.WriteString(wr, templateRender(fname, map[string]string {"message_id" : nntp.MessageID, "redirect_url" : url}))
 }
 
 
@@ -252,15 +368,9 @@ func (self httpFrontend) handle_poster(wr http.ResponseWriter, r *http.Request) 
   // this is a POST request
   if r.Method == "POST" {
     self.handle_postform(wr, r, board)
-  } else if r.Method == "GET" {
-    // get method
-    // generate post form
-    if len(board) > 0 {
-      self.renderPostForm(wr, board, "")
-    } else {
-      wr.WriteHeader(404)
-      io.WriteString(wr, "No Such board")
-    }
+  } else {
+      wr.WriteHeader(403)
+      io.WriteString(wr, "Nope")
   }
 }
 

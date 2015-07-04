@@ -59,17 +59,42 @@ func EnsureDir(dirname string) {
 
 // TODO make this work better
 func ValidMessageID(id string) bool {
-  if len(id) <= 4 {
+  id_len := len(id)
+  if id_len < 5 {
     return false 
   }
-  if id[0] != '<' || id[len(id)-1] != '>' {
-    log.Println(id[0], id[len(id)-1])
+
+  at_idx := strings.Index(id, "@")
+  if at_idx < 3 {
     return false
   }
-  if strings.Count(id, "@") != 1 {
-    return false
-  }
-  if strings.Count(id, "/") > 0 {
+  
+  for idx, c := range id {
+    if idx == 0 {
+      if c == '<' {
+        continue
+      }
+    } else if idx == id_len - 1  {
+      if c == '>' {
+        continue
+      }
+    }
+    if idx == at_idx {
+      continue
+    }
+    if c >= 'a' && c <= 'z' {
+      continue
+    }
+    if c >= 'A' && c <= 'Z' {
+      continue
+    }
+    if c >= '0' && c <= '9' {
+      continue
+    }
+    if c == '.' {
+      continue
+    }
+    log.Printf("bad message ID: %s , invalid char at %d: %c", id, idx, c)
     return false
   }
   return true
@@ -110,6 +135,14 @@ func randStr(length int) string {
   return hex.EncodeToString(nacl.RandBytes(length))[:length]
 }
 
+
+// time for right now as int64
 func timeNow() int64 {
-  return time.Now().UnixNano()
+  return time.Now().Unix()
+}
+
+// sanitize data for nntp
+func nntpSanitize(data string) string {
+  parts := strings.Split(data, "\n.\n")
+  return parts[0]
 }

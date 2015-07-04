@@ -113,10 +113,15 @@ func (self *NNTPConnection) HandleOutbound(d *NNTPDaemon) {
         log.Println("error reading response code", err)
         return
       }
-      if code == 238 && ValidMessageID(line) {
-        self.send <- d.store.GetMessage(line)
+      code = int(code)
+      commands := strings.Split(line, " ")
+      if code == 238 && len(commands) > 1 && ValidMessageID(commands[0]) {
+        self.send <- d.store.GetMessage(commands[0])
       } else if code == 438 {
         continue
+      } else if code == 239 {
+        // it got sent
+        log.Println("we sent", commands[0])
       } else {
         log.Printf("invalid response from outbound feed: '%d %s'", code, line)
       }

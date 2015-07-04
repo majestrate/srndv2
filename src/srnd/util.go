@@ -74,7 +74,7 @@ func ValidMessageID(id string) bool {
       if c == '<' {
         continue
       }
-    } else if idx == id_len - 1  {
+    } else if idx == id_len - 1 {
       if c == '>' {
         continue
       }

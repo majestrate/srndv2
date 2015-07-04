@@ -353,7 +353,7 @@ func (self httpFrontend) handle_poster(wr http.ResponseWriter, r *http.Request) 
     board = strings.Split(path,"/")[2]
   }
   // this is a POST request
-  if r.Method == "POST" {
+  if r.Method == "POST" && strings.HasPrefix(board, "overchan.") {
     self.handle_postform(wr, r, board)
   } else {
       wr.WriteHeader(403)

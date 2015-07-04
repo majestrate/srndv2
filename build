@@ -49,12 +49,11 @@ else
     go get github.com/go-sql-driver/mysql
     echo "--> mustache"
     go get github.com/hoisie/mustache
+    echo "build nacl..."
+    go build $root/src/nacl/*.go
 fi
 
 export PKG_CONFIG_PATH=$root/build.dir/prefix/lib/pkgconfig
-
-echo "build nacl..."
-go build $root/src/nacl/*.go
 echo "build srnd core..."
 go build $root/src/srnd/*.go
 echo "build snrd main..."

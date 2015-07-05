@@ -3,9 +3,24 @@
     margin_bottom: 5px;
 }
 
+.frontend , .subject {
+    color: #dd2222;
+}
 
+.name {
+    color: #22dd22;
+}
+
+
+.name , .frontend , .subject {
+    font-weight: bold;
+}
+
+.post {
+    background: #d6daf0;
+    padding: 10px;
+}
 
 body {
     background: #eef2ff;
-    
 }

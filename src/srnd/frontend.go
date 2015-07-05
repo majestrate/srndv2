@@ -167,7 +167,7 @@ func (self httpFrontend) regenerateThread(rootMessageID string) {
   }
 
   // make post model for root post
-  post := PostModelFromMessage(msg)
+  post := PostModelFromMessage(self.prefix, msg)
   posts := []PostModel{post}
 
   // make post model for all replies
@@ -177,12 +177,12 @@ func (self httpFrontend) regenerateThread(rootMessageID string) {
         log.Println("could not get message", msgid)
       continue
     }
-    post = PostModelFromMessage(msg)
+    post = PostModelFromMessage(self.prefix, msg)
     posts = append(posts, post)
   }
   
   // make thread model
-  thread := NewThreadModel(posts)
+  thread := NewThreadModel(self.prefix, posts)
   // get filename for thread
   fname := self.getFilenameForThread(rootMessageID)
   // open writer for file

@@ -13,6 +13,7 @@ import (
 )
 
 type post struct {
+  prefix string
   board string
   name string
   subject string
@@ -41,7 +42,7 @@ func (self attachment) Filename() string {
   return self.filename
 }
 
-func PostModelFromMessage(nntp *NNTPMessage) PostModel {
+func PostModelFromMessage(prefix string, nntp *NNTPMessage) PostModel {
   p :=  post{}
   p.name = nntp.Name
   p.subject = nntp.Subject
@@ -51,6 +52,7 @@ func PostModelFromMessage(nntp *NNTPMessage) PostModel {
   p.board = nntp.Newsgroup
   p.posted = nntp.Posted
   p.op = nntp.OP
+  p.prefix = prefix
   return p
 }
 
@@ -110,7 +112,7 @@ func (self post) PostURL() string {
 
 // TODO: implement
 func (self post) Prefix() string {
-  return "/" 
+  return self.prefix 
 }
 
 func (self post) RenderTo(wr io.Writer) error {
@@ -130,13 +132,12 @@ func (self post) RenderBody() string {
 }
 
 type thread struct {
-  ThreadModel
+  prefix string
   posts []PostModel
 }
 
-// TODO: implement
 func (self thread) Prefix() string {
-  return "/"
+  return self.prefix
 }
 
 func (self thread) Board() string {
@@ -155,7 +156,7 @@ func (self thread) TemplateDir() string {
 func (self thread) RenderTo(wr io.Writer) error {
   fname := filepath.Join(self.TemplateDir(), "thread.mustache")
   rpls := self.Replies()
-  postform := self.renderPostForm(self.Board(), self.posts[0].MessageID())
+  postform := self.renderPostForm(self.prefix, self.Board(), self.posts[0].MessageID())
   data := mustache.RenderFile(fname, map[string]interface{} { "thread": self, "repls" : rpls, "form" : postform})
   io.WriteString(wr, data)
   return nil
@@ -172,9 +173,10 @@ func (self thread) Replies() []PostModel {
   return []PostModel{}
 }
 
-func NewThreadModel(posts []PostModel) ThreadModel {
+func NewThreadModel(prefix string, posts []PostModel) ThreadModel {
   th := thread{}
   th.posts = posts
+  th.prefix = prefix
   return th
 }
 
@@ -183,8 +185,7 @@ func templateRender(fname string, obj interface{}) string {
 }
 
 
-func (self thread) renderPostForm(board, op_msg_id string) string {
-  // TODO: prefix
-  url := "/post/" + board
+func (self thread) renderPostForm(prefix, board, op_msg_id string) string {
+  url := prefix + "post/" + board
   return mustache.RenderFile(filepath.Join(defaultTemplateDir(), "postform.mustache"), map[string]string { "post_url" : url, "reference" : op_msg_id , "button" : "Reply" } )
 }

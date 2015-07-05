@@ -117,13 +117,13 @@ func (self PostgresDatabase) GetThreadReplies(rootpost string, limit int) []stri
   var rows *sql.Rows
   var err error
   if limit > 0 {
-    stmt, err := self.Conn().Prepare("SELECT message_id FROM Articles WHERE message_ref_id = $1 ORDER BY time_obtained LIMIT $2")
+    stmt, err := self.Conn().Prepare("SELECT message_id FROM ArticlePosts WHERE message_id IN ( SELECT message_id FROM Articles WHERE message_ref_id = $1 ) ORDER BY time_posted LIMIT $2")
     if err == nil {
       defer stmt.Close()
       rows, err = stmt.Query(rootpost, limit)
     }
   } else {
-    stmt, err := self.Conn().Prepare("SELECT message_id FROM Articles WHERE message_ref_id = $1 ORDER BY time_obtained")
+    stmt, err := self.Conn().Prepare("SELECT message_id FROM ArticlePosts WHERE message_id IN ( SELECT message_id FROM Articles WHERE message_ref_id = $1 ) ORDER BY time_posted")
     if err == nil {
       defer stmt.Close()
       rows, err = stmt.Query(rootpost)

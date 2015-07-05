@@ -301,6 +301,19 @@ func (self PostgresDatabase) HasArticle(message_id string) bool {
   return count > 0
 }
 
+// check if an article exists
+func (self PostgresDatabase) ArticleCount() int64 {
+  stmt, err := self.Conn().Prepare("SELECT COUNT(message_id) FROM ArticlePosts")
+  if err != nil {
+    log.Println("failed to prepare query to get article count", err)
+    return -1
+  }
+  defer stmt.Close()
+  var count int64
+  stmt.QueryRow().Scan(&count)
+  return count 
+}
+
 // register a new newsgroup
 func (self PostgresDatabase) RegisterNewsgroup(group string) {
   stmt, err := self.Conn().Prepare("INSERT INTO Newsgroups (name, last_post) VALUES($1, $2)")

@@ -20,6 +20,9 @@ type Database interface {
   GetAllArticlesInGroup(group string, send chan string)
   GetAllArticles() []ArticleEntry
 
+  // get the number of articles we have
+  ArticleCount() int64
+  
   // return true if this thread has any replies
   ThreadHasReplies(root_message_id string) bool
 

@@ -5,6 +5,7 @@ package srnd
 import (
   "log"
   "net"
+  "fmt"
   "strconv"
   "strings"
   "net/textproto"
@@ -182,7 +183,27 @@ func (self *NNTPDaemon) Run() {
 
   // start accepting incoming connections
   go self.acceptloop()
-  
+
+  go func () {
+    // if we have no initial posts create one
+    if self.database.ArticleCount() == 0 {
+      nntp := new(NNTPMessage)
+      nntp.Newsgroup = "overchan.overchan"
+      nntp.MessageID = fmt.Sprintf("<%s%d@%s>", randStr(5), timeNow(), self.instance_name)
+      nntp.Name = "system"
+      nntp.Email = "srndv2@"+self.instance_name
+      nntp.Subject = "New Frontend"
+      nntp.Posted = timeNow()
+      nntp.Message = "Hi, welcome to nntpchan, this post was inserted on startup because you have no other posts, this messages was auto-generated"
+      nntp.ContentType = "text/plain"
+      file := self.store.CreateTempFile(nntp.MessageID)
+      if file != nil {
+        nntp.WriteTo(file, "\r\n")
+        file.Close()
+        self.infeed <- nntp
+      }
+    }
+  }()
   if self.sync_on_start {
     go self.syncAll()
   }

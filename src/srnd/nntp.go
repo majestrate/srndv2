@@ -117,6 +117,11 @@ func (self *NNTPConnection) HandleOutbound(d *NNTPDaemon) {
     commands := strings.Split(line, " ")
     if code == 238 && len(commands) > 1 && ValidMessageID(commands[0]) {
       msg := d.store.GetMessage(commands[0])
+      if msg == nil {
+        log.Println("wut? don't have message", commands[0])
+        self.Quit()
+        return
+      } 
       err = self.SendMessage(msg, d)
       if err != nil {
         log.Println("failed to send message", err)

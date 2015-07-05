@@ -1,8 +1,8 @@
 <html>
   <head>
-    <style type="text/css" src="{{Prefix}}static/site.css" />
-    <style type="text/css" src="{{Prefix}}static/user.css" />
-    <title>{{Frontend}} - {{Name}} </title>
+    <meta charset="utf-8" />
+    <script type="text/javascript" src="{{thread.Prefix}}static/captcha.js"></script>
+    <link rel="stylesheet" href="{{thread.Prefix}}static/site.css"></link>
   </head>
   <body>
     <!-- begin header -->
@@ -11,8 +11,7 @@
 
     <!-- postform -->
     <div id="postform_container">
-      <iframe src="{{Prefix}}post/{{Board}}" width=400 height=200>
-      </iframe>
+      {{{form}}}
     </div>
     <hr />
     <div id="threads_container">

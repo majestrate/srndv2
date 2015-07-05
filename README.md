@@ -41,7 +41,7 @@ donate: bitcoin 15yuMzuueV8y5vPQQ39ZqQVz5Ey98DNrjE
 ## initial run
 
     # this will generate base config files if they aren't present
-    ./SRNd
+    ./run
 
 
 ## configuration

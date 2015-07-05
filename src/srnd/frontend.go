@@ -6,6 +6,7 @@
 package srnd
 
 import (
+  "github.com/dchest/captcha"
   "bytes"
   "fmt"
   "io"
@@ -245,6 +246,9 @@ func (self httpFrontend) handle_postform(wr http.ResponseWriter, r *http.Request
   email := ""
   subject := "None"
   message := ""
+  // captcha stuff
+  captcha_id := ""
+  captcha_solution := ""
   // mime part handler
   var part_buff bytes.Buffer
   mp_reader, err := r.MultipartReader()
@@ -274,6 +278,10 @@ func (self httpFrontend) handle_postform(wr http.ResponseWriter, r *http.Request
         message = part_buff.String()
       } else if partname == "reference" {
         ref = part_buff.String()
+      } else if partname == "captcha" {
+        captcha_id = part_buff.String()
+      } else if partname == "captcha_solution" {
+        captcha_solution = part_buff.String()
       }
       
       // we done
@@ -293,10 +301,35 @@ func (self httpFrontend) handle_postform(wr http.ResponseWriter, r *http.Request
     }
   }
 
+  url := self.prefix
+  if len(ref) > 0 {
+    // redirect to thread
+    url += fmt.Sprintf("thread-%s.html", ShortHashMessageID(ref))
+  } else {
+    // redirect to board
+    url += fmt.Sprintf("%s.html", board)
+  }
+
+  // make error template param
+  resp_map := make(map[string]string)
+  resp_map["redirect_url"] = url
+  postfail := ""
+  
+  if len(captcha_solution) == 0 || len(captcha_id) == 0 {
+    postfail = "no captcha provided"
+  }
+  if ! captcha.VerifyString(captcha_id, captcha_solution) {
+    postfail = "failed captcha"
+  }
+
   if len(message) == 0 {
+    postfail = "message too small"
+  }
+  if len(postfail) > 0 {
     wr.WriteHeader(200)
+    resp_map["reason"] = postfail
     fname := filepath.Join(defaultTemplateDir(), "post_fail.mustache")
-    io.WriteString(wr, templateRender(fname, map[string]string { "reason" : "no message" }))
+    io.WriteString(wr, templateRender(fname, resp_map))
     return
   }
   
@@ -337,7 +370,7 @@ func (self httpFrontend) handle_postform(wr http.ResponseWriter, r *http.Request
   if len(msg_id) == 0 {
     msg_id = nntp.MessageID
   }
-  url := fmt.Sprintf("%sthread-%s.html", self.prefix, ShortHashMessageID(msg_id))
+  url = fmt.Sprintf("%sthread-%s.html", self.prefix, ShortHashMessageID(msg_id))
   fname := filepath.Join(defaultTemplateDir(), "post_success.mustache")
   io.WriteString(wr, templateRender(fname, map[string]string {"message_id" : nntp.MessageID, "redirect_url" : url}))
 }
@@ -359,6 +392,10 @@ func (self httpFrontend) handle_poster(wr http.ResponseWriter, r *http.Request) 
       wr.WriteHeader(403)
       io.WriteString(wr, "Nope")
   }
+}
+
+func (self httpFrontend) new_captcha(wr http.ResponseWriter, r *http.Request) {
+  io.WriteString(wr, captcha.NewLen(8))
 }
 
 func (self httpFrontend) Mainloop() {
@@ -384,6 +421,9 @@ func (self httpFrontend) Mainloop() {
   self.httpmux.Handle("/", http.FileServer(http.Dir(self.webroot_dir)))
   // post handler
   self.httpmux.HandleFunc("/post/", self.handle_poster)
+  // captcha handlers
+  self.httpmux.Handle("/captcha/", captcha.Server(350, 175))
+  self.httpmux.HandleFunc("/captcha", self.new_captcha)
   
   err := http.ListenAndServe(self.bindaddr, self.httpmux)
   if err != nil {

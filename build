@@ -41,6 +41,8 @@ else
 
     cd $root  
     echo "getting go dependancies"
+    echo "--> captcha"
+    go get github.com/dchest/captcha
     echo "--> configparser"
     go get github.com/majestrate/configparser
     echo "--> pq"

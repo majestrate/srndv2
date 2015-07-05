@@ -196,6 +196,7 @@ func (self *NNTPDaemon) Run() {
       nntp.Posted = timeNow()
       nntp.Message = "Hi, welcome to nntpchan, this post was inserted on startup because you have no other posts, this messages was auto-generated"
       nntp.ContentType = "text/plain"
+      nntp.Path = self.instance_name
       file := self.store.CreateTempFile(nntp.MessageID)
       if file != nil {
         nntp.WriteTo(file, "\r\n")

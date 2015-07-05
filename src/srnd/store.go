@@ -5,8 +5,10 @@
 package srnd
 
 import (
+  "encoding/base64"
   "errors"
   "io"
+  "io/ioutil"
   "log"
   "os"
   "path/filepath"
@@ -15,6 +17,8 @@ import (
 type ArticleStore struct {
   directory string
   temp string
+  attachments string
+  thumbs string
   database Database
 }
 
@@ -22,6 +26,18 @@ type ArticleStore struct {
 func (self *ArticleStore) Init() {
   EnsureDir(self.directory)
   EnsureDir(self.temp)
+  EnsureDir(self.attachments)
+  EnsureDir(self.thumbs)
+}
+
+// get the filename for an attachment
+func (self *ArticleStore) AttachmentFilename(fname string) string {
+  return filepath.Join(self.attachments, fname)
+}
+
+// get the filename for a thumbanil
+func (self *ArticleStore) ThumbnailFilename(fname string) string {
+  return filepath.Join(self.thumbs, fname)
 }
 
 // send every article's message id down a channel for a given newsgroup
@@ -60,15 +76,50 @@ func (self *ArticleStore) CreateTempFile(messageID string) io.WriteCloser {
 }
 
 // store article, save it in the storage folder
-// don't register 
+// don't register
 func (self *ArticleStore) StorePost(post *NNTPMessage) error {
+  // open file for storing article
   file := self.CreateFile(post.MessageID)
   if file == nil {
     return errors.New("cannot open file for post "+post.MessageID)
   }
   post.WriteTo(file, "\n")
   file.Close()
-  log.Printf("stored post %s", post.MessageID)
+  // store attachments
+  for _, att := range post.Attachments {
+    fname := att.Filename()
+    // make thumbnails if we need to
+    if att.NeedsThumbnail() {
+      // fork operation off into background
+      go func() {
+        att_thumb := self.ThumbnailFilename(fname)
+        file, err := os.Create(att_thumb)
+        if err != nil {
+          log.Println("failed to open file for thumbnail", err)
+          return
+        } 
+        err = att.WriteThumbnailTo(file)
+        file.Close()
+        if err != nil {
+          log.Println("failed to create thumbnail", err)
+        }
+      }()
+    }
+    // store original attachment via background
+    go func () {
+      att_fname := self.AttachmentFilename(fname)
+      // decode it
+      data, err := base64.StdEncoding.DecodeString(att.Data)
+      if err == nil {
+        // store it
+        err = ioutil.WriteFile(att_fname, data, 0644)
+      }
+      if err != nil {
+        log.Println("error storing attachment", err)
+      }
+    }()
+    
+  }
   return nil
 }
 
@@ -90,13 +141,13 @@ func (self *ArticleStore) GetTempFilename(messageID string) string {
 // loads temp message and deletes old article
 func (self *ArticleStore) ReadTempMessage(messageID string) *NNTPMessage {
   fname := self.GetTempFilename(messageID)
-  nntp := self.readfile(fname)
+  nntp := self.readfile(fname, true)
   defer DelFile(fname)
   return nntp
 }
 
 // read a file give filepath
-func (self *ArticleStore) readfile(fname string) *NNTPMessage {
+func (self *ArticleStore) readfile(fname string, full bool) *NNTPMessage {
   
   file, err := os.Open(fname)
   if err != nil {
@@ -117,5 +168,12 @@ func (self *ArticleStore) readfile(fname string) *NNTPMessage {
 // load an article
 // return nil on failure
 func (self *ArticleStore) GetMessage(messageID string) *NNTPMessage {
-  return self.readfile(self.GetFilename(messageID))
+  return self.readfile(self.GetFilename(messageID), true)
 }
+
+// get article with headers only
+func (self *ArticleStore) GetHeaders(messageID string) *NNTPMessage {
+  return self.readfile(self.GetFilename(messageID), false)
+}
+
+

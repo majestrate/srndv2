@@ -18,6 +18,7 @@ type NNTPDaemon struct {
   store *ArticleStore
   database Database
   mod Moderation
+  expire Expiration
   listener net.Listener
   debug bool
   sync_on_start bool
@@ -169,7 +170,8 @@ func (self *NNTPDaemon) Run() {
     return
   }
   defer self.listener.Close()
-
+  // run expiration mainloop
+  go self.expire.Mainloop()
   // we are now running
   self.running = true
   
@@ -246,12 +248,16 @@ func (self *NNTPDaemon) pollfeeds() {
         }
       }
     case nntp := <- self.infeed:
-      // register article
-      self.database.RegisterArticle(nntp)
       // check for validity
       if nntp.Verify() {
+        // register article
+        self.database.RegisterArticle(nntp)
         // store article
+        // this generates thumbs and stores attachemnts
         self.store.StorePost(nntp)
+        // roll over old content
+        // TODO: hard coded expiration threshold
+        self.expire.ExpireGroup(nntp.Newsgroup, 100)
         // tell frontend
         chnl <- nntp
         // queue to all outfeeds
@@ -310,7 +316,7 @@ func (self *NNTPDaemon) Init() bool {
   self.send_all_feeds = make(chan string, 64)
   self.feeds = make(map[NNTPConnection]bool)
   
-  
+
   db_host := self.conf.database["host"]
   db_port := self.conf.database["port"]
   db_user := self.conf.database["user"]
@@ -322,9 +328,12 @@ func (self *NNTPDaemon) Init() bool {
   self.store = new(ArticleStore)
   self.store.directory = self.conf.store["store_dir"]
   self.store.temp = self.conf.store["incoming_dir"]
+  self.store.attachments = self.conf.store["attachments_dir"]
+  self.store.thumbs = self.conf.store["thumbs_dir"]
   self.store.database = self.database
   self.store.Init()
   
+  self.expire = expire{self.database, self.store, make(chan deleteEvent)}
   self.sync_on_start = self.conf.daemon["sync_on_start"] == "1"
   if self.sync_on_start {
     log.Println("sync on start") 

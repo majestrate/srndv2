@@ -81,6 +81,8 @@ func GenSRNdConfig() error {
 
   sect.Add("store_dir", "articles")
   sect.Add("incoming_dir", "articles")
+  sect.Add("attachments_dir", "webroot/img")
+  sect.Add("thumbs_dir", "webroot/thm")
 
   // database backend config
   sect = conf.NewSection("database")

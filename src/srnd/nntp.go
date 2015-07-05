@@ -189,8 +189,8 @@ func (self *NNTPConnection) HandleInbound(d *NNTPDaemon) {
       return
     }
     // read line and break if needed
-    line := self.ReadLine()
-    if len(line) == 0 {
+    line, err := self.ReadLine()
+    if len(line) == 0 || err != nil {
       break
     }
     var code int
@@ -232,8 +232,12 @@ func (self *NNTPConnection) HandleInbound(d *NNTPDaemon) {
           if ValidMessageID(article) {
             file := d.store.CreateTempFile(article)
             for {
-              line := self.ReadLine()  
-              // done reading
+              var line string
+              line, err = self.ReadLine()
+              if err != nil {
+                log.Println("error reading", article, err)
+                break
+              }
               if line == "." {
                 break
               } else {
@@ -297,16 +301,16 @@ func (self *NNTPConnection) Quit() {
   self.Close()
 }
 
-func (self *NNTPConnection) ReadLine() string {
+func (self *NNTPConnection) ReadLine() (string, error) {
   line, err := self.txtconn.ReadLine()
   if err != nil {
     log.Println("error reading line in feed", err)
-    return ""
+    return "", err
   }
   if self.debug {
     log.Println(self.conn.RemoteAddr(), "recv line", line)
   }
-  return line
+  return line, nil
 }
 
 // close the connection

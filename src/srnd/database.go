@@ -27,6 +27,9 @@ type Database interface {
   // if last > 0 then get that many of the last replies
   GetThreadReplies(root_message_id string, last int) []string
 
+  // get all attachments for this message
+  GetPostAttachments(message_id string) []string
+
   // return true if this newsgroup has posts
   GroupHasPosts(newsgroup string) bool
   
@@ -34,9 +37,10 @@ type Database interface {
   // send each thread's root's message_id down a channel
   GetGroupThreads(newsgroup string, send chan string)
 
-  // get a postmodel from the database for this message_id
-  GetPost(message_id string) PostModel
-    
+  // get every message id for root posts that need to be expired in a newsgroup
+  // threadcount is the upperbound limit to how many root posts we keep
+  GetRootPostsForExpiration(newsgroup string, threadcount int) []string
+  
   // underlying database connection
   Conn() *sql.DB
 
@@ -48,14 +52,6 @@ func NewDatabase(db_type, schema, host, port, user, password string) Database  {
   if db_type == "postgres" {
     if schema == "srnd" {
       return NewPostgresDatabase(host, port, user, password)
-    } else if schema == "infinity-next" {
-      // nop
-    }
-  } else if db_type == "mysql" {
-    if schema == "srnd" {
-      // nop
-    } else if schema == "infinity-next" {
-      // nop
     }
   }
   log.Fatalf("invalid database type: %s/%s" , db_type, schema)

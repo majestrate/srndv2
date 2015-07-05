@@ -28,6 +28,27 @@ type NNTPAttachment struct {
   Data string
 }
 
+func (self NNTPAttachment) Hash() string {
+  hash := sha512.Sum512([]byte(self.Data))
+  return hex.EncodeToString(hash[:])
+}
+
+// generate deterministic filename for this attachment
+func (self NNTPAttachment) Filename() string {
+  return fmt.Sprintf("%s.%s", self.Hash(), self.Extension)
+}
+
+// does this attachment need to have a thumbnail made for it?
+func (self NNTPAttachment) NeedsThumbnail() bool {
+  // only generate thumbnails for images
+  return strings.HasPrefix(strings.ToLower(self.Mime), "image/")
+}
+
+// generate thumbnails
+func (self NNTPAttachment) WriteThumbnailTo(wr io.Writer) error {
+  return nil
+}
+
 type NNTPMessage struct {
   Please string
   MessageID string
@@ -291,8 +312,6 @@ func (self *NNTPMessage) Load(file io.Reader, loadBody bool) bool {
     self.ContentType = self.ContentType[:semi_idx]
   }
   bodyreader := bytes.NewReader(bodybuff.Bytes())
-  parts := make([]NNTPAttachment, 32)
-  idx = 0
   if strings.HasPrefix(mediaType, "multipart/") {
     mr := multipart.NewReader(bodyreader, params["boundary"])
     for {
@@ -310,40 +329,27 @@ func (self *NNTPMessage) Load(file io.Reader, loadBody bool) bool {
         return true
       }
       fname := part.FileName()
-      parts[idx].Name = fname
-      parts[idx].Extension = filepath.Ext(fname)
+      var np NNTPAttachment
+      np.Name = fname
+      np.Extension = filepath.Ext(fname)
       mime := part.Header.Get("Content-Type")
       semi_idx = strings.Index(mime, ";")
       if semi_idx > 0 {
         mime = mime[:semi_idx]
       }
-      parts[idx].Mime = mime
+      np.Mime = mime
       _, err = buff.ReadFrom(part)
       if err != nil {
         log.Println("failed to load attachment for", self.MessageID, err)
         return false
       }
-      parts[idx].Data = buff.String()
+      np.Data = buff.String()
 
-      if parts[idx].Mime == "text/plain" {
-        self.Message += parts[idx].Data
-      } 
-      
-      idx += 1
-
-    }
-    
-    self.Attachments = make([]NNTPAttachment, idx)
-
-    counter := 0
-    for i := range(parts) {
-      part := parts[i]
-      if len(part.Data) > 0 {
-        self.Attachments[counter] = parts[i]
-        counter ++        
+      if np.Mime == "text/plain" {
+        self.Message += np.Data
       }
+      self.Attachments = append(self.Attachments, np)
     }
-    self.Attachments = self.Attachments[:idx-counter]
   } else {
   
     self.Message = bodybuff.String()

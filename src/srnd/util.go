@@ -146,3 +146,24 @@ func nntpSanitize(data string) string {
   parts := strings.Split(data, "\n.\n")
   return parts[0]
 }
+
+
+type int64Sorter []int64
+
+func (self int64Sorter) Len() int {
+  return len(self)
+}
+
+func (self int64Sorter) Less(i, j int) bool {
+  return self[i] < self[j]
+}
+
+
+func (self int64Sorter) Swap(i, j int) {
+  tmp := self[j]
+  self[j] = self[i]
+  self[i] = tmp
+}
+
+
+

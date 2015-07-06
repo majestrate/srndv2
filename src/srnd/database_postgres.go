@@ -270,7 +270,7 @@ func (self PostgresDatabase) GetLastBumpedThreads(threads int) []string {
     return nil
   }
   defer stmt.Close()
-  rows, err := stmt.Query(threads)
+  rows, err := stmt.Query()
   if err != nil {
     log.Println("failed to execute query for get last bumped", err)
   }

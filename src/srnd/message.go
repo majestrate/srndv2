@@ -65,6 +65,7 @@ type NNTPMessage struct {
   ContentType string
   Sage bool
   OP bool
+  ExtraHeaders map[string]string
   Attachments []NNTPAttachment
   Signed string
 }
@@ -172,6 +173,13 @@ func (self *NNTPMessage) WriteTo(w io.WriteCloser, delim string) (err error) {
   // path header
   io.WriteString(writer, fmt.Sprintf("Path: %s", self.Path))
 
+  // extra headers
+  if self.ExtraHeaders != nil {
+    for k , v := range self.ExtraHeaders {
+      io.WriteString(writer, fmt.Sprintf("%s: %s", k, v))
+    }
+  }
+  
   // TODO: sign/verify
 
   // header done
@@ -222,6 +230,7 @@ func (self *NNTPMessage) WriteTo(w io.WriteCloser, delim string) (err error) {
 
 // load from file
 func (self *NNTPMessage) Load(file io.Reader, loadBody bool) bool {
+  self.ExtraHeaders = make(map[string]string)
   reader := bufio.NewReader(file)
   var idx int
   for {
@@ -276,6 +285,11 @@ func (self *NNTPMessage) Load(file io.Reader, loadBody bool) bool {
       }
     } else if strings.HasPrefix(lowline, "content-type: ") {
       self.ContentType = line[14:llen-1]
+    } else {
+      idx = strings.Index(line, " ")
+      if len(line) > idx {
+        self.ExtraHeaders[line[idx:]] = line[:1+idx]
+      }
     }
   }
   // TODO: allow pastebin

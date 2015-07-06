@@ -12,6 +12,7 @@ donate: bitcoin 15yuMzuueV8y5vPQQ39ZqQVz5Ey98DNrjE
 ## requirements ##
 
 * go 1.4 or higher
+* a postgresql database
 
 ## building
 

@@ -130,6 +130,9 @@ func (self *NNTPConnection) HandleOutbound(d *NNTPDaemon) {
       }
       code, line, err = self.txtconn.ReadCodeLine(-1)
       //TODO: log 239
+      if code == 239 {
+        log.Println("sent",msg.MessageID)
+      }
     } else if code == 438 {
       continue
     } else {

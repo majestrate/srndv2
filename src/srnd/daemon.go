@@ -142,7 +142,6 @@ func (self *NNTPDaemon) persistFeed(conf FeedConfig) {
           msgid := result[0]
           group := result[1]
           if policy.AllowsNewsgroup(group) {
-            log.Println("will sync", msgid)
             //XXX: will this crash if interrupted?
             nntp.sync <- msgid
           }

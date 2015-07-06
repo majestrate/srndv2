@@ -128,11 +128,6 @@ func (self *NNTPConnection) HandleOutbound(d *NNTPDaemon) {
         self.Quit()
         return
       }
-      code, line, err = self.txtconn.ReadCodeLine(-1)
-      //TODO: log 239
-      if code == 239 {
-        log.Println("sent",msg.MessageID)
-      }
     } else if code == 438 {
       continue
     } else {
@@ -171,6 +166,7 @@ func (self *NNTPConnection) SendMessage(message *NNTPMessage, d *NNTPDaemon) err
     return nil
   }
   if code == 438 {
+    log.Println("peer already has", message.MessageID)
     // they already have it
     return nil
   }
@@ -258,10 +254,11 @@ func (self *NNTPConnection) HandleInbound(d *NNTPDaemon) {
             // tell them
             self.txtconn.PrintfLine("239 %s", article)
             log.Println(self.conn.RemoteAddr(), "got article", article)
-
             // inform daemon
             d.infeed_load <- article
             log.Println("daemon feed article")
+          } else {
+            self.txtconn.PrintfLine("439 %s", article)
           }
         }
       }

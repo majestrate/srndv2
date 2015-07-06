@@ -360,6 +360,29 @@ func (self httpFrontend) handle_postform(wr http.ResponseWriter, r *http.Request
     nntp.Reference = ref
   }
   nntp.OP = len(ref) == 0
+
+  // set ip address info
+  nntp.ExtraHeaders = make(map[string]string)
+  // get the "real" ip address from the request
+  address := getRealIP(r.RemoteAddr)
+  if len(address) == 0 {
+    // fall back to X-Real-IP header optinally set by reverse proxy
+    // TODO: make sure this isn't a Tor user being sneaky
+    address = getRealIP(r.Header.Get("X-Real-IP"))
+  }
+  if len(address) > 0 {
+    // set the ip address of the poster to be put into article headers
+    // if we cannot determine it, i.e. we are on Tor/i2p, this value is not set
+    nntp.ExtraHeaders["X-Frontend-IP"] = address
+  } else {
+    // if we don't have an address for the poster try checking for i2p httpd headers
+    address = r.Header.Get("X-I2P-DestHash")
+    // TODO: make sure this isn't a Tor user being sneaky
+    if len(address) > 0 {
+      nntp.ExtraHeaders["X-Frontend-DestHash"] = address
+    }
+  }
+
   
   // send message off to daemon
   self.postchan <- nntp

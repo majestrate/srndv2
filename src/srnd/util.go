@@ -12,6 +12,7 @@ import (
   "fmt"
   "io"
   "log"
+  "net"
   "os"
   "strings"
   "time"
@@ -166,4 +167,16 @@ func (self int64Sorter) Swap(i, j int) {
 }
 
 
-
+// obtain the "real" ip address
+func getRealIP(name string) string {
+  host, _, err := net.SplitHostPort(name)
+  if err == nil {
+    ip , err := net.ResolveIPAddr("ip", host)
+    if err == nil {
+      if ip.IP.IsGlobalUnicast() {
+        return ip.IP.String()
+      }
+    }
+  }
+  return ""
+}

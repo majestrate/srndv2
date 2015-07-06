@@ -49,12 +49,8 @@ else
     go get github.com/lib/pq
     echo "--> mustache"
     go get github.com/hoisie/mustache
-    echo "build nacl..."
-    go build $root/src/nacl/*.go
 fi
 
 export PKG_CONFIG_PATH=$root/build.dir/prefix/lib/pkgconfig
-echo "build srnd core..."
-go build $root/src/srnd/*.go
-echo "build snrd main..."
+echo "build snrd ..."
 go build -o $root/SRNd $root/main.go

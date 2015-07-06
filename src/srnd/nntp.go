@@ -242,7 +242,6 @@ func (self *NNTPConnection) HandleInbound(d *NNTPDaemon) {
             log.Println(self.conn.RemoteAddr(), "got article", article)
             // inform daemon
             d.infeed_load <- article
-            log.Println("daemon feed article")
           } else {
             self.txtconn.PrintfLine("439 %s", article)
           }

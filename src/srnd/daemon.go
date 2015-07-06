@@ -249,6 +249,12 @@ func (self *NNTPDaemon) pollfeeds() {
           }
         }
       }
+    case msgid := <- self.infeed_load:
+      log.Println("load from infeed", msgid)
+      msg := self.store.ReadTempMessage(msgid)
+      if msg != nil {
+        self.infeed <- msg
+      }
     case nntp := <- self.infeed:
       // ammend path
       nntp.Path = self.instance_name + "!" + nntp.Path

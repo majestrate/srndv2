@@ -286,9 +286,9 @@ func (self *NNTPMessage) Load(file io.Reader, loadBody bool) bool {
     } else if strings.HasPrefix(lowline, "content-type: ") {
       self.ContentType = line[14:llen-1]
     } else {
-      idx = strings.Index(line, " ")
-      if len(line) > idx {
-        self.ExtraHeaders[line[idx:]] = line[:1+idx]
+      idx = strings.Index(line, ": ")
+      if idx > 0 && len(line) > idx {
+        self.ExtraHeaders[line[idx:]] = line[1+idx:llen-1]
       }
     }
   }

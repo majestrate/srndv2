@@ -222,16 +222,8 @@ func (self *NNTPDaemon) pollfrontend() {
     select {
     case nntp := <- chnl:
       // new post from frontend
-      // ammend path
-      nntp.Path = self.instance_name + "!" + nntp.Path
-      // store it temp
-      file := self.store.CreateTempFile(nntp.MessageID)
-      if file != nil {
-        nntp.WriteTo(file, "\r\n")
-        file.Close()
-        // tell infeed that we got one
-        self.infeed_load <- nntp.MessageID
-      }
+      log.Println("frontend post", nntp.MessageID)
+      self.infeed <- nntp
     }
   }
 }
@@ -240,18 +232,6 @@ func (self *NNTPDaemon) pollfeeds() {
   chnl := self.frontend.PostsChan()
   for {
     select {
-    case msgid := <- self.infeed_load:
-      // load temp message
-      // this deletes the temp file
-      nntp := self.store.ReadTempMessage(msgid)
-      if nntp == nil {
-        log.Println("invalid message", msgid)
-        break
-      }
-      // rewrite path header
-      nntp.Path = self.instance_name +"!" + nntp.Path
-      // offer infeed
-      self.infeed <- nntp
     case msgid := <- self.send_all_feeds:
       // send all feeds
       nntp := self.store.GetMessage(msgid)
@@ -269,6 +249,8 @@ func (self *NNTPDaemon) pollfeeds() {
         }
       }
     case nntp := <- self.infeed:
+      // ammend path
+      nntp.Path = self.instance_name + "!" + nntp.Path
       // check for validity
       if nntp.Verify() {
         // register article

@@ -142,7 +142,7 @@ func (self *ArticleStore) GetTempFilename(messageID string) string {
 func (self *ArticleStore) ReadTempMessage(messageID string) *NNTPMessage {
   fname := self.GetTempFilename(messageID)
   nntp := self.readfile(fname, true)
-  defer DelFile(fname)
+  DelFile(fname)
   return nntp
 }
 

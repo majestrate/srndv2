@@ -264,7 +264,7 @@ func (self PostgresDatabase) GetGroupThreads(group string, recv chan string) {
 
 func (self PostgresDatabase) GetLastBumpedThreads(threads int) []string {
   // TODO: detect sage
-  stmt, err := self.Conn().Prepare("SELECT message_id, ref_id FROM ArticlePosts ORDER BY time_posted DESC LIMIT $1 ")
+  stmt, err := self.Conn().Prepare("SELECT message_id, ref_id, time_posted FROM ArticlePosts ORDER BY time_posted DESC LIMIT $1 ")
   if err != nil {
     log.Println("failed to prepare query for get last bumped", err)
     return nil
@@ -279,11 +279,22 @@ func (self PostgresDatabase) GetLastBumpedThreads(threads int) []string {
   var roots []string
   for rows.Next() {
     var msgid, refid string
-    rows.Scan(&msgid, &refid)
-    if refid == "" {
+    var posted int64
+    rows.Scan(&msgid, &refid, &posted)
+    if refid != "" {
+      msgid = refid
+    }
+    put := true
+    if len(roots) > 0 {
+      for _, root := range roots {
+        if root == msgid {
+          put = false
+          break
+        }
+      }
+    }
+    if put {
       roots = append(roots, msgid)
-    } else if roots[len(roots)-1] != refid {
-      roots = append(roots, refid)
     }
   }
   return roots

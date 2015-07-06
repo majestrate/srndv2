@@ -253,6 +253,7 @@ func (self *NNTPDaemon) pollfeeds() {
       // ammend path
       nntp.Path = self.instance_name + "!" + nntp.Path
       // check for validity
+      log.Println("daemon got", nntp.MessageID)
       if nntp.Verify() {
         // register article
         self.database.RegisterArticle(nntp)

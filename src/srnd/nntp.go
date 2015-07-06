@@ -153,6 +153,7 @@ func (self *NNTPConnection) SendMessage(message *NNTPMessage, d *NNTPDaemon) err
   wr := self.txtconn.DotWriter()
   err = message.WriteTo(wr, "\r\n")
   wr.Close()
+  self.reading = false
   if err != nil {
     log.Printf("failed to send %s via feed: %s", message.MessageID, err)
     return err

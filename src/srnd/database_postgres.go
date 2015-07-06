@@ -224,13 +224,10 @@ func (self PostgresDatabase) GetThreadReplies(rootpost string, limit int) []stri
     rows.Scan(&msgid)
     repls = append(repls, msgid)
   }
-  log.Printf("thread has %d replies", len(repls))
-  return repls
-  
+  return repls  
 }
 
 func (self PostgresDatabase) ThreadHasReplies(rootpost string) bool {
-  log.Println("checking for replies for", rootpost)
   stmt, err := self.Conn().Prepare("SELECT COUNT(message_id) FROM ArticlePosts WHERE ref_id = $1")
   if err != nil {
     log.Println("failed to prepare query to check for thread replies", rootpost, err)
@@ -239,7 +236,6 @@ func (self PostgresDatabase) ThreadHasReplies(rootpost string) bool {
   defer stmt.Close()
   var count int64
   stmt.QueryRow(rootpost).Scan(&count)
-  log.Printf("we have %d replies", count)
   return count > 0
 }
 

@@ -132,6 +132,9 @@ func (self *NNTPConnection) HandleOutbound(d *NNTPDaemon) {
     } else if code == 438 {
       // declined
       continue
+    } else if code == 239 {
+      // accepted
+      continue
     } else {
       log.Printf("invalid response from outbound feed: '%d %s'", code, line)
     }

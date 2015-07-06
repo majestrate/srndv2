@@ -87,7 +87,7 @@ func (self attachment) Filename() string {
   return self.filename
 }
 
-func PostModelFromMessage(prefix, parent string, nntp *NNTPMessage) PostModel {
+func PostModelFromMessage(parent, prefix string, nntp *NNTPMessage) PostModel {
   p :=  post{}
   p.name = nntp.Name
   p.subject = nntp.Subject
@@ -157,7 +157,7 @@ func (self post) Attachments() []AttachmentModel {
 }
 
 func (self post) PostURL() string {
-  return fmt.Sprintf("%sthread-%s.html#%s", self.prefix, ShortHashMessageID(self.parent), self.PostHash())
+  return fmt.Sprintf("%sthread-%s.html#%s", self.Prefix(), ShortHashMessageID(self.parent), self.PostHash())
 }
 
 func (self post) Prefix() string {

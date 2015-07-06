@@ -1,12 +1,13 @@
 <html>
   <head>
     <meta charset="utf-8" />
-    <script type="text/javascript" src="{{thread.Prefix}}static/captcha.js"></script>
-    <link rel="stylesheet" href="{{thread.Prefix}}static/site.css"></link>
+    <script type="text/javascript" src="{{board.Prefix}}static/captcha.js"></script>
+    <link rel="stylesheet" href="{{board.Prefix}}static/site.css"></link>
+    <title>{{board.Board}}</title>
   </head>
   <body>
     <!-- begin header -->
-    {{{RenderNavbar}}}
+    {{{board.RenderNavbar}}}
     <!-- end header -->
 
     <!-- postform -->
@@ -15,7 +16,7 @@
     </div>
     <hr />
     <div id="threads_container">
-      {{#Threads}}
+      {{#board.Threads}}
         <div class="thread" id="thread_{{OP.PostHash}}">
           <div clsss="thread_header">
           </div>
@@ -26,7 +27,7 @@
           {{/Replies}}
         </div>
         <hr/>
-      {{/Threads}}
+      {{/board.Threads}}
     </div>
   </body>
 </html>

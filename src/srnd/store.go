@@ -165,6 +165,26 @@ func (self *ArticleStore) readfile(fname string, full bool) *NNTPMessage {
   return nil
 }
 
+// get the replies for a thread
+func (self *ArticleStore) GetThreadReplies(messageID string, last int) []*NNTPMessage {
+  var repls []*NNTPMessage
+  if self.database.ThreadHasReplies(messageID) {
+    rpls := self.database.GetThreadReplies(messageID, last)
+    if rpls == nil {
+      return repls
+    }
+    for _, rpl := range rpls {
+      msg := self.GetMessage(rpl)
+      if msg == nil {
+        log.Println("cannot get message", rpl)
+      } else { 
+        repls = append(repls, msg)
+      }
+    }
+  }
+  return repls
+}
+
 // load an article
 // return nil on failure
 func (self *ArticleStore) GetMessage(messageID string) *NNTPMessage {

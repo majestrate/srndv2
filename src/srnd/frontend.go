@@ -95,6 +95,11 @@ func MuxFrontends(fronts ...Frontend) Frontend {
   return front
 }
 
+type groupRegenRequest struct {
+  group string
+  page int
+}
+
 type httpFrontend struct {
   Frontend
 
@@ -110,7 +115,7 @@ type httpFrontend struct {
 
   prefix string
   regenThreadChan chan string
-  regenGroupChan chan string
+  regenGroupChan chan groupRegenRequest
 }
 
 func (self httpFrontend) AllowNewsgroup(group string) bool {
@@ -149,8 +154,46 @@ func (self httpFrontend) regenAll() {
   }
 }
 
-func (self httpFrontend) regenerateBoard(newsgroup string) {
-  // don't regen anything
+
+// regenerate a board page for newsgroup
+func (self httpFrontend) regenerateBoard(newsgroup string, pageno int) {
+  // do nothing for now
+  
+}
+
+// regenerate the ukko page
+func (self httpFrontend) regenUkko() {
+  // get the last 5 bumped threads
+  roots := self.daemon.database.GetLastBumpedThreads(5)
+  var threads []ThreadModel
+  for _, rootpost := range roots {
+    // for each root post
+    // get the last 5 posts
+    repls := self.daemon.store.GetThreadReplies(rootpost, 5)
+    // make post model for all replies
+    var posts []PostModel
+    rootmsg := self.daemon.store.GetMessage(rootpost)
+    if rootmsg == nil {
+      log.Println("cannot find root post for ukko", rootmsg)
+      continue
+    }
+    post := PostModelFromMessage(rootpost, self.prefix, rootmsg)
+    posts = append(posts, post)
+    for _, msg := range repls {
+      
+      post = PostModelFromMessage(rootpost, self.prefix, msg)
+      posts = append(posts, post)
+    }
+    threads = append(threads, NewThreadModel(self.prefix, posts))
+  }
+
+  wr, err := OpenFileWriter(filepath.Join(self.webroot_dir, "ukko.html"))
+  if err == nil {
+    io.WriteString(wr, renderUkko(self.prefix, threads))
+    wr.Close()
+  } else {
+    log.Println("error generating ukko", err)
+  }
 }
 
 // regnerate a thread given the messageID of the root post
@@ -168,7 +211,7 @@ func (self httpFrontend) regenerateThread(rootMessageID string) {
   }
 
   // make post model for root post
-  post := PostModelFromMessage(self.prefix, msg)
+  post := PostModelFromMessage(rootMessageID, self.prefix, msg)
   posts := []PostModel{post}
 
   // make post model for all replies
@@ -178,9 +221,13 @@ func (self httpFrontend) regenerateThread(rootMessageID string) {
         log.Println("could not get message", msgid)
       continue
     }
-    post = PostModelFromMessage(self.prefix, msg)
+    post = PostModelFromMessage(rootMessageID, self.prefix, msg)
     posts = append(posts, post)
   }
+
+  // is the last post a sage?
+  // if so don't regen everything
+  // regen_all := ! posts[len(posts)-1].Sage()
   
   // make thread model
   thread := NewThreadModel(self.prefix, posts)
@@ -200,6 +247,17 @@ func (self httpFrontend) regenerateThread(rootMessageID string) {
   } else {
     log.Printf("failed to render %s", err)
   }
+
+  // regen ukko
+  // HOT PATH
+  self.regenUkko()
+  
+  // regenerate the entire board 
+  // if regen_all {
+  //  
+  //  self.regenBoardChan <-
+  // }
+  
 }
 
 func (self httpFrontend) poll() {
@@ -216,7 +274,7 @@ func (self httpFrontend) poll() {
       }
       // regen the newsgroup we're in
       // TODO: smart regen
-      self.regenGroupChan <- nntp.Newsgroup
+      // self.regenGroupChan <- nntp.Newsgroup
     }
   }
 }
@@ -231,8 +289,8 @@ func (self httpFrontend) pollregen() {
       self.regenerateThread(msgid)
       
       // listen for regen board requests
-    case board := <- self.regenGroupChan:
-      self.regenerateBoard(board)
+    case req := <- self.regenGroupChan:
+      self.regenerateBoard(req.group, req.page)
     }
   }
 }
@@ -479,6 +537,6 @@ func NewHTTPFrontend(daemon *NNTPDaemon, config map[string]string) Frontend {
   front.postchan = make(chan *NNTPMessage, 16)
   front.recvpostchan = make(chan *NNTPMessage, 16)
   front.regenThreadChan = make(chan string, 16)
-  front.regenGroupChan = make(chan string, 8)
+  front.regenGroupChan = make(chan groupRegenRequest, 8)
   return front
 }

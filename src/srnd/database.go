@@ -43,6 +43,15 @@ type Database interface {
   // get every message id for root posts that need to be expired in a newsgroup
   // threadcount is the upperbound limit to how many root posts we keep
   GetRootPostsForExpiration(newsgroup string, threadcount int) []string
+
+  // get the number of pages a board has
+  // GetGroupPageCount(newsgroup string) int
+  
+  // get board page number N
+  // GetGroupForPage(newsgroup string, pageno, perpage int) BoardModel
+
+  // get the root posts of the last N bumped threads globally, for ukko
+  GetLastBumpedThreads(threadcount int) []string
   
   // underlying database connection
   Conn() *sql.DB

@@ -5,12 +5,55 @@
 package srnd
 
 import (
+  "fmt"
   "github.com/hoisie/mustache"
   "io"
   "path/filepath"
   "strings"
   "time"
 )
+
+type boardModel struct {
+  frontend string
+  prefix string
+  board string
+  threads []ThreadModel
+}
+
+
+func (self boardModel) RenderNavbar() string {
+  // TODO navbar
+  return "navbar goes here"
+}
+
+func (self boardModel) Frontend() string {
+  return self.frontend
+}
+
+func (self boardModel) Prefix() string {
+  return self.prefix
+}
+
+func (self boardModel) Name() string {
+  return self.board
+}
+
+func (self boardModel) Threads() []ThreadModel {
+  return self.threads
+}
+
+func (self boardModel) RenderTo(wr io.Writer) error {
+  fname := filepath.Join(defaultTemplateDir(), "board.mustache")
+  param := make(map[string]interface{})
+  param["board"] = self
+  param["form"] = renderPostForm(self.Prefix(), self.board, "")
+  _, err := io.WriteString(wr, mustache.RenderFile(fname, param))
+  return err
+}
+
+func createBoardModel(prefix, frontend, name string, threads []ThreadModel) BoardModel {
+  return boardModel{frontend, prefix, name, threads}
+}
 
 type post struct {
   prefix string
@@ -22,6 +65,8 @@ type post struct {
   path string
   op bool
   posted int64
+  parent string
+  sage bool
 }
 
 type attachment struct {
@@ -42,7 +87,7 @@ func (self attachment) Filename() string {
   return self.filename
 }
 
-func PostModelFromMessage(prefix string, nntp *NNTPMessage) PostModel {
+func PostModelFromMessage(prefix, parent string, nntp *NNTPMessage) PostModel {
   p :=  post{}
   p.name = nntp.Name
   p.subject = nntp.Subject
@@ -53,11 +98,17 @@ func PostModelFromMessage(prefix string, nntp *NNTPMessage) PostModel {
   p.posted = nntp.Posted
   p.op = nntp.OP
   p.prefix = prefix
+  p.parent = parent
+  p.sage = nntp.Sage
   return p
 }
 
 func (self post) ShortHash() string {
   return ShortHashMessageID(self.message_id)
+}
+
+func (self post) Sage() bool {
+  return self.sage
 }
 
 func (self post) OP() bool {
@@ -105,12 +156,10 @@ func (self post) Attachments() []AttachmentModel {
   return nil
 }
 
-// TODO: implement
 func (self post) PostURL() string {
-  return "#"
+  return fmt.Sprintf("%sthread-%s.html#%s", self.prefix, ShortHashMessageID(self.parent), self.PostHash())
 }
 
-// TODO: implement
 func (self post) Prefix() string {
   return self.prefix 
 }
@@ -156,7 +205,7 @@ func (self thread) TemplateDir() string {
 func (self thread) RenderTo(wr io.Writer) error {
   fname := filepath.Join(self.TemplateDir(), "thread.mustache")
   rpls := self.Replies()
-  postform := self.renderPostForm(self.prefix, self.Board(), self.posts[0].MessageID())
+  postform := renderPostForm(self.prefix, self.Board(), self.posts[0].MessageID())
   data := mustache.RenderFile(fname, map[string]interface{} { "thread": self, "repls" : rpls, "form" : postform})
   io.WriteString(wr, data)
   return nil
@@ -184,8 +233,12 @@ func templateRender(fname string, obj interface{}) string {
   return mustache.RenderFile(fname, obj)
 }
 
+func renderUkko(prefix string, threads []ThreadModel) string {
+  return mustache.RenderFile(filepath.Join(defaultTemplateDir(), "ukko.mustache"), map[string]interface{} { "prefix" : prefix, "threads" : threads } )
+}
 
-func (self thread) renderPostForm(prefix, board, op_msg_id string) string {
+
+func renderPostForm(prefix, board, op_msg_id string) string {
   url := prefix + "post/" + board
   return mustache.RenderFile(filepath.Join(defaultTemplateDir(), "postform.mustache"), map[string]string { "post_url" : url, "reference" : op_msg_id , "button" : "Reply" } )
 }

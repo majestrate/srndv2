@@ -47,6 +47,7 @@ type PostModel interface {
   OP() bool
   Attachments() []AttachmentModel
   Board() string
+  Sage() bool
   
   RenderBody() string
   RenderPost() string

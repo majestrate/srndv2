@@ -99,10 +99,10 @@ func (self PostgresDatabase) CreateTables() {
   }
 }
 
-
-// TODO: optimize
 func (self PostgresDatabase) GetRootPostsForExpiration(newsgroup string, threadcount int) []string {
 
+  //TODO, do this all in 1 query with no bullshit after logic
+  
   // root post -> last bump
   threads := make(map[string]int64)
   var rows *sql.Rows
@@ -195,7 +195,7 @@ func (self PostgresDatabase) GetThreadReplies(rootpost string, limit int) []stri
   var rows *sql.Rows
   var err error
   if limit > 0 {
-    stmt, err := self.Conn().Prepare("SELECT message_id FROM ArticlePosts WHERE message_id IN ( SELECT message_id FROM Articles WHERE message_ref_id = $1 ) ORDER BY time_posted LIMIT $2")
+    stmt, err := self.Conn().Prepare("SELECT message_id FROM ArticlePosts WHERE message_id IN ( SELECT message_id FROM Articles WHERE message_ref_id = $1 ) ORDER BY time_posted DESC LIMIT $2")
     if err == nil {
       defer stmt.Close()
       rows, err = stmt.Query(rootpost, limit)
@@ -260,6 +260,29 @@ func (self PostgresDatabase) GetGroupThreads(group string, recv chan string) {
     rows.Scan(&msgid)
     recv <- msgid
   }
+}
+
+func (self PostgresDatabase) GetLastBumpedThreads(threads int) []string {
+  // TODO: detect sage
+  stmt, err := self.Conn().Prepare("SELECT DISTINCT ref_id FROM ( SELECT ref_id, message_id FROM ArticlePosts ORDER BY time_posted DESC ) AS posts WHERE ref_id != '' LIMIT $1 ")
+  if err != nil {
+    log.Println("failed to prepare query for get last bumped", err)
+    return nil
+  }
+  defer stmt.Close()
+  rows, err := stmt.Query(threads)
+  if err != nil {
+    log.Println("failed to execute query for get last bumped", err)
+  }
+  defer rows.Close()
+
+  var roots []string
+  for rows.Next() {
+    var msgid string
+    rows.Scan(&msgid)
+    roots = append(roots, msgid)
+  }
+  return roots
 }
 
 func (self PostgresDatabase) GroupHasPosts(group string) bool {

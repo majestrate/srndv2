@@ -169,13 +169,11 @@ func (self int64Sorter) Swap(i, j int) {
 
 // obtain the "real" ip address
 func getRealIP(name string) string {
-  host, _, err := net.SplitHostPort(name)
+
+  ip , err := net.ResolveIPAddr("ip", name)
   if err == nil {
-    ip , err := net.ResolveIPAddr("ip", host)
-    if err == nil {
-      if ip.IP.IsGlobalUnicast() {
-        return ip.IP.String()
-      }
+    if ip.IP.IsGlobalUnicast() {
+      return ip.IP.String()
     }
   }
   return ""

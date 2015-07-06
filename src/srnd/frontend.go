@@ -11,6 +11,7 @@ import (
   "fmt"
   "io"
   "log"
+  "net"
   "net/http"
   "path/filepath"
   "strings"
@@ -362,9 +363,20 @@ func (self httpFrontend) handle_postform(wr http.ResponseWriter, r *http.Request
   nntp.OP = len(ref) == 0
 
   // set ip address info
+  // TODO:
+  //  encrypt IP Addresses
+  //  when a post is recv'd from a frontend, the remote address is given its own symetric key that the local srnd uses to encrypt the address with, for privacy
+  //  when a mod event is fired, it includes the encrypted IP address and the symetric key that frontend used to encrypt it, thus allowing others to determine the IP address
+  //  each stnf will optinally comply with the mod event, banning the address from being able to post from that frontend
+  //  this will be done eventually but for now that requires too much infrastrucutre, let's go with regular IP Addresses for now.
+  //
   nntp.ExtraHeaders = make(map[string]string)
   // get the "real" ip address from the request
-  address := getRealIP(r.RemoteAddr)
+  address := ""
+  host, _, err := net.SplitHostPort(r.RemoteAddr)
+  if err == nil {
+    address = getRealIP(host)
+  }
   if len(address) == 0 {
     // fall back to X-Real-IP header optinally set by reverse proxy
     // TODO: make sure this isn't a Tor user being sneaky

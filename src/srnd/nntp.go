@@ -107,6 +107,7 @@ func (self *NNTPConnection) HandleOutbound(d *NNTPDaemon) {
       self.askSync(msg_id)
     }
   }()
+  
   for {
     code, line, err = self.txtconn.ReadCodeLine(-1)
     if err != nil {
@@ -129,6 +130,7 @@ func (self *NNTPConnection) HandleOutbound(d *NNTPDaemon) {
         return
       }
     } else if code == 438 {
+      // declined
       continue
     } else {
       log.Printf("invalid response from outbound feed: '%d %s'", code, line)
@@ -139,8 +141,6 @@ func (self *NNTPConnection) HandleOutbound(d *NNTPDaemon) {
 // just do it (tm)
 func (self *NNTPConnection) SendMessage(message *NNTPMessage, d *NNTPDaemon) error {
   var err error
-  var line string
-  var code int
   self.reading = true
   err = self.txtconn.PrintfLine("TAKETHIS %s", message.MessageID)
   if err != nil {
@@ -154,24 +154,6 @@ func (self *NNTPConnection) SendMessage(message *NNTPMessage, d *NNTPDaemon) err
     log.Printf("failed to send %s via feed: %s", message.MessageID, err)
     return err
   }
-  // check for success / fail
-  code, line, err = self.txtconn.ReadCodeLine(-1)
-  self.reading = false
-  if err != nil {
-    log.Printf("failed to read response while sending %s: %s", message.MessageID, err)
-    return err
-  }
-  if code == 239 {
-    // success :3
-    return nil
-  }
-  if code == 438 {
-    log.Println("peer already has", message.MessageID)
-    // they already have it
-    return nil
-  }
-  // unknown response
-  log.Printf("feed gave response '%d %s' for article %s", code, line, message.MessageID)
   return nil
 }
 

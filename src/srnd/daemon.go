@@ -217,9 +217,10 @@ func (self *NNTPDaemon) Run() {
 
 
 func (self *NNTPDaemon) pollfrontend() {
+  chnl := self.frontend.NewPostsChan()
   for {
     select {
-    case nntp := <- self.frontend.NewPostsChan():
+    case nntp := <- chnl:
       // new post from frontend
       // ammend path
       nntp.Path = self.instance_name + "!" + nntp.Path
@@ -229,8 +230,16 @@ func (self *NNTPDaemon) pollfrontend() {
         nntp.WriteTo(file, "\r\n")
         file.Close()
         // tell infeed that we got one
-        self.infeed <- nntp
+        self.infeed_load <- nntp.MessageID
       }
+    }
+  }
+}
+
+func (self *NNTPDaemon) pollfeeds() {
+  chnl := self.frontend.PostsChan()
+  for {
+    select {
     case msgid := <- self.infeed_load:
       // load temp message
       // this deletes the temp file
@@ -243,15 +252,6 @@ func (self *NNTPDaemon) pollfrontend() {
       nntp.Path = self.instance_name +"!" + nntp.Path
       // offer infeed
       self.infeed <- nntp
-
-    }
-  }
-}
-
-func (self *NNTPDaemon) pollfeeds() {
-  chnl := self.frontend.PostsChan()
-  for {
-    select {
     case msgid := <- self.send_all_feeds:
       // send all feeds
       nntp := self.store.GetMessage(msgid)
@@ -276,13 +276,13 @@ func (self *NNTPDaemon) pollfeeds() {
         // store article
         // this generates thumbs and stores attachemnts
         self.store.StorePost(nntp)
+        // queue to all outfeeds
+        self.send_all_feeds <- nntp.MessageID
         // roll over old content
         // TODO: hard coded expiration threshold
         self.expire.ExpireGroup(nntp.Newsgroup, 100)
         // tell frontend
         chnl <- nntp
-        // queue to all outfeeds
-        self.send_all_feeds <- nntp.MessageID
         // do any moderation events
         nntp.DoModeration(&self.mod)
       } else {

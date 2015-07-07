@@ -443,7 +443,7 @@ func (self httpFrontend) handle_postform(wr http.ResponseWriter, r *http.Request
   if len(address) > 0 {
     // set the ip address of the poster to be put into article headers
     // if we cannot determine it, i.e. we are on Tor/i2p, this value is not set
-    nntp.ExtraHeaders["X-Frontend-IP"] = address
+    // nntp.ExtraHeaders["X-Encrypted-IP"] = address
   } else {
     // if we don't have an address for the poster try checking for i2p httpd headers
     address = r.Header.Get("X-I2P-DestHash")

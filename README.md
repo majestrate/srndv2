@@ -12,11 +12,14 @@ donate: bitcoin 15yuMzuueV8y5vPQQ39ZqQVz5Ey98DNrjE
 ## requirements ##
 
 * a modern c compiler, (gcc, clang)
+* libsodium
 * go 1.4 or higher
 * postgresql
 
 ## building
 
+    # get libsodium
+    sudo apt-get install libsodium-dev
     # set gopath if it's not already set
     export GOPATH=$HOME/go
     mkdir -p $GOPATH

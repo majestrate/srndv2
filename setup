@@ -1,0 +1,5 @@
+#!/bin/bash
+#
+#
+root=$(dirname $0)
+LD_LIBRARY_PATH=$root/build.dir/prefix/lib $root/SRNd -action setup

@@ -133,20 +133,23 @@ func (self *NNTPDaemon) persistFeed(conf FeedConfig) {
       nntp := self.newConnection(conn, false, policy)
       // start syncing in background
       go func() {
-        // get every article
-        articles := self.database.GetAllArticles()
-        // wait 5 seconds for feed to handshake
-        time.Sleep(5 * time.Second)
-        log.Println("outfeed begin sync")
-        for _, result := range articles {
-          msgid := result[0]
-          group := result[1]
-          if policy.AllowsNewsgroup(group) {
-            //XXX: will this crash if interrupted?
-            nntp.sync <- msgid
+        if self.sync_on_start {
+          log.Println("sync on start")
+          // get every article
+          articles := self.database.GetAllArticles()
+          // wait 5 seconds for feed to handshake
+          time.Sleep(5 * time.Second)
+          log.Println("outfeed begin sync")
+          for _, result := range articles {
+            msgid := result[0]
+            group := result[1]
+            if policy.AllowsNewsgroup(group) {
+              //XXX: will this crash if interrupted?
+              nntp.sync <- msgid
+            }
           }
+          log.Println("outfeed end sync")
         }
-        log.Println("outfeed end sync")
       }()
       nntp.HandleOutbound(self)
       log.Println("remove outfeed")
@@ -156,19 +159,8 @@ func (self *NNTPDaemon) persistFeed(conf FeedConfig) {
   time.Sleep(1 * time.Second)
 }
 
-// sync every article to all feeds
-func (self *NNTPDaemon) syncAll() {
-  
-}
-
-
 // run daemon
 func (self *NNTPDaemon) Run() {	
-  err := self.Bind()
-  if err != nil {
-    log.Println("failed to bind:", err)
-    return
-  }
   defer self.listener.Close()
   // run expiration mainloop
   go self.expire.Mainloop()
@@ -191,7 +183,7 @@ func (self *NNTPDaemon) Run() {
       nntp.MessageID = fmt.Sprintf("<%s%d@%s>", randStr(5), timeNow(), self.instance_name)
       nntp.Name = "system"
       nntp.Email = "srndv2@"+self.instance_name
-      nntp.Subject = "New Frontend"
+      nntp.Subject = "New Frontend, "+self.instance_name
       nntp.Posted = timeNow()
       nntp.Message = "Hi, welcome to nntpchan, this post was inserted on startup because you have no other posts, this messages was auto-generated"
       nntp.ContentType = "text/plain"
@@ -204,9 +196,6 @@ func (self *NNTPDaemon) Run() {
       }
     }
   }()
-  if self.sync_on_start {
-    go self.syncAll()
-  }
   // if we have no frontend this does nothing
   if self.frontend != nil {
     go self.pollfrontend()
@@ -300,6 +289,23 @@ func (self *NNTPDaemon) RunInbound(nntp NNTPConnection) {
   delete(self.feeds, nntp)
 }
 
+
+func (self *NNTPDaemon) Setup() {
+  log.Println("checking for configs...")
+  // check that are configs exist
+  CheckConfig()
+  log.Println("loading config...")
+  // read the config
+  self.conf = ReadConfig()
+  if self.conf == nil {
+    log.Fatal("failed to load config")
+  }
+  // validate the config
+  log.Println("validating configs...")
+  self.conf.Validate()
+  log.Println("configs are valid")
+}
+
 // bind to address
 func (self *NNTPDaemon) Bind() error {
   listener , err := net.Listen("tcp", self.bind_addr)
@@ -308,25 +314,29 @@ func (self *NNTPDaemon) Bind() error {
     return err
   }
   self.listener = listener
-  log.Println("SRNd NNTPD bound at", listener.Addr())
+  log.Printf("SRNd NNTPD bound at %s", listener.Addr())
   return nil
 }
 
 // load configuration
 // bind to interface
 func (self *NNTPDaemon) Init() bool {
-  CheckConfig()
-  log.Println("load config")
-  self.conf = ReadConf()
-  if self.conf == nil {
-    log.Println("cannot load config")
-    return false
-  }
+
+  // set up daemon configs
+  self.Setup()
+  
   self.infeed = make(chan *NNTPMessage, 64)
   self.infeed_load = make(chan string, 64)
   self.send_all_feeds = make(chan string, 64)
   self.feeds = make(map[NNTPConnection]bool)
+
+  self.bind_addr = self.conf.daemon["bind"]
   
+  err := self.Bind()
+  if err != nil {
+    log.Println("failed to bind:", err)
+    return false
+  }
 
   db_host := self.conf.database["host"]
   db_port := self.conf.database["port"]
@@ -346,10 +356,6 @@ func (self *NNTPDaemon) Init() bool {
   
   self.expire = expire{self.database, self.store, make(chan deleteEvent)}
   self.sync_on_start = self.conf.daemon["sync_on_start"] == "1"
-  if self.sync_on_start {
-    log.Println("sync on start") 
-  }
-  self.bind_addr = self.conf.daemon["bind"]
   self.debug = self.conf.daemon["log"] == "debug"
   self.instance_name = self.conf.daemon["instance_name"]
   if self.debug {

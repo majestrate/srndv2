@@ -27,6 +27,7 @@ type SRNdConfig struct {
   database map[string]string
   feeds []FeedConfig
   frontend map[string]string
+  system map[string]string
 }
 
 // check for config files
@@ -52,7 +53,7 @@ func CheckConfig() {
 // generate default feeds.ini
 func GenFeedsConfig() error {
   conf := configparser.NewConfiguration()
-  sect := conf.NewSection("10.0.0.1:119")
+  sect := conf.NewSection("feed-10.0.0.1:119")
   sect.Add("proxy-type", "socks4a")
   sect.Add("proxy-host", "127.0.0.1")
   sect.Add("proxy-port", "9050")
@@ -68,7 +69,7 @@ func GenFeedsConfig() error {
 // generate default srnd.ini
 func GenSRNdConfig() error {
   conf := configparser.NewConfiguration()
-
+  
   // nntp related section
   sect := conf.NewSection("nntp")
 
@@ -99,7 +100,7 @@ func GenSRNdConfig() error {
   // baked in static html frontend
   sect = conf.NewSection("frontend")
   sect.Add("enable", "1")
-  sect.Add("bind", "127.0.0.1:18000")
+  sect.Add("bind", "0.0.0.0:18000")
   sect.Add("name", "web.srndv2.test")
   sect.Add("webroot", "webroot")
   sect.Add("prefix", "/")
@@ -110,7 +111,7 @@ func GenSRNdConfig() error {
 }
 
 // read config files
-func ReadConf() *SRNdConfig {
+func ReadConfig() *SRNdConfig {
   
   // begin read srnd.ini
 
@@ -227,4 +228,36 @@ func ReadConf() *SRNdConfig {
   
   
   return &sconf
+}
+
+// fatals on failed validation
+func (self *SRNdConfig) Validate() {
+  // check for daemon section entries
+  daemon_param := []string{"bind", "instance_name"}
+  for _, p := range daemon_param {
+    _, ok := self.daemon[p]
+    if ! ok {
+      log.Fatalf("in section [nntp], no parameter '%s' provided", p)
+    }
+  }
+  
+  // check validity of store directories
+  store_dirs := []string{"store", "incoming", "attachments", "thumbs"}
+  for _, d := range store_dirs {
+    k := d + "_dir"
+    dir, ok := self.store[k]
+    if ! ok {
+      log.Fatalf("in section [store], no parameter '%s' provided", k)
+    }
+    checkPerms(dir)
+  }
+
+  // check database parameters existing
+  db_param := []string{"host", "port", "user", "password", "type", "schema"}
+  for _, p := range db_param {
+    _, ok := self.database[p]
+    if ! ok {
+      log.Fatalf("in section [database], no parameter '%s' provided", p)
+    }
+  }  
 }

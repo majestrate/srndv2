@@ -14,6 +14,7 @@ import (
   "log"
   "net"
   "os"
+  "path/filepath"
   "strings"
   "time"
 )
@@ -178,4 +179,36 @@ func getRealIP(name string) string {
     }
   }
   return ""
+}
+
+// check that we have permission to access this
+// fatal on fail
+func checkPerms(fname string) {
+  fstat, err := os.Stat(fname)
+  if err != nil {
+    log.Fatalf("Cannot access %s, %s", fname, err)
+  }
+  // check if we can access this dir
+  if fstat.IsDir() {
+    tmpfname := filepath.Join(fname, ".test")
+    f, err := os.Create(tmpfname)
+    if err != nil {
+      log.Fatalf("No Write access in %s, %s", fname, err)
+    }
+    err = f.Close()
+    if err != nil {
+      log.Fatalf("failed to close test file %s !? %s", tmpfname, err)
+    }
+    err = os.Remove(tmpfname)
+    if err != nil {
+      log.Fatalf("failed to remove test file %s, %s", tmpfname, err)
+    }
+  } else {
+    // this isn't a dir, treat it like a regular file
+    f, err := os.Open(fname)
+    if err != nil {
+      log.Fatalf("cannot read file %s, %s", fname, err)
+    }
+    f.Close()
+  }
 }

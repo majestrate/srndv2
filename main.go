@@ -1,16 +1,31 @@
 package main
 
 import (
-  "log"
+  "flag"
   "github.com/majestrate/srndv2/src/srnd"
+  "log"
 )
+
+var action string
+
+func init() {
+  flag.StringVar(&action, "action", "", "what action will we run? (setup, run)")
+}
 
 
 func main() {
-  log.Println("starting up SRNd")
   var daemon srnd.NNTPDaemon
-  if daemon.Init() {
-    daemon.Run()
+  flag.Parse()
+  if action == "setup" {
+    log.Println("Setting up SRNd base...")
+    daemon.Setup()
+    log.Println("Setup Done")
+  } else if action == "run" {
+    log.Println("Starting up SRNd...")
+    if daemon.Init() {
+      daemon.Run()
+    } else {
+      log.Println("Failed to initialize")
+    }
   }
-  log.Println("SRNd done")
 }

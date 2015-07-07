@@ -34,9 +34,8 @@ donate: bitcoin 15yuMzuueV8y5vPQQ39ZqQVz5Ey98DNrjE
 
     # clean any previous builds
     ./clean
-    # build everything
-    # this builds libsodium too so it could take a bit
-    ./build
+    # build it
+    ./build core
 
 ## rebuilding
 

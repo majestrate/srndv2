@@ -1,4 +1,0 @@
-#!/bin/bash
-root=$(dirname $(readlink -e $0))
-rm -rf $root/build.dir
-rm -rf SRNd

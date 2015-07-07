@@ -20,7 +20,7 @@ type PostgresDatabase struct {
 
 func NewPostgresDatabase(host, port, user, password string) Database {
   var db PostgresDatabase
-  db.db_str = fmt.Sprintf("user=%s password=%s host=%s port=%s client_encoding=UTF8", user, password, host, port)
+  db.db_str = fmt.Sprintf("user=%s password=%s host=%s port=%s client_encoding='UTF8'", user, password, host, port)
   db.conn = db.Conn()
   return db
 }

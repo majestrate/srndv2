@@ -135,6 +135,9 @@ func (self *NNTPConnection) HandleOutbound(d *NNTPDaemon) {
     } else if code == 239 {
       // accepted
       continue
+    } else if code == 439 {
+      // invalid
+      log.Printf("article %s was not sent to outfeed, they said it was invalid", commands[0])
     } else {
       log.Printf("invalid response from outbound feed: '%d %s'", code, line)
     }
@@ -217,9 +220,11 @@ func (self *NNTPConnection) HandleInbound(d *NNTPDaemon) {
       self.txtconn.PrintfLine("%d %s", code, msg)
     } else if self.info.mode == "stream" { // we are in stream mode
       if cmd == "TAKETHIS" {
+        var newsgroup string
         if len(commands) == 2 {
           article := commands[1]
           if ValidMessageID(article) {
+            code := 239
             file := d.store.CreateTempFile(article)
             for {
               var line string
@@ -231,17 +236,33 @@ func (self *NNTPConnection) HandleInbound(d *NNTPDaemon) {
               if line == "." {
                 break
               } else {
+                // newsgroup header 
+                if strings.HasPrefix(strings.ToLower(line), "Newsgroup: ") {
+                  if len(newsgroup) == 0 {
+                    newsgroup := line[11:]
+                    if ! newsgroupValidFormat(newsgroup) {
+                      // bad newsgroup
+                      code = 439
+                    }
+                  }
+                }
                 file.Write([]byte(line))
                 file.Write([]byte("\n"))
               }
             }
             file.Close()
+            // tell them our result
+            self.txtconn.PrintfLine("%d %s", code, article)
             // the send was good
-            // tell them
-            self.txtconn.PrintfLine("239 %s", article)
-            log.Println(self.conn.RemoteAddr(), "got article", article)
-            // inform daemon
-            d.infeed_load <- article
+            if code == 239 {
+              log.Println(self.conn.RemoteAddr(), "got article", article)
+              // inform daemon
+              d.infeed_load <- article
+            } else {
+              // delete unaccepted article
+              fname := d.store.GetTempFilename(article)
+              DelFile(fname)
+            }
           } else {
             self.txtconn.PrintfLine("439 %s", article)
           }

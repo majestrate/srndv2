@@ -191,6 +191,107 @@ func (self PostgresDatabase) GetAllNewsgroups() []string {
   return groups
 }
 
+func (self PostgresDatabase) GetGroupPageCount(newsgroup string) int64 {
+  stmt, err := self.Conn().Prepare("SELECT COUNT(*) FROM ArticlePosts WHERE newsgroup = $1 AND ref_id = ''")
+  if err != nil {
+    log.Println("failed to prepare query to get board page count", err)
+    return -1
+  }
+  defer stmt.Close()
+  var count int64
+  stmt.QueryRow(newsgroup).Scan(&count)
+  // divide by threads per page
+  return count / 10
+}
+
+func (self PostgresDatabase) GetGroupForPage(prefix, frontend, newsgroup string, pageno, perpage int) BoardModel {
+  var threads []ThreadModel
+
+  // TODO: hard coded value
+  roots := self.GetLastBumpedThreads(newsgroup, 100)
+  for _, root_msg_id := range roots {
+    var posts []PostModel
+    op := self.GetPostModel(prefix, root_msg_id)
+    if op == nil {
+      log.Println("failed to get OP, was nil:", root_msg_id)
+      return nil
+    }
+    posts = append(posts, op)
+    if self.ThreadHasReplies(root_msg_id) {
+      // TODO: harcoded value
+      repls := self.GetThreadReplyPostModels(prefix, root_msg_id, 5)
+      if repls == nil {
+        log.Println("failed to get replies to", root_msg_id)
+        return nil
+      }
+      posts = append(posts, repls...)
+    }
+    thread := NewThreadModel(prefix, posts)
+    threads = append(threads, thread)
+  }
+  
+  return createBoardModel(prefix, frontend, newsgroup, threads)
+}
+
+func (self PostgresDatabase) GetPostModel(prefix, messageID string) PostModel {
+  stmt, err := self.Conn().Prepare("SELECT message_id, ref_id, name, subject, path, time_posted, message FROM ArticlePosts WHERE message_id = $1")
+  if err != nil {
+    log.Println("failed to prepare query for geting post model for", messageID, err)
+    return nil
+  }
+  var model post
+  model.prefix = prefix
+  stmt.QueryRow(messageID).Scan(&model.message_id, &model.parent, &model.name, &model.subject, &model.path, &model.posted, &model.message)
+  model.op = len(model.parent) == 0
+  model.sage = strings.HasPrefix(strings.ToLower(model.subject), "sage ") || model.subject == "sage"
+  return model
+}
+
+func (self PostgresDatabase) GetThreadReplyPostModels(prefix, rootpost string, limit int) []PostModel {
+  var rows *sql.Rows
+  var err error
+  if limit > 0 {
+    stmt, err := self.Conn().Prepare("SELECT message_id, ref_id, name, subject, path, time_posted, message FROM ArticlePosts WHERE message_id IN ( SELECT message_id FROM ArticlePosts WHERE ref_id = $1 ORDER BY time_posted DESC LIMIT $2 ) ORDER BY time_posted ASC")
+    if err == nil {
+      defer stmt.Close()
+      rows, err = stmt.Query(rootpost, limit)
+    } else {
+      log.Println("failed to prepare limited query for", rootpost, err)
+    }
+  } else {
+    stmt, err := self.Conn().Prepare("SELECT message_id, ref_id, name, subject, path, time_posted, message FROM ArticlePosts WHERE message_id IN ( SELECT message_id FROM ArticlePosts WHERE ref_id = $1 ) ORDER BY time_posted ASC")
+    if err == nil {
+      defer stmt.Close()
+      rows, err = stmt.Query(rootpost)
+    } else {
+      log.Println("failed to prepare unlimited query for", rootpost, err)
+    }
+  }
+  
+  if err != nil {
+    log.Println("failed to get thread replies", rootpost, err)
+    return nil
+  }
+  
+  if rows == nil {
+    log.Println("rows is nil")
+    return nil
+  }
+  
+  var repls []PostModel
+    
+  for rows.Next() {
+    var model post
+    model.prefix = prefix
+    rows.Scan(&model.message_id, &model.parent, &model.name, &model.subject, &model.path, &model.posted, &model.message)
+    model.op = len(model.parent) == 0
+    model.sage = strings.HasPrefix(strings.ToLower(model.subject), "sage ") || model.subject == "sage"
+    repls = append(repls, model)
+  }
+  return repls  
+
+}
+
 func (self PostgresDatabase) GetThreadReplies(rootpost string, limit int) []string {
   var rows *sql.Rows
   var err error
@@ -258,15 +359,27 @@ func (self PostgresDatabase) GetGroupThreads(group string, recv chan string) {
   }
 }
 
-func (self PostgresDatabase) GetLastBumpedThreads(threads int) []string {
+func (self PostgresDatabase) GetLastBumpedThreads(newsgroup string, threads int) []string {
+  var err error
+  var rows *sql.Rows
   // TODO: detect sage
-  stmt, err := self.Conn().Prepare("SELECT message_id, ref_id, time_posted FROM ArticlePosts ORDER BY time_posted DESC")
-  if err != nil {
-    log.Println("failed to prepare query for get last bumped", err)
-    return nil
+  if len(newsgroup) > 0 { 
+    stmt, err := self.Conn().Prepare("SELECT message_id, ref_id, time_posted FROM ArticlePosts WHERE newsgroup = $1 ORDER BY time_posted DESC")
+    if err == nil {
+      defer stmt.Close()
+      rows, err = stmt.Query(newsgroup)
+    } else {
+      log.Println("failed to prepare query for get last bumped", err)
+    }
+  } else {
+    stmt, err := self.Conn().Prepare("SELECT message_id, ref_id, time_posted FROM ArticlePosts WHERE newsgroup ORDER BY time_posted DESC")
+    if err == nil {
+      defer stmt.Close()
+      rows, err = stmt.Query()
+    } else {
+      log.Println("failed to prepare query for get last bumped", err)
+    }
   }
-  defer stmt.Close()
-  rows, err := stmt.Query()
   if err != nil {
     log.Println("failed to execute query for get last bumped", err)
   }

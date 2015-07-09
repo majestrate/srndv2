@@ -128,6 +128,11 @@ func (self httpFrontend) getFilenameForThread(root_post_id string) string {
   return filepath.Join(self.webroot_dir, fname)
 }
 
+func (self httpFrontend) getFilenameForBoardPage(boardname string, pageno int) string {
+  fname := fmt.Sprintf("%s-%d.html", boardname, pageno)
+  return filepath.Join(self.webroot_dir, fname)
+}
+
 func (self httpFrontend) NewPostsChan() chan *NNTPMessage {
   return self.postchan
 }
@@ -150,6 +155,15 @@ func (self httpFrontend) regenAll() {
     for _, group := range groups {
       // send every thread for this group down the regen thread channel
       self.daemon.database.GetGroupThreads(group, self.regenThreadChan)
+      // regen the entire board too
+      pages := self.daemon.database.GetGroupPageCount(group)
+      // regen all pages
+      var page int64
+      for ; page < pages ; page ++ {
+        req := groupRegenRequest{group, int(page)}
+        self.regenGroupChan <- req
+      }
+
     }
   }
 }
@@ -157,36 +171,46 @@ func (self httpFrontend) regenAll() {
 
 // regenerate a board page for newsgroup
 func (self httpFrontend) regenerateBoard(newsgroup string, pageno int) {
-  // do nothing for now
-  
+  // TODO: hard coded threads per page
+  board_page := self.daemon.database.GetGroupForPage(self.prefix, self.name, newsgroup, pageno, 10)
+  if board_page == nil {
+    log.Println("failed to regen board", newsgroup)
+    return
+  }
+  fname := self.getFilenameForBoardPage(newsgroup, pageno)
+  wr, err := OpenFileWriter(fname)
+  if err == nil {
+    err = board_page.RenderTo(wr)
+    wr.Close()
+    if err != nil {
+      log.Println("did not write board page",fname, err)
+    }
+  } else {
+    log.Println("cannot open", fname, err)
+  }
+  log.Println("regenerated file", fname)
 }
 
 // regenerate the ukko page
 func (self httpFrontend) regenUkko() {
   // get the last 5 bumped threads
-  roots := self.daemon.database.GetLastBumpedThreads(5)
+  roots := self.daemon.database.GetLastBumpedThreads("", 5)
   var threads []ThreadModel
   for _, rootpost := range roots {
     // for each root post
     // get the last 5 posts
-    repls := self.daemon.store.GetThreadReplies(rootpost, 5)
-    // make post model for all replies
-    var posts []PostModel
-    rootmsg := self.daemon.store.GetMessage(rootpost)
-    if rootmsg == nil {
-      log.Println("cannot find root post for ukko", rootmsg)
-      continue
+    post := self.daemon.database.GetPostModel(self.prefix, rootpost)
+    if post == nil {
+      return
     }
-    post := PostModelFromMessage(rootpost, self.prefix, rootmsg)
-    posts = append(posts, post)
-    for _, msg := range repls {
-      
-      post = PostModelFromMessage(rootpost, self.prefix, msg)
-      posts = append(posts, post)
+    posts := []PostModel{post}
+    repls := self.daemon.database.GetThreadReplyPostModels(self.prefix, rootpost, 5)
+    if repls == nil {
+      return
     }
+    posts = append(posts, repls...)
     threads = append(threads, NewThreadModel(self.prefix, posts))
   }
-
   wr, err := OpenFileWriter(filepath.Join(self.webroot_dir, "ukko.html"))
   if err == nil {
     io.WriteString(wr, renderUkko(self.prefix, threads))
@@ -197,37 +221,22 @@ func (self httpFrontend) regenUkko() {
 }
 
 // regnerate a thread given the messageID of the root post
+// TODO: don't load from store
 func (self httpFrontend) regenerateThread(rootMessageID string) {
-  var replies []string
-  // get replies
-  if self.daemon.database.ThreadHasReplies(rootMessageID) {
-    replies = append(replies, self.daemon.database.GetThreadReplies(rootMessageID, 0)...)
-  }
   // get the root post
-  msg := self.daemon.store.GetMessage(rootMessageID)
-  if msg == nil {
-    log.Printf("failed to fetch root post %s, regen cancelled", rootMessageID)
+  post := self.daemon.database.GetPostModel(self.prefix, rootMessageID)
+  if post == nil {
     return
   }
-
-  // make post model for root post
-  post := PostModelFromMessage(rootMessageID, self.prefix, msg)
   posts := []PostModel{post}
-
-  // make post model for all replies
-  for _, msgid := range replies {
-    msg = self.daemon.store.GetMessage(msgid)
-    if msg == nil {
-        log.Println("could not get message", msgid)
-      continue
+  // get replies
+  if self.daemon.database.ThreadHasReplies(rootMessageID) {
+    repls :=  self.daemon.database.GetThreadReplyPostModels(self.prefix, rootMessageID, 0)
+    if repls == nil {
+      return
     }
-    post = PostModelFromMessage(rootMessageID, self.prefix, msg)
-    posts = append(posts, post)
+    posts = append(posts, repls...)
   }
-
-  // is the last post a sage?
-  // if so don't regen everything
-  // regen_all := ! posts[len(posts)-1].Sage()
   
   // make thread model
   thread := NewThreadModel(self.prefix, posts)
@@ -246,18 +255,7 @@ func (self httpFrontend) regenerateThread(rootMessageID string) {
     log.Printf("regenerated file %s", fname)
   } else {
     log.Printf("failed to render %s", err)
-  }
-
-  // regen ukko
-  // HOT PATH
-  self.regenUkko()
-  
-  // regenerate the entire board 
-  // if regen_all {
-  //  
-  //  self.regenBoardChan <-
-  // }
-  
+  }  
 }
 
 func (self httpFrontend) poll() {
@@ -273,8 +271,16 @@ func (self httpFrontend) poll() {
         self.regenThreadChan <- nntp.MessageID
       }
       // regen the newsgroup we're in
-      // TODO: smart regen
-      // self.regenGroupChan <- nntp.Newsgroup
+      // TODO: regen only what we need to
+      pages := self.daemon.database.GetGroupPageCount(nntp.Newsgroup)
+      // regen all pages
+      var page int64
+      for ; page < pages ; page ++ {
+        req := groupRegenRequest{nntp.Newsgroup, int(page)}
+        self.regenGroupChan <- req
+      }
+      // regen ukko
+      self.regenUkko()
     }
   }
 }
@@ -400,10 +406,10 @@ func (self httpFrontend) handle_postform(wr http.ResponseWriter, r *http.Request
   nntp.Newsgroup = board
   if len(name) > 0 {
     nntp.Name = nntpSanitize(name)
-    nntp.Email = nntp.Name
   } else {
     nntp.Name = "Anonymous"
   }
+  nntp.Email = nntp.Name + "@" + self.name
   if len(subject) > 0 {
     nntp.Subject = nntpSanitize(subject)
   } else {
@@ -479,7 +485,7 @@ func (self httpFrontend) handle_poster(wr http.ResponseWriter, r *http.Request) 
     board = strings.Split(path,"/")[2]
   }
   // this is a POST request
-  if r.Method == "POST" && strings.HasPrefix(board, "overchan.") {
+  if r.Method == "POST" && strings.HasPrefix(board, "overchan.") && newsgroupValidFormat(board) {
     self.handle_postform(wr, r, board)
   } else {
       wr.WriteHeader(403)

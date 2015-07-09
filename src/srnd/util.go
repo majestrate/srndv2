@@ -212,3 +212,23 @@ func checkPerms(fname string) {
     f.Close()
   }
 }
+
+
+func newsgroupValidFormat(newsgroup string) bool {
+  for _, ch := range newsgroup {
+    if ch >= 'a' && ch <= 'z' {
+      continue
+    }
+    if ch >= '0' && ch <= '9' {
+      continue
+    }
+    if ch >= 'A' && ch <= 'Z' {
+      continue
+    }
+    if ch == '.' {
+      continue
+    }
+    return false
+  }
+  return true
+}

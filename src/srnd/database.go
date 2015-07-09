@@ -45,13 +45,22 @@ type Database interface {
   GetRootPostsForExpiration(newsgroup string, threadcount int) []string
 
   // get the number of pages a board has
-  // GetGroupPageCount(newsgroup string) int
+  GetGroupPageCount(newsgroup string) int64
   
   // get board page number N
-  // GetGroupForPage(newsgroup string, pageno, perpage int) BoardModel
+  // prefix and frontend are injected
+  GetGroupForPage(prefix, frontend,  newsgroup string, pageno, perpage int) BoardModel
 
   // get the root posts of the last N bumped threads globally, for ukko
-  GetLastBumpedThreads(threadcount int) []string
+  GetLastBumpedThreads(newsgroup string, threadcount int) []string
+
+  // get the PostModels for replies to a thread
+  // prefix is injected into the post models
+  GetThreadReplyPostModels(prefix, rootMessageID string, limit int) []PostModel
+
+  // get a post model for a post
+  // prefix is injected into the post model
+  GetPostModel(prefix, messageID string) PostModel
   
   // underlying database connection
   Conn() *sql.DB

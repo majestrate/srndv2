@@ -22,7 +22,7 @@ donate: bitcoin 15yuMzuueV8y5vPQQ39ZqQVz5Ey98DNrjE
     go get github.com/dchest/captcha
     go get github.com/majestrate/configparser
     go get github.com/lib/pq
-    go get github.com/hoisie/mustach
+    go get github.com/hoisie/mustache
 
     # get libsodium
     sudo apt-get install libsodium-dev

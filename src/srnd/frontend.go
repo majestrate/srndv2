@@ -166,6 +166,7 @@ func (self httpFrontend) regenAll() {
 
     }
   }
+  self.regenUkko()
 }
 
 

@@ -372,7 +372,7 @@ func (self PostgresDatabase) GetLastBumpedThreads(newsgroup string, threads int)
       log.Println("failed to prepare query for get last bumped", err)
     }
   } else {
-    stmt, err := self.Conn().Prepare("SELECT message_id, ref_id, time_posted FROM ArticlePosts WHERE newsgroup ORDER BY time_posted DESC")
+    stmt, err := self.Conn().Prepare("SELECT message_id, ref_id, time_posted FROM ArticlePosts ORDER BY time_posted DESC")
     if err == nil {
       defer stmt.Close()
       rows, err = stmt.Query()

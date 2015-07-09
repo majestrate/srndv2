@@ -205,12 +205,14 @@ func (self httpFrontend) regenUkko() {
       return
     }
     posts := []PostModel{post}
-    repls := self.daemon.database.GetThreadReplyPostModels(self.prefix, rootpost, 5)
-    if repls == nil {
-      log.Println("failed to get replies for", rootpost)
-      return
+    if self.daemon.database.ThreadHasReplies(rootpost) {
+      repls := self.daemon.database.GetThreadReplyPostModels(self.prefix, rootpost, 5)
+      if repls == nil {
+        log.Println("failed to get replies for", rootpost)
+        return
+      }
+      posts = append(posts, repls...)
     }
-    posts = append(posts, repls...)
     threads = append(threads, NewThreadModel(self.prefix, posts))
   }
   wr, err := OpenFileWriter(filepath.Join(self.webroot_dir, "ukko.html"))

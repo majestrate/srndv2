@@ -239,7 +239,7 @@ func (self PostgresDatabase) GetPostModel(prefix, messageID string) PostModel {
     log.Println("failed to prepare query for geting post model for", messageID, err)
     return nil
   }
-  var model post
+  model := post{}
   model.prefix = prefix
   stmt.QueryRow(messageID).Scan(&model.board, &model.message_id, &model.parent, &model.name, &model.subject, &model.path, &model.posted, &model.message)
   model.op = len(model.parent) == 0
@@ -284,7 +284,7 @@ func (self PostgresDatabase) GetThreadReplyPostModels(prefix, rootpost string, l
   var repls []PostModel
     
   for rows.Next() {
-    var model post
+    model := post{}
     model.prefix = prefix
     rows.Scan(&model.board, &model.message_id, &model.parent, &model.name, &model.subject, &model.path, &model.posted, &model.message)
     model.op = len(model.parent) == 0

@@ -24,3 +24,14 @@
 body {
     background: #eef2ff;
 }
+
+div.post.reply {
+    margin: 0.2em 4px;
+    padding: 0.5em 0.3em 0.5em 0.6em;
+}
+
+div.post.op {
+    background: #0f0d2d;
+    margin-right: 20px;
+    margin-bottom: 5px;
+}

@@ -234,14 +234,14 @@ func (self PostgresDatabase) GetGroupForPage(prefix, frontend, newsgroup string,
 }
 
 func (self PostgresDatabase) GetPostModel(prefix, messageID string) PostModel {
-  stmt, err := self.Conn().Prepare("SELECT message_id, ref_id, name, subject, path, time_posted, message FROM ArticlePosts WHERE message_id = $1")
+  stmt, err := self.Conn().Prepare("SELECT newsgroup message_id, ref_id, name, subject, path, time_posted, message FROM ArticlePosts WHERE message_id = $1")
   if err != nil {
     log.Println("failed to prepare query for geting post model for", messageID, err)
     return nil
   }
   var model post
   model.prefix = prefix
-  stmt.QueryRow(messageID).Scan(&model.message_id, &model.parent, &model.name, &model.subject, &model.path, &model.posted, &model.message)
+  stmt.QueryRow(messageID).Scan(&model.board, &model.message_id, &model.parent, &model.name, &model.subject, &model.path, &model.posted, &model.message)
   model.op = len(model.parent) == 0
   model.sage = strings.HasPrefix(strings.ToLower(model.subject), "sage ") || model.subject == "sage"
   return model
@@ -251,7 +251,7 @@ func (self PostgresDatabase) GetThreadReplyPostModels(prefix, rootpost string, l
   var rows *sql.Rows
   var err error
   if limit > 0 {
-    stmt, err := self.Conn().Prepare("SELECT message_id, ref_id, name, subject, path, time_posted, message FROM ArticlePosts WHERE message_id IN ( SELECT message_id FROM ArticlePosts WHERE ref_id = $1 ORDER BY time_posted DESC LIMIT $2 ) ORDER BY time_posted ASC")
+    stmt, err := self.Conn().Prepare("SELECT newsgroup, message_id, ref_id, name, subject, path, time_posted, message FROM ArticlePosts WHERE message_id IN ( SELECT message_id FROM ArticlePosts WHERE ref_id = $1 ORDER BY time_posted DESC LIMIT $2 ) ORDER BY time_posted ASC")
     if err == nil {
       defer stmt.Close()
       rows, err = stmt.Query(rootpost, limit)
@@ -259,7 +259,7 @@ func (self PostgresDatabase) GetThreadReplyPostModels(prefix, rootpost string, l
       log.Println("failed to prepare limited query for", rootpost, err)
     }
   } else {
-    stmt, err := self.Conn().Prepare("SELECT message_id, ref_id, name, subject, path, time_posted, message FROM ArticlePosts WHERE message_id IN ( SELECT message_id FROM ArticlePosts WHERE ref_id = $1 ) ORDER BY time_posted ASC")
+    stmt, err := self.Conn().Prepare("SELECT newsgroup, message_id, ref_id, name, subject, path, time_posted, message FROM ArticlePosts WHERE message_id IN ( SELECT message_id FROM ArticlePosts WHERE ref_id = $1 ) ORDER BY time_posted ASC")
     if err == nil {
       defer stmt.Close()
       rows, err = stmt.Query(rootpost)
@@ -283,7 +283,7 @@ func (self PostgresDatabase) GetThreadReplyPostModels(prefix, rootpost string, l
   for rows.Next() {
     var model post
     model.prefix = prefix
-    rows.Scan(&model.message_id, &model.parent, &model.name, &model.subject, &model.path, &model.posted, &model.message)
+    rows.Scan(&model.board, &model.message_id, &model.parent, &model.name, &model.subject, &model.path, &model.posted, &model.message)
     model.op = len(model.parent) == 0
     model.sage = strings.HasPrefix(strings.ToLower(model.subject), "sage ") || model.subject == "sage"
     repls = append(repls, model)

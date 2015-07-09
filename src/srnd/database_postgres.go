@@ -201,7 +201,7 @@ func (self PostgresDatabase) GetGroupPageCount(newsgroup string) int64 {
   var count int64
   stmt.QueryRow(newsgroup).Scan(&count)
   // divide by threads per page
-  return count / 10
+  return ( count / 10 ) + 1
 }
 
 func (self PostgresDatabase) GetGroupForPage(prefix, frontend, newsgroup string, pageno, perpage int) BoardModel {

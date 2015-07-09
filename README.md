@@ -18,6 +18,12 @@ donate: bitcoin 15yuMzuueV8y5vPQQ39ZqQVz5Ey98DNrjE
 
 ## building
 
+    # get dependancies
+    go get github.com/dchest/captcha
+    go get github.com/majestrate/configparser
+    go get github.com/lib/pq
+    go get github.com/hoisie/mustach
+
     # get libsodium
     sudo apt-get install libsodium-dev
     # set gopath if it's not already set

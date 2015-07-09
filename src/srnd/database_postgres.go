@@ -243,6 +243,9 @@ func (self PostgresDatabase) GetPostModel(prefix, messageID string) PostModel {
   model.prefix = prefix
   stmt.QueryRow(messageID).Scan(&model.board, &model.message_id, &model.parent, &model.name, &model.subject, &model.path, &model.posted, &model.message)
   model.op = len(model.parent) == 0
+  if len(model.parent) == 0 {
+      model.parent = model.message_id
+  }
   model.sage = strings.HasPrefix(strings.ToLower(model.subject), "sage ") || model.subject == "sage"
   return model
 }
@@ -285,6 +288,9 @@ func (self PostgresDatabase) GetThreadReplyPostModels(prefix, rootpost string, l
     model.prefix = prefix
     rows.Scan(&model.board, &model.message_id, &model.parent, &model.name, &model.subject, &model.path, &model.posted, &model.message)
     model.op = len(model.parent) == 0
+    if len(model.parent) == 0 {
+      model.parent = model.message_id
+    }
     model.sage = strings.HasPrefix(strings.ToLower(model.subject), "sage ") || model.subject == "sage"
     repls = append(repls, model)
   }

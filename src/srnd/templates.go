@@ -35,6 +35,8 @@ type AttachmentModel interface {
 type PostModel interface {
 
   BaseModel
+
+  CSSClass() string
   
   MessageID() string
   PostHash() string

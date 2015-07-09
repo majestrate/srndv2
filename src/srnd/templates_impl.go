@@ -111,8 +111,16 @@ func (self post) Sage() bool {
   return self.sage
 }
 
+func (self post) CSSClass() string {
+  if self.OP() {
+    return "post op"
+  } else {
+    return "post reply"
+  }
+}
+
 func (self post) OP() bool {
-  return self.op
+  return len(self.parent) == 0
 }
 
 func (self post) Date() string {

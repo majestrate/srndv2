@@ -215,6 +215,10 @@ func checkPerms(fname string) {
 
 
 func newsgroupValidFormat(newsgroup string) bool {
+  // too long newsgroup
+  if len(newsgroup) > 128 {
+    return false
+  }
   for _, ch := range newsgroup {
     if ch >= 'a' && ch <= 'z' {
       continue

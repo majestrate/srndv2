@@ -26,6 +26,7 @@ donate: bitcoin 15yuMzuueV8y5vPQQ39ZqQVz5Ey98DNrjE
 
     # get libsodium
     sudo apt-get install libsodium-dev
+    
     # set gopath if it's not already set
     export GOPATH=$HOME/go
     mkdir -p $GOPATH

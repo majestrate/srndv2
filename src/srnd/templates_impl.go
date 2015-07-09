@@ -120,7 +120,7 @@ func (self post) CSSClass() string {
 }
 
 func (self post) OP() bool {
-  return len(self.parent) == 0
+  return self.parent == self.message_id || len(self.parent) == 0
 }
 
 func (self post) Date() string {

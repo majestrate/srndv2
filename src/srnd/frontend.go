@@ -201,11 +201,13 @@ func (self httpFrontend) regenUkko() {
     // get the last 5 posts
     post := self.daemon.database.GetPostModel(self.prefix, rootpost)
     if post == nil {
+      log.Println("failed to get root post", rootpost)
       return
     }
     posts := []PostModel{post}
     repls := self.daemon.database.GetThreadReplyPostModels(self.prefix, rootpost, 5)
     if repls == nil {
+      log.Println("failed to get replies for", rootpost)
       return
     }
     posts = append(posts, repls...)
@@ -226,6 +228,7 @@ func (self httpFrontend) regenerateThread(rootMessageID string) {
   // get the root post
   post := self.daemon.database.GetPostModel(self.prefix, rootMessageID)
   if post == nil {
+    log.Println("failed to regen thread, root post is nil", rootMessageID)
     return
   }
   posts := []PostModel{post}
@@ -233,6 +236,7 @@ func (self httpFrontend) regenerateThread(rootMessageID string) {
   if self.daemon.database.ThreadHasReplies(rootMessageID) {
     repls :=  self.daemon.database.GetThreadReplyPostModels(self.prefix, rootMessageID, 0)
     if repls == nil {
+      log.Println("failed to regen thread, replies was nil for op", rootMessageID)
       return
     }
     posts = append(posts, repls...)

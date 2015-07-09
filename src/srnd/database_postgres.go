@@ -234,7 +234,7 @@ func (self PostgresDatabase) GetGroupForPage(prefix, frontend, newsgroup string,
 }
 
 func (self PostgresDatabase) GetPostModel(prefix, messageID string) PostModel {
-  stmt, err := self.Conn().Prepare("SELECT newsgroup message_id, ref_id, name, subject, path, time_posted, message FROM ArticlePosts WHERE message_id = $1")
+  stmt, err := self.Conn().Prepare("SELECT newsgroup, message_id, ref_id, name, subject, path, time_posted, message FROM ArticlePosts WHERE message_id = $1")
   if err != nil {
     log.Println("failed to prepare query for geting post model for", messageID, err)
     return nil

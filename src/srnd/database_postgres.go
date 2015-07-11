@@ -5,6 +5,7 @@ package srnd
 
 import (
   "database/sql"
+  "errors"
   "fmt"
   "log"
   "sort"
@@ -90,6 +91,21 @@ func (self PostgresDatabase) CreateTables() {
                                     filename TEXT NOT NULL,
                                     filepath TEXT NOT NULL
                                   )`
+
+  // table for storing current permissions of mod pubkeys
+  tables["ModPrivs"] = `(
+                          pubkey VARCHAR(255),
+                          newsgroup VARCHAR(255),
+                          permission VARCHAR(255)
+                        )`
+
+  // table for storing moderation events
+  tables["ModLogs"] = `(
+                        pubkey VARCHAR(255),
+                        action VARCHAR(255),
+                        target VARCHAR(255),
+                        time INTEGER
+                      )`
   
   for k, v := range(tables) {
     _, err := self.Conn().Exec(fmt.Sprintf("CREATE TABLE IF NOT EXISTS %s%s", k, v))
@@ -97,6 +113,84 @@ func (self PostgresDatabase) CreateTables() {
       log.Fatalf("cannot create table %s, %s, login was '%s'", k, err,self.db_str)
     }
   }
+}
+
+func (self PostgresDatabase) AddModPubkey(pubkey string) error {
+  if self.CheckModPubkey(pubkey) {
+    log.Println("did not add pubkey", pubkey, "already exists")
+    return nil
+  }
+  stmt, err := self.Conn().Prepare("INSERT INTO ModPrivs(pubkey, newsgroup, permission) VALUES ( $1, $2, $3 )")
+  if err != nil {
+    return err
+  }
+  defer stmt.Close()
+  rows, err := stmt.Query(pubkey, "ctl", "login")
+  if rows != nil {
+    rows.Close()
+  }
+  // TODO: modlogs
+  return err
+}
+
+func (self PostgresDatabase) CheckModPubkeyGlobal(pubkey string) bool {
+  stmt, err := self.Conn().Prepare("SELECT COUNT(*) FROM ModPrivs WHERE pubkey = $1 AND newsgroup = $2 AND permission = $3")
+  var result int64
+  if err == nil {
+    defer stmt.Close()
+    stmt.QueryRow(pubkey, "overchan", "all").Scan(&result)
+  }
+  return result > 0
+}
+
+func (self PostgresDatabase) CheckModPubkeyCanModGroup(pubkey, newsgroup string) bool {
+  stmt, err := self.Conn().Prepare("SELECT COUNT(*) FROM ModPrivs WHERE pubkey = $1 AND newsgroup = $2")
+  var result int64
+  if err == nil {
+    defer stmt.Close()
+    stmt.QueryRow(pubkey, newsgroup).Scan(&result)
+  }
+  return result > 0
+}
+
+func (self PostgresDatabase) CheckModPubkey(pubkey string) bool {
+  stmt, err := self.Conn().Prepare("SELECT COUNT(*) FROM ModPrivs WHERE pubkey = $1 AND newsgroup = $2 AND permission = $3")
+  var result int64
+  if err == nil {
+    defer stmt.Close()
+    stmt.QueryRow(pubkey, "ctl", "login").Scan(&result)
+  }
+  return result > 0
+}
+
+func (self PostgresDatabase) MarkModPubkeyGlobal(pubkey string) error {
+  if self.CheckModPubkeyGlobal(pubkey) {
+    // already marked
+    log.Println("pubkey already marked as global", pubkey)
+    return nil
+  }
+  stmt, err := self.Conn().Prepare("INSERT INTO ModPrivs(pubkey, newsgroup, permission) VALUES ( $1, $2, $3 )")
+  if err != nil {
+    return err
+  }
+  defer stmt.Close()
+  _ , err = stmt.Exec(pubkey, "overchan", "all")
+  return err
+}
+
+func (self PostgresDatabase) UnMarkModPubkeyGlobal(pubkey string) error {
+  if self.CheckModPubkeyGlobal(pubkey) {
+    // already marked
+    
+    stmt, err := self.Conn().Prepare("DELETE FROM ModPrivs WHERE pubkey = $1 AND newsgroup = $2 AND permission = $3")
+    if err != nil {
+      return err
+    }
+    defer stmt.Close()
+    _ , err = stmt.Exec(pubkey, "overchan", "all")
+    return err
+  }
+  return errors.New("public key not marked as global")
 }
 
 func (self PostgresDatabase) GetRootPostsForExpiration(newsgroup string, threadcount int) []string {

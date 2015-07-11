@@ -9,6 +9,19 @@ import (
   "time"
 )
 
+
+// interface for moderation ui
+type ModUI interface {
+
+  // channel for daemon to poll for nntp articles from the mod ui
+  MessageChan() chan *NNTPMessage
+
+  // check if this key is allowed to access
+  // return true if it can otherwise false
+  CheckKey(privkey string) bool
+  
+}
+
 // moderation engine
 type Moderation struct {
   // channel to send commands down line by line

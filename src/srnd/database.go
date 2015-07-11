@@ -61,6 +61,24 @@ type Database interface {
   // get a post model for a post
   // prefix is injected into the post model
   GetPostModel(prefix, messageID string) PostModel
+
+  // add a public key to the database
+  AddModPubkey(pubkey string) error
+
+  // mark that a mod with this pubkey can act on all boards
+  MarkModPubkeyGlobal(pubkey string) error
+  
+  // revoke mod with this pubkey the privilege of being able to act on all boards
+  UnMarkModPubkeyGlobal(pubkey string) error
+
+  // check if this mod pubkey can moderate at a global level
+  CheckModPubkeyGlobal(pubkey string) bool
+  
+  // check if a mod with this pubkey has permission to moderate at all
+  CheckModPubkey(pubkey string) bool
+
+  // check if a mod with this pubkey can moderate on the given newsgroup
+  CheckModPubkeyCanModGroup(pubkey, newsgroup string) bool
   
   // underlying database connection
   Conn() *sql.DB

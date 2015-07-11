@@ -26,8 +26,10 @@ func (self httpModUI) CheckKey(privkey string) bool {
   privkey_bytes, err := hex.DecodeString(privkey)
   if err == nil {
     pubkey_bytes := nacl.GetSignPubkey(privkey_bytes)
-    pubkey := hex.EncodeToString(pubkey_bytes)
-    return self.database.CheckModPubkey(pubkey)
+    if pubkey_bytes != nil {
+      pubkey := hex.EncodeToString(pubkey_bytes)
+      return self.database.CheckModPubkey(pubkey)
+    }
   }
   log.Println("invalid key format for key", privkey)
   return false

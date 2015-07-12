@@ -24,6 +24,7 @@ type groupRegenRequest struct {
 
 type httpFrontend struct {
 
+  modui ModUI
   httpmux *http.ServeMux
   daemon *NNTPDaemon
   postchan chan *NNTPMessage
@@ -451,6 +452,8 @@ func (self httpFrontend) Mainloop() {
   // captcha handlers
   self.httpmux.Handle("/captcha/", captcha.Server(350, 175))
   self.httpmux.HandleFunc("/captcha", self.new_captcha)
+  // modui handlers
+  self.httpmux.Handle("/mod/", self.modui)
   
   err := http.ListenAndServe(self.bindaddr, self.httpmux)
   if err != nil {

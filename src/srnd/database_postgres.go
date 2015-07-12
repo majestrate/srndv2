@@ -62,6 +62,21 @@ func (self PostgresDatabase) CreateTables() {
                             restricted BOOLEAN
                           )`
 
+
+  // table for ip and their encryption key
+  tables["EncryptedAddrs"] = `(
+                                enckey VARCHAR(255) NOT NULL,
+                                addr VARCHAR(255) NOT NULL,
+                                encaddr VARCHAR(255) NOT NULL
+                              )`
+  
+  // table for articles that have been banned
+  tables["BannedArticles"] = `(
+                                message_id VARCHAR(255) PRIMARY KEY,
+                                time_banned INTEGER NOT NULL,
+                                ban_reason TEXT NOT NULL
+                              )`    
+  
   // table for storing nntp article meta data
   tables["Articles"] = `( 
                           message_id VARCHAR(255) PRIMARY KEY,
@@ -161,6 +176,85 @@ func (self PostgresDatabase) CheckModPubkey(pubkey string) bool {
     stmt.QueryRow(pubkey, "ctl", "login").Scan(&result)
   }
   return result > 0
+}
+
+func (self PostgresDatabase) BanArticle(messageID, reason string) error {
+  stmt, err := self.Conn().Prepare("INSERT INTO BannedArticles(message_id, time_banned, ban_reason) VALUES($1, $2, $3)")
+  if err == nil {
+    defer stmt.Close()
+    _, err = stmt.Exec(messageID, timeNow(), reason)
+  }
+  return err
+}
+
+func (self PostgresDatabase) CheckArticleBanned(messageID string) (bool, error) {
+  stmt, err := self.Conn().Prepare("SELECT COUNT(message_id) FROM BannedArticles WHERE message_id = $1")
+  if err == nil {
+    defer stmt.Close()
+    var count int64
+    err = stmt.QueryRow(messageID).Scan(&count)
+    return count > 0, err
+  }
+  return false, err
+}
+
+func (self PostgresDatabase) GetEncAddress(addr string) (string, error) {
+  stmt, err := self.Conn().Prepare("SELECT COUNT(addr) FROM EncryptedAddrs WHERE addr = $1")
+  if err == nil {
+    defer stmt.Close()
+    var count int64
+    err = stmt.QueryRow(addr).Scan(&count)
+    if err == nil {
+      if count == 0 {
+        // needs to be inserted
+        stmt, err = self.Conn().Prepare("INSERT INTO EncryptedAddrs(enckey, encaddr, addr) VALUES($1, $2, $3)")
+        var encaddr, key string
+        if err == nil {
+          defer stmt.Close()
+          key, encaddr = newAddrEnc(addr)
+          if len(encaddr) == 0 {
+            err = errors.New("failed to generate new encryption key")
+          }
+          if err == nil {
+            _, err = stmt.Exec(key, encaddr, addr)
+          }
+        }
+        return encaddr, err
+      } else {
+        stmt, err = self.Conn().Prepare("SELECT encAddr FROM EncryptedAddrs WHERE addr = $1 LIMIT 1")
+        if err == nil {
+          defer stmt.Close()
+          var encaddr string
+          err = stmt.QueryRow(addr).Scan(&encaddr)
+          return encaddr, err
+        }
+      }
+    }
+  }
+  return "", err
+}
+
+func (self PostgresDatabase) GetIPAddress(encaddr string) (string, error) {
+  stmt, err := self.Conn().Prepare("SELECT COUNT(encAddr) FROM EncryptedAddrs WHERE encAddr = $1")
+  if err == nil {
+    defer stmt.Close()
+    var count int64
+    err = stmt.QueryRow(encaddr).Scan(&count)
+    if err == nil {
+      if count == 0 {
+        return "", nil
+      } else {
+        stmt, err = self.Conn().Prepare("SELECT addr FROM EncryptedAddrs WHERE encAddr = $1 LIMIT 1")
+        if err == nil {
+          defer stmt.Close()
+          var addr string
+          err = stmt.QueryRow(encaddr).Scan(&addr)
+          return addr, err
+        }
+      }
+    }
+  }
+  return "", err
 }
 
 func (self PostgresDatabase) MarkModPubkeyGlobal(pubkey string) error {

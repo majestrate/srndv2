@@ -22,17 +22,17 @@ func createHttpModUI(daemon *NNTPDaemon) httpModUI {
 }
 
 
-func (self httpModUI) CheckKey(privkey string) bool {
+func (self httpModUI) CheckKey(privkey string) (bool, error) {
   privkey_bytes, err := hex.DecodeString(privkey)
   if err == nil {
     pubkey_bytes := nacl.GetSignPubkey(privkey_bytes)
     if pubkey_bytes != nil {
       pubkey := hex.EncodeToString(pubkey_bytes)
-      return self.database.CheckModPubkey(pubkey)
+      return self.database.CheckModPubkey(pubkey), nil
     }
   }
   log.Println("invalid key format for key", privkey)
-  return false
+  return false, err
 }
 
 

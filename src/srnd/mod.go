@@ -1,10 +1,12 @@
 //
 // mod.go
+// post moderation
 //
 package srnd
 
 import (
   "fmt"
+  "net/http"
   "strings"
   "time"
 )
@@ -18,13 +20,16 @@ type ModUI interface {
 
   // check if this key is allowed to access
   // return true if it can otherwise false
-  CheckKey(privkey string) bool
+  CheckKey(privkey string) (bool, error)
+
+  // an http handler function
+  ServeHTTP(wr http.ResponseWriter, r *http.Request)
   
 }
 
 // moderation engine
 type Moderation struct {
-  // channel to send commands down line by line
+  // channel to send commands down line by line after they are authenticated
   feed chan string
   daemon *NNTPDaemon
 }

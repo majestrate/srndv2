@@ -80,6 +80,20 @@ type Database interface {
   // check if a mod with this pubkey can moderate on the given newsgroup
   CheckModPubkeyCanModGroup(pubkey, newsgroup string) bool
   
+  // ban an article
+  BanArticle(messageID, reason string) error
+
+  // check if an article is banned or not
+  CheckArticleBanned(messageID string) (bool, error)
+
+  // Get ip address given the encrypted version
+  // return emtpy string if we don't have it
+  GetIPAddress(encAddr string) (string, error)
+
+  // return the encrypted version of an IPAddress
+  // if it's not already there insert it into the database
+  GetEncAddress(addr string) (string, error)
+  
   // underlying database connection
   Conn() *sql.DB
 

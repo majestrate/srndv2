@@ -13,6 +13,10 @@ type multiFrontend struct {
 }
 
 
+func (self multiFrontend) AllowNewsgroup(newsgroup string) bool {
+  return true
+}
+
 func (self multiFrontend) Mainloop() {
   for idx := range(self.frontends) {
     go self.frontends[idx].Mainloop()

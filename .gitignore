@@ -13,3 +13,4 @@ build.dir
 _obj
 *.log
 *.la
+webroot/*.html

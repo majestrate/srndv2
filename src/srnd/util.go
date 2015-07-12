@@ -213,6 +213,68 @@ func checkPerms(fname string) {
   }
 }
 
+// given an address
+// generate a new encryption key for it
+// return the encryption key and the encrypted address
+func newAddrEnc(addr string) (string, string) {
+  key_bytes := nacl.RandBytes(32)
+  key := base64.StdEncoding.EncodeToString(key_bytes)
+  return key, encAddr(addr, key)
+}
+
+// xor address with a one time pad
+// if the address isn't long enough it's padded with spaces
+func encAddr(addr, key string) string {
+  key_bytes, err := base64.StdEncoding.DecodeString(key)
+
+  if err != nil {
+    log.Println("encAddr() key base64 decode", err)
+    return ""
+  }
+  
+  if len(addr) > len(key_bytes) {
+    log.Println("encAddr() len(addr) > len(key_bytes)")
+    return ""
+  }
+  
+  // pad with spaces
+  for len(addr) < len(key_bytes) {
+    addr += " "
+  }
+
+  addr_bytes := []byte(addr)
+  res_bytes := make([]byte, len(addr_bytes))
+  for idx, b := range key_bytes {
+    res_bytes[idx] = addr_bytes[idx] ^ b
+  }
+  
+  return base64.StdEncoding.EncodeToString(res_bytes)
+}
+
+// decrypt an address
+// strips any whitespaces
+func decAddr(encaddr, key string) string {
+  encaddr_bytes, err := base64.StdEncoding.DecodeString(encaddr)
+  if err != nil {
+    log.Println("decAddr() encaddr base64 decode", err)
+    return ""
+  }
+  if len(encaddr_bytes) != len(key) {
+    log.Println("decAddr() len(encaddr_bytes) != len(key)")
+    return ""
+  }
+  key_bytes, err := base64.StdEncoding.DecodeString(key)
+  if err != nil {
+    log.Println("decAddr() key base64 decode", err)
+  }
+  res_bytes := make([]byte, len(key))
+  for idx, b := range key_bytes {
+    res_bytes[idx] = encaddr_bytes[idx] ^ b
+  }
+  res := string(res_bytes)
+  return strings.Trim(res, " ")
+}
+
 
 func newsgroupValidFormat(newsgroup string) bool {
   // too long newsgroup

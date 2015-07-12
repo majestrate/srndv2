@@ -423,7 +423,7 @@ func (self httpFrontend) handle_poster(wr http.ResponseWriter, r *http.Request) 
 }
 
 func (self httpFrontend) new_captcha(wr http.ResponseWriter, r *http.Request) {
-  io.WriteString(wr, captcha.New())
+  io.WriteString(wr, captcha.NewLen(6))
 }
 
 func (self httpFrontend) Mainloop() {

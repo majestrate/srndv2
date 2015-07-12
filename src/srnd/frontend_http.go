@@ -453,7 +453,7 @@ func (self httpFrontend) Mainloop() {
   self.httpmux.Handle("/captcha/", captcha.Server(350, 175))
   self.httpmux.HandleFunc("/captcha", self.new_captcha)
   // modui handlers
-  self.httpmux.Handle("/mod/", self.modui)
+  // self.httpmux.Handle("/mod/", self.modui)
   
   err := http.ListenAndServe(self.bindaddr, self.httpmux)
   if err != nil {

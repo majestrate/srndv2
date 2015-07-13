@@ -459,7 +459,7 @@ func (self httpFrontend) Mainloop() {
   self.httpmux.Path("/post/{f}").HandlerFunc(self.handle_poster).Methods("POST")
   // captcha handlers
   self.httpmux.Path("/captcha/{f}").Handler(captcha.Server(350, 175)).Methods("GET")
-  self.httpmux.Path("/captcha").HandlerFunc(self.new_captcha).Methods("GET")
+  self.httpmux.Path("/captcha/get").HandlerFunc(self.new_captcha).Methods("GET")
 
   // create mod ui
   self.modui = createHttpModUI(self)

@@ -37,7 +37,9 @@ type NNTPConnection struct {
 
 // ask if they need this article
 func (self *NNTPConnection) askSync(msgid string) {
-  self.txtconn.PrintfLine("CHECK %s", msgid)
+  if ValidMessageID(msgid) {
+    self.txtconn.PrintfLine("CHECK %s", msgid)
+  }
 }
 
 func (self *NNTPConnection) HandleOutbound(d *NNTPDaemon) {

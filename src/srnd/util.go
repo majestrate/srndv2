@@ -80,21 +80,22 @@ func ValidMessageID(id string) bool {
       if c == '>' {
         continue
       }
-    }
-    if idx == at_idx {
-      continue
-    }
-    if c >= 'a' && c <= 'z' {
-      continue
-    }
-    if c >= 'A' && c <= 'Z' {
-      continue
-    }
-    if c >= '0' && c <= '9' {
-      continue
-    }
-    if c == '.' {
-      continue
+    } else {
+      if idx == at_idx {
+        continue
+      }
+      if c >= 'a' && c <= 'z' {
+        continue
+      }
+      if c >= 'A' && c <= 'Z' {
+        continue
+      }
+      if c >= '0' && c <= '9' {
+        continue
+      }
+      if c == '.' {
+        continue
+      }
     }
     log.Printf("bad message ID: %s , invalid char at %d: %c", id, idx, c)
     return false

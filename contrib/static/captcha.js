@@ -20,6 +20,6 @@ window.addEventListener('load', function() {
     }
   };
   // open and send the ajax request
-  ajax.open("GET", "captcha");
+  ajax.open("GET", "captcha/new");
   ajax.send();
 });

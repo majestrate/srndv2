@@ -241,12 +241,17 @@ func templateRender(fname string, obj interface{}) string {
   return mustache.RenderFile(fname, obj)
 }
 
+func renderTemplate(name string, obj interface{}) string {
+  return templateRender(filepath.Join(defaultTemplateDir(), name), obj)
+}
+
+
 func renderUkko(prefix string, threads []ThreadModel) string {
-  return mustache.RenderFile(filepath.Join(defaultTemplateDir(), "ukko.mustache"), map[string]interface{} { "prefix" : prefix, "threads" : threads } )
+  return renderTemplate("ukko.mustache", map[string]interface{} { "prefix" : prefix, "threads" : threads } )
 }
 
 
 func renderPostForm(prefix, board, op_msg_id string) string {
   url := prefix + "post/" + board
-  return mustache.RenderFile(filepath.Join(defaultTemplateDir(), "postform.mustache"), map[string]string { "post_url" : url, "reference" : op_msg_id , "button" : "Reply" } )
+  return renderTemplate("postform.mustache", map[string]string { "post_url" : url, "reference" : op_msg_id , "button" : "Reply" } )
 }

@@ -5,7 +5,9 @@
 package srnd
 
 import (
+  "encoding/base32"
   "github.com/majestrate/configparser"
+  "github.com/majestrate/srndv2/src/nacl"
   "log"
   "strings"
 )
@@ -104,8 +106,11 @@ func GenSRNdConfig() error {
   sect.Add("name", "web.srndv2.test")
   sect.Add("webroot", "webroot")
   sect.Add("prefix", "/")
+  sect.Add("static_files", "contrib")
   sect.Add("templates", "contrib/templates/default")
-  
+  secret_bytes := nacl.RandBytes(8)
+  secret := base32.StdEncoding.EncodeToString(secret_bytes)
+  sect.Add("api-secret", secret)
 
   return configparser.Save(conf, "srnd.ini")
 }

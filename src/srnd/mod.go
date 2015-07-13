@@ -22,9 +22,20 @@ type ModUI interface {
   // return true if it can otherwise false
   CheckKey(privkey string) (bool, error)
 
-  // an http handler function
-  ServeHTTP(wr http.ResponseWriter, r *http.Request)
-  
+  // serve the base page
+  ServeModPage(wr http.ResponseWriter, r *http.Request)
+  // handle a login POST request
+  HandleLogin(wr http.ResponseWriter, r *http.Request)
+  // handle a delete article request 
+  HandleDeletePost(wr http.ResponseWriter, r *http.Request)
+  // handle a ban address request
+  HandleBanAddress(wr http.ResponseWriter, r *http.Request)
+  // handle add a pubkey
+  HandleAddPubkey(wr http.ResponseWriter, r *http.Request)
+  // handle removing a pubkey
+  HandleDelPubkey(wr http.ResponseWriter, r *http.Request)
+  // handle key generation
+  HandleKeyGen(wr http.ResponseWriter, r *http.Request)
 }
 
 // moderation engine

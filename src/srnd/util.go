@@ -298,3 +298,38 @@ func newsgroupValidFormat(newsgroup string) bool {
   }
   return true
 }
+
+
+// generate a new signing keypair
+// public, secret
+func newSignKeypair() (string, string) {
+  kp := nacl.GenSignKeypair()
+  defer kp.Free()
+  pk := kp.Public()
+  sk := kp.Secret()
+  return hex.EncodeToString(pk), hex.EncodeToString(sk)
+}
+
+// make a utf-8 tripcode
+func makeTripcode(pk string) string {
+  data, err := hex.DecodeString(pk)
+  if err == nil {
+    tripcode := ""
+    //  here is the python code this is based off of
+    //  i do something slightly different but this is the base
+    //
+    //  for x in range(0, length / 2):
+    //    pub_short += '&#%i;' % (9600 + int(full_pubkey_hex[x*2:x*2+2], 16))
+    //  length -= length / 2
+    //  for x in range(0, length):
+    //    pub_short += '&#%i;' % (9600 + int(full_pubkey_hex[-(length*2):][x*2:x*2+2], 16))
+    //
+    for _, c := range data {
+      ch := 9600
+      ch += int(c)
+      tripcode += fmt.Sprintf("&#%04d;", ch)
+    }
+    return tripcode
+  }
+  return "[invalid]"
+}

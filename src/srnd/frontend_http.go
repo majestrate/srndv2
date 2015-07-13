@@ -7,6 +7,8 @@ package srnd
 
 import (
   "github.com/dchest/captcha"
+  "github.com/gorilla/mux"
+  "github.com/gorilla/sessions"
   "bytes"
   "fmt"
   "io"
@@ -17,6 +19,7 @@ import (
   "strings"
 )
 
+
 type groupRegenRequest struct {
   group string
   page int
@@ -25,7 +28,7 @@ type groupRegenRequest struct {
 type httpFrontend struct {
 
   modui ModUI
-  httpmux *http.ServeMux
+  httpmux *mux.Router
   daemon *NNTPDaemon
   postchan chan *NNTPMessage
   recvpostchan chan *NNTPMessage
@@ -34,10 +37,13 @@ type httpFrontend struct {
 
   webroot_dir string
   template_dir string
-
+  static_dir string
+  
   prefix string
   regenThreadChan chan string
   regenGroupChan chan groupRegenRequest
+
+  store *sessions.CookieStore
 }
 
 func (self httpFrontend) AllowNewsgroup(group string) bool {
@@ -443,17 +449,29 @@ func (self httpFrontend) Mainloop() {
   // start webserver here
   log.Printf("frontend %s binding to %s", self.name, self.bindaddr)
   // set up handler mux
-  self.httpmux = http.NewServeMux()
+  self.httpmux = mux.NewRouter()
   // register handlers for mux
   // webroot handler
-  self.httpmux.Handle("/", http.FileServer(http.Dir(self.webroot_dir)))
+  self.httpmux.Path("/").Handler(http.FileServer(http.Dir(self.webroot_dir)))
+  self.httpmux.Path("/{f}").Handler(http.FileServer(http.Dir(self.webroot_dir)))
+  self.httpmux.Path("/static/{f}").Handler(http.FileServer(http.Dir(self.static_dir)))
   // post handler
-  self.httpmux.HandleFunc("/post/", self.handle_poster)
+  self.httpmux.Path("/post/{f}").HandlerFunc(self.handle_poster).Methods("POST")
   // captcha handlers
-  self.httpmux.Handle("/captcha/", captcha.Server(350, 175))
-  self.httpmux.HandleFunc("/captcha", self.new_captcha)
+  self.httpmux.Path("/captcha/{f}").Handler(captcha.Server(350, 175)).Methods("GET")
+  self.httpmux.Path("/captcha").HandlerFunc(self.new_captcha).Methods("GET")
+
+  // create mod ui
+  self.modui = createHttpModUI(self)
+
   // modui handlers
-  // self.httpmux.Handle("/mod/", self.modui)
+  self.httpmux.Path("/mod/").HandlerFunc(self.modui.ServeModPage).Methods("GET")
+  self.httpmux.Path("/mod/keygen").HandlerFunc(self.modui.HandleKeyGen).Methods("GET")
+  self.httpmux.Path("/mod/login").HandlerFunc(self.modui.HandleLogin).Methods("POST")
+  self.httpmux.Path("/mod/del/{article_hash}").HandlerFunc(self.modui.HandleDeletePost).Methods("GET")
+  self.httpmux.Path("/mod/ban/{address}").HandlerFunc(self.modui.HandleBanAddress).Methods("GET")
+  self.httpmux.Path("/mod/addkey/{pubkey}").HandlerFunc(self.modui.HandleAddPubkey).Methods("GET")
+  self.httpmux.Path("/mod/delkey/{pubkey}").HandlerFunc(self.modui.HandleDelPubkey).Methods("GET")
   
   err := http.ListenAndServe(self.bindaddr, self.httpmux)
   if err != nil {
@@ -469,8 +487,10 @@ func NewHTTPFrontend(daemon *NNTPDaemon, config map[string]string) Frontend {
   front.bindaddr = config["bind"]
   front.name = config["name"]
   front.webroot_dir = config["webroot"]
+  front.static_dir = config["static_files"]
   front.template_dir = config["templates"]
   front.prefix = config["prefix"]
+  front.store = sessions.NewCookieStore([]byte(config["api-secret"]))
   front.postchan = make(chan *NNTPMessage, 16)
   front.recvpostchan = make(chan *NNTPMessage, 16)
   front.regenThreadChan = make(chan string, 16)

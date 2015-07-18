@@ -205,7 +205,7 @@ func (self *NNTPDaemon) pollfrontend() {
     select {
     case nntp := <- chnl:
       // new post from frontend
-      log.Println("frontend post", nntp.MessageID)
+      log.Println("frontend post", nntp.MessageID())
       self.infeed <- nntp
     }
   }

@@ -271,6 +271,9 @@ func (self httpFrontend) handle_postform(wr http.ResponseWriter, r *http.Request
         subject = part_buff.String()
       } else if partname == "name" {
         name = part_buff.String()
+        if len(name) == 0 {
+          name = "Anonymous"
+        }
       } else if partname == "message" {
         message = part_buff.String()
       } else if partname == "reference" {

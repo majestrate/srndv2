@@ -300,11 +300,11 @@ func (self *NNTPConnection) HandleInbound(d *NNTPDaemon) {
 
 func (self *NNTPConnection) sendCapabilities() {
   wr := self.txtconn.DotWriter()
-  io.WriteString(wr, "101 we can haz do things\n")
-  io.WriteString(wr, "VERSION 2\n")
-  io.WriteString(wr, "IMPLEMENTATION srndv2 better than SRNd\n")
-  io.WriteString(wr, "STREAMING\n")
-  io.WriteString(wr, "READER\n")
+  io.WriteString(wr, "101 we can haz do things\r\n")
+  io.WriteString(wr, "VERSION 2\r\n")
+  io.WriteString(wr, "IMPLEMENTATION srndv2 better than SRNd\r\n")
+  io.WriteString(wr, "STREAMING\r\n")
+  io.WriteString(wr, "READER\r\n")
   wr.Close()
 }
 

@@ -339,7 +339,7 @@ func (self httpFrontend) handle_postform(wr http.ResponseWriter, r *http.Request
   // generate message id
   nntp.headers["MessageID"] = genMessageID(self.name)
   // TODO: hardcoded newsgroup prefix
-  nntp.headers["Newsgroup"] = board
+  nntp.headers["Newsgroups"] = board
   
   nntp.headers["From"] = nntpSanitize(fmt.Sprintf("%s <%s@%s>", name, name, self.name))
   if len(subject) == 0 {

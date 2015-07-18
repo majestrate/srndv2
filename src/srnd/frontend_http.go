@@ -347,7 +347,7 @@ func (self httpFrontend) handle_postform(wr http.ResponseWriter, r *http.Request
   }
   nntp.headers["Subject"] = nntpSanitize(subject)
   nntp.headers["Path"] = self.name
-  nntp.headers["Posted"] = timeNowStr()
+  nntp.headers["Date"] = timeNowStr()
   nntp.message = nntpSanitize(message)
   nntp.headers["Content-Type"] = content_type
   // set reference

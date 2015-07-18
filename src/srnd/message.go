@@ -115,7 +115,7 @@ func newPlaintextArticle(message, email, subject, name, instance, newsgroup stri
   nntp.headers["Content-Type"] = "text/plain"
   nntp.headers["MessageID"] = genMessageID(instance)
   // posted now
-  nntp.headers["Posted"] = timeNowStr()
+  nntp.headers["Date"] = timeNowStr()
   nntp.headers["Newsgroups"] = newsgroup
 
   return nntp

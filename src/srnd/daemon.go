@@ -225,7 +225,6 @@ func (self *NNTPDaemon) pollfeeds() {
           if use && feed.policy != nil {
             if feed.policy.AllowsNewsgroup(nntp.Newsgroup()) {
               feed.sync <- nntp.MessageID()
-              log.Println("told feed")
             } else {
               log.Println("not syncing", msgid)
             }

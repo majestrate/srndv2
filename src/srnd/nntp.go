@@ -152,7 +152,7 @@ func (self *NNTPConnection) HandleOutbound(d *NNTPDaemon) {
 func (self *NNTPConnection) SendMessage(message NNTPMessage, d *NNTPDaemon) error {
   var err error
   self.reading = true
-  err = self.txtconn.PrintfLine("TAKETHIS %s", message.MessageID)
+  err = self.txtconn.PrintfLine("TAKETHIS %s", message.MessageID())
   if err != nil {
     log.Println("error in outfeed", err)
     return  err
@@ -162,7 +162,7 @@ func (self *NNTPConnection) SendMessage(message NNTPMessage, d *NNTPDaemon) erro
   wr.Close()
   self.reading = false
   if err != nil {
-    log.Printf("failed to send %s via feed: %s", message.MessageID, err)
+    log.Printf("failed to send %s via feed: %s", message.MessageID(), err)
     return err
   }
   return nil

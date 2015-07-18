@@ -9,10 +9,10 @@ package srnd
 type Frontend interface {
 
   // channel that is for the nntpd to poll for new posts from this frontend
-  NewPostsChan() chan *NNTPMessage
+  NewPostsChan() chan NNTPMessage
 
   // channel that is for the frontend to pool for new posts from the nntpd
-  PostsChan() chan *NNTPMessage
+  PostsChan() chan NNTPMessage
   
   // run mainloop
   Mainloop()

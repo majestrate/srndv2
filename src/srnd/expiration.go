@@ -11,13 +11,17 @@ import (
 )
 
 // content expiration interface
-type Expiration interface {
+type ExpirationCore interface {
   // do expiration for a group
   ExpireGroup(newsgroup string, keep int)
   // Delete a single post and all children
   DeletePost(messageID string)
   // run our mainloop
   Mainloop()
+}
+
+func createExpirationCore(database Database, store ArticleStore) ExpirationCore {
+  return expire{database, store, make(chan deleteEvent, 24)}
 }
 
 type deleteEvent string
@@ -32,22 +36,23 @@ func (self deleteEvent) MessageID() string {
 
 type expire struct {
   database Database
-  store *ArticleStore
+  store ArticleStore
   // channel to send delete requests down
   delChan chan deleteEvent
 }
 
 func (self expire) DeletePost(messageID string) {
   // get article headers
-  nntp  := self.store.GetHeaders(messageID)
-  if nntp == nil {
+  headers := self.store.GetHeaders(messageID)
+  if headers == nil {
     log.Println("failed to load headers for", messageID)
     return
   }
   // is this a root post ?
-  if len(nntp.Reference) == 0 {
+  ref := headers.Get("Reference", "")
+  if ref != "" {
     // ya, get all replies
-    replies := self.database.GetThreadReplies(nntp.MessageID, 0)
+    replies := self.database.GetThreadReplies(ref, 0)
     if replies != nil {
       for _, repl := range replies {
         // scehedule delete of the reply
@@ -57,7 +62,7 @@ func (self expire) DeletePost(messageID string) {
       log.Println("failed to get replies for", messageID)
     }
   }
-  self.delChan <- deleteEvent(self.store.GetFilename(nntp.MessageID))
+  self.delChan <- deleteEvent(self.store.GetFilename(messageID))
 }
 
 func (self expire) ExpireGroup(newsgroup string, keep int) {
@@ -75,9 +80,9 @@ func (self expire) Mainloop() {
       // remove all attachments
       if atts != nil {
         for _, att := range atts {
-          img := self.store.AttachmentFilename(att)
+          img := self.store.AttachmentFilepath(att)
           os.Remove(img)
-          thm := self.store.ThumbnailFilename(att)
+          thm := self.store.ThumbnailFilepath(att)
           os.Remove(thm)
         }
       }

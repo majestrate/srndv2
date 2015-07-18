@@ -694,19 +694,23 @@ func (self PostgresDatabase) GetPostAttachments(messageID string) []string {
 }
 
 // register a message with the database
-func (self PostgresDatabase) RegisterArticle(message *NNTPMessage) {
-  if ! self.HasNewsgroup(message.Newsgroup) {
-    self.RegisterNewsgroup(message.Newsgroup)
+func (self PostgresDatabase) RegisterArticle(message NNTPMessage) {
+  
+  msgid := message.MessageID()
+  group := message.Newsgroup()
+  
+  if ! self.HasNewsgroup(group) {
+    self.RegisterNewsgroup(group)
   }
   // insert article metadata
   stmt, err := self.Conn().Prepare("INSERT INTO Articles (message_id, message_id_hash, message_newsgroup, time_obtained, message_ref_id) VALUES($1, $2, $3, $4, $5)")
   if err != nil {
-    log.Println("failed to prepare query to register article", message.MessageID, err)
+    log.Println("failed to prepare query to register article", msgid, err)
     return
   }
   defer stmt.Close()
   now := time.Now().Unix()
-  _, err = stmt.Exec(message.MessageID, HashMessageID(message.MessageID), message.Newsgroup, now, message.Reference)
+  _, err = stmt.Exec(msgid, HashMessageID(msgid), group, now, message.Reference())
   if err != nil {
     log.Println("failed to register article", err)
   }
@@ -717,7 +721,7 @@ func (self PostgresDatabase) RegisterArticle(message *NNTPMessage) {
     return
   }
   defer stmt.Close()
-  _, err = stmt.Exec(now, message.Newsgroup)
+  _, err = stmt.Exec(now, group)
   if err != nil {
     log.Println("cannot execute query to update newsgroup last post", err)
     return
@@ -729,19 +733,24 @@ func (self PostgresDatabase) RegisterArticle(message *NNTPMessage) {
     return
   }
   defer stmt.Close()
-  _, err = stmt.Exec(message.Newsgroup, message.MessageID, message.Reference, message.Name, message.Subject, message.Path, message.Posted, message.Message)
+  _, err = stmt.Exec(group, msgid, message.Reference(), message.Name(), message.Subject(), message.Path(), message.Posted(), message.Message())
   if err != nil {
     log.Println("cannot insert article post", err)
     return
   }
   // register all attachments
-  for _, att := range message.Attachments {
+  atts := message.Attachments()
+  if atts == nil {
+    // no attachments
+    return
+  }
+  for _, att := range atts {
     stmt, err = self.Conn().Prepare("INSERT INTO ArticleAttachments(message_id, sha_hash, filename, filepath) VALUES($1, $2, $3, $4)")
     if err != nil {
       log.Println("failed to prepare query to register attachment", err)
     }
     defer stmt.Close()
-    _, err = stmt.Exec(message.MessageID, att.Hash(), att.Name, att.Filename())
+    _, err = stmt.Exec(msgid, att.Hash(), att.Filename(), att.Filepath())
     if err != nil {
       log.Println("failed to execute query to register attachment", err)
     }

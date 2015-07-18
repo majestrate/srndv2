@@ -334,3 +334,12 @@ func makeTripcode(pk string) string {
   }
   return "[invalid]"
 }
+
+// generate a new message id with base name
+func genMessageID(name string) string {
+  return fmt.Sprintf("<%s%d@%s>", randStr(5), timeNow(), name)
+}
+
+func timeNowStr() string {
+  return time.Unix(timeNow(), 0).UTC().Format(time.RFC1123Z)
+}

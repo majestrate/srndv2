@@ -30,8 +30,8 @@ type httpFrontend struct {
   modui ModUI
   httpmux *mux.Router
   daemon *NNTPDaemon
-  postchan chan *NNTPMessage
-  recvpostchan chan *NNTPMessage
+  postchan chan NNTPMessage
+  recvpostchan chan NNTPMessage
   bindaddr string
   name string
 
@@ -61,11 +61,11 @@ func (self httpFrontend) getFilenameForBoardPage(boardname string, pageno int) s
   return filepath.Join(self.webroot_dir, fname)
 }
 
-func (self httpFrontend) NewPostsChan() chan *NNTPMessage {
+func (self httpFrontend) NewPostsChan() chan NNTPMessage {
   return self.postchan
 }
 
-func (self httpFrontend) PostsChan() chan *NNTPMessage {
+func (self httpFrontend) PostsChan() chan NNTPMessage {
   return self.recvpostchan
 }
 
@@ -200,18 +200,18 @@ func (self httpFrontend) poll() {
     select {
     case nntp := <- chnl:
       // get root post and tell frontend to regen that thread
-      if len(nntp.Reference) > 0 {
-        self.regenThreadChan <- nntp.Reference
+      if len(nntp.Reference()) > 0 {
+        self.regenThreadChan <- nntp.Reference()
       } else {
-        self.regenThreadChan <- nntp.MessageID
+        self.regenThreadChan <- nntp.MessageID()
       }
       // regen the newsgroup we're in
       // TODO: regen only what we need to
-      pages := self.daemon.database.GetGroupPageCount(nntp.Newsgroup)
+      pages := self.daemon.database.GetGroupPageCount(nntp.Newsgroup())
       // regen all pages
       var page int64
       for ; page < pages ; page ++ {
-        req := groupRegenRequest{nntp.Newsgroup, int(page)}
+        req := groupRegenRequest{nntp.Newsgroup(), int(page)}
         self.regenGroupChan <- req
       }
       // regen ukko
@@ -243,7 +243,6 @@ func (self httpFrontend) handle_postform(wr http.ResponseWriter, r *http.Request
   content_type := "text/plain"
   ref := ""
   name := "anonymous"
-  email := ""
   subject := "None"
   message := ""
   // captcha stuff
@@ -268,9 +267,7 @@ func (self httpFrontend) handle_postform(wr http.ResponseWriter, r *http.Request
       // get the name of the part
       partname := part.FormName()
       // check for values we want
-      if partname == "email" {
-        email = part_buff.String()
-      } else if partname == "subject" {
+      if partname == "subject" {
         subject = part_buff.String()
       } else if partname == "name" {
         name = part_buff.String()
@@ -334,32 +331,26 @@ func (self httpFrontend) handle_postform(wr http.ResponseWriter, r *http.Request
   }
   
   // make the message
-  nntp := new(NNTPMessage)
+  var nntp nntpArticle
+  nntp.headers = make(ArticleHeaders)
   // generate message id
-  nntp.MessageID = fmt.Sprintf("<%s%d@%s>", randStr(12), timeNow(), self.name)
+  nntp.headers["MessageID"] = genMessageID(self.name)
   // TODO: hardcoded newsgroup prefix
-  nntp.Newsgroup = board
-  if len(name) > 0 {
-    nntp.Name = nntpSanitize(name)
-  } else {
-    nntp.Name = "Anonymous"
+  nntp.headers["Newsgroup"] = board
+  
+  nntp.headers["From"] = nntpSanitize(fmt.Sprintf("%s <%s@%s>", name, name, self.name))
+  if len(subject) == 0 {
+    subject = "None"
   }
-  nntp.Email = nntp.Name + "@" + self.name
-  if len(subject) > 0 {
-    nntp.Subject = nntpSanitize(subject)
-  } else {
-    nntp.Subject = "None"
-  }
-  nntp.Path = self.name
-  nntp.Posted = timeNow()
-  nntp.Message = nntpSanitize(message)
-  nntp.ContentType = content_type
-  nntp.Sage = strings.HasPrefix(strings.ToLower(email), "sage")
+  nntp.headers["Subject"] = nntpSanitize(subject)
+  nntp.headers["Path"] = self.name
+  nntp.headers["Posted"] = timeNowStr()
+  nntp.message = nntpSanitize(message)
+  nntp.headers["Content-Type"] = content_type
   // set reference
   if ValidMessageID(ref) {
-    nntp.Reference = ref
+    nntp.headers["Reference"] = ref
   }
-  nntp.OP = len(ref) == 0
 
   // set ip address info
   // TODO:
@@ -369,7 +360,6 @@ func (self httpFrontend) handle_postform(wr http.ResponseWriter, r *http.Request
   //  each stnf will optinally comply with the mod event, banning the address from being able to post from that frontend
   //  this will be done eventually but for now that requires too much infrastrucutre, let's go with regular IP Addresses for now.
   //
-  nntp.ExtraHeaders = make(map[string]string)
   // get the "real" ip address from the request
   address := ""
   host, _, err := net.SplitHostPort(r.RemoteAddr)
@@ -384,13 +374,13 @@ func (self httpFrontend) handle_postform(wr http.ResponseWriter, r *http.Request
   if len(address) > 0 {
     // set the ip address of the poster to be put into article headers
     // if we cannot determine it, i.e. we are on Tor/i2p, this value is not set
-    // nntp.ExtraHeaders["X-Encrypted-IP"] = address
+    // nntp.headers["X-Encrypted-IP"] = address
   } else {
     // if we don't have an address for the poster try checking for i2p httpd headers
     address = r.Header.Get("X-I2P-DestHash")
     // TODO: make sure this isn't a Tor user being sneaky
     if len(address) > 0 {
-      nntp.ExtraHeaders["X-Frontend-DestHash"] = address
+      nntp.headers["X-Frontend-DestHash"] = address
     }
   }
 
@@ -400,13 +390,14 @@ func (self httpFrontend) handle_postform(wr http.ResponseWriter, r *http.Request
 
   // send success reply
   wr.WriteHeader(200)
-  msg_id := nntp.Reference
+  msg_id := ref
   if len(msg_id) == 0 {
-    msg_id = nntp.MessageID
+    // if this fails we crash :^3
+    msg_id = nntp.headers["MessageID"]
   }
   url = fmt.Sprintf("%sthread-%s.html", self.prefix, ShortHashMessageID(msg_id))
   fname := filepath.Join(defaultTemplateDir(), "post_success.mustache")
-  io.WriteString(wr, templateRender(fname, map[string]string {"message_id" : nntp.MessageID, "redirect_url" : url}))
+  io.WriteString(wr, templateRender(fname, map[string]string {"message_id" : nntp.MessageID(), "redirect_url" : url}))
 }
 
 
@@ -491,8 +482,8 @@ func NewHTTPFrontend(daemon *NNTPDaemon, config map[string]string) Frontend {
   front.template_dir = config["templates"]
   front.prefix = config["prefix"]
   front.store = sessions.NewCookieStore([]byte(config["api-secret"]))
-  front.postchan = make(chan *NNTPMessage, 16)
-  front.recvpostchan = make(chan *NNTPMessage, 16)
+  front.postchan = make(chan NNTPMessage, 16)
+  front.recvpostchan = make(chan NNTPMessage, 16)
   front.regenThreadChan = make(chan string, 16)
   front.regenGroupChan = make(chan groupRegenRequest, 8)
   return front

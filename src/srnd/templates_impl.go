@@ -87,19 +87,19 @@ func (self attachment) Filename() string {
   return self.filename
 }
 
-func PostModelFromMessage(parent, prefix string, nntp *NNTPMessage) PostModel {
+func PostModelFromMessage(parent, prefix string, nntp NNTPMessage) PostModel {
   p :=  post{}
-  p.name = nntp.Name
-  p.subject = nntp.Subject
-  p.message = nntp.Message
-  p.path = nntp.Path
-  p.message_id = nntp.MessageID
-  p.board = nntp.Newsgroup
-  p.posted = nntp.Posted
-  p.op = nntp.OP
+  p.name = nntp.Name()
+  p.subject = nntp.Subject()
+  p.message = nntp.Message()
+  p.path = nntp.Path()
+  p.message_id = nntp.MessageID()
+  p.board = nntp.Newsgroup()
+  p.posted = nntp.Posted()
+  p.op = nntp.OP()
   p.prefix = prefix
   p.parent = parent
-  p.sage = nntp.Sage
+  p.sage = nntp.Sage()
   return p
 }
 

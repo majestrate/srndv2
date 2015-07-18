@@ -7,8 +7,8 @@ package srnd
 
 // muxed frontend for holding many frontends
 type multiFrontend struct {
-  muxedpostchan chan *NNTPMessage
-  muxedchan chan *NNTPMessage
+  muxedpostchan chan NNTPMessage
+  muxedchan chan NNTPMessage
   frontends []Frontend
 }
 
@@ -45,25 +45,25 @@ func (self multiFrontend) forwardPosts(front Frontend) {
     case nntp := <- chnl:
       // put in the path header the fact that this passed through the multifrontend
       // why? because why not.
-      nntp.Path = "srndv2.frontend.mux!" + nntp.Path
+      nntp = nntp.AppendPath("srndv2.frontend.mux")
       self.muxedpostchan <- nntp
     }
   }
 }
 
-func (self multiFrontend) NewPostsChan() chan *NNTPMessage {
+func (self multiFrontend) NewPostsChan() chan NNTPMessage {
   return self.muxedpostchan
 }
 
-func (self multiFrontend) PostsChan() chan *NNTPMessage {
+func (self multiFrontend) PostsChan() chan NNTPMessage {
   return self.muxedchan
 }
 
 
 func MuxFrontends(fronts ...Frontend) Frontend {
   var front multiFrontend
-  front.muxedchan = make(chan *NNTPMessage, 64)
-  front.muxedpostchan = make(chan *NNTPMessage, 64)
+  front.muxedchan = make(chan NNTPMessage, 64)
+  front.muxedpostchan = make(chan NNTPMessage, 64)
   front.frontends = fronts
   return front
 }

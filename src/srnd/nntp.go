@@ -28,11 +28,13 @@ type NNTPConnection struct {
   debug bool
   info *ConnectionInfo
   policy *FeedPolicy
-  send chan *NNTPMessage
   // channel for senging sync messages
   sync chan string
   // if true we are reading data
   reading bool
+  // message io
+  msg_reader MessageReader
+  msg_writer MessageWriter
 }
 
 // ask if they need this article
@@ -147,7 +149,7 @@ func (self *NNTPConnection) HandleOutbound(d *NNTPDaemon) {
 }
 
 // just do it (tm)
-func (self *NNTPConnection) SendMessage(message *NNTPMessage, d *NNTPDaemon) error {
+func (self *NNTPConnection) SendMessage(message NNTPMessage, d *NNTPDaemon) error {
   var err error
   self.reading = true
   err = self.txtconn.PrintfLine("TAKETHIS %s", message.MessageID)
@@ -156,7 +158,7 @@ func (self *NNTPConnection) SendMessage(message *NNTPMessage, d *NNTPDaemon) err
     return  err
   }
   wr := self.txtconn.DotWriter()
-  err = message.WriteTo(wr, "\r\n")
+  err = self.msg_writer.WriteMessage(message, wr)
   wr.Close()
   self.reading = false
   if err != nil {
@@ -262,8 +264,7 @@ func (self *NNTPConnection) HandleInbound(d *NNTPDaemon) {
               d.infeed_load <- article
             } else {
               // delete unaccepted article
-              fname := d.store.GetTempFilename(article)
-              DelFile(fname)
+              _ = d.store.GetTempFilename(article)
             }
           } else {
             self.txtconn.PrintfLine("439 %s", article)

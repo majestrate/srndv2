@@ -5,16 +5,49 @@
 package srnd
 
 import (
-  "encoding/base64"
+  "bufio"
+  "bytes"
+  //"encoding/base64"
   "errors"
+  "fmt"
   "io"
-  "io/ioutil"
+  //"io/ioutil"
   "log"
   "os"
   "path/filepath"
+  "strings"
 )
 
-type ArticleStore struct {
+type ArticleStore interface {
+  MessageReader
+  MessageWriter
+  MessageVerifier
+  
+  // get the filepath for an attachment
+  AttachmentFilepath(fname string) string
+  // get the filepath for an attachment's thumbnail
+  ThumbnailFilepath(fname string) string
+  // do we have this article?
+  HasArticle(msgid string) bool
+  // create a file for a message
+  CreateFile(msgid string) io.WriteCloser
+  // create a file for a temp message
+  CreateTempFile(msgid string) io.WriteCloser
+  // get the filename of a message
+  GetFilename(msgid string) string
+  // get the filename of a temp message
+  GetTempFilename(msgid string) string
+  // Get a message given its messageid
+  GetMessage(msgid string) NNTPMessage
+  // get a temp message given its messageid
+  // temp message is deleted once read
+  ReadTempMessage(msgid string) NNTPMessage
+  // store a post
+  StorePost(nntp NNTPMessage) error
+  // get article headers only
+  GetHeaders(msgid string) ArticleHeaders
+}
+type articleStore struct {
   directory string
   temp string
   attachments string
@@ -22,39 +55,113 @@ type ArticleStore struct {
   database Database
 }
 
+
+func createArticleStore(config map[string]string, database Database) ArticleStore {
+  store := articleStore{
+    directory: config["store_dir"],
+    temp: config["incoming_dir"],
+    attachments: config["attachments_dir"],
+    thumbs: config["thumbs_dir"],
+    database: database,
+  }
+  store.Init()
+  return store
+}
+
 // initialize article store
-func (self *ArticleStore) Init() {
+func (self articleStore) Init() {
   EnsureDir(self.directory)
   EnsureDir(self.temp)
   EnsureDir(self.attachments)
   EnsureDir(self.thumbs)
 }
 
-// get the filename for an attachment
-func (self *ArticleStore) AttachmentFilename(fname string) string {
+func (self articleStore) StorePost(nntp NNTPMessage) (err error) {
+  f := self.CreateFile(nntp.MessageID())
+  if f != nil {
+    err = self.WriteMessage(nntp, f)
+    f.Close()
+  }
+  return 
+}
+
+func (self articleStore) ReadMessage(r io.Reader) (NNTPMessage, error) {
+  nntp := nntpArticle{headers: make(ArticleHeaders)}
+  reader := bufio.NewReader(r)
+  var err error
+  // read headers
+  for {
+    l, err := reader.ReadString('\n')
+    if err == io.EOF {
+      return nil, errors.New("got EOF while reading headers")
+    } else if err != nil {
+      return nil, err
+    }
+    linelen := len(l)
+    var line string
+    if strings.HasPrefix(l, "\r\n") {
+      line = l[:linelen-2]
+    } else {
+      line = l[:linelen-1]
+    }
+    // end of headers?
+    if len(line) == 0 {
+      break
+    }
+    colonIdx := strings.Index(line, ": ")
+    if colonIdx > 1 {
+      headername := line[:colonIdx]
+      headerval := line[colonIdx+2:]
+      nntp.headers[headername] = headerval
+    } else {
+      // invalid line
+      return nil, errors.New("invalid header line: "+l)
+    }
+  }
+  var body bytes.Buffer
+  _, err = io.Copy(&body, reader)
+  nntp.message = body.String()
+  return nntp, err
+}
+
+
+func (self articleStore) WriteMessage(nntp NNTPMessage, wr io.Writer) (err error) {
+  // write headers
+  for hdr, hdr_val := range(nntp.Headers()) {
+    _, err = io.WriteString(wr, fmt.Sprintf("%s: %s\n", hdr, hdr_val))
+    if err != nil {
+      return
+    }
+  }
+  // done headers
+  _, err = io.WriteString(wr, "\n")
+  if err != nil {
+    return
+  }
+  // write body
+  err = nntp.WriteBody(wr)
+  return
+}
+
+
+
+func (self articleStore) VerifyMessage(nntp NNTPMessage) (NNTPMessage, error) {
+  // TODO: implement
+  return nntp, nil
+}
+
+// get the filepath for an attachment
+func (self articleStore) AttachmentFilepath(fname string) string {
   return filepath.Join(self.attachments, fname)
 }
 
-// get the filename for a thumbanil
-func (self *ArticleStore) ThumbnailFilename(fname string) string {
+// get the filepath for a thumbanil
+func (self articleStore) ThumbnailFilepath(fname string) string {
   return filepath.Join(self.thumbs, fname)
 }
 
-// send every article's message id down a channel for a given newsgroup
-func (self *ArticleStore) IterateAllForNewsgroup(newsgroup string, recv chan string) {
-  group := filepath.Clean(newsgroup)
-  self.database.GetAllArticlesInGroup(group, recv)
-}
-
-// send every article's message id down a channel
-func (self *ArticleStore) IterateAllArticles(recv chan string) {
-  for _, result := range self.database.GetAllArticles() {
-    recv <- result[0]
-  }
-}
-
 // create a file for this article
-func (self *ArticleStore) CreateFile(messageID string) io.WriteCloser {
+func (self articleStore) CreateFile(messageID string) io.WriteCloser {
   fname := self.GetFilename(messageID)
   file, err := os.Create(fname)
   if err != nil {
@@ -65,7 +172,7 @@ func (self *ArticleStore) CreateFile(messageID string) io.WriteCloser {
 }
 
 // create a temp file for inboud articles
-func (self *ArticleStore) CreateTempFile(messageID string) io.WriteCloser {
+func (self articleStore) CreateTempFile(messageID string) io.WriteCloser {
   fname := self.GetTempFilename(messageID)
   file, err := os.Create(fname)
   if err != nil {
@@ -75,89 +182,40 @@ func (self *ArticleStore) CreateTempFile(messageID string) io.WriteCloser {
   return file
 }
 
-// store article, save it in the storage folder
-// don't register
-func (self *ArticleStore) StorePost(post *NNTPMessage) error {
-  // open file for storing article
-  file := self.CreateFile(post.MessageID)
-  if file == nil {
-    return errors.New("cannot open file for post "+post.MessageID)
-  }
-  post.WriteTo(file, "\n")
-  file.Close()
-  // store attachments
-  for _, att := range post.Attachments {
-    fname := att.Filename()
-    // make thumbnails if we need to
-    if att.NeedsThumbnail() {
-      // fork operation off into background
-      go func() {
-        att_thumb := self.ThumbnailFilename(fname)
-        file, err := os.Create(att_thumb)
-        if err != nil {
-          log.Println("failed to open file for thumbnail", err)
-          return
-        } 
-        err = att.WriteThumbnailTo(file)
-        file.Close()
-        if err != nil {
-          log.Println("failed to create thumbnail", err)
-        }
-      }()
-    }
-    // store original attachment via background
-    go func () {
-      att_fname := self.AttachmentFilename(fname)
-      // decode it
-      data, err := base64.StdEncoding.DecodeString(att.Data)
-      if err == nil {
-        // store it
-        err = ioutil.WriteFile(att_fname, data, 0644)
-      }
-      if err != nil {
-        log.Println("error storing attachment", err)
-      }
-    }()
-    
-  }
-  return nil
-}
-
 // return true if we have an article
-func (self *ArticleStore) HasArticle(messageID string) bool {
+func (self articleStore) HasArticle(messageID string) bool {
   return self.database.HasArticle(messageID)
 }
 
 // get the filename for this article
-func (self *ArticleStore) GetFilename(messageID string) string {
+func (self articleStore) GetFilename(messageID string) string {
   return filepath.Join(self.directory, messageID)
 }
 
 // get the filename for this article
-func (self *ArticleStore) GetTempFilename(messageID string) string {
+func (self articleStore) GetTempFilename(messageID string) string {
   return filepath.Join(self.temp, messageID)
 }
 
 // loads temp message and deletes old article
-func (self *ArticleStore) ReadTempMessage(messageID string) *NNTPMessage {
+func (self articleStore) ReadTempMessage(messageID string) NNTPMessage {
   fname := self.GetTempFilename(messageID)
-  nntp := self.readfile(fname, true)
+  nntp := self.readfile(fname)
   DelFile(fname)
   return nntp
 }
 
 // read a file give filepath
-func (self *ArticleStore) readfile(fname string, full bool) *NNTPMessage {
+func (self articleStore) readfile(fname string) NNTPMessage {
   
   file, err := os.Open(fname)
   if err != nil {
     log.Println("store cannot open file",fname)
     return nil
   }
-  message := new(NNTPMessage)
-  success := message.Load(file, true)
+  message, err := self.ReadMessage(file)
   file.Close()
-  if success {
+  if err == nil {
     return message
   }
   
@@ -166,8 +224,8 @@ func (self *ArticleStore) readfile(fname string, full bool) *NNTPMessage {
 }
 
 // get the replies for a thread
-func (self *ArticleStore) GetThreadReplies(messageID string, last int) []*NNTPMessage {
-  var repls []*NNTPMessage
+func (self articleStore) GetThreadReplies(messageID string, last int) []NNTPMessage {
+  var repls []NNTPMessage
   if self.database.ThreadHasReplies(messageID) {
     rpls := self.database.GetThreadReplies(messageID, last)
     if rpls == nil {
@@ -187,13 +245,15 @@ func (self *ArticleStore) GetThreadReplies(messageID string, last int) []*NNTPMe
 
 // load an article
 // return nil on failure
-func (self *ArticleStore) GetMessage(messageID string) *NNTPMessage {
-  return self.readfile(self.GetFilename(messageID), true)
+func (self articleStore) GetMessage(messageID string) NNTPMessage {
+  return self.readfile(self.GetFilename(messageID))
 }
 
 // get article with headers only
-func (self *ArticleStore) GetHeaders(messageID string) *NNTPMessage {
-  return self.readfile(self.GetFilename(messageID), false)
+func (self articleStore) GetHeaders(messageID string) ArticleHeaders {
+  // TODO: don't load the entire body
+  nntp := self.readfile(self.GetFilename(messageID))
+  return nntp.Headers()
 }
 
 

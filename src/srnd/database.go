@@ -16,7 +16,7 @@ type Database interface {
   HasNewsgroup(group string) bool
   HasArticle(message_id string) bool
   RegisterNewsgroup(group string)
-  RegisterArticle(article *NNTPMessage)
+  RegisterArticle(article NNTPMessage)
   GetAllArticlesInGroup(group string, send chan string)
   GetAllArticles() []ArticleEntry
 

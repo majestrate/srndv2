@@ -5,7 +5,6 @@ package srnd
 import (
   "log"
   "net"
-  "fmt"
   "strconv"
   "strings"
   "net/textproto"
@@ -16,10 +15,10 @@ type NNTPDaemon struct {
   instance_name string
   bind_addr string
   conf *SRNdConfig
-  store *ArticleStore
+  store ArticleStore
   database Database
   mod Moderation
-  expire Expiration
+  expire ExpirationCore
   listener net.Listener
   debug bool
   sync_on_start bool
@@ -29,7 +28,7 @@ type NNTPDaemon struct {
 
   // nntp feeds map, feed, isoutbound
   feeds map[NNTPConnection]bool
-  infeed chan *NNTPMessage
+  infeed chan NNTPMessage
   // channel to load messages to infeed given their message id
   infeed_load chan string
   // channel for broadcasting a message to all feeds given their message id
@@ -44,7 +43,7 @@ func (self *NNTPDaemon) End() {
 // register a new connection
 // can be either inbound or outbound
 func (self *NNTPDaemon) newConnection(conn net.Conn, inbound bool, policy *FeedPolicy) NNTPConnection {
-  feed := NNTPConnection{conn, textproto.NewConn(conn), inbound, self.debug, new(ConnectionInfo), policy, make(chan *NNTPMessage, 64),  make(chan string, 512), false}
+  feed := NNTPConnection{conn, textproto.NewConn(conn), inbound, self.debug, new(ConnectionInfo), policy,  make(chan string, 512), false, self.store, self.store}
   self.feeds[feed] = ! inbound
   return feed
 }
@@ -178,21 +177,16 @@ func (self *NNTPDaemon) Run() {
   go func () {
     // if we have no initial posts create one
     if self.database.ArticleCount() == 0 {
-      nntp := new(NNTPMessage)
-      nntp.Newsgroup = "overchan.overchan"
-      nntp.MessageID = fmt.Sprintf("<%s%d@%s>", randStr(5), timeNow(), self.instance_name)
-      nntp.Name = "system"
-      nntp.Email = "srndv2@"+self.instance_name
-      nntp.Subject = "New Frontend, "+self.instance_name
-      nntp.Posted = timeNow()
-      nntp.Message = "Hi, welcome to nntpchan, this post was inserted on startup because you have no other posts, this messages was auto-generated"
-      nntp.ContentType = "text/plain"
-      nntp.Path = self.instance_name
-      file := self.store.CreateTempFile(nntp.MessageID)
+      nntp := newPlaintextArticle("welcome to nntpchan, this post was inserted on startup automatically", "system@"+self.instance_name, "Welcome to NNTPChan", "system", self.instance_name, "overchan.test")
+      file := self.store.CreateTempFile(nntp.MessageID())
       if file != nil {
-        nntp.WriteTo(file, "\r\n")
+        err := self.store.WriteMessage(nntp, file)
         file.Close()
-        self.infeed <- nntp
+        if err == nil {
+          self.infeed <- nntp
+        } else {
+          log.Println("failed to create startup messge?", err)
+        }
       }
     }
   }()
@@ -229,8 +223,8 @@ func (self *NNTPDaemon) pollfeeds() {
       } else {
         for feed , use := range self.feeds {
           if use && feed.policy != nil {
-            if feed.policy.AllowsNewsgroup(nntp.Newsgroup) {
-              feed.sync <- nntp.MessageID
+            if feed.policy.AllowsNewsgroup(nntp.Newsgroup()) {
+              feed.sync <- nntp.MessageID()
               log.Println("told feed")
             } else {
               log.Println("not syncing", msgid)
@@ -246,26 +240,30 @@ func (self *NNTPDaemon) pollfeeds() {
       }
     case nntp := <- self.infeed:
       // ammend path
-      nntp.Path = self.instance_name + "!" + nntp.Path
+      nntp = nntp.AppendPath(self.instance_name)
       // check for validity
-      log.Println("daemon got", nntp.MessageID)
-      if nntp.Verify() {
+      msgid := nntp.MessageID()
+      log.Println("daemon got", msgid)
+      nntp, err := self.store.VerifyMessage(nntp)
+      if err == nil {
         // register article
         self.database.RegisterArticle(nntp)
         // store article
         // this generates thumbs and stores attachemnts
-        self.store.StorePost(nntp)
-        // queue to all outfeeds
-        self.send_all_feeds <- nntp.MessageID
-        // roll over old content
-        // TODO: hard coded expiration threshold
-        self.expire.ExpireGroup(nntp.Newsgroup, 100)
-        // tell frontend
-        chnl <- nntp
-        // do any moderation events
-        nntp.DoModeration(&self.mod)
+        err = self.store.StorePost(nntp)
+        if err == nil {
+          // queue to all outfeeds
+          self.send_all_feeds <- msgid
+          // roll over old content
+          // TODO: hard coded expiration threshold
+          self.expire.ExpireGroup(nntp.Newsgroup(), 100)
+          // tell frontend
+          chnl <- nntp
+        } else {
+          log.Printf("%s failed to store: %s", msgid, err)
+        }
       } else {
-        log.Printf("%s has invalid signature", nntp.MessageID)
+        log.Printf("%s has invalid signature: %s", msgid, err)
       }
     }
   }
@@ -325,7 +323,7 @@ func (self *NNTPDaemon) Init() bool {
   // set up daemon configs
   self.Setup()
   
-  self.infeed = make(chan *NNTPMessage, 64)
+  self.infeed = make(chan NNTPMessage, 64)
   self.infeed_load = make(chan string, 64)
   self.send_all_feeds = make(chan string, 64)
   self.feeds = make(map[NNTPConnection]bool)
@@ -346,15 +344,9 @@ func (self *NNTPDaemon) Init() bool {
   self.database = NewDatabase(self.conf.database["type"], self.conf.database["schema"], db_host, db_port, db_user, db_passwd)
   self.database.CreateTables()
   
-  self.store = new(ArticleStore)
-  self.store.directory = self.conf.store["store_dir"]
-  self.store.temp = self.conf.store["incoming_dir"]
-  self.store.attachments = self.conf.store["attachments_dir"]
-  self.store.thumbs = self.conf.store["thumbs_dir"]
-  self.store.database = self.database
-  self.store.Init()
+  self.store = createArticleStore(self.conf.store, self.database)
   
-  self.expire = expire{self.database, self.store, make(chan deleteEvent)}
+  self.expire = createExpirationCore(self.database, self.store)
   self.sync_on_start = self.conf.daemon["sync_on_start"] == "1"
   self.debug = self.conf.daemon["log"] == "debug"
   self.instance_name = self.conf.daemon["instance_name"]

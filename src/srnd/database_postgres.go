@@ -702,6 +702,9 @@ func (self PostgresDatabase) RegisterArticle(message NNTPMessage) {
   if ! self.HasNewsgroup(group) {
     self.RegisterNewsgroup(group)
   }
+  if self.HasArticle(msgid) {
+    return
+  }
   // insert article metadata
   stmt, err := self.Conn().Prepare("INSERT INTO Articles (message_id, message_id_hash, message_newsgroup, time_obtained, message_ref_id) VALUES($1, $2, $3, $4, $5)")
   if err != nil {

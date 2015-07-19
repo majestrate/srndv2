@@ -374,10 +374,11 @@ func (self httpFrontend) handle_postform(wr http.ResponseWriter, r *http.Request
     // TODO: make sure this isn't a Tor user being sneaky
     address = getRealIP(r.Header.Get("X-Real-IP"))
   }
-  if len(address) > 0 {
+  if len(address) > 0 && ! strings.HasPrefix(address, "127.") {
     // set the ip address of the poster to be put into article headers
     // if we cannot determine it, i.e. we are on Tor/i2p, this value is not set
-    // nntp.headers["X-Encrypted-IP"] = address
+    address, err = self.daemon.database.GetEncAddress(address)
+    nntp.headers["X-Encrypted-IP"] = address
   } else {
     // if we don't have an address for the poster try checking for i2p httpd headers
     address = r.Header.Get("X-I2P-DestHash")

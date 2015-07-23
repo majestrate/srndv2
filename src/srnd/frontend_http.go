@@ -313,14 +313,13 @@ func (self httpFrontend) handle_postform(wr http.ResponseWriter, r *http.Request
   resp_map := make(map[string]string)
   resp_map["redirect_url"] = url
   postfail := ""
-  if false {
-    if len(captcha_solution) == 0 || len(captcha_id) == 0 {
-      postfail = "no captcha provided"
-    }
-
-    if ! captcha.VerifyString(captcha_id, captcha_solution) {
-      postfail = "failed captcha"
-    }
+  
+  if len(captcha_solution) == 0 || len(captcha_id) == 0 {
+    postfail = "no captcha provided"
+  }
+  
+  if ! captcha.VerifyString(captcha_id, captcha_solution) {
+    postfail = "failed captcha"
   }
 
   if len(message) == 0 {

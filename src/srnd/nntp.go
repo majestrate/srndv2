@@ -125,8 +125,7 @@ func (self *NNTPConnection) HandleOutbound(d *NNTPDaemon) {
       msg := d.store.GetMessage(commands[0])
       if msg == nil {
         log.Println("wut? don't have message", commands[0])
-        self.Quit()
-        return
+        continue
       } 
       err = self.SendMessage(msg, d)
       if err != nil {

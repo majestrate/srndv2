@@ -443,13 +443,17 @@ func (self httpFrontend) Mainloop() {
     log.Fatalf("no such template folder %s", self.template_dir)
   }
 
-  // regen threads
+  // 4 regen threads
   go self.pollregen()
+  go self.pollregen()
+  go self.pollregen()
+  go self.pollregen()
+  
   // poll channels
   go self.poll()
 
   // trigger regen
-  go self.regenAll()
+  self.regenAll()
   
   // start webserver here
   log.Printf("frontend %s binding to %s", self.name, self.bindaddr)

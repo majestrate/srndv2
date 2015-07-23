@@ -392,19 +392,32 @@ func (self PostgresDatabase) GetGroupPageCount(newsgroup string) int64 {
   return ( count / 10 ) + 1
 }
 
+// TODO: optimize
 func (self PostgresDatabase) GetGroupForPage(prefix, frontend, newsgroup string, pageno, perpage int) BoardModel {
   var threads []ThreadModel
 
   // TODO: hard coded value
   roots := self.GetLastBumpedThreads(newsgroup, 100)
-  for _, root_msg_id := range roots {
+
+  min_thread := pageno * perpage
+  max_thread := ( ( pageno + 1 ) * perpage ) 
+  
+  // for each OP
+  for thread_no, root_msg_id := range roots {
+    // is this in our range?
+    if thread_no < min_thread || thread_no > max_thread {
+      // no
+      continue
+    }
     var posts []PostModel
+    // get op
     op := self.GetPostModel(prefix, root_msg_id)
     if op == nil {
       log.Println("failed to get OP, was nil:", root_msg_id)
       return nil
     }
     posts = append(posts, op)
+    // append replies
     if self.ThreadHasReplies(root_msg_id) {
       // TODO: harcoded value
       repls := self.GetThreadReplyPostModels(prefix, root_msg_id, 5)
@@ -414,6 +427,7 @@ func (self PostgresDatabase) GetGroupForPage(prefix, frontend, newsgroup string,
       }
       posts = append(posts, repls...)
     }
+    // add thread to board page
     thread := NewThreadModel(prefix, posts)
     threads = append(threads, thread)
   }

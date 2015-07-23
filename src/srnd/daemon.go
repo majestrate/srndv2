@@ -43,7 +43,7 @@ func (self *NNTPDaemon) End() {
 // register a new connection
 // can be either inbound or outbound
 func (self *NNTPDaemon) newConnection(conn net.Conn, inbound bool, policy *FeedPolicy) NNTPConnection {
-  feed := NNTPConnection{conn, textproto.NewConn(conn), inbound, self.debug, new(ConnectionInfo), policy,  make(chan string, 512), false, self.store, self.store}
+  feed := NNTPConnection{conn, textproto.NewConn(conn), inbound, self.debug, new(ConnectionInfo), policy,  make(chan string, 512), self.store, self.store}
   self.feeds[feed] = ! inbound
   return feed
 }

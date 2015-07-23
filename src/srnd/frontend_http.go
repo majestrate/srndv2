@@ -20,8 +20,11 @@ import (
 )
 
 
+// regenerate a newsgroup page
 type groupRegenRequest struct {
+  // which newsgroup
   group string
+  // page number
   page int
 }
 
@@ -46,6 +49,7 @@ type httpFrontend struct {
   store *sessions.CookieStore
 }
 
+// do we allow this newsgroup?
 func (self httpFrontend) AllowNewsgroup(group string) bool {
   return strings.HasPrefix(group, "overchan.")
 }
@@ -68,11 +72,6 @@ func (self httpFrontend) NewPostsChan() chan NNTPMessage {
 func (self httpFrontend) PostsChan() chan NNTPMessage {
   return self.recvpostchan
 }
-
-func (self httpFrontend) loghttp(req *http.Request, code int) {
-  log.Printf("%s -- %s %s -- %d", self.name, req.Method, req.URL.Path, code)
-}
-
 
 // regen every newsgroup
 func (self httpFrontend) regenAll() {
@@ -314,12 +313,14 @@ func (self httpFrontend) handle_postform(wr http.ResponseWriter, r *http.Request
   resp_map := make(map[string]string)
   resp_map["redirect_url"] = url
   postfail := ""
-  
-  if len(captcha_solution) == 0 || len(captcha_id) == 0 {
-    postfail = "no captcha provided"
-  }
-  if ! captcha.VerifyString(captcha_id, captcha_solution) {
-    postfail = "failed captcha"
+  if false {
+    if len(captcha_solution) == 0 || len(captcha_id) == 0 {
+      postfail = "no captcha provided"
+    }
+
+    if ! captcha.VerifyString(captcha_id, captcha_solution) {
+      postfail = "failed captcha"
+    }
   }
 
   if len(message) == 0 {
@@ -434,7 +435,7 @@ func (self httpFrontend) handle_poster(wr http.ResponseWriter, r *http.Request) 
 }
 
 func (self httpFrontend) new_captcha(wr http.ResponseWriter, r *http.Request) {
-  io.WriteString(wr, captcha.NewLen(6))
+  io.WriteString(wr, captcha.NewLen(2))
 }
 
 func (self httpFrontend) Mainloop() {

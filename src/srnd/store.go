@@ -253,6 +253,9 @@ func (self articleStore) GetMessage(messageID string) NNTPMessage {
 func (self articleStore) GetHeaders(messageID string) ArticleHeaders {
   // TODO: don't load the entire body
   nntp := self.readfile(self.GetFilename(messageID))
+  if nntp == nil {
+    return nil
+  }
   return nntp.Headers()
 }
 

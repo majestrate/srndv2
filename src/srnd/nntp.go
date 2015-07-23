@@ -19,6 +19,8 @@ type ConnectionInfo struct {
   allowsPosting bool 
   supportsStream bool
   state string
+  // if true we are reading data
+  reading bool
 }
 
 type NNTPConnection struct {
@@ -30,8 +32,6 @@ type NNTPConnection struct {
   policy *FeedPolicy
   // channel for senging sync messages
   sync chan string
-  // if true we are reading data
-  reading bool
   // message io
   msg_reader MessageReader
   msg_writer MessageWriter
@@ -102,10 +102,11 @@ func (self *NNTPConnection) HandleOutbound(d *NNTPDaemon) {
   }
   log.Println("outfeed enter mainloop")
 
+  // go routine for sending sync requests
   go func() {
     for {
       msg_id := <- self.sync
-      for self.reading {
+      for self.info.reading {
         time.Sleep(10 * time.Millisecond)
       }
       self.askSync(msg_id)
@@ -151,7 +152,7 @@ func (self *NNTPConnection) HandleOutbound(d *NNTPDaemon) {
 // just do it (tm)
 func (self *NNTPConnection) SendMessage(message NNTPMessage, d *NNTPDaemon) error {
   var err error
-  self.reading = true
+  self.info.reading = true
   err = self.txtconn.PrintfLine("TAKETHIS %s", message.MessageID())
   if err != nil {
     log.Println("error in outfeed", err)
@@ -160,7 +161,7 @@ func (self *NNTPConnection) SendMessage(message NNTPMessage, d *NNTPDaemon) erro
   wr := self.txtconn.DotWriter()
   err = self.msg_writer.WriteMessage(message, wr)
   wr.Close()
-  self.reading = false
+  self.info.reading = false
   if err != nil {
     log.Printf("failed to send %s via feed: %s", message.MessageID(), err)
     return err

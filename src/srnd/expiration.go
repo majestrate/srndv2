@@ -88,6 +88,10 @@ func (self expire) Mainloop() {
       }
       // remove article
       os.Remove(ev.Path())
+      err := self.database.DeleteArticle(ev.MessageID())
+      if err != nil {
+        log.Println("failed to delete article", err)
+      }
     }
   }
 }

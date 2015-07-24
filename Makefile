@@ -1,4 +1,6 @@
+all: clean build
 
-
-all:
-	go build -o SRNd main.go
+build:
+	go build -o srnd main.go
+clean:
+	rm -f srnd

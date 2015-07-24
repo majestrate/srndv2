@@ -38,12 +38,12 @@ donate: bitcoin 15yuMzuueV8y5vPQQ39ZqQVz5Ey98DNrjE
     cd $GOPATH/src/github.com/majestrate/srndv2
 
     # build it
-    go build -o SRNd main.go
+    make
 
 ## initial run
 
     # this will generate base config files if they aren't present
-    ./SRNd -action setup
+    ./srnd setup
 
 ## database configuration
 
@@ -79,7 +79,7 @@ then edit the database section in srnd.ini so it has the proper parameters
     # after you have configured the daemon, run it
     # by default, an http daemon will bind on all interfaces port 18000
     # if your server is 1.2.34.5 access it via your web browser at http://1.2.34.5:18000/ 
-    ./SRNd -action run
+    ./srnd run
 
 ## running on tor
 

@@ -100,6 +100,12 @@ type Database interface {
   // underlying database connection
   Conn() *sql.DB
 
+  // get threads per page for a newsgroup
+  GetThreadsPerPage(group string) (int, error)
+
+  // get pages per board for a newsgroup
+  GetPagesPerBoard(group string) (int, error)
+  
   // get every newsgroup we know of
   GetAllNewsgroups() []string
 }

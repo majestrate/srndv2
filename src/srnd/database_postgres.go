@@ -3,6 +3,13 @@
 //
 package srnd
 
+/**
+ * TODO:
+ *  ~ caching of board settings
+ *  ~ caching of encrypted address info
+ *  ~ multithreading check
+ */
+
 import (
   "database/sql"
   "errors"
@@ -826,3 +833,16 @@ func (self PostgresDatabase) GetAllArticles() []ArticleEntry {
   }
   return articles
 }
+
+
+func (self PostgresDatabase) GetPagesPerBoard(group string) (int, error) {
+  //XXX: hardcoded
+  return 10, nil
+}
+
+func (self PostgresDatabase) GetThreadsPerPage(group string) (int, error) {
+  //XXX: hardcoded
+  return 10, nil
+}
+
+

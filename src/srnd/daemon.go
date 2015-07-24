@@ -250,9 +250,20 @@ func (self *NNTPDaemon) pollfeeds() {
         // store article
         // this generates thumbs and stores attachemnts
         err = self.store.StorePost(nntp)
+
+        // prepare for content rollover
+        // fallback rollover
+        rollover := 100
+        
+        group := nntp.Newsgroup()
+        tpp, err := self.database.GetThreadsPerPage(group)
+        ppb, err := self.database.GetPagesPerBoard(group)
+        if err == nil {
+          rollover = tpp * ppb
+        }
+        
         // roll over old content
-        // TODO: hard coded expiration threshold
-        self.expire.ExpireGroup(nntp.Newsgroup(), 100)
+        self.expire.ExpireGroup(group, rollover)
         if err == nil {
           // queue to all outfeeds
           self.send_all_feeds <- msgid

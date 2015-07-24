@@ -1,5 +1,5 @@
 //
-// util.go
+// util.go -- various utilities
 //
 
 package srnd
@@ -15,6 +15,7 @@ import (
   "net"
   "os"
   "path/filepath"
+  "strconv"
   "strings"
   "time"
 )
@@ -340,6 +341,19 @@ func genMessageID(name string) string {
   return fmt.Sprintf("<%s%d@%s>", randStr(5), timeNow(), name)
 }
 
+// time now as a string timestamp
 func timeNowStr() string {
   return time.Unix(timeNow(), 0).UTC().Format(time.RFC1123Z)
+}
+
+// get from a map an int given a key or fall back to a default value
+func mapGetInt(m map[string]string, key string, fallback int) int {
+  val, ok := m[key]
+  if ok {
+    i, err := strconv.ParseInt(val, 10, 32)
+    if err == nil {
+      return int(i)
+    }
+  } 
+  return fallback
 }

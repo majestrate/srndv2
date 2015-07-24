@@ -41,6 +41,8 @@ type httpFrontend struct {
   webroot_dir string
   template_dir string
   static_dir string
+
+  regen_threads int
   
   prefix string
   regenThreadChan chan string
@@ -51,6 +53,8 @@ type httpFrontend struct {
 
 // do we allow this newsgroup?
 func (self httpFrontend) AllowNewsgroup(group string) bool {
+  // XXX: hardcoded nntp prefix
+  // TODO: make configurable nntp prefix
   return strings.HasPrefix(group, "overchan.")
 }
 
@@ -99,8 +103,15 @@ func (self httpFrontend) regenAll() {
 
 // regenerate a board page for newsgroup
 func (self httpFrontend) regenerateBoard(newsgroup string, pageno int) {
-  // TODO: hard coded threads per page
-  board_page := self.daemon.database.GetGroupForPage(self.prefix, self.name, newsgroup, pageno, 10)
+  var err error
+  var perpage int
+  perpage, err = self.daemon.database.GetThreadsPerPage(newsgroup)
+  if err != nil {
+    log.Println("board regen fallback to default threads per page because", err)
+    // fallback
+    perpage = 10
+  }
+  board_page := self.daemon.database.GetGroupForPage(self.prefix, self.name, newsgroup, pageno, perpage)
   if board_page == nil {
     log.Println("failed to regen board", newsgroup)
     return
@@ -235,6 +246,7 @@ func (self httpFrontend) pollregen() {
   }
 }
 
+// handle new post via http request for a board
 func (self httpFrontend) handle_postform(wr http.ResponseWriter, r *http.Request, board string) {
 
   // default values
@@ -355,14 +367,12 @@ func (self httpFrontend) handle_postform(wr http.ResponseWriter, r *http.Request
     nntp.headers["Reference"] = ref
   }
 
-  // set ip address info
-  // TODO:
-  //  encrypt IP Addresses
-  //  when a post is recv'd from a frontend, the remote address is given its own symetric key that the local srnd uses to encrypt the address with, for privacy
-  //  when a mod event is fired, it includes the encrypted IP address and the symetric key that frontend used to encrypt it, thus allowing others to determine the IP address
-  //  each stnf will optinally comply with the mod event, banning the address from being able to post from that frontend
-  //  this will be done eventually but for now that requires too much infrastrucutre, let's go with regular IP Addresses for now.
-  //
+  // encrypt IP Addresses
+  // when a post is recv'd from a frontend, the remote address is given its own symetric key that the local srnd uses to encrypt the address with, for privacy
+  // when a mod event is fired, it includes the encrypted IP address and the symetric key that frontend used to encrypt it, thus allowing others to determine the IP address
+  // each stnf will optinally comply with the mod event, banning the address from being able to post from that frontend
+  // this will be done eventually but for now that requires too much infrastrucutre, let's go with regular IP Addresses for now.
+  
   // get the "real" ip address from the request
   address := ""
   host, _, err := net.SplitHostPort(r.RemoteAddr)
@@ -394,7 +404,7 @@ func (self httpFrontend) handle_postform(wr http.ResponseWriter, r *http.Request
   address = r.Header.Get("X-I2P-DestHash")
   // TODO: make sure this isn't a Tor user being sneaky
   if len(address) > 0 {
-    nntp.headers["X-Frontend-DestHash"] = address
+    nntp.headers["X-I2P-DestHash"] = address
   }
   
 
@@ -409,6 +419,7 @@ func (self httpFrontend) handle_postform(wr http.ResponseWriter, r *http.Request
     // if this fails we crash :^3
     msg_id = nntp.headers["MessageID"]
   }
+  // render response as success
   url = fmt.Sprintf("%sthread-%s.html", self.prefix, ShortHashMessageID(msg_id))
   fname := filepath.Join(defaultTemplateDir(), "post_success.mustache")
   io.WriteString(wr, templateRender(fname, map[string]string {"message_id" : nntp.MessageID(), "redirect_url" : url}))
@@ -421,15 +432,17 @@ func (self httpFrontend) handle_poster(wr http.ResponseWriter, r *http.Request) 
   path := r.URL.Path
   var board string
   // extract board
-  if strings.Count(path, "/") > 1 {
-    board = strings.Split(path,"/")[2]
+  parts := strings.Count(path, "/")
+  if parts > 1 {
+    board = strings.Split(path, "/")[parts-1]
   }
+  
   // this is a POST request
-  if r.Method == "POST" && strings.HasPrefix(board, "overchan.") && newsgroupValidFormat(board) {
+  if r.Method == "POST" && self.AllowNewsgroup(board) && newsgroupValidFormat(board) {
     self.handle_postform(wr, r, board)
   } else {
-      wr.WriteHeader(403)
-      io.WriteString(wr, "Nope")
+    wr.WriteHeader(403)
+    io.WriteString(wr, "Nope")
   }
 }
 
@@ -443,11 +456,18 @@ func (self httpFrontend) Mainloop() {
     log.Fatalf("no such template folder %s", self.template_dir)
   }
 
-  // 4 regen threads
-  go self.pollregen()
-  go self.pollregen()
-  go self.pollregen()
-  go self.pollregen()
+  threads := self.regen_threads 
+
+  // check for invalid number of threads
+  if threads > 0 {
+    threads = 1
+  }
+  
+  // make regen threads
+  for threads > 0 {    
+    go self.pollregen()
+    threads -- 
+  }
   
   // poll channels
   go self.poll()
@@ -499,6 +519,7 @@ func NewHTTPFrontend(daemon *NNTPDaemon, config map[string]string) Frontend {
   front.static_dir = config["static_files"]
   front.template_dir = config["templates"]
   front.prefix = config["prefix"]
+  front.regen_threads = mapGetInt(config, "regen_threads", 1)
   front.store = sessions.NewCookieStore([]byte(config["api-secret"]))
   front.postchan = make(chan NNTPMessage, 16)
   front.recvpostchan = make(chan NNTPMessage, 16)

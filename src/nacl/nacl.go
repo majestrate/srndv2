@@ -7,6 +7,7 @@ import "C"
 import (
   "bytes"
   "log"
+  "os"
 )
 
 // return how many bytes overhead does CryptoBox have
@@ -93,8 +94,10 @@ func init() {
   if status == -1 {
     log.Fatalf("failed to initialize libsodium status=%d", status)
   }
-  version_ptr := C.sodium_version_string()
-  
-  log.Println("Intialized Sodium", C.GoString(version_ptr))
-  TestAll()
+
+  if os.Getenv("SODIUM_TEST") == "1" {
+    version_ptr := C.sodium_version_string()
+    log.Println("Intialized Sodium", C.GoString(version_ptr))
+    TestAll()
+  }
 }

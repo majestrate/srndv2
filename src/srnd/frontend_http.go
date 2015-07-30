@@ -434,7 +434,7 @@ func (self httpFrontend) handle_poster(wr http.ResponseWriter, r *http.Request) 
   // extract board
   parts := strings.Count(path, "/")
   if parts > 1 {
-    board = strings.Split(path, "/")[parts-1]
+    board = strings.Split(path, "/")[2]
   }
   
   // this is a POST request

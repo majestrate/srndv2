@@ -412,7 +412,7 @@ func (self PostgresDatabase) GetGroupForPage(prefix, frontend, newsgroup string,
   // for each OP
   for thread_no, root_msg_id := range roots {
     // is this in our range?
-    if thread_no < min_thread || thread_no > max_thread {
+    if thread_no < min_thread || thread_no >= max_thread {
       // no
       continue
     }

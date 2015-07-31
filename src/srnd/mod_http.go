@@ -114,7 +114,7 @@ func (self httpModUI) HandleDeletePost(wr http.ResponseWriter, r *http.Request) 
         // get headers
         hdr := self.articles.GetHeaders(msgid)
         if hdr == nil {
-          resp["error"] = fmt.Sprintf("cannot load headers for %s", msgid)
+          resp["error"] = fmt.Sprintf("message %s is not on the filesystem? wtf!", msgid)
         } else {
           ref := hdr.Get("Reference", "")
           if ref == "" {
@@ -150,7 +150,11 @@ func (self httpModUI) HandleDeletePost(wr http.ResponseWriter, r *http.Request) 
           }
         }
       } else {
-        resp["error"] = fmt.Sprintf("error getting message id: %", err)
+        if msg.MessageID() == "" {
+          resp["error"] = "no such message with that hash"
+        } else {
+          resp["error"] = err.Error()
+        }
       }
       // send response
       enc := json.NewEncoder(wr)

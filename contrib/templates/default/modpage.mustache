@@ -7,8 +7,12 @@
   </head>
   <body>
     <div>
-      <label for="nntpchan_mod_delete">delete post (longhash):</label>
-      <input id="nntpchan_mod_delete" type="text" />
+      <div> post actions </div>
+      <hr />
+      <div>
+        <label for="nntpchan_mod_delete">delete by url</label>
+        <input id="nntpchan_mod_delete" type="text" />
+      </div>
       <button id="nntpchan_mod" onclick="nntpchan_delete()">go</button>
       <span id="nntpchan_mod_result"></span>
     </div>

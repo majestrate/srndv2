@@ -7,11 +7,65 @@ package srnd
 import (
   "fmt"
   "github.com/hoisie/mustache"
+  "github.com/opennota/markdown"
   "io"
   "path/filepath"
   "strings"
   "time"
 )
+
+type markdownRender struct {
+  // source data
+  src []byte
+  // reply channel
+  rpl chan string
+}
+
+// threadsafe markdown generator
+type Markdown struct {
+  md *markdown.Markdown
+  chnl chan markdownRender
+}
+
+// run renderer
+func (self Markdown) run() {
+  for {
+    job := <- self.chnl
+    job.rpl <- self.md.RenderToString(job.src)
+  }
+}
+
+// return rendered markup, threadsafe
+func (self Markdown) Render(src string) string {
+  job := markdownRender{
+    src: []byte(src),
+    rpl: make(chan string),
+  }
+  self.chnl <- job
+  defer close(job.rpl)
+  return <- job.rpl
+}
+
+// create markdown renderer
+func createMarkdown() Markdown {
+  return Markdown{
+    md: markdown.New(
+      markdown.HTML(false),
+      markdown.Tables(false),
+      markdown.Nofollow(true),
+      markdown.Linkify(true),
+      markdown.Typographer(true),
+      markdown.XHTMLOutput(false)),
+    chnl: make(chan markdownRender),
+  }
+}
+
+var md = createMarkdown()
+
+// start markdown renderer
+func init() {
+  go md.run()
+}
 
 type boardModel struct {
   frontend string
@@ -88,7 +142,7 @@ func (self attachment) Filename() string {
 }
 
 func PostModelFromMessage(parent, prefix string, nntp NNTPMessage) PostModel {
-  p :=  post{}
+  p := post{}
   p.name = nntp.Name()
   p.subject = nntp.Subject()
   p.message = nntp.Message()
@@ -182,10 +236,8 @@ func (self post) RenderPost() string {
   return mustache.RenderFile(fname, self)
 }
 
-// TODO: formatting
 func (self post) RenderBody() string {
-  // escape it
-  return mustache.Render("{{message}}", map[string]string { "message": self.message})
+  return md.Render(self.message)
 }
 
 type thread struct {

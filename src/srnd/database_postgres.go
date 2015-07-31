@@ -607,6 +607,9 @@ func (self PostgresDatabase) GetLastBumpedThreads(newsgroup string, threads int)
   if err != nil {
     log.Println("failed to execute query for get last bumped", err)
   }
+  if rows == nil {
+    return nil
+  }
   defer rows.Close()
 
   var roots []string

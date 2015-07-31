@@ -8,7 +8,17 @@ import (
   "log"
 )
 
+
+// a ( MessageID , newsgroup ) tuple
 type ArticleEntry [2]string
+
+func (self ArticleEntry) Newsgroup() string {
+  return self[1]
+}
+
+func (self ArticleEntry) MessageID() string {
+  return self[0]
+}
 
 type Database interface {
   Login() string
@@ -20,6 +30,10 @@ type Database interface {
   GetAllArticlesInGroup(group string, send chan string)
   GetAllArticles() []ArticleEntry
 
+  // get an article's MessageID given the hash of the MessageID
+  // return an article entry or nil when it doesn't exist + and error if it happened
+  GetMessageIDByHash(hash string) (ArticleEntry, error)
+  
   // get the number of articles we have
   ArticleCount() int64
   

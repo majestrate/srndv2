@@ -373,6 +373,16 @@ func (self *NNTPDaemon) Init() bool {
     self.frontend = NewHTTPFrontend(self, self.conf.frontend) 
     go self.frontend.Mainloop()
   }
-  
+
+  // set up admin user if it's specified in the config
+  pubkey , ok := self.conf.frontend["admin_key"]
+  if ok {
+    // TODO: check for valid format
+    log.Println("add admin key", pubkey)
+    err = self.database.MarkModPubkeyGlobal(pubkey)
+    if err != nil {
+      log.Printf("failed to add admin mod key, %s", err)
+    }
+  }
   return true
 }

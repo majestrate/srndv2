@@ -19,5 +19,8 @@ type Frontend interface {
 
   // do we want posts from a newsgroup?
   AllowNewsgroup(group string) bool
+
+  // trigger a manual regen of indexes for a root post
+  Regen(msg ArticleEntry)
   
 }

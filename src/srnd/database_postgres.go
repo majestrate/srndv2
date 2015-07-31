@@ -846,3 +846,11 @@ func (self PostgresDatabase) GetThreadsPerPage(group string) (int, error) {
 }
 
 
+func (self PostgresDatabase) GetMessageIDByHash(hash string) (article ArticleEntry, err error) {
+  stmt, err := self.Conn().Prepare("SELECT message_id, message_newsgroup FROM Articles WHERE message_id_hash = $1 LIMIT 1")
+  if err == nil {
+    defer stmt.Close()
+    err = stmt.QueryRow(hash).Scan(&article[0], &article[1])
+  }
+  return article, err
+}

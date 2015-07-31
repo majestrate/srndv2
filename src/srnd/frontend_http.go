@@ -15,6 +15,7 @@ import (
   "log"
   "net"
   "net/http"
+  "os"
   "path/filepath"
   "strings"
 )
@@ -47,7 +48,8 @@ type httpFrontend struct {
   prefix string
   regenThreadChan chan string
   regenGroupChan chan groupRegenRequest
-
+  ukkoChan chan bool
+  
   store *sessions.CookieStore
 }
 
@@ -58,6 +60,12 @@ func (self httpFrontend) AllowNewsgroup(group string) bool {
   return strings.HasPrefix(group, "overchan.")
 }
 
+// try to delete root post's page
+func (self httpFrontend) deleteThreadMarkup(root_post_id string) {
+  fname :=  self.getFilenameForThread(root_post_id)
+  log.Println("delete file", fname)
+  os.Remove(fname)
+}
 
 func (self httpFrontend) getFilenameForThread(root_post_id string) string {
   fname := fmt.Sprintf("thread-%s.html", ShortHashMessageID(root_post_id))
@@ -80,29 +88,34 @@ func (self httpFrontend) PostsChan() chan NNTPMessage {
 // regen every newsgroup
 func (self httpFrontend) regenAll() {
   log.Println("regen all on http frontend")
+  // tell to regen ukko first
+  self.ukkoChan <- true
   // get all groups
   groups := self.daemon.database.GetAllNewsgroups()
   if groups != nil {
     for _, group := range groups {
       // send every thread for this group down the regen thread channel
       self.daemon.database.GetGroupThreads(group, self.regenThreadChan)
-      // regen the entire board too
-      pages := self.daemon.database.GetGroupPageCount(group)
-      // regen all pages
-      var page int64
-      for ; page < pages ; page ++ {
-        req := groupRegenRequest{group, int(page)}
-        self.regenGroupChan <- req
-      }
-
+      self.regenerateBoard(group)
     }
   }
-  self.regenUkko()
 }
 
 
+// regen every page of the board
+func (self httpFrontend) regenerateBoard(group string) {
+  // regen the entire board too
+  pages := self.daemon.database.GetGroupPageCount(group)
+  // regen all pages
+  var page int64
+  for ; page < pages ; page ++ {
+    req := groupRegenRequest{group, int(page)}
+    self.regenGroupChan <- req
+  }
+}
+
 // regenerate a board page for newsgroup
-func (self httpFrontend) regenerateBoard(newsgroup string, pageno int) {
+func (self httpFrontend) regenerateBoardPage(newsgroup string, pageno int) {
   var err error
   var perpage int
   perpage, err = self.daemon.database.GetThreadsPerPage(newsgroup)
@@ -205,9 +218,12 @@ func (self httpFrontend) regenerateThread(rootMessageID string) {
 
 func (self httpFrontend) poll() {
   chnl := self.PostsChan()
- 
+  modChnl := self.modui.MessageChan()
   for {
     select {
+    case nntp := <- modChnl:
+      // forward signed messages to daemon
+      self.postchan <- nntp
     case nntp := <- chnl:
       // get root post and tell frontend to regen that thread
       if len(nntp.Reference()) > 0 {
@@ -225,7 +241,7 @@ func (self httpFrontend) poll() {
         self.regenGroupChan <- req
       }
       // regen ukko
-      self.regenUkko()
+      self.ukkoChan <- true
     }
   }
 }
@@ -234,15 +250,23 @@ func (self httpFrontend) poll() {
 func (self httpFrontend) pollregen() {
   for {
     select {
-      
       // listen for regen thread requests
     case msgid := <- self.regenThreadChan:
       self.regenerateThread(msgid)
       
       // listen for regen board requests
     case req := <- self.regenGroupChan:
-      self.regenerateBoard(req.group, req.page)
+      self.regenerateBoardPage(req.group, req.page)
     }
+  }
+}
+
+
+func (self httpFrontend) pollukko() {
+  for {
+    _ : <- self.ukkoChan
+    self.regenUkko()
+    log.Println("ukko regenerated")
   }
 }
 
@@ -434,7 +458,7 @@ func (self httpFrontend) handle_poster(wr http.ResponseWriter, r *http.Request) 
   // extract board
   parts := strings.Count(path, "/")
   if parts > 1 {
-    board = strings.Split(path, "/")[parts-1]
+    board = strings.Split(path, "/")[2]
   }
   
   // this is a POST request
@@ -463,33 +487,9 @@ func (self httpFrontend) Mainloop() {
     threads = 1
   }
   
-  // make regen threads
-  for threads > 0 {    
-    go self.pollregen()
-    threads -- 
-  }
-  
-  // poll channels
-  go self.poll()
-
-  // trigger regen
-  self.regenAll()
-  
-  // start webserver here
-  log.Printf("frontend %s binding to %s", self.name, self.bindaddr)
   // set up handler mux
   self.httpmux = mux.NewRouter()
-  // register handlers for mux
-  // webroot handler
-  self.httpmux.Path("/").Handler(http.FileServer(http.Dir(self.webroot_dir)))
-  self.httpmux.Path("/{f}").Handler(http.FileServer(http.Dir(self.webroot_dir)))
-  self.httpmux.Path("/static/{f}").Handler(http.FileServer(http.Dir(self.static_dir)))
-  // post handler
-  self.httpmux.Path("/post/{f}").HandlerFunc(self.handle_poster).Methods("POST")
-  // captcha handlers
-  self.httpmux.Path("/captcha/new").HandlerFunc(self.new_captcha).Methods("GET")
-  self.httpmux.Path("/captcha/{f}").Handler(captcha.Server(350, 175)).Methods("GET")
-
+  
   // create mod ui
   self.modui = createHttpModUI(self)
 
@@ -502,10 +502,45 @@ func (self httpFrontend) Mainloop() {
   self.httpmux.Path("/mod/addkey/{pubkey}").HandlerFunc(self.modui.HandleAddPubkey).Methods("GET")
   self.httpmux.Path("/mod/delkey/{pubkey}").HandlerFunc(self.modui.HandleDelPubkey).Methods("GET")
   
+  // webroot handler
+  self.httpmux.Path("/").Handler(http.FileServer(http.Dir(self.webroot_dir)))
+  self.httpmux.Path("/{f}.html").Handler(http.FileServer(http.Dir(self.webroot_dir)))
+  self.httpmux.Path("/static/{f}").Handler(http.FileServer(http.Dir(self.static_dir)))
+  // post handler
+  self.httpmux.Path("/post/{f}").HandlerFunc(self.handle_poster).Methods("POST")
+  // captcha handlers
+  self.httpmux.Path("/captcha/new").HandlerFunc(self.new_captcha).Methods("GET")
+  self.httpmux.Path("/captcha/{f}").Handler(captcha.Server(350, 175)).Methods("GET")
+
+  
+  // make regen threads
+  for threads > 0 {    
+    go self.pollregen()
+    threads -- 
+  }
+
+  // poll for ukko regen
+  go self.pollukko()
+  
+  // poll channels
+  go self.poll()
+  
+  // trigger regen
+  go self.regenAll()
+
+  // start webserver here
+  log.Printf("frontend %s binding to %s", self.name, self.bindaddr)
+  
   err := http.ListenAndServe(self.bindaddr, self.httpmux)
   if err != nil {
     log.Fatalf("failed to bind frontend %s %s", self.name, err)
   }
+}
+
+func (self httpFrontend) Regen(msg ArticleEntry) {
+  self.regenThreadChan <- msg.MessageID()
+  self.regenerateBoard(msg.Newsgroup())
+  self.ukkoChan <- true
 }
 
 
@@ -525,5 +560,6 @@ func NewHTTPFrontend(daemon *NNTPDaemon, config map[string]string) Frontend {
   front.recvpostchan = make(chan NNTPMessage, 16)
   front.regenThreadChan = make(chan string, 16)
   front.regenGroupChan = make(chan groupRegenRequest, 8)
+  front.ukkoChan = make(chan bool)
   return front
 }

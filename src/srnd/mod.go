@@ -16,7 +16,7 @@ import (
 type ModUI interface {
 
   // channel for daemon to poll for nntp articles from the mod ui
-  MessageChan() chan *NNTPMessage
+  MessageChan() chan NNTPMessage
 
   // check if this key is allowed to access
   // return true if it can otherwise false

@@ -17,6 +17,12 @@ func (self multiFrontend) AllowNewsgroup(newsgroup string) bool {
   return true
 }
 
+func (self multiFrontend) Regen(msg ArticleEntry) {
+  for _, front := range self.frontends {
+    front.Regen(msg)
+  }
+}
+
 func (self multiFrontend) Mainloop() {
   for idx := range(self.frontends) {
     go self.frontends[idx].Mainloop()

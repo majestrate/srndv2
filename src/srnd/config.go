@@ -112,7 +112,7 @@ func GenSRNdConfig() error {
   secret_bytes := nacl.RandBytes(8)
   secret := base32.StdEncoding.EncodeToString(secret_bytes)
   sect.Add("api-secret", secret)
-
+  
   return configparser.Save(conf, "srnd.ini")
 }
 

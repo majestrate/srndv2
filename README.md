@@ -25,7 +25,6 @@ donate: bitcoin 15yuMzuueV8y5vPQQ39ZqQVz5Ey98DNrjE
     go get github.com/majestrate/configparser
     go get github.com/lib/pq
     go get github.com/hoisie/mustache
-    go get github.com/opennota/markdown
 
     # get libsodium
     sudo apt-get install libsodium-dev

@@ -135,8 +135,8 @@ func (self articleStore) ReadMessage(r io.Reader) (NNTPMessage, error) {
               nntp.message.body.ReadFrom(part)
               if nntp.message.header == nil {
                 nntp.message.header = make(textproto.MIMEHeader)
-                nntp.message.header.Set("Content-Type", part_type)
               }
+              nntp.message.header.Set("Content-Type", part_type)
             } else {
               // non plaintext gets added to attachments
               att := self.ReadAttachmentFromMimePart(part)

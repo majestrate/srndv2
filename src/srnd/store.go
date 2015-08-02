@@ -125,6 +125,7 @@ func (self articleStore) ReadMessage(r io.Reader) (NNTPMessage, error) {
           hdr := part.Header
           // get content type of part
           part_type := hdr.Get("Content-Type")
+          log.Println("part has content type", part_type)
           // parse content type
           media_type, _, err := mime.ParseMediaType(part_type)
           if err == nil {
@@ -134,7 +135,7 @@ func (self articleStore) ReadMessage(r io.Reader) (NNTPMessage, error) {
             } else {
               // non plaintext gets added to attachments
               att := self.ReadAttachmentFromMimePart(part)
-              nntp.Attach(att)
+              nntp = nntp.Attach(att).(nntpArticle)
             }
           } else {
             log.Println("part has no content type", err)

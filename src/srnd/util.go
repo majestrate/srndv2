@@ -136,7 +136,7 @@ func OpenFileWriter(fname string) (io.WriteCloser, error) {
 
 // make a random string
 func randStr(length int) string {
-  return hex.EncodeToString(nacl.RandBytes(length))[:length]
+  return hex.EncodeToString(nacl.RandBytes(length))[length:]
 }
 
 

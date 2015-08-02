@@ -12,6 +12,7 @@ import (
   "io"
   //"io/ioutil"
   "log"
+  "mime"
   "mime/multipart"
   "net/mail"
   "os"
@@ -84,25 +85,78 @@ func (self articleStore) StorePost(nntp NNTPMessage) (err error) {
     err = self.WriteMessage(nntp, f)
     f.Close()
   }
+  for _, att := range nntp.Attachments() {
+    log.Println("save attachment", att.Filename(), "to", att.Filepath())
+    fpath := att.Filepath()
+    f, err = os.Create(fpath)
+    if err == nil {
+      err = att.WriteTo(f)
+      f.Close()
+    }
+    if err != nil {
+      return
+    }
+  }
   return 
 }
 
-func (self articleStore) ReadMessage(r io.Reader) (nntp NNTPMessage, err error) {
+func (self articleStore) ReadMessage(r io.Reader) (NNTPMessage, error) {
 
   msg, err := mail.ReadMessage(r)
+  nntp := nntpArticle{}
+
   if err == nil {
-    var buff bytes.Buffer
-    _, err = io.Copy(&buff, msg.Body)
-    nntp = nntpArticle{
-      headers: ArticleHeaders(msg.Header),
-      body: buff,
+    nntp.headers = ArticleHeaders(msg.Header)
+    log.Println("reading message")
+    content_type := msg.Header.Get("Content-Type")
+    _, params, err := mime.ParseMediaType(content_type)
+    if err != nil {
+      log.Println("failed to parse media type", err)
+      return nil, err
     }
+    boundary, ok := params["boundary"]
+    if ok {
+      partReader := multipart.NewReader(msg.Body, boundary)
+      for {
+        part, err := partReader.NextPart()
+        if err == io.EOF {
+          return nntp, nil
+        } else if err == nil {
+          hdr := part.Header
+          // get content type of part
+          part_type := hdr.Get("Content-Type")
+          // parse content type
+          media_type, _, err := mime.ParseMediaType(part_type)
+          if err == nil {
+            if media_type == "text/plain" {
+              // plaintext gets added to message part
+              nntp.message.body.ReadFrom(part)
+            } else {
+              // non plaintext gets added to attachments
+              att := self.ReadAttachmentFromMimePart(part)
+              nntp.Attach(att)
+            }
+          } else {
+            log.Println("part has no content type", err)
+          }
+          part.Close()
+        } else {
+          log.Println("failed to load part! ", err)
+          return nntp, err
+        }
+      }
+    } else {   
+      _, err = nntp.message.body.ReadFrom(msg.Body)
+    }
+  } else {
+    log.Println("failed to read message", err)
   }
   return nntp, err
 }
 
 
 func (self articleStore) WriteMessage(nntp NNTPMessage, wr io.Writer) (err error) {
+  nntp.Pack()
   // write headers
   for hdr, hdr_vals := range(nntp.Headers()) {
     for _ , hdr_val := range hdr_vals {
@@ -180,7 +234,7 @@ func (self articleStore) GetTempFilename(messageID string) string {
 func (self articleStore) ReadTempMessage(messageID string) NNTPMessage {
   fname := self.GetTempFilename(messageID)
   nntp := self.readfile(fname)
-  DelFile(fname)
+  //DelFile(fname)
   return nntp
 }
 
@@ -251,14 +305,20 @@ func (self articleStore) ReadAttachmentFromMimePart(part *multipart.Part) NNTPAt
     ext = fname[idx:]
   }
   
-  _, _ = io.Copy(&buff, part)  
-
+  n, err := io.Copy(&buff, part)
+  log.Printf("read %d bytes from mime part", n)
+  if err != nil {
+    log.Println("failed to read attachment from mimepart", err)
+    return nil
+  }
   sha := sha512.Sum512(buff.Bytes())
   hashstr := base32.StdEncoding.EncodeToString(sha[:])
   fpath_fname := hashstr+ext
   fpath := filepath.Join(self.attachments, fpath_fname)
-  
+
+  hdr := part.Header
   return nntpAttachment{
+    header: hdr,
     body: buff,
     mime: content_type,
     filename: fname,

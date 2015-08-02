@@ -4,10 +4,13 @@
 package srnd
 
 import (
-  "bytes"
+  "encoding/base64"
   "fmt"
   "io"
+  "log"
+  "mime"
   "mime/multipart"
+  "net/textproto"
   "strings"
   "time"
 )
@@ -67,9 +70,11 @@ type NNTPMessage interface {
   // write out body
   WriteBody(wr io.Writer) error
   // attach a file
-  Attach(att NNTPAttachment) 
+  Attach(att NNTPAttachment) NNTPMessage
   // get the plaintext message if it exists
   Message() string
+  // pack the whole message and prepare for write
+  Pack()
 }
 
 type MessageReader interface {
@@ -94,7 +99,7 @@ type MessageVerifier interface {
 
 type nntpArticle struct {
   headers ArticleHeaders
-  body bytes.Buffer
+  boundary string
   message nntpAttachment
   attachments []NNTPAttachment
 }
@@ -103,7 +108,6 @@ type nntpArticle struct {
 func newPlaintextArticle(message, email, subject, name, instance, newsgroup string) NNTPMessage {
   nntp := nntpArticle{
     headers: make(ArticleHeaders),
-    body: bytes.Buffer{},
   }
   nntp.headers.Set("From", fmt.Sprintf("%s <%s>", name, email))
   nntp.headers.Set("Subject", subject)
@@ -111,18 +115,28 @@ func newPlaintextArticle(message, email, subject, name, instance, newsgroup stri
     nntp.headers.Set("X-Sage", "1")
   }
   nntp.headers.Set("Path", instance)
-  nntp.headers.Set("Content-Type", "text/plain; charset=utf8")
   nntp.headers.Set("Message-ID", genMessageID(instance))
   // posted now
   nntp.headers.Set("Date", timeNowStr())
   nntp.headers.Set("Newsgroups", newsgroup)
   nntp.message = createPlaintextAttachment(message)
+  nntp.Pack()
   return nntp
 }
 
 
 func (self nntpArticle) MessageID() string {
   return self.headers.Get("Message-ID", self.headers.Get("Messageid", self.headers.Get("MessageID", self.headers.Get("Message-Id", ""))))
+}
+
+func (self nntpArticle) Pack() {
+  if len(self.boundary) == 0 {
+    self.boundary = randStr(24) 
+    self.headers.Set("Mime-Version", "1.0")
+    self.headers.Set("Content-Type", fmt.Sprintf("mulitype/mixed; boundary=%s", self.boundary))
+    log.Println("pack article boundary is", self.boundary)
+  }
+
 }
 
 func (self nntpArticle) Reference() string {
@@ -207,24 +221,54 @@ func (self nntpArticle) Attachments() []NNTPAttachment {
 }
 
 
-func (self nntpArticle) Attach(att NNTPAttachment) {
+func (self nntpArticle) Attach(att NNTPAttachment) NNTPMessage {
+  log.Println("attaching file", att.Filename())
   self.attachments = append(self.attachments, att)
+  return self
 }
 
 func (self nntpArticle) WriteBody(wr io.Writer) (err error) {
-  w := multipart.NewWriter(wr)
-  attachments := []NNTPAttachment{self.message}
-  if self.attachments != nil {
-    attachments = append(attachments, self.attachments...)
+  log.Printf("writing %d attachments", len(self.attachments))
+  content_type := self.ContentType()
+  _, params, err := mime.ParseMediaType(content_type)
+  if err != nil {
+    log.Println("failed to parse media type", err)
+    return err
   }
-  
-  for _ , att := range(attachments) {
-    part, err := w.CreatePart(att.Header())
-    err = att.WriteTo(part)
-    if err != nil {
-      break
+
+  boundary, ok := params["boundary"]
+  if ok {
+    w := multipart.NewWriter(wr)
+    
+    err = w.SetBoundary(boundary)
+    if err == nil {
+      attachments := []NNTPAttachment{self.message}
+      attachments = append(attachments, self.attachments...)
+      log.Println("writing nntp body")
+      for _ , att := range(attachments) {
+        hdr := att.Header()
+        if hdr == nil {
+          hdr = make(textproto.MIMEHeader)
+        }
+        hdr.Set("Content-Transfer-Encoding", "base64")
+        part, err := w.CreatePart(hdr)
+        if err != nil {
+          log.Println("error writing part", err)
+        }
+        enc := base64.NewEncoder(base64.StdEncoding, part)
+        err = att.WriteTo(enc)
+        enc.Close()  
+        if err != nil {
+          break
+        }
+      }
     }
+    if err != nil {
+      log.Println(err)
+    }
+    err = w.Close()
+  } else {
+    _, err = self.message.body.WriteTo(wr)
   }
-  err = w.Close()
   return err
 }

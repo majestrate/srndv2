@@ -239,7 +239,7 @@ func (self *NNTPDaemon) pollfeeds() {
       }
     case nntp := <- self.infeed:
       // ammend path
-      nntp = nntp.AppendPath(self.instance_name)
+      nntp.AppendPath(self.instance_name)
       // check for validity
       msgid := nntp.MessageID()
       log.Println("daemon got", msgid)

@@ -9,6 +9,7 @@ import (
   "log"
   "net"
   "net/textproto"
+  "os"
   "strings"
   "time"
 )
@@ -122,12 +123,14 @@ func (self *NNTPConnection) HandleOutbound(d *NNTPDaemon) {
     code = int(code)
     commands := strings.Split(line, " ")
     if code == 238 && len(commands) > 1 && ValidMessageID(commands[0]) {
-      msg := d.store.GetMessage(commands[0])
-      if msg == nil {
+      fname := d.store.GetFilename(commands[0])
+      f, err := os.Open(fname)
+      if f == nil {
         log.Println("wut? don't have message", commands[0])
         continue
       } 
-      err = self.SendMessage(msg, d)
+      err = self.SendMessage(commands[0], f, d)
+      f.Close()
       if err != nil {
         log.Println("failed to send message", err)
         self.Quit()
@@ -149,20 +152,20 @@ func (self *NNTPConnection) HandleOutbound(d *NNTPDaemon) {
 }
 
 // just do it (tm)
-func (self *NNTPConnection) SendMessage(message NNTPMessage, d *NNTPDaemon) error {
+func (self *NNTPConnection) SendMessage(msgid string, msg io.Reader, d *NNTPDaemon) error {
   var err error
   self.info.reading = true
-  err = self.txtconn.PrintfLine("TAKETHIS %s", message.MessageID())
+  err = self.txtconn.PrintfLine("TAKETHIS %s", msgid)
   if err != nil {
     log.Println("error in outfeed", err)
     return  err
   }
   wr := self.txtconn.DotWriter()
-  err = self.msg_writer.WriteMessage(message, wr)
+  _, err = io.Copy(wr, msg)
   wr.Close()
   self.info.reading = false
   if err != nil {
-    log.Printf("failed to send %s via feed: %s", message.MessageID(), err)
+    log.Printf("failed to send %s via feed: %s", msgid, err)
     return err
   }
   return nil

@@ -98,9 +98,11 @@ func createPlaintextAttachment(msg string) nntpAttachment {
   var buff bytes.Buffer
   _, _ = io.WriteString(&buff, msg)
   header := make(textproto.MIMEHeader)
+  mime := "text/plain; charset=utf-8"
+  header.Set("Content-Type", mime)
   return nntpAttachment{
+    mime: mime,
     ext: ".txt",
-    mime: "text/plain; charset=utf-8",
     body: buff,
     header: header,
   }

@@ -289,7 +289,6 @@ func (self httpFrontend) handle_postform(wr http.ResponseWriter, r *http.Request
 
 
 
-
   // encrypt IP Addresses
   // when a post is recv'd from a frontend, the remote address is given its own symetric key that the local srnd uses to encrypt the address with, for privacy
   // when a mod event is fired, it includes the encrypted IP address and the symetric key that frontend used to encrypt it, thus allowing others to determine the IP address
@@ -345,9 +344,9 @@ func (self httpFrontend) handle_postform(wr http.ResponseWriter, r *http.Request
     nntp.headers.Set("X-I2P-DestHash", address)
   }
   
-  
+
+  // set newsgroup
   nntp.headers.Set("Newsgroups", board)
-  
   
   // redirect url
   url := self.prefix
@@ -364,11 +363,19 @@ func (self httpFrontend) handle_postform(wr http.ResponseWriter, r *http.Request
   for {
     part, err := mp_reader.NextPart()
     if err == nil {
-      // we got a part
-      // read the body first
-      io.Copy(&part_buff, part)
       // get the name of the part
       partname := part.FormName()
+
+      // read part for attachment
+      if partname == "attachment" {
+        log.Println("attaching file...")
+        att := self.daemon.store.ReadAttachmentFromMimePart(part)
+        nntp = nntp.Attach(att).(nntpArticle)
+        continue
+      }
+
+      io.Copy(&part_buff, part)
+      
       // check for values we want
       if partname == "subject" {
         subject := part_buff.String()
@@ -414,11 +421,7 @@ func (self httpFrontend) handle_postform(wr http.ResponseWriter, r *http.Request
         captcha_id = part_buff.String()
       } else if partname == "captcha_solution" {
         captcha_solution = part_buff.String()
-      } else if partname == "attachment" {
-        att := self.daemon.store.ReadAttachmentFromMimePart(part)
-        nntp.Attach(att)
-      }
-      
+      }      
       // we done
       // reset buffer for reading parts
       part_buff.Reset()
@@ -451,10 +454,7 @@ func (self httpFrontend) handle_postform(wr http.ResponseWriter, r *http.Request
 
   if len(nntp.attachments) == 0 && len(msg) == 0 {
     post_fail += "no message. "
-  } else if len(msg) > 0 {
-    io.WriteString(&nntp.message.body, msg)
   }
-
   if len(post_fail) > 0 {
     wr.WriteHeader(200)
     resp_map["reason"] = post_fail
@@ -462,12 +462,15 @@ func (self httpFrontend) handle_postform(wr http.ResponseWriter, r *http.Request
     io.WriteString(wr, templateRender(fname, resp_map))
     return
   }
-  
+  // set message
+  nntp.message = createPlaintextAttachment(msg)
   // set date
   nntp.headers.Set("Date", timeNowStr())
   // append path from frontend
   nntp.AppendPath(self.name)
   // send message off to daemon
+  log.Printf("uploaded %d attachments", len(nntp.Attachments()))
+  nntp.Pack()
   self.postchan <- nntp
 
   // send success reply

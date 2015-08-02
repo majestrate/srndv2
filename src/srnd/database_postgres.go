@@ -12,6 +12,7 @@ package srnd
 
 import (
   "database/sql"
+  "encoding/hex"
   "errors"
   "fmt"
   "log"
@@ -820,7 +821,7 @@ func (self PostgresDatabase) RegisterArticle(message NNTPMessage) {
       continue
     }
     defer stmt.Close()
-    _, err = stmt.Exec(msgid, att.Hash(), att.Filename(), att.Filepath())
+    _, err = stmt.Exec(msgid, hex.EncodeToString(att.Hash()), att.Filename(), att.Filepath())
     if err != nil {
       log.Println("failed to execute query to register attachment", err)
       continue

@@ -369,7 +369,7 @@ func (self httpFrontend) handle_postform(wr http.ResponseWriter, r *http.Request
       // read part for attachment
       if partname == "attachment" {
         log.Println("attaching file...")
-        att := self.daemon.store.ReadAttachmentFromMimePart(part)
+        att := self.daemon.store.ReadAttachmentFromMimePart(part, false)
         nntp = nntp.Attach(att).(nntpArticle)
         continue
       }

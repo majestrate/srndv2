@@ -11,6 +11,7 @@ import (
   "bytes"
   "crypto/sha512"
   "encoding/base32"
+  "encoding/base64"
   "fmt"
   "io"
   //"io/ioutil"
@@ -184,7 +185,7 @@ func (self articleStore) ReadMessage(r io.Reader) (NNTPMessage, error) {
               nntp.message.header.Set("Content-Type", part_type)
             } else {
               // non plaintext gets added to attachments
-              att := self.ReadAttachmentFromMimePart(part)
+              att := self.ReadAttachmentFromMimePart(part, true)
               nntp = nntp.Attach(att).(nntpArticle)
             }
           } else {
@@ -342,23 +343,24 @@ func (self articleStore) GetHeaders(messageID string) ArticleHeaders {
   return nntp.Headers()
 }
 
-func (self articleStore) ReadAttachmentFromMimePart(part *multipart.Part) NNTPAttachment {
+func (self articleStore) ReadAttachmentFromMimePart(part *multipart.Part, decode bool) NNTPAttachment {
   var buff bytes.Buffer
   content_type := part.Header.Get("Content-Type")
-  if content_type == "" {
-    content_type = "unknown"
-  }
   media_type, _ , err := mime.ParseMediaType(content_type)
-
+  
   fname := part.FileName()
   idx := strings.LastIndex(fname, ".")
   ext := ".txt"
   if idx > 0 {
     ext = fname[idx:]
   }
-  
-  n, err := io.Copy(&buff, part)
-  log.Printf("read %d bytes from mime part", n)
+
+  if decode {
+    reader := base64.NewDecoder(base64.StdEncoding, part)
+    _, err = io.Copy(&buff, reader)
+  } else {
+    _, err = io.Copy(&buff, part)
+  }
   if err != nil {
     log.Println("failed to read attachment from mimepart", err)
     return nil

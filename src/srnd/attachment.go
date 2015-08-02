@@ -69,7 +69,7 @@ func (self nntpAttachment) Extension() string {
   return self.ext
 }
 
-func (self nntpAttachment) WriteTo(wr io.Writer) error {
+func (self nntpAttachment) WriteTo(wr io.Writer) error {  
   _, err := self.body.WriteTo(wr)
   return err
 }
@@ -102,7 +102,7 @@ type AttachmentSaver interface {
 
 
 type AttachmentReader interface {
-  ReadAttachmentFromMimePart(part *multipart.Part) NNTPAttachment
+  ReadAttachmentFromMimePart(part *multipart.Part, decode bool) NNTPAttachment
 }
 
 // create a plaintext attachment

@@ -454,10 +454,17 @@ func (self PostgresDatabase) DeleteThread(msgid string) (err error) {
 }
 
 func (self PostgresDatabase) DeleteArticle(msgid string) (err error) {
+  
   stmt, err := self.Conn().Prepare("DELETE FROM ArticlePosts WHERE message_id = $1")
   if err == nil {
     defer stmt.Close()
-     _ = stmt.QueryRow(msgid)
+    _ = stmt.QueryRow(msgid)
+    // delete attachments too
+    stmt, err = self.Conn().Prepare("DELETE FROM ArticleAttachments WHERE message_id = $1")
+    if err == nil {
+      defer stmt.Close()
+      _ = stmt.QueryRow(msgid)
+    }
   }
   return
 }

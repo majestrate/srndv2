@@ -114,6 +114,7 @@ type Database interface {
 
   // delete an article from the database
   DeleteArticle(msg_id string) error
+  
   // detele the existance of a thread from the threads table, does NOT remove replies
   DeleteThread(root_msg_id string) error
   

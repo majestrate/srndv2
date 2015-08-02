@@ -318,9 +318,7 @@ func (self articleStore) ReadAttachmentFromMimePart(part *multipart.Part) NNTPAt
   }
   sha := sha512.Sum512(buff.Bytes())
   hashstr := base32.StdEncoding.EncodeToString(sha[:])
-  fpath_fname := hashstr+ext
-  fpath := filepath.Join(self.attachments, fpath_fname)
-
+  fpath := hashstr+ext
   hdr := part.Header
   return nntpAttachment{
     header: hdr,

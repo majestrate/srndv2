@@ -156,7 +156,6 @@ func (self articleStore) ReadMessage(r io.Reader) (NNTPMessage, error) {
 
 
 func (self articleStore) WriteMessage(nntp NNTPMessage, wr io.Writer) (err error) {
-  nntp.Pack()
   // write headers
   for hdr, hdr_vals := range(nntp.Headers()) {
     for _ , hdr_val := range hdr_vals {

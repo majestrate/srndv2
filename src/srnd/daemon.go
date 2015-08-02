@@ -26,6 +26,9 @@ type NNTPDaemon struct {
   // http frontend
   frontend Frontend
 
+  // thumbnail generator for images
+  img_thm ThumbnailGenerator
+  
   // nntp feeds map, feed, isoutbound
   feeds map[NNTPConnection]bool
   infeed chan NNTPMessage
@@ -178,6 +181,7 @@ func (self *NNTPDaemon) Run() {
     // if we have no initial posts create one
     if self.database.ArticleCount() == 0 {
       nntp := newPlaintextArticle("welcome to nntpchan, this post was inserted on startup automatically", "system@"+self.instance_name, "Welcome to NNTPChan", "system", self.instance_name, "overchan.test")
+      nntp.Pack()
       file := self.store.CreateTempFile(nntp.MessageID())
       if file != nil {
         err := self.store.WriteMessage(nntp, file)
@@ -247,8 +251,9 @@ func (self *NNTPDaemon) pollfeeds() {
       if err == nil {
         // register article
         self.database.RegisterArticle(nntp)
-        // store article
-        // this generates thumbs and stores attachemnts
+
+        // store article and attachments
+        // this also generates thumbnails
         err = self.store.StorePost(nntp)
 
         // prepare for content rollover

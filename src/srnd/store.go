@@ -5,6 +5,9 @@
 package srnd
 
 import (
+
+  "github.com/gographics/imagick/imagick"
+  
   "bytes"
   "crypto/sha512"
   "encoding/base32"
@@ -20,6 +23,7 @@ import (
   "path/filepath"
   "strings"
 )
+
 
 type ArticleStore interface {
   MessageReader
@@ -80,6 +84,32 @@ func (self articleStore) Init() {
   EnsureDir(self.thumbs)
 }
 
+
+func (self articleStore) GenerateThumbnail(infname string) (err error) {
+  wand := imagick.NewMagickWand()
+  defer wand.Destroy()
+  // read image source
+  err = wand.ReadImage(self.AttachmentFilepath(infname))
+  if err == nil {
+    // get size
+    h := wand.GetImageHeight()
+    w := wand.GetImageWidth()
+
+    // calculate scale parameters
+    var scale, th, tw float64 
+    scale = 180
+    modifier := scale / float64(w)
+    th = modifier * float64(h)
+    tw = modifier * float64(w)
+    // scale it
+    err = wand.ScaleImage(uint(tw), uint(th))
+    if err == nil {
+      err = wand.WriteImage(self.ThumbnailFilepath(infname))
+    }
+  }
+  return
+}
+
 func (self articleStore) StorePost(nntp NNTPMessage) (err error) {
   f := self.CreateFile(nntp.MessageID())
   if f != nil {
@@ -87,15 +117,30 @@ func (self articleStore) StorePost(nntp NNTPMessage) (err error) {
     f.Close()
   }
   for _, att := range nntp.Attachments() {
-    log.Println("save attachment", att.Filename(), "to", att.Filepath())
     fpath := att.Filepath()
-    f, err = os.Create(fpath)
+
+    upload := self.AttachmentFilepath(fpath)
+
+    
+    
+    // save attachment
+    log.Println("save attachment", att.Filename(), "to", upload)
+    f, err = os.Create(upload)
     if err == nil {
       err = att.WriteTo(f)
       f.Close()
     }
     if err != nil {
       return
+    }
+    
+    // generate thumbanils
+    if att.NeedsThumbnail() {
+      err = self.GenerateThumbnail(fpath)
+      if err != nil {
+        log.Println("failed to generate thumbnail", err)
+        return 
+      }
     }
   }
   return 
@@ -239,7 +284,7 @@ func (self articleStore) GetTempFilename(messageID string) string {
 func (self articleStore) ReadTempMessage(messageID string) NNTPMessage {
   fname := self.GetTempFilename(messageID)
   nntp := self.readfile(fname)
-  //DelFile(fname)
+  DelFile(fname)
   return nntp
 }
 
@@ -303,6 +348,8 @@ func (self articleStore) ReadAttachmentFromMimePart(part *multipart.Part) NNTPAt
   if content_type == "" {
     content_type = "unknown"
   }
+  media_type, _ , err := mime.ParseMediaType(content_type)
+
   fname := part.FileName()
   idx := strings.LastIndex(fname, ".")
   ext := ".txt"
@@ -323,7 +370,7 @@ func (self articleStore) ReadAttachmentFromMimePart(part *multipart.Part) NNTPAt
   return nntpAttachment{
     header: hdr,
     body: buff,
-    mime: content_type,
+    mime: media_type,
     filename: fname,
     filepath: fpath,
     ext: ext,

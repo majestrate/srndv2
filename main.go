@@ -2,6 +2,7 @@ package main
 
 import (
   "fmt"
+  "github.com/gographics/imagick/imagick"
   "github.com/majestrate/srndv2/src/srnd"
   "log"
   "os"
@@ -19,7 +20,9 @@ func main() {
     } else if action == "run" {
       log.Println("Starting up SRNd...")
       if daemon.Init() {
+        imagick.Initialize()
         daemon.Run()
+        imagick.Terminate()
       } else {
         log.Println("Failed to initialize")
       }

@@ -441,6 +441,18 @@ func (self PostgresDatabase) GetPostModel(prefix, messageID string) PostModel {
       model.parent = model.message_id
   }
   model.sage = isSage(model.subject)
+  atts := self.GetPostAttachments(messageID)
+  if atts != nil {
+    for _, fname := range atts {
+      model.attachments = append(model.attachments, attachment{
+        prefix: prefix,
+        source: prefix+"img/"+fname,
+        thumbnail: prefix+"thm/"+fname,
+        // TODO: obtain upload filename
+        filename: "uploaded file",
+      })
+    }
+  }
   return model
 }
 
@@ -511,6 +523,19 @@ func (self PostgresDatabase) GetThreadReplyPostModels(prefix, rootpost string, l
       model.parent = model.message_id
     }
     model.sage = isSage(model.subject)
+    atts := self.GetPostAttachments(model.message_id)
+    if atts != nil {
+      for _, fname := range atts {
+        model.attachments = append(model.attachments, attachment{
+          prefix: prefix,
+          source: prefix+"img/"+fname,
+          thumbnail: prefix+"thm/"+fname,
+          // TODO: obtain upload filename
+          filename: "uploaded file",
+        })
+      }
+    }
+    
     repls = append(repls, model)
   }
   return repls  

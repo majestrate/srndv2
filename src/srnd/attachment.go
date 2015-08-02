@@ -10,6 +10,7 @@ import (
   "io"
   "mime/multipart"
   "net/textproto"
+  "strings"
 )
 
 type NNTPAttachment interface {
@@ -29,6 +30,8 @@ type NNTPAttachment interface {
   NeedsThumbnail() bool
   // mime header
   Header() textproto.MIMEHeader
+  // make into a model
+  ToModel(prefix string) AttachmentModel
 }
 
 type nntpAttachment struct {
@@ -39,6 +42,15 @@ type nntpAttachment struct {
   hash []byte
   header textproto.MIMEHeader
   body bytes.Buffer
+}
+
+func (self nntpAttachment) ToModel(prefix string) AttachmentModel {
+  return attachment{
+    prefix: prefix,
+    source: prefix+"img/"+self.Filepath(),
+    thumbnail: prefix+"thm/"+self.Filepath(),
+    filename: self.Filename(),
+  }
 }
 
 func (self nntpAttachment) Filename() string {
@@ -74,7 +86,7 @@ func (self nntpAttachment) Hash() []byte {
 
 // TODO: detect
 func (self nntpAttachment) NeedsThumbnail() bool {
-  return false
+  return strings.HasPrefix(self.mime, "image/")
 }
 
 func (self nntpAttachment) Header() textproto.MIMEHeader {

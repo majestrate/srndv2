@@ -13,22 +13,26 @@ donate: bitcoin 15yuMzuueV8y5vPQQ39ZqQVz5Ey98DNrjE
 
 * a modern c compiler, (gcc, clang)
 * libsodium
+* image magick
 * go 1.4 or higher
 * postgresql
 
 ## building
 
-    # get dependancies
+
+
+    # get libsodium and imagemagick
+    sudo apt-get install libsodium-dev libmagickwand-dev
+    
+    # get go dependancies
     go get github.com/gorilla/sessions
     go get github.com/gorilla/mux
     go get github.com/dchest/captcha
     go get github.com/majestrate/configparser
     go get github.com/lib/pq
     go get github.com/hoisie/mustache
+    go get github.com/gographics/imagick/imagick
 
-    # get libsodium
-    sudo apt-get install libsodium-dev
-    
     # set gopath if it's not already set
     export GOPATH=$HOME/go
     mkdir -p $GOPATH

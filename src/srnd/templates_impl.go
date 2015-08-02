@@ -68,12 +68,23 @@ type post struct {
   posted int64
   parent string
   sage bool
+  attachments []AttachmentModel
 }
 
 type attachment struct {
+  prefix string
   thumbnail string
   source string
   filename string
+}
+
+func (self attachment) Prefix() string {
+  return self.prefix
+}
+
+func (self attachment) RenderTo(wr io.Writer) error {
+  // does nothing
+  return nil
 }
 
 func (self attachment) Thumbnail() string {
@@ -101,6 +112,9 @@ func PostModelFromMessage(parent, prefix string, nntp NNTPMessage) PostModel {
   p.prefix = prefix
   p.parent = parent
   p.sage = nntp.Sage()
+  for _, att := range nntp.Attachments() {
+    p.attachments = append(p.attachments, att.ToModel(prefix))
+  }
   return p
 }
 
@@ -162,7 +176,7 @@ func (self post) Subject() string {
 
 // TODO: implement
 func (self post) Attachments() []AttachmentModel {
-  return nil
+  return self.attachments
 }
 
 func (self post) PostURL() string {

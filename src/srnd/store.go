@@ -15,6 +15,7 @@ import (
   "mime"
   "mime/multipart"
   "net/mail"
+  "net/textproto"
   "os"
   "path/filepath"
   "strings"
@@ -132,6 +133,10 @@ func (self articleStore) ReadMessage(r io.Reader) (NNTPMessage, error) {
             if media_type == "text/plain" {
               // plaintext gets added to message part
               nntp.message.body.ReadFrom(part)
+              if nntp.message.header == nil {
+                nntp.message.header = make(textproto.MIMEHeader)
+                nntp.message.header.Set("Content-Type", part_type)
+              }
             } else {
               // non plaintext gets added to attachments
               att := self.ReadAttachmentFromMimePart(part)

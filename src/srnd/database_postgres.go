@@ -15,7 +15,6 @@ import (
   "errors"
   "fmt"
   "log"
-  "strings"
   "time"
   _ "github.com/lib/pq"
 )
@@ -256,7 +255,7 @@ func (self PostgresDatabase) GetEncAddress(addr string) (string, error) {
 }
 
 func (self PostgresDatabase) CheckIPBanned(addr string) (banned bool, err error) {
-  stmt, err := self.Conn().Prepare("SELECT COUNT(*) FROM IPBans WHERE addr >>= inet $1 ")
+  stmt, err := self.Conn().Prepare("SELECT COUNT(*) FROM IPBans WHERE addr >>= $1 ")
   if err == nil {
     defer stmt.Close()
     var amount int64
@@ -440,7 +439,7 @@ func (self PostgresDatabase) GetPostModel(prefix, messageID string) PostModel {
   if len(model.parent) == 0 {
       model.parent = model.message_id
   }
-  model.sage = strings.HasPrefix(strings.ToLower(model.subject), "sage ") || model.subject == "sage"
+  model.sage = isSage(model.subject)
   return model
 }
 
@@ -503,7 +502,7 @@ func (self PostgresDatabase) GetThreadReplyPostModels(prefix, rootpost string, l
     if len(model.parent) == 0 {
       model.parent = model.message_id
     }
-    model.sage = strings.HasPrefix(strings.ToLower(model.subject), "sage ") || model.subject == "sage"
+    model.sage = isSage(model.subject)
     repls = append(repls, model)
   }
   return repls  
@@ -580,7 +579,6 @@ func (self PostgresDatabase) GetGroupThreads(group string, recv chan string) {
 func (self PostgresDatabase) GetLastBumpedThreads(newsgroup string, threads int) []string {
   var err error
   var rows *sql.Rows
-  // TODO: detect sage
   if len(newsgroup) > 0 { 
     stmt, err := self.Conn().Prepare("SELECT root_message_id FROM ArticleThreads WHERE newsgroup = $1 ORDER BY last_bump DESC LIMIT $2")
     if err == nil {

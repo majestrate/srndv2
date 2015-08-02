@@ -371,14 +371,21 @@ func (self httpFrontend) handle_postform(wr http.ResponseWriter, r *http.Request
       partname := part.FormName()
       // check for values we want
       if partname == "subject" {
-        nntp.headers.Set("Subject", part_buff.String())
+        subject := part_buff.String()
+        if len(subject) == 0 {
+          subject = "None"
+        }
+        nntp.headers.Set("Subject", subject)
+        if isSage(subject) {
+          nntp.headers.Set("X-Sage", "1")
+        }
       } else if partname == "name" {
         name := part_buff.String()
         if len(name) == 0 {
           name = "Anonymous"
         }  
         nntp.headers.Set("From", nntpSanitize(fmt.Sprintf("%s <%s@%s>", name, name, self.name)))
-        nntp.headers.Set("Message-ID", genMessageID(name))
+        nntp.headers.Set("Message-ID", genMessageID(self.name))
       } else if partname == "message" {
         msg = part_buff.String()
       } else if partname == "reference" {
@@ -444,6 +451,8 @@ func (self httpFrontend) handle_postform(wr http.ResponseWriter, r *http.Request
 
   if len(nntp.attachments) == 0 && len(msg) == 0 {
     post_fail += "no message. "
+  } else if len(msg) > 0 {
+    io.WriteString(&nntp.message.body, msg)
   }
 
   if len(post_fail) > 0 {
@@ -454,8 +463,10 @@ func (self httpFrontend) handle_postform(wr http.ResponseWriter, r *http.Request
     return
   }
   
-
-  
+  // set date
+  nntp.headers.Set("Date", timeNowStr())
+  // append path from frontend
+  nntp.AppendPath(self.name)
   // send message off to daemon
   self.postchan <- nntp
 

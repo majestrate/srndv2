@@ -96,7 +96,7 @@ type AttachmentReader interface {
 // create a plaintext attachment
 func createPlaintextAttachment(msg string) nntpAttachment {
   var buff bytes.Buffer
-  buff.WriteString(msg)
+  _, _ = io.WriteString(&buff, msg)
   header := make(textproto.MIMEHeader)
   return nntpAttachment{
     ext: ".txt",

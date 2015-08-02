@@ -107,6 +107,9 @@ func newPlaintextArticle(message, email, subject, name, instance, newsgroup stri
   }
   nntp.headers.Set("From", fmt.Sprintf("%s <%s>", name, email))
   nntp.headers.Set("Subject", subject)
+  if isSage(subject) {
+    nntp.headers.Set("X-Sage", "1")
+  }
   nntp.headers.Set("Path", instance)
   nntp.headers.Set("Content-Type", "text/plain; charset=utf8")
   nntp.headers.Set("Message-ID", genMessageID(instance))
@@ -222,5 +225,6 @@ func (self nntpArticle) WriteBody(wr io.Writer) (err error) {
       break
     }
   }
+  err = w.Close()
   return err
 }

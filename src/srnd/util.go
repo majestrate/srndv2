@@ -357,3 +357,8 @@ func mapGetInt(m map[string]string, key string, fallback int) int {
   } 
   return fallback
 }
+
+func isSage(str string) bool {
+  str = strings.ToLower(str)
+  return str == "sage" || strings.HasPrefix(str, "sage ")
+}

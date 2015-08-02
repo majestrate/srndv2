@@ -5,14 +5,15 @@
 package srnd
 
 import (
-  "bufio"
   "bytes"
-  //"encoding/base64"
-  "errors"
+  "crypto/sha512"
+  "encoding/base32"
   "fmt"
   "io"
   //"io/ioutil"
   "log"
+  "mime/multipart"
+  "net/mail"
   "os"
   "path/filepath"
   "strings"
@@ -22,6 +23,7 @@ type ArticleStore interface {
   MessageReader
   MessageWriter
   MessageVerifier
+  AttachmentReader
   
   // get the filepath for an attachment
   AttachmentFilepath(fname string) string
@@ -85,52 +87,29 @@ func (self articleStore) StorePost(nntp NNTPMessage) (err error) {
   return 
 }
 
-func (self articleStore) ReadMessage(r io.Reader) (NNTPMessage, error) {
-  nntp := nntpArticle{headers: make(ArticleHeaders)}
-  reader := bufio.NewReader(r)
-  var err error
-  // read headers
-  for {
-    l, err := reader.ReadString('\n')
-    if err == io.EOF {
-      return nil, errors.New("got EOF while reading headers")
-    } else if err != nil {
-      return nil, err
-    }
-    linelen := len(l)
-    var line string
-    if strings.HasPrefix(l, "\r\n") {
-      line = l[:linelen-2]
-    } else {
-      line = l[:linelen-1]
-    }
-    // end of headers?
-    if len(line) == 0 {
-      break
-    }
-    colonIdx := strings.Index(line, ": ")
-    if colonIdx > 1 {
-      headername := line[:colonIdx]
-      headerval := line[colonIdx+2:]
-      nntp.headers[headername] = headerval
-    } else {
-      // invalid line
-      return nil, errors.New("invalid header line: "+l)
+func (self articleStore) ReadMessage(r io.Reader) (nntp NNTPMessage, err error) {
+
+  msg, err := mail.ReadMessage(r)
+  if err == nil {
+    var buff bytes.Buffer
+    _, err = io.Copy(&buff, msg.Body)
+    nntp = nntpArticle{
+      headers: ArticleHeaders(msg.Header),
+      body: buff,
     }
   }
-  var body bytes.Buffer
-  _, err = io.Copy(&body, reader)
-  nntp.message = body.String()
   return nntp, err
 }
 
 
 func (self articleStore) WriteMessage(nntp NNTPMessage, wr io.Writer) (err error) {
   // write headers
-  for hdr, hdr_val := range(nntp.Headers()) {
-    _, err = io.WriteString(wr, fmt.Sprintf("%s: %s\n", hdr, hdr_val))
-    if err != nil {
-      return
+  for hdr, hdr_vals := range(nntp.Headers()) {
+    for _ , hdr_val := range hdr_vals {
+      _, err = io.WriteString(wr, fmt.Sprintf("%s: %s\n", hdr, hdr_val))
+      if err != nil {
+        return
+      }
     }
   }
   // done headers
@@ -259,4 +238,32 @@ func (self articleStore) GetHeaders(messageID string) ArticleHeaders {
   return nntp.Headers()
 }
 
+func (self articleStore) ReadAttachmentFromMimePart(part *multipart.Part) NNTPAttachment {
+  var buff bytes.Buffer
+  content_type := part.Header.Get("Content-Type")
+  if content_type == "" {
+    content_type = "unknown"
+  }
+  fname := part.FileName()
+  idx := strings.LastIndex(fname, ".")
+  ext := ".txt"
+  if idx > 0 {
+    ext = fname[idx:]
+  }
+  
+  _, _ = io.Copy(&buff, part)  
 
+  sha := sha512.Sum512(buff.Bytes())
+  hashstr := base32.StdEncoding.EncodeToString(sha[:])
+  fpath_fname := hashstr+ext
+  fpath := filepath.Join(self.attachments, fpath_fname)
+  
+  return nntpAttachment{
+    body: buff,
+    mime: content_type,
+    filename: fname,
+    filepath: fpath,
+    ext: ext,
+    hash: sha[:],
+  }
+}

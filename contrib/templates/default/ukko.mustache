@@ -8,7 +8,7 @@
     <div id="ukko_threads" class="threads_container">
       {{#threads}}
         <div class="ukko_thread_header">
-          <p> Posted on <span class="ukko_boardname">{{OP.Board}}</span></p>
+          <p> Posted on <a href="{{{BoardURL}}}"><span class="ukko_boardname">{{OP.Board}}</span></a></p>
         </div>
         <div class="thread" id="thread_{{OP.PostHash}}">
           <div clsss="thread_header">

@@ -64,6 +64,7 @@ type ThreadModel interface {
   OP() PostModel
   Replies() []PostModel
   Board() string
+  BoardURL() string
 }
 
 // board interface

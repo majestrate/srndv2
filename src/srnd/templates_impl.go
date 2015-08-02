@@ -22,8 +22,9 @@ type boardModel struct {
 
 
 func (self boardModel) RenderNavbar() string {
-  // TODO navbar
-  return "navbar goes here"
+  param := make(map[string]interface{})
+  param["board"] = self
+  return renderTemplate("navbar.mustache", param)
 }
 
 func (self boardModel) Frontend() string {
@@ -200,6 +201,10 @@ func (self thread) Board() string {
   return self.posts[0].Board()
 }
 
+func (self thread) BoardURL() string {
+  return fmt.Sprintf("%s%s-0.html", self.Prefix(), self.Board())
+}
+
 // get our default template dir
 func defaultTemplateDir() string {
   return  filepath.Join("contrib", "templates", "default")
@@ -252,5 +257,9 @@ func renderUkko(prefix string, threads []ThreadModel) string {
 
 func renderPostForm(prefix, board, op_msg_id string) string {
   url := prefix + "post/" + board
-  return renderTemplate("postform.mustache", map[string]string { "post_url" : url, "reference" : op_msg_id , "button" : "Reply" } )
+  button := "New Thread"
+  if op_msg_id != "" {
+    button = "Reply"
+  }
+  return renderTemplate("postform.mustache", map[string]string { "post_url" : url, "reference" : op_msg_id , "button" : button } )
 }

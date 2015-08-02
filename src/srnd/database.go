@@ -25,6 +25,7 @@ type Database interface {
   CreateTables()
   HasNewsgroup(group string) bool
   HasArticle(message_id string) bool
+  HasArticleLocal(message_id string) bool
   RegisterNewsgroup(group string)
   RegisterArticle(article NNTPMessage)
   GetAllArticlesInGroup(group string, send chan string)
@@ -104,12 +105,17 @@ type Database interface {
   // return emtpy string if we don't have it
   GetIPAddress(encAddr string) (string, error)
 
+  // check if an ip is banned from our local
+  CheckIPBanned(addr string) (bool, error)
+  
   // return the encrypted version of an IPAddress
   // if it's not already there insert it into the database
   GetEncAddress(addr string) (string, error)
 
   // delete an article from the database
   DeleteArticle(msg_id string) error
+  // detele the existance of a thread from the threads table, does NOT remove replies
+  DeleteThread(root_msg_id string) error
   
   // underlying database connection
   Conn() *sql.DB

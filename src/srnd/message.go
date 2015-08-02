@@ -4,41 +4,30 @@
 package srnd
 
 import (
-/*
-  "bufio"
   "bytes"
-  "crypto/rand"
-  "crypto/sha512"
-  "encoding/hex"
   "fmt"
-  "github.com/majestrate/srndv2/src/nacl"
   "io"
-  "log"
-  "mime"
   "mime/multipart"
-  "net/textproto"
-  "path/filepath"
-  "time"
-*/
-  "fmt"
-  "io"
   "strings"
   "time"
-
 )
 
 
-type ArticleHeaders map[string]string
+type ArticleHeaders map[string][]string
 
 func (self ArticleHeaders) Has(key string) bool {
   _, ok := self[key]
   return ok
 }
 
+func (self ArticleHeaders) Set(key, val string) {
+  self[key] = []string{val}
+}
+
 func (self ArticleHeaders) Get(key, fallback string) string {
   val , ok := self[key]
   if ok {
-    return val
+    return val[0]
   } else {
     return fallback
   }
@@ -60,8 +49,6 @@ type NNTPMessage interface {
   Subject() string
   // when this was posted
   Posted() int64
-  // the message from the poster
-  Message() string
   // the path header
   Path() string
   // append something to path
@@ -79,6 +66,10 @@ type NNTPMessage interface {
   Headers() ArticleHeaders
   // write out body
   WriteBody(wr io.Writer) error
+  // attach a file
+  Attach(att NNTPAttachment) 
+  // get the plaintext message if it exists
+  Message() string
 }
 
 type MessageReader interface {
@@ -103,26 +94,32 @@ type MessageVerifier interface {
 
 type nntpArticle struct {
   headers ArticleHeaders
-  message string
+  body bytes.Buffer
+  message nntpAttachment
+  attachments []NNTPAttachment
 }
 
 // create a simple plaintext nntp message
 func newPlaintextArticle(message, email, subject, name, instance, newsgroup string) NNTPMessage {
-  nntp := nntpArticle{make(ArticleHeaders), message}
-  nntp.headers["From"] = fmt.Sprintf("%s <%s>", name, email)
-  nntp.headers["Subject"] = subject
-  nntp.headers["Path"] = instance
-  nntp.headers["Content-Type"] = "text/plain"
-  nntp.headers["MessageID"] = genMessageID(instance)
+  nntp := nntpArticle{
+    headers: make(ArticleHeaders),
+    body: bytes.Buffer{},
+  }
+  nntp.headers.Set("From", fmt.Sprintf("%s <%s>", name, email))
+  nntp.headers.Set("Subject", subject)
+  nntp.headers.Set("Path", instance)
+  nntp.headers.Set("Content-Type", "text/plain; charset=utf8")
+  nntp.headers.Set("Message-ID", genMessageID(instance))
   // posted now
-  nntp.headers["Date"] = timeNowStr()
-  nntp.headers["Newsgroups"] = newsgroup
-
+  nntp.headers.Set("Date", timeNowStr())
+  nntp.headers.Set("Newsgroups", newsgroup)
+  nntp.message = createPlaintextAttachment(message)
   return nntp
 }
 
+
 func (self nntpArticle) MessageID() string {
-  return self.headers.Get("MessageID", "")
+  return self.headers.Get("Message-ID", self.headers.Get("Messageid", self.headers.Get("MessageID", self.headers.Get("Message-Id", ""))))
 }
 
 func (self nntpArticle) Reference() string {
@@ -170,7 +167,7 @@ func (self nntpArticle) Posted() int64 {
 }
 
 func (self nntpArticle) Message() string {
-  return self.message
+  return self.message.body.String()
 }
 
 func (self nntpArticle) Path() string {
@@ -183,9 +180,9 @@ func (self nntpArticle) Headers() ArticleHeaders {
 
 func (self nntpArticle) AppendPath(part string) NNTPMessage {
   if self.headers.Has("Path") {
-    self.headers["Path"] = part + "!" + self.Path()
+    self.headers.Set("Path", part + "!" + self.Path())
   } else {
-    self.headers["Path"] = part
+    self.headers.Set("Path", part)
   }
   return self
 }
@@ -203,13 +200,27 @@ func (self nntpArticle) OP() bool {
 }
 
 func (self nntpArticle) Attachments() []NNTPAttachment {
-  // TODO: implement?
-  return nil
+  return self.attachments
 }
 
 
+func (self nntpArticle) Attach(att NNTPAttachment) {
+  self.attachments = append(self.attachments, att)
+}
+
 func (self nntpArticle) WriteBody(wr io.Writer) (err error) {
-  // TODO: attachments
-  _, err = io.WriteString(wr, self.message)
-  return
+  w := multipart.NewWriter(wr)
+  attachments := []NNTPAttachment{self.message}
+  if self.attachments != nil {
+    attachments = append(attachments, self.attachments...)
+  }
+  
+  for _ , att := range(attachments) {
+    part, err := w.CreatePart(att.Header())
+    err = att.WriteTo(part)
+    if err != nil {
+      break
+    }
+  }
+  return err
 }

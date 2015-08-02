@@ -273,16 +273,84 @@ func (self httpFrontend) pollukko() {
 // handle new post via http request for a board
 func (self httpFrontend) handle_postform(wr http.ResponseWriter, r *http.Request, board string) {
 
-  // default values
-  // TODO: set content type for attachments
-  content_type := "text/plain"
-  ref := ""
-  name := "anonymous"
-  subject := "None"
-  message := ""
   // captcha stuff
   captcha_id := ""
   captcha_solution := ""
+
+  // post fail message
+  post_fail := ""
+
+  // post message
+  msg := ""
+  
+  // the nntp message
+  var nntp nntpArticle
+  nntp.headers = make(ArticleHeaders)
+
+
+
+
+  // encrypt IP Addresses
+  // when a post is recv'd from a frontend, the remote address is given its own symetric key that the local srnd uses to encrypt the address with, for privacy
+  // when a mod event is fired, it includes the encrypted IP address and the symetric key that frontend used to encrypt it, thus allowing others to determine the IP address
+  // each stnf will optinally comply with the mod event, banning the address from being able to post from that frontend
+  // this will be done eventually but for now that requires too much infrastrucutre, let's go with regular IP Addresses for now.
+  
+  // get the "real" ip address from the request
+
+  address , _, err := net.SplitHostPort(r.RemoteAddr)
+  // TODO: have in config upstream proxy ip and check for that
+  if strings.HasPrefix(address, "127.") {
+    // if it's loopback check headers for reverse proxy headers
+    // TODO: make sure this isn't a tor user being sneaky
+    address = getRealIP(r.Header.Get("X-Real-IP"))
+  }
+    
+  // check for banned
+  if len(address) > 0 {
+    banned, err :=  self.daemon.database.CheckIPBanned(address)
+    if err == nil {
+      if banned {
+        wr.WriteHeader(403)
+        // TODO: ban messages
+        io.WriteString(wr,  "nigguh u banned.")
+        return
+      }
+    } else {
+      wr.WriteHeader(500)
+      io.WriteString(wr, "error checking for ban: ")
+      io.WriteString(wr, err.Error())
+      return
+    }
+  }
+  if len(address) == 0 {
+    address = "Tor"
+  }
+  if ! strings.HasPrefix(address, "127.") {
+    // set the ip address of the poster to be put into article headers
+    // if we cannot determine it, i.e. we are on Tor/i2p, this value is not set
+    if address == "Tor" {
+      nntp.headers.Set("X-Tor-Poster", "1")
+    } else {
+      address, err = self.daemon.database.GetEncAddress(address)
+      nntp.headers.Set("X-Encrypted-IP", address)
+      // TODO: add x-tor-poster header for tor exits
+    }
+  }
+  
+  // if we don't have an address for the poster try checking for i2p httpd headers
+  address = r.Header.Get("X-I2P-DestHash")
+  // TODO: make sure this isn't a Tor user being sneaky
+  if len(address) > 0 {
+    nntp.headers.Set("X-I2P-DestHash", address)
+  }
+  
+  
+  nntp.headers.Set("Newsgroups", board)
+  
+  
+  // redirect url
+  url := self.prefix
   // mime part handler
   var part_buff bytes.Buffer
   mp_reader, err := r.MultipartReader()
@@ -303,20 +371,45 @@ func (self httpFrontend) handle_postform(wr http.ResponseWriter, r *http.Request
       partname := part.FormName()
       // check for values we want
       if partname == "subject" {
-        subject = part_buff.String()
+        nntp.headers.Set("Subject", part_buff.String())
       } else if partname == "name" {
-        name = part_buff.String()
+        name := part_buff.String()
         if len(name) == 0 {
           name = "Anonymous"
-        }
+        }  
+        nntp.headers.Set("From", nntpSanitize(fmt.Sprintf("%s <%s@%s>", name, name, self.name)))
+        nntp.headers.Set("Message-ID", genMessageID(name))
       } else if partname == "message" {
-        message = part_buff.String()
+        msg = part_buff.String()
       } else if partname == "reference" {
-        ref = part_buff.String()
+        ref := part_buff.String()
+        if len(ref) == 0 {
+          url = fmt.Sprintf("%s.html", board)
+        } else if ValidMessageID(ref) {
+          if self.daemon.database.HasArticleLocal(ref) {
+            nntp.headers.Set("Reference", ref)
+            url = fmt.Sprintf("thread-%s.html", ShortHashMessageID(ref))
+          } else {
+            // no such article
+            url = fmt.Sprintf("%s.html", board)
+            post_fail += "we don't have "
+            post_fail += ref
+            post_fail += "locally, can't reply. "
+          }
+        } else {
+          post_fail += "invalid reference: "
+          post_fail += ref
+          post_fail += ", not posting. "
+        }
+          
+
       } else if partname == "captcha" {
         captcha_id = part_buff.String()
       } else if partname == "captcha_solution" {
         captcha_solution = part_buff.String()
+      } else if partname == "attachment" {
+        att := self.daemon.store.ReadAttachmentFromMimePart(part)
+        nntp.Attach(att)
       }
       
       // we done
@@ -336,99 +429,29 @@ func (self httpFrontend) handle_postform(wr http.ResponseWriter, r *http.Request
     }
   }
 
-  url := self.prefix
-  if len(ref) > 0 {
-    // redirect to thread
-    url += fmt.Sprintf("thread-%s.html", ShortHashMessageID(ref))
-  } else {
-    // redirect to board
-    url += fmt.Sprintf("%s.html", board)
-  }
 
   // make error template param
   resp_map := make(map[string]string)
   resp_map["redirect_url"] = url
-  postfail := ""
   
   if len(captcha_solution) == 0 || len(captcha_id) == 0 {
-    postfail = "no captcha provided"
+    post_fail += "no captcha provided. "
   }
   
   if ! captcha.VerifyString(captcha_id, captcha_solution) {
-    postfail = "failed captcha"
+    post_fail += "failed captcha. "
   }
 
-  if len(message) == 0 {
-    postfail = "message too small"
+  if len(nntp.attachments) == 0 && len(msg) == 0 {
+    post_fail += "no message. "
   }
-  if len(postfail) > 0 {
+
+  if len(post_fail) > 0 {
     wr.WriteHeader(200)
-    resp_map["reason"] = postfail
+    resp_map["reason"] = post_fail
     fname := filepath.Join(defaultTemplateDir(), "post_fail.mustache")
     io.WriteString(wr, templateRender(fname, resp_map))
     return
-  }
-  
-  // make the message
-  var nntp nntpArticle
-  nntp.headers = make(ArticleHeaders)
-  // generate message id
-  nntp.headers["MessageID"] = genMessageID(self.name)
-  // TODO: hardcoded newsgroup prefix
-  nntp.headers["Newsgroups"] = board
-  
-  nntp.headers["From"] = nntpSanitize(fmt.Sprintf("%s <%s@%s>", name, name, self.name))
-  if len(subject) == 0 {
-    subject = "None"
-  }
-  nntp.headers["Subject"] = nntpSanitize(subject)
-  nntp.headers["Path"] = self.name
-  nntp.headers["Date"] = timeNowStr()
-  nntp.message = nntpSanitize(message)
-  nntp.headers["Content-Type"] = content_type
-  // set reference
-  if ValidMessageID(ref) {
-    nntp.headers["Reference"] = ref
-  }
-
-  // encrypt IP Addresses
-  // when a post is recv'd from a frontend, the remote address is given its own symetric key that the local srnd uses to encrypt the address with, for privacy
-  // when a mod event is fired, it includes the encrypted IP address and the symetric key that frontend used to encrypt it, thus allowing others to determine the IP address
-  // each stnf will optinally comply with the mod event, banning the address from being able to post from that frontend
-  // this will be done eventually but for now that requires too much infrastrucutre, let's go with regular IP Addresses for now.
-  
-  // get the "real" ip address from the request
-  address := ""
-  host, _, err := net.SplitHostPort(r.RemoteAddr)
-  if err == nil {
-    address = getRealIP(host)
-  }
-  if len(address) == 0 {
-    // fall back to X-Real-IP header optinally set by reverse proxy
-    // TODO: make sure this isn't a Tor user being sneaky
-    address = getRealIP(r.Header.Get("X-Real-IP"))
-  }
-  if len(address) == 0 {
-    address = "Tor"
-  }
-  if ! strings.HasPrefix(address, "127.") {
-    // set the ip address of the poster to be put into article headers
-    // if we cannot determine it, i.e. we are on Tor/i2p, this value is not set
-    if address == "Tor" {
-      nntp.headers["X-Tor-Poster"] = "1"
-    } else {
-      address, err = self.daemon.database.GetEncAddress(address)
-      nntp.headers["X-Encrypted-IP"] = address
-      // TODO: detect Tor Exits
-      nntp.headers["X-Tor-Poster"] = "0"
-    }
-  }
-  
-  // if we don't have an address for the poster try checking for i2p httpd headers
-  address = r.Header.Get("X-I2P-DestHash")
-  // TODO: make sure this isn't a Tor user being sneaky
-  if len(address) > 0 {
-    nntp.headers["X-I2P-DestHash"] = address
   }
   
 
@@ -438,11 +461,8 @@ func (self httpFrontend) handle_postform(wr http.ResponseWriter, r *http.Request
 
   // send success reply
   wr.WriteHeader(200)
-  msg_id := ref
-  if len(msg_id) == 0 {
-    // if this fails we crash :^3
-    msg_id = nntp.headers["MessageID"]
-  }
+  // determine the root post so we can redirect to the thread for it
+  msg_id := nntp.headers.Get("Reference", nntp.MessageID())
   // render response as success
   url = fmt.Sprintf("%sthread-%s.html", self.prefix, ShortHashMessageID(msg_id))
   fname := filepath.Join(defaultTemplateDir(), "post_success.mustache")

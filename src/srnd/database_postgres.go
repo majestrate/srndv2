@@ -15,7 +15,6 @@ import (
   "errors"
   "fmt"
   "log"
-  "sort"
   "strings"
   "time"
   _ "github.com/lib/pq"
@@ -106,6 +105,14 @@ func (self PostgresDatabase) CreateTables() {
                               message TEXT NOT NULL
                             )`
 
+  // table for thread state
+  tables["ArticleThreads"] = `(
+                                newsgroup VARCHAR(255) NOT NULL,
+                                root_message_id VARCHAR(255) NOT NULL,
+                                last_bump INTEGER NOT NULL,
+                                last_post INTEGER NOT NULL
+                              )`
+  
   // table for storing nntp article attachment info
   tables["ArticleAttachments"] = `(
                                     message_id VARCHAR(255),
@@ -123,10 +130,17 @@ func (self PostgresDatabase) CreateTables() {
 
   // table for storing moderation events
   tables["ModLogs"] = `(
-                        pubkey VARCHAR(255),
-                        action VARCHAR(255),
-                        target VARCHAR(255),
-                        time INTEGER
+                         pubkey VARCHAR(255),
+                         action VARCHAR(255),
+                         target VARCHAR(255),
+                         time INTEGER
+                       )`
+
+  // ip range bans
+  tables["IPBans"] = `(
+                        addr cidr NOT NULL,
+                        made INTEGER NOT NULL,
+                        expires INTEGER NOT NULL
                       )`
   
   for k, v := range(tables) {
@@ -241,6 +255,17 @@ func (self PostgresDatabase) GetEncAddress(addr string) (string, error) {
   return "", err
 }
 
+func (self PostgresDatabase) CheckIPBanned(addr string) (banned bool, err error) {
+  stmt, err := self.Conn().Prepare("SELECT COUNT(*) FROM IPBans WHERE addr >>= inet $1 ")
+  if err == nil {
+    defer stmt.Close()
+    var amount int64
+    err = stmt.QueryRow(addr).Scan(&amount)
+    banned = amount > 0
+  }
+  return banned, err
+}
+
 func (self PostgresDatabase) GetIPAddress(encaddr string) (string, error) {
   stmt, err := self.Conn().Prepare("SELECT COUNT(encAddr) FROM EncryptedAddrs WHERE encAddr = $1")
   if err == nil {
@@ -294,68 +319,28 @@ func (self PostgresDatabase) UnMarkModPubkeyGlobal(pubkey string) error {
   return errors.New("public key not marked as global")
 }
 
+
+
 func (self PostgresDatabase) GetRootPostsForExpiration(newsgroup string, threadcount int) []string {
 
-  //TODO, do this all in 1 query with no bullshit after logic
-  
-  // root post -> last bump
-  threads := make(map[string]int64)
   var rows *sql.Rows
-  // get all posts for this newsgroup sorted by oldest post first
-  stmt, err := self.Conn().Prepare("SELECT message_id, time_posted, subject, ref_id FROM ArticlePosts WHERE newsgroup = $1 ORDER BY time_posted ASC")
+  stmt, err := self.Conn().Prepare("SELECT root_message_id FROM ArticleThreads WHERE newsgroup = $1 AND root_message_id NOT IN ( SELECT root_message_id FROM ArticleThreads WHERE newsgroup = $1 ORDER BY last_bump DESC LIMIT $2)")
   if err != nil {
-    log.Println("failed to prepare query for post expiration step 1", err)
+    log.Println("failed to prepare query for post expiration step", err)
     return nil
   }
   defer stmt.Close()
-  rows, err = stmt.Query(newsgroup)
+  rows, err = stmt.Query(newsgroup, threadcount)
   if err != nil {
-    log.Println("failed to execute query for post expiration step 1", err)
+    log.Println("failed to execute query for post expiration", err)
     return nil
   }
+  var roots []string
   // get results
   for rows.Next() {
-    var msgid, subject, ref string
-    var posted int64
-    rows.Scan(&msgid, &posted, &subject, &ref)
-    // is this a root post ?
-    if len(ref) == 0 {
-      // ya
-      // record it bumped
-      threads[msgid] = posted
-      continue
-    }
-    // check for sage
-    subject = strings.ToLower(subject)
-    if strings.HasPrefix(subject, "sage ") || subject == "sage" {
-      // this is a sage
-      // we won't add it to the bump stuff
-      continue
-    }
-    // bump the thread if the root post is there
-    bump, ok := threads[ref]
-    if ok {
-      // bump it if it needs to
-      if bump < posted { 
-        threads[ref] = posted
-      }
-    }
-  }
-
-  // make map such that: last bumped -> root post
-  threads_out := make(map[int64]string)
-  var bumps int64Sorter
-  for root, bump := range threads {
-    threads_out[bump] = root
-    bumps = append(bumps, bump)
-  }
-  //sort by oldest first
-  sort.Sort(bumps)
-  var roots []string
-  // add the oldest thread to the list of expired roots until we have enough threads left
-  for len(bumps) >= threadcount {
-    roots = append(roots, threads_out[bumps[0]])
-    bumps = bumps[1:]
+    var root string
+    rows.Scan(&root)
+    roots = append(roots, root)
   }
   // return the list of expired roots
   return roots
@@ -457,6 +442,15 @@ func (self PostgresDatabase) GetPostModel(prefix, messageID string) PostModel {
   }
   model.sage = strings.HasPrefix(strings.ToLower(model.subject), "sage ") || model.subject == "sage"
   return model
+}
+
+func (self PostgresDatabase) DeleteThread(msgid string) (err error) {
+  stmt, err := self.Conn().Prepare("DELETE FROM ArticleThreads WHERE root_message_id = $1")
+  if err == nil {
+    defer stmt.Close()
+     _ = stmt.QueryRow(msgid)
+  }
+  return
 }
 
 func (self PostgresDatabase) DeleteArticle(msgid string) (err error) {
@@ -588,18 +582,18 @@ func (self PostgresDatabase) GetLastBumpedThreads(newsgroup string, threads int)
   var rows *sql.Rows
   // TODO: detect sage
   if len(newsgroup) > 0 { 
-    stmt, err := self.Conn().Prepare("SELECT message_id, ref_id, time_posted FROM ArticlePosts WHERE newsgroup = $1 ORDER BY time_posted DESC")
+    stmt, err := self.Conn().Prepare("SELECT root_message_id FROM ArticleThreads WHERE newsgroup = $1 ORDER BY last_bump DESC LIMIT $2")
     if err == nil {
       defer stmt.Close()
-      rows, err = stmt.Query(newsgroup)
+      rows, err = stmt.Query(newsgroup, threads)
     } else {
       log.Println("failed to prepare query for get last bumped", err)
     }
   } else {
-    stmt, err := self.Conn().Prepare("SELECT message_id, ref_id, time_posted FROM ArticlePosts ORDER BY time_posted DESC")
+    stmt, err := self.Conn().Prepare("SELECT root_message_id FROM ArticleThreads ORDER BY last_bump DESC LIMIT $1")
     if err == nil {
       defer stmt.Close()
-      rows, err = stmt.Query()
+      rows, err = stmt.Query(threads)
     } else {
       log.Println("failed to prepare query for get last bumped", err)
     }
@@ -614,27 +608,9 @@ func (self PostgresDatabase) GetLastBumpedThreads(newsgroup string, threads int)
 
   var roots []string
   for rows.Next() {
-    var msgid, refid string
-    var posted int64
-    rows.Scan(&msgid, &refid, &posted)
-    if refid != "" {
-      msgid = refid
-    }
-    put := true
-    if len(roots) > 0 {
-      for _, root := range roots {
-        if root == msgid {
-          put = false
-          break
-        }
-      }
-    }
-    if put {
-      roots = append(roots, msgid)
-    }
-    if len(roots) == threads {
-      break
-    }
+    var root string
+    rows.Scan(&root)
+    roots = append(roots, root)
   }
   return roots
 }
@@ -678,7 +654,20 @@ func (self PostgresDatabase) HasArticle(message_id string) bool {
   return count > 0
 }
 
-// check if an article exists
+// check if an article exists locally
+func (self PostgresDatabase) HasArticleLocal(message_id string) bool {
+  stmt, err := self.Conn().Prepare("SELECT COUNT(message_id) FROM ArticlePosts WHERE message_id = $1")
+  if err != nil {
+    log.Println("failed to prepare query to check for local article", message_id, err)
+    return false
+  }
+  defer stmt.Close()
+  var count int64
+  stmt.QueryRow(message_id).Scan(&count)
+  return count > 0
+}
+
+// count articles we have
 func (self PostgresDatabase) ArticleCount() int64 {
   stmt, err := self.Conn().Prepare("SELECT COUNT(message_id) FROM ArticlePosts")
   if err != nil {
@@ -774,6 +763,52 @@ func (self PostgresDatabase) RegisterArticle(message NNTPMessage) {
     log.Println("cannot insert article post", err)
     return
   }
+
+  
+  // set / update thread state
+  if message.OP() {
+    // insert new thread for op
+    stmt, err = self.Conn().Prepare("INSERT INTO ArticleThreads(root_message_id, last_bump, last_post, newsgroup) VALUES($1, $2, $2, $3)")
+    if err != nil {
+      log.Println("cannot prepare query to register thread", msgid, err)
+      return
+    }
+    defer stmt.Close()
+    _, err = stmt.Exec(message.MessageID(), now, group)
+    if err != nil {
+      log.Println("cannot execute query to register thread", msgid, err)
+      return
+    }
+  } else {
+    ref := message.Reference()
+    if ! message.Sage() {
+      // bump it nigguh
+      stmt, err = self.Conn().Prepare("UPDATE ArticleThreads SET last_bump = $2 WHERE root_message_id = $1")
+      if err != nil {
+        log.Println("failed to prepare query to bump thread", ref, err)
+        return
+      }
+      defer stmt.Close()
+      _, err = stmt.Exec(ref, now)
+      if err != nil {
+        log.Println("failed to execute query to bump thread", ref, err)
+        return
+      }
+    }
+    // update last posted
+    stmt, err = self.Conn().Prepare("UPDATE ArticleThreads SET last_post = $2 WHERE root_message_id = $1")
+    if err != nil {
+      log.Println("failed to prepare query to update post time for", ref, err)
+      return
+    }
+    defer stmt.Close()
+    _, err = stmt.Exec(ref, now)
+    if err != nil {
+      log.Println("failed to execute query to update post time for", ref, err)
+      return
+    }
+  }
+  
   // register all attachments
   atts := message.Attachments()
   if atts == nil {
@@ -784,11 +819,13 @@ func (self PostgresDatabase) RegisterArticle(message NNTPMessage) {
     stmt, err = self.Conn().Prepare("INSERT INTO ArticleAttachments(message_id, sha_hash, filename, filepath) VALUES($1, $2, $3, $4)")
     if err != nil {
       log.Println("failed to prepare query to register attachment", err)
+      continue
     }
     defer stmt.Close()
     _, err = stmt.Exec(msgid, att.Hash(), att.Filename(), att.Filepath())
     if err != nil {
       log.Println("failed to execute query to register attachment", err)
+      continue
     }
   }
 }

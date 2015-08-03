@@ -184,7 +184,9 @@ func (self articleStore) ReadMessage(r io.Reader) (NNTPMessage, error) {
             } else {
               // non plaintext gets added to attachments
               att := self.ReadAttachmentFromMimePart(part, true)
-              nntp = nntp.Attach(att).(nntpArticle)
+              if att != nil {
+                nntp = nntp.Attach(att).(nntpArticle)
+              }
             }
           } else {
             log.Println("part has no content type", err)

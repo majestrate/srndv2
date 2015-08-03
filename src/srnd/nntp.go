@@ -144,7 +144,7 @@ func (self *NNTPConnection) HandleOutbound(d *NNTPDaemon) {
       continue
     } else if code == 439 {
       // invalid
-      log.Printf("article %s was not sent to outfeed, they said it was invalid", commands[0])
+      continue
     } else {
       log.Printf("invalid response from outbound feed: '%d %s'", code, line)
     }

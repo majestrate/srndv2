@@ -438,7 +438,8 @@ func (self PostgresDatabase) GetPostModel(prefix, messageID string) PostModel {
   defer stmt.Close()
   model := post{}
   model.prefix = prefix
-  stmt.QueryRow(messageID).Scan(&model.board, &model.message_id, &model.parent, &model.name, &model.subject, &model.path, &model.posted, &model.message)
+  row := stmt.QueryRow(messageID)
+  row.Scan(&model.board, &model.message_id, &model.parent, &model.name, &model.subject, &model.path, &model.posted, &model.message)
   model.op = len(model.parent) == 0
   if len(model.parent) == 0 {
       model.parent = model.message_id
@@ -585,11 +586,14 @@ func (self PostgresDatabase) ThreadHasReplies(rootpost string) bool {
   stmt, err := self.Conn().Prepare("SELECT COUNT(message_id) FROM ArticlePosts WHERE ref_id = $1")
   if err != nil {
     log.Println("failed to prepare query to check for thread replies", rootpost, err)
+    if stmt != nil {
+      stmt.Close()
+    }
     return false
   }
-  defer stmt.Close()
   var count int64
   stmt.QueryRow(rootpost).Scan(&count)
+  stmt.Close()
   return count > 0
 }
 
@@ -739,6 +743,7 @@ func (self PostgresDatabase) GetPostAttachments(messageID string) []string {
   rows, err := stmt.Query(messageID)
   if err != nil {
     log.Println("failed to execute query to get attachments for ", messageID, err)
+    return atts
   }
   defer rows.Close()
   for rows.Next() {

@@ -433,6 +433,7 @@ func (self PostgresDatabase) GetPostModel(prefix, messageID string) PostModel {
     log.Println("failed to prepare query for geting post model for", messageID, err)
     return nil
   }
+  defer stmt.Close()
   model := post{}
   model.prefix = prefix
   stmt.QueryRow(messageID).Scan(&model.board, &model.message_id, &model.parent, &model.name, &model.subject, &model.path, &model.posted, &model.message)

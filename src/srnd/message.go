@@ -252,16 +252,10 @@ func (self nntpArticle) WriteBody(wr io.Writer) (err error) {
         }
         hdr.Set("Content-Transfer-Encoding", "base64")
         part, err := w.CreatePart(hdr)
-        if err != nil {
-          log.Println("error writing part", err)
-        }
-        if strings.HasPrefix(att.Mime(), "text/plain") {
-          err = att.WriteTo(part)
-        } else {
-          enc := base64.NewEncoder(base64.StdEncoding, part)
-          err = att.WriteTo(enc)
-          enc.Close()  
-        }
+        enc := base64.NewEncoder(base64.StdEncoding, part)
+        err = att.WriteTo(enc)
+        enc.Close()  
+        
         if err != nil {
           break
         }

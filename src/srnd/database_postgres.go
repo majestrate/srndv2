@@ -445,17 +445,9 @@ func (self PostgresDatabase) GetPostModel(prefix, messageID string) PostModel {
       model.parent = model.message_id
   }
   model.sage = isSage(model.subject)
-  atts := self.GetPostAttachments(messageID)
+  atts := self.GetPostAttachmentModels(prefix, messageID)
   if atts != nil {
-    for _, fname := range atts {
-      model.attachments = append(model.attachments, attachment{
-        prefix: prefix,
-        source: prefix+"img/"+fname,
-        thumbnail: prefix+"thm/"+fname,
-        // TODO: obtain upload filename
-        filename: "uploaded file",
-      })
-    }
+    model.attachments = append(model.attachments, atts...)
   }
   return model
 }

@@ -6,6 +6,8 @@ import (
   "github.com/majestrate/srndv2/src/srnd"
   "log"
   "os"
+  "log"
+  "net/http"
   _ "net/http/pprof"
 )
 
@@ -13,6 +15,10 @@ import (
 
 
 func main() {
+  go func() {
+    log.Println(http.ListenAndServe("localhost:6060", nil))
+  }()
+  
   var daemon srnd.NNTPDaemon
   if len(os.Args) > 1 {
     action := os.Args[1]

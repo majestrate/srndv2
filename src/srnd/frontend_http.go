@@ -538,6 +538,8 @@ func (self httpFrontend) Mainloop() {
   
   // webroot handler
   self.httpmux.Path("/").Handler(http.FileServer(http.Dir(self.webroot_dir)))
+  self.httpmux.Path("/thm/{f}").Handler(http.FileServer(http.Dir(self.webroot_dir)))
+  self.httpmux.Path("/img/{f}").Handler(http.FileServer(http.Dir(self.webroot_dir)))
   self.httpmux.Path("/{f}.html").Handler(http.FileServer(http.Dir(self.webroot_dir)))
   self.httpmux.Path("/static/{f}").Handler(http.FileServer(http.Dir(self.static_dir)))
   // post handler

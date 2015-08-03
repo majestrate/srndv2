@@ -294,7 +294,7 @@ func (self *NNTPConnection) HandleInbound(d *NNTPDaemon) {
                   }
                 } else if strings.HasPrefix(lower_line, "x-encrypted-ip: ") {
                   has_ip_header = true
-                } else if strings.HasPrefix(lower_line, "Content-Type: multipart") {
+                } else if strings.HasPrefix(lower_line, "content-type: multipart") {
                   has_attachment = true
                 } else if strings.HasPrefix(lower_line, "x-signature-ed25519-sha512: ") {
                   is_signed = true

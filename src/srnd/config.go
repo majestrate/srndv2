@@ -83,7 +83,7 @@ func GenSRNdConfig() error {
   sect = conf.NewSection("articles")
 
   sect.Add("store_dir", "articles")
-  sect.Add("incoming_dir", "articles")
+  sect.Add("incoming_dir", "/tmp/articles")
   sect.Add("attachments_dir", "webroot/img")
   sect.Add("thumbs_dir", "webroot/thm")
 

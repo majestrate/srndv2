@@ -182,14 +182,9 @@ func (self articleStore) ReadMessage(r io.Reader) (NNTPMessage, error) {
           media_type, _, err := mime.ParseMediaType(part_type)
           if err == nil {
             if media_type == "text/plain" {
-              encoding := hdr.Get("Content-Transfer-Encoding")
-              if encoding == "base64" {
-                att := self.ReadAttachmentFromMimePart(part, true)
-                if att != nil {
-                  att.WriteTo(&nntp.message.body)
-                }
-              } else {
-                nntp.message.body.ReadFrom(part)
+              att := self.ReadAttachmentFromMimePart(part, true)
+              if att != nil {
+                att.WriteTo(&nntp.message.body)
               }
               if nntp.message.header == nil {
                 nntp.message.header = make(textproto.MIMEHeader)
@@ -369,7 +364,9 @@ func (self articleStore) ReadAttachmentFromMimePart(part *multipart.Part, decode
     ext = fname[idx:]
   }
 
-  if decode {
+  transfer_encoding := part.Header.Get("Content-Transfer-Encoding")
+  
+  if transfer_encoding == "base64" {
     reader := base64.NewDecoder(base64.StdEncoding, part)
     _, err = io.Copy(&buff, reader)
   } else {

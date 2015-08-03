@@ -338,6 +338,24 @@ func (self *NNTPDaemon) Setup() {
   log.Println("validating configs...")
   self.conf.Validate()
   log.Println("configs are valid")
+
+  
+  db_host := self.conf.database["host"]
+  db_port := self.conf.database["port"]
+  db_user := self.conf.database["user"]
+  db_passwd := self.conf.database["password"]
+
+  // set up database stuff
+  log.Println("connecting to database...")
+  self.database = NewDatabase(self.conf.database["type"], self.conf.database["schema"], db_host, db_port, db_user, db_passwd)
+  log.Println("ensure that the database is created...")
+  self.database.CreateTables()
+
+  // set up store
+  log.Println("set up article store...")
+  self.store = createArticleStore(self.conf.store, self.database)
+
+  
 }
 
 // bind to address
@@ -371,16 +389,6 @@ func (self *NNTPDaemon) Init() bool {
     log.Println("failed to bind:", err)
     return false
   }
-
-  db_host := self.conf.database["host"]
-  db_port := self.conf.database["port"]
-  db_user := self.conf.database["user"]
-  db_passwd := self.conf.database["password"]
-
-  self.database = NewDatabase(self.conf.database["type"], self.conf.database["schema"], db_host, db_port, db_user, db_passwd)
-  self.database.CreateTables()
-  
-  self.store = createArticleStore(self.conf.store, self.database)
   
   self.expire = createExpirationCore(self.database, self.store)
   self.sync_on_start = self.conf.daemon["sync_on_start"] == "1"

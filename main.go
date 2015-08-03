@@ -4,7 +4,6 @@ import (
   "fmt"
   "github.com/gographics/imagick/imagick"
   "github.com/majestrate/srndv2/src/srnd"
-  "log"
   "os"
   "log"
   "net/http"

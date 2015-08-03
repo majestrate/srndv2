@@ -161,7 +161,7 @@ func (self articleStore) ReadMessage(r io.Reader) (NNTPMessage, error) {
   if err == nil {
     nntp.headers = ArticleHeaders(msg.Header)
     content_type := msg.Header.Get("Content-Type")
-    _, params, err := mime.ParseMediaType(content_type)
+    media_type, params, err := mime.ParseMediaType(content_type)
     if err != nil {
       log.Println("failed to parse media type", err)
       return nil, err
@@ -179,7 +179,7 @@ func (self articleStore) ReadMessage(r io.Reader) (NNTPMessage, error) {
           part_type := hdr.Get("Content-Type")
           log.Println("part has content type", part_type)
           // parse content type
-          media_type, _, err := mime.ParseMediaType(part_type)
+          media_type, _, err = mime.ParseMediaType(part_type)
           if err == nil {
             if media_type == "text/plain" {
               att := self.ReadAttachmentFromMimePart(part, true)
@@ -190,9 +190,7 @@ func (self articleStore) ReadMessage(r io.Reader) (NNTPMessage, error) {
                 nntp.message.header = make(textproto.MIMEHeader)
               }
               nntp.message.header.Set("Content-Type", part_type)
-            } else if media_type == "message/rfc822" {
-              // tripcoded message
-              // TODO: handle
+         
             } else {
               // non plaintext gets added to attachments
               att := self.ReadAttachmentFromMimePart(part, true)
@@ -209,6 +207,10 @@ func (self articleStore) ReadMessage(r io.Reader) (NNTPMessage, error) {
           return nntp, err
         }
       }
+
+    } else if media_type == "message/rfc822" {
+      // tripcoded message
+      // TODO: handle
     } else {   
       _, err = nntp.message.body.ReadFrom(msg.Body)
     }

@@ -190,6 +190,9 @@ func (self articleStore) ReadMessage(r io.Reader) (NNTPMessage, error) {
                 nntp.message.header = make(textproto.MIMEHeader)
               }
               nntp.message.header.Set("Content-Type", part_type)
+            } else if media_type == "message/rfc822" {
+              // tripcoded message
+              // TODO: handle
             } else {
               // non plaintext gets added to attachments
               att := self.ReadAttachmentFromMimePart(part, true)

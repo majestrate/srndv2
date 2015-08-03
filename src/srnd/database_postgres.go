@@ -336,6 +336,7 @@ func (self PostgresDatabase) GetRootPostsForExpiration(newsgroup string, threadc
     return nil
   }
   var roots []string
+  defer rows.Close()
   // get results
   for rows.Next() {
     var root string
@@ -362,6 +363,7 @@ func (self PostgresDatabase) GetAllNewsgroups() []string {
   var groups []string
   
   if rows != nil {
+    defer rows.Close()
     for rows.Next() {
       var group string
       rows.Scan(&group)
@@ -514,7 +516,7 @@ func (self PostgresDatabase) GetThreadReplyPostModels(prefix, rootpost string, l
   }
   
   var repls []PostModel
-    
+  defer rows.Close()
   for rows.Next() {
     model := post{}
     model.prefix = prefix
@@ -570,7 +572,7 @@ func (self PostgresDatabase) GetThreadReplies(rootpost string, limit int) []stri
   }
 
   var repls []string
-    
+  defer rows.Close()
   for rows.Next() {
     var msgid string
     rows.Scan(&msgid)
@@ -876,6 +878,7 @@ func (self PostgresDatabase) GetAllArticlesInGroup(group string, recv chan strin
     log.Printf("Failed to execute quert for getting all articles in %s: %s", group, err)
     return
   }
+  defer rows.Close()
   for rows.Next() {
     var msgid string
     rows.Scan(&msgid)
@@ -898,6 +901,7 @@ func (self PostgresDatabase) GetAllArticles() []ArticleEntry {
     return nil
   }
   var articles []ArticleEntry
+  defer rows.Close()
   for rows.Next() {
     var entry ArticleEntry
     rows.Scan(&entry[0], &entry[1])

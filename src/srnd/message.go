@@ -213,7 +213,7 @@ func (self nntpArticle) Sage() bool {
 }
 
 func (self nntpArticle) OP() bool {
-  return ! self.headers.Has("Reference")
+  return ! ( self.headers.Has("References") || self.headers.Has("Reference") )
 }
 
 func (self nntpArticle) Attachments() []NNTPAttachment {

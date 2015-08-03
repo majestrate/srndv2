@@ -255,10 +255,13 @@ func (self *NNTPConnection) HandleInbound(d *NNTPDaemon) {
                 if self.allow_tor {
                   // do we want tor posts with attachments?
                   if has_attachment && ! self.allow_tor_attachments {
-                    // no?
-                    // dropit
-                    code = 439
-                    read_more = false
+                    if has_ip_header {
+                      // it's fine
+                    } else {
+                      // dropit
+                      code = 439
+                      read_more = false
+                    }
                   }
                   // we'll allow it
                 } else if has_ip_header {

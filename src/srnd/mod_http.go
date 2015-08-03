@@ -117,9 +117,10 @@ func (self httpModUI) HandleDeletePost(wr http.ResponseWriter, r *http.Request) 
           resp["error"] = fmt.Sprintf("message %s is not on the filesystem? wtf!", msgid)
         } else {
           ref := hdr.Get("References", hdr.Get("Reference", msgid))
+          ref = strings.Trim(ref, "\t ")
           if ref == "" {
             // load replies
-            replies := self.database.GetThreadReplies(ref, 0)
+            replies := self.database.GetThreadReplies(msgid, 0)
             if replies != nil {
               delmsgs = append(delmsgs, replies...)
             }

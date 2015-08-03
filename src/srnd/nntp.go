@@ -273,6 +273,7 @@ func (self *NNTPConnection) HandleInbound(d *NNTPDaemon) {
                   if ! self.allow_tor {
                     // we don't want this post
                     code = 439
+                    read_more = false
                   }
                 } else if ! headers_done && strings.HasPrefix(lower_line, "x-encrypted-ip: ") {
                   has_ip_header = true
@@ -293,6 +294,7 @@ func (self *NNTPConnection) HandleInbound(d *NNTPDaemon) {
               d.infeed_load <- article
             } else {
               // delete unaccepted article
+              log.Println("did not accept", article)
               _ = d.store.GetTempFilename(article)
             }
           } else {

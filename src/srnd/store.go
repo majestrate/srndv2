@@ -154,7 +154,6 @@ func (self articleStore) ReadMessage(r io.Reader) (NNTPMessage, error) {
 
   if err == nil {
     nntp.headers = ArticleHeaders(msg.Header)
-    log.Println("reading message")
     content_type := msg.Header.Get("Content-Type")
     _, params, err := mime.ParseMediaType(content_type)
     if err != nil {
@@ -177,7 +176,6 @@ func (self articleStore) ReadMessage(r io.Reader) (NNTPMessage, error) {
           media_type, _, err := mime.ParseMediaType(part_type)
           if err == nil {
             if media_type == "text/plain" {
-              // plaintext gets added to message part
               nntp.message.body.ReadFrom(part)
               if nntp.message.header == nil {
                 nntp.message.header = make(textproto.MIMEHeader)

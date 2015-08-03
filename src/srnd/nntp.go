@@ -36,6 +36,8 @@ type NNTPConnection struct {
   // message io
   msg_reader MessageReader
   msg_writer MessageWriter
+  // do we allow articles from tor?
+  allow_tor bool
 }
 
 // ask if they need this article
@@ -233,6 +235,9 @@ func (self *NNTPConnection) HandleInbound(d *NNTPDaemon) {
           if ValidMessageID(article) {
             code := 239
             file := d.store.CreateTempFile(article)
+            has_ip_header := false
+            headers_done := false
+            read_more := true
             for {
               var line string
               line, err = self.ReadLine()
@@ -240,11 +245,23 @@ func (self *NNTPConnection) HandleInbound(d *NNTPDaemon) {
                 log.Println("error reading", article, err)
                 break
               }
+
+              if line == "" && ! headers_done {
+                // headers done
+                headers_done = true
+                if ( ! self.allow_tor ) && ( ! has_ip_header ) {
+                  // we don'e want the body
+                  code = 439
+                  read_more = false
+                }
+              }
+              
               if line == "." {
                 break
               } else {
-                // newsgroup header 
-                if strings.HasPrefix(strings.ToLower(line), "Newsgroup: ") {
+                lower_line := strings.ToLower(line)
+                // newsgroup header
+                if strings.HasPrefix(lower_line, "newsgroups: ") {
                   if len(newsgroup) == 0 {
                     newsgroup := line[11:]
                     if ! newsgroupValidFormat(newsgroup) {
@@ -252,9 +269,18 @@ func (self *NNTPConnection) HandleInbound(d *NNTPDaemon) {
                       code = 439
                     }
                   }
+                } else if ! headers_done && strings.HasPrefix(lower_line, "x-tor-poster: 1") {
+                  if ! self.allow_tor {
+                    // we don't want this post
+                    code = 439
+                  }
+                } else if ! headers_done && strings.HasPrefix(lower_line, "x-encrypted-ip: ") {
+                  has_ip_header = true
                 }
-                file.Write([]byte(line))
-                file.Write([]byte("\n"))
+                if read_more {
+                  file.Write([]byte(line))
+                  file.Write([]byte("\n"))
+                }
               }
             }
             file.Close()

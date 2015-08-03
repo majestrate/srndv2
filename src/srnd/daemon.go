@@ -26,7 +26,7 @@ type NNTPDaemon struct {
   running bool
   // http frontend
   frontend Frontend
-
+  
   // thumbnail generator for images
   img_thm ThumbnailGenerator
   
@@ -47,7 +47,8 @@ func (self *NNTPDaemon) End() {
 // register a new connection
 // can be either inbound or outbound
 func (self *NNTPDaemon) newConnection(conn net.Conn, inbound bool, policy *FeedPolicy) NNTPConnection {
-  feed := NNTPConnection{conn, textproto.NewConn(conn), inbound, self.debug, new(ConnectionInfo), policy,  make(chan string, 512), self.store, self.store}
+  allow_tor := self.conf.daemon["allow_tor"]
+  feed := NNTPConnection{conn, textproto.NewConn(conn), inbound, self.debug, new(ConnectionInfo), policy,  make(chan string, 512), self.store, self.store, allow_tor == "1"}
   self.feeds[feed] = ! inbound
   return feed
 }
@@ -373,10 +374,10 @@ func (self *NNTPDaemon) Bind() error {
 // load configuration
 // bind to interface
 func (self *NNTPDaemon) Init() bool {
-
+  
   // set up daemon configs
   self.Setup()
-  
+
   self.infeed = make(chan NNTPMessage, 64)
   self.infeed_load = make(chan string, 64)
   self.send_all_feeds = make(chan string, 64)

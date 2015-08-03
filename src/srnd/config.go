@@ -74,10 +74,11 @@ func GenSRNdConfig() error {
   
   // nntp related section
   sect := conf.NewSection("nntp")
-
+  sect.Add("profiler", "0")
   sect.Add("instance_name", "test.srndv2.tld")
   sect.Add("bind", "127.0.0.1:1199")
   sect.Add("sync_on_start", "1")
+  sect.Add("allow_tor", "0")
 
   // article store section
   sect = conf.NewSection("articles")
@@ -239,7 +240,7 @@ func ReadConfig() *SRNdConfig {
 // fatals on failed validation
 func (self *SRNdConfig) Validate() {
   // check for daemon section entries
-  daemon_param := []string{"bind", "instance_name"}
+  daemon_param := []string{"bind", "instance_name", "allow_tor"}
   for _, p := range daemon_param {
     _, ok := self.daemon[p]
     if ! ok {

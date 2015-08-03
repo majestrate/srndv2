@@ -562,7 +562,7 @@ func (self httpFrontend) Mainloop() {
   go self.poll()
   
   // trigger regen
-  go self.regenAll()
+  self.regenAll()
 
   // start webserver here
   log.Printf("frontend %s binding to %s", self.name, self.bindaddr)

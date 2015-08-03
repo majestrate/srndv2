@@ -6,7 +6,10 @@ import (
   "github.com/majestrate/srndv2/src/srnd"
   "log"
   "os"
+  _ "net/http/pprof"
 )
+
+
 
 
 func main() {

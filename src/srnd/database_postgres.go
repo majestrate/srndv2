@@ -805,7 +805,7 @@ func (self PostgresDatabase) RegisterArticle(message NNTPMessage) {
       return
     }
     defer stmt.Close()
-    _, err = stmt.Exec(message.MessageID(), now, group)
+    _, err = stmt.Exec(message.MessageID(), message.Posted(), group)
     if err != nil {
       log.Println("cannot execute query to register thread", msgid, err)
       return
@@ -820,7 +820,7 @@ func (self PostgresDatabase) RegisterArticle(message NNTPMessage) {
         return
       }
       defer stmt.Close()
-      _, err = stmt.Exec(ref, now)
+      _, err = stmt.Exec(ref, message.Posted())
       if err != nil {
         log.Println("failed to execute query to bump thread", ref, err)
         return
@@ -833,7 +833,7 @@ func (self PostgresDatabase) RegisterArticle(message NNTPMessage) {
       return
     }
     defer stmt.Close()
-    _, err = stmt.Exec(ref, now)
+    _, err = stmt.Exec(ref, message.Posted())
     if err != nil {
       log.Println("failed to execute query to update post time for", ref, err)
       return

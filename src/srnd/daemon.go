@@ -8,6 +8,7 @@ import (
   "strconv"
   "strings"
   "net/textproto"
+  "os"
   "time"
 )
 
@@ -194,6 +195,21 @@ func (self *NNTPDaemon) Run() {
       }
     }
   }()
+
+  // get all pending articles from infeed and load them
+  go func() {
+    f, err := os.Open(self.store.TempDir()) 
+    if err == nil {
+      names, err := f.Readdirnames(0)
+      if err == nil {
+        for _, name := range names {
+          self.infeed_load <- name
+        }
+      }
+    }
+    
+  }()
+  
   // if we have no frontend this does nothing
   if self.frontend != nil {
     go self.pollfrontend()

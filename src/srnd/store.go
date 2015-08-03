@@ -55,6 +55,9 @@ type ArticleStore interface {
   StorePost(nntp NNTPMessage) error
   // get article headers only
   GetHeaders(msgid string) ArticleHeaders
+
+  // get our temp directory for articles
+  TempDir() string
 }
 type articleStore struct {
   directory string
@@ -63,7 +66,6 @@ type articleStore struct {
   thumbs string
   database Database
 }
-
 
 func createArticleStore(config map[string]string, database Database) ArticleStore {
   store := articleStore{
@@ -75,6 +77,10 @@ func createArticleStore(config map[string]string, database Database) ArticleStor
   }
   store.Init()
   return store
+}
+
+func (self articleStore) TempDir() string {
+  return self.temp
 }
 
 // initialize article store

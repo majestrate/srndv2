@@ -267,19 +267,19 @@ func (self *NNTPConnection) HandleInbound(d *NNTPDaemon) {
                 // newsgroup header
                 if strings.HasPrefix(lower_line, "newsgroups: ") {
                   if len(newsgroup) == 0 {
-                    newsgroup := line[11:]
+                    newsgroup := line[12:]
                     if ! newsgroupValidFormat(newsgroup) {
                       // bad newsgroup
                       code = 439
                     }
                   }
-                } else if ! headers_done && strings.HasPrefix(lower_line, "x-tor-poster: 1") {
+                } else if strings.HasPrefix(lower_line, "x-tor-poster: 1") {
                   if ! self.allow_tor {
                     // we don't want this post
                     code = 439
                     read_more = false
                   }
-                } else if ! headers_done && strings.HasPrefix(lower_line, "x-encrypted-ip: ") {
+                } else if strings.HasPrefix(lower_line, "x-encrypted-ip: ") {
                   has_ip_header = true
                 }
               }

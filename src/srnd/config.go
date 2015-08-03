@@ -103,6 +103,7 @@ func GenSRNdConfig() error {
   // baked in static html frontend
   sect = conf.NewSection("frontend")
   sect.Add("enable", "1")
+  sect.Add("allow_files", "1")
   sect.Add("regen_threads", "1")
   sect.Add("bind", "[::]:18000")
   sect.Add("name", "web.srndv2.test")

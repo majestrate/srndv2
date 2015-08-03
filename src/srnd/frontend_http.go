@@ -44,6 +44,7 @@ type httpFrontend struct {
   static_dir string
 
   regen_threads int
+  attachments bool
   
   prefix string
   regenThreadChan chan string
@@ -367,7 +368,7 @@ func (self httpFrontend) handle_postform(wr http.ResponseWriter, r *http.Request
       partname := part.FormName()
 
       // read part for attachment
-      if partname == "attachment" {
+      if partname == "attachment" && self.attachments {
         log.Println("attaching file...")
         att := self.daemon.store.ReadAttachmentFromMimePart(part, false)
         nntp = nntp.Attach(att).(nntpArticle)
@@ -584,6 +585,7 @@ func (self httpFrontend) Regen(msg ArticleEntry) {
 func NewHTTPFrontend(daemon *NNTPDaemon, config map[string]string) Frontend {
   var front httpFrontend
   front.daemon = daemon
+  front.attachments = mapGetInt(config, "allow_files", 1) == 1
   front.bindaddr = config["bind"]
   front.name = config["name"]
   front.webroot_dir = config["webroot"]

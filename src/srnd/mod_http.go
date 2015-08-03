@@ -128,7 +128,6 @@ func (self httpModUI) HandleDeletePost(wr http.ResponseWriter, r *http.Request) 
             self.database.DeleteThread(msgid)
             // pre-emptively delete thread html page
             self.delete(msgid)
-
           }
           delmsgs = append(delmsgs, msgid)
           deleted := []string{}

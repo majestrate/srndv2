@@ -140,7 +140,7 @@ func (self nntpArticle) Pack() {
 }
 
 func (self nntpArticle) Reference() string {
-  return self.headers.Get("Reference", "")
+  return self.headers.Get("Reference", self.headers.Get("References",""))
 }
 
 func (self nntpArticle) Newsgroup() string {

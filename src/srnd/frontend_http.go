@@ -401,7 +401,7 @@ func (self httpFrontend) handle_postform(wr http.ResponseWriter, r *http.Request
           url = fmt.Sprintf("%s.html", board)
         } else if ValidMessageID(ref) {
           if self.daemon.database.HasArticleLocal(ref) {
-            nntp.headers.Set("Reference", ref)
+            nntp.headers.Set("References", ref)
             url = fmt.Sprintf("thread-%s.html", ShortHashMessageID(ref))
           } else {
             // no such article

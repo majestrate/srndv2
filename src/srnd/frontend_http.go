@@ -476,7 +476,7 @@ func (self httpFrontend) handle_postform(wr http.ResponseWriter, r *http.Request
   // send success reply
   wr.WriteHeader(200)
   // determine the root post so we can redirect to the thread for it
-  msg_id := nntp.headers.Get("Reference", nntp.MessageID())
+  msg_id := nntp.headers.Get("References", nntp.MessageID())
   // render response as success
   url = fmt.Sprintf("%sthread-%s.html", self.prefix, ShortHashMessageID(msg_id))
   fname := filepath.Join(defaultTemplateDir(), "post_success.mustache")

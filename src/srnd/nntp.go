@@ -249,7 +249,11 @@ func (self *NNTPConnection) HandleInbound(d *NNTPDaemon) {
               if line == "" && ! headers_done {
                 // headers done
                 headers_done = true
-                if ( ! self.allow_tor ) && ( ! has_ip_header ) {
+                if self.allow_tor {
+                  // we'll allow it
+                } else if has_ip_header {
+                  // we'll allow it
+                } else {
                   // we don'e want the body
                   code = 439
                   read_more = false
@@ -258,7 +262,7 @@ func (self *NNTPConnection) HandleInbound(d *NNTPDaemon) {
               
               if line == "." {
                 break
-              } else {
+              } else if ! headers_done {
                 lower_line := strings.ToLower(line)
                 // newsgroup header
                 if strings.HasPrefix(lower_line, "newsgroups: ") {
@@ -278,10 +282,10 @@ func (self *NNTPConnection) HandleInbound(d *NNTPDaemon) {
                 } else if ! headers_done && strings.HasPrefix(lower_line, "x-encrypted-ip: ") {
                   has_ip_header = true
                 }
-                if read_more {
-                  file.Write([]byte(line))
-                  file.Write([]byte("\n"))
-                }
+              }
+              if read_more {
+                file.Write([]byte(line))
+                file.Write([]byte("\n")) 
               }
             }
             file.Close()

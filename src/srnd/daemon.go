@@ -48,7 +48,8 @@ func (self *NNTPDaemon) End() {
 // can be either inbound or outbound
 func (self *NNTPDaemon) newConnection(conn net.Conn, inbound bool, policy *FeedPolicy) NNTPConnection {
   allow_tor := self.conf.daemon["allow_tor"]
-  feed := NNTPConnection{conn, textproto.NewConn(conn), inbound, self.debug, new(ConnectionInfo), policy,  make(chan string, 512), self.store, self.store, allow_tor == "1"}
+  allow_tor_attachments := self.conf.daemon["allow_tor_attachments"]
+  feed := NNTPConnection{conn, textproto.NewConn(conn), inbound, self.debug, new(ConnectionInfo), policy,  make(chan string, 512), self.store, self.store, allow_tor == "1", allow_tor_attachments == "1"}
   self.feeds[feed] = ! inbound
   return feed
 }

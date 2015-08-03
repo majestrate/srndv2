@@ -38,6 +38,7 @@ type NNTPConnection struct {
   msg_writer MessageWriter
   // do we allow articles from tor?
   allow_tor bool
+  allow_tor_attachments bool
 }
 
 // ask if they need this article
@@ -238,6 +239,8 @@ func (self *NNTPConnection) HandleInbound(d *NNTPDaemon) {
             has_ip_header := false
             headers_done := false
             read_more := true
+            has_attachment := false
+            is_signed := false
             for {
               var line string
               line, err = self.ReadLine()
@@ -250,6 +253,13 @@ func (self *NNTPConnection) HandleInbound(d *NNTPDaemon) {
                 // headers done
                 headers_done = true
                 if self.allow_tor {
+                  // do we want tor posts with attachments?
+                  if has_attachment && ! self.allow_tor_attachments {
+                    // no?
+                    // dropit
+                    code = 439
+                    read_more = false
+                  }
                   // we'll allow it
                 } else if has_ip_header {
                   // we'll allow it
@@ -257,6 +267,9 @@ func (self *NNTPConnection) HandleInbound(d *NNTPDaemon) {
                   // we don'e want the body
                   code = 439
                   read_more = false
+                }
+                if is_signed {
+                  log.Println("we got a signed message")
                 }
               }
               
@@ -281,6 +294,11 @@ func (self *NNTPConnection) HandleInbound(d *NNTPDaemon) {
                   }
                 } else if strings.HasPrefix(lower_line, "x-encrypted-ip: ") {
                   has_ip_header = true
+                } else if strings.HasPrefix(lower_line, "Content-Type: multipart") {
+                  has_attachment = true
+                } else if strings.HasPrefix(lower_line, "x-signature-ed25519-sha512: ") {
+                  is_signed = true
+                  has_attachment = true
                 }
               }
               if read_more {

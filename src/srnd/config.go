@@ -79,6 +79,7 @@ func GenSRNdConfig() error {
   sect.Add("bind", "127.0.0.1:1199")
   sect.Add("sync_on_start", "1")
   sect.Add("allow_tor", "0")
+  sect.Add("allow_tor_attachments", "0")
 
   // article store section
   sect = conf.NewSection("articles")
@@ -241,7 +242,7 @@ func ReadConfig() *SRNdConfig {
 // fatals on failed validation
 func (self *SRNdConfig) Validate() {
   // check for daemon section entries
-  daemon_param := []string{"bind", "instance_name", "allow_tor"}
+  daemon_param := []string{"bind", "instance_name", "allow_tor", "allow_tor_attachments"}
   for _, p := range daemon_param {
     _, ok := self.daemon[p]
     if ! ok {

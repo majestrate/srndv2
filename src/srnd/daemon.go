@@ -232,7 +232,10 @@ func (self *NNTPDaemon) pollfrontend() {
 }
 
 func (self *NNTPDaemon) pollfeeds() {
-  chnl := self.frontend.PostsChan()
+  var chnl chan NNTPMessage
+  if self.frontend != nil {
+    chnl = self.frontend.PostsChan()
+  }
   for {
     select {
     case msgid := <- self.send_all_feeds:
@@ -289,7 +292,9 @@ func (self *NNTPDaemon) pollfeeds() {
           // queue to all outfeeds
           self.send_all_feeds <- msgid
           // tell frontend
-          chnl <- nntp
+          if chnl != nil {
+            chnl <- nntp
+          }
         } else {
           log.Printf("%s failed to store: %s", msgid, err)
         }

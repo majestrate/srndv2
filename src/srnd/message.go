@@ -250,7 +250,6 @@ func (self nntpArticle) WriteBody(wr io.Writer) (err error) {
         if hdr == nil {
           hdr = make(textproto.MIMEHeader)
         }
-        hdr.Set("Content-Transfer-Encoding", "base64")
         part, err := w.CreatePart(hdr)
         if err != nil {
           log.Println("error writing part", err)
@@ -258,6 +257,7 @@ func (self nntpArticle) WriteBody(wr io.Writer) (err error) {
         if strings.HasPrefix(att.Mime(), "text/plain") {
           err = att.WriteTo(part)
         } else {
+          hdr.Set("Content-Transfer-Encoding", "base64")
           enc := base64.NewEncoder(base64.StdEncoding, part)
           err = att.WriteTo(enc)
           enc.Close()  

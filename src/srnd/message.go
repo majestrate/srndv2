@@ -133,7 +133,7 @@ func (self nntpArticle) Pack() {
   if len(self.boundary) == 0 {
     self.boundary = randStr(24) 
     self.headers.Set("Mime-Version", "1.0")
-    self.headers.Set("Content-Type", fmt.Sprintf("mulitype/mixed; boundary=%s", self.boundary))
+    self.headers.Set("Content-Type", fmt.Sprintf("multitype/mixed; boundary=%s", self.boundary))
     log.Println("pack article boundary is", self.boundary)
   }
 

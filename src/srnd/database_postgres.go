@@ -527,17 +527,9 @@ func (self PostgresDatabase) GetThreadReplyPostModels(prefix, rootpost string, l
       model.parent = model.message_id
     }
     model.sage = isSage(model.subject)
-    atts := self.GetPostAttachments(model.message_id)
+    atts := self.GetPostAttachmentModels(prefix, model.message_id)
     if atts != nil {
-      for _, fname := range atts {
-        model.attachments = append(model.attachments, attachment{
-          prefix: prefix,
-          source: prefix+"img/"+fname,
-          thumbnail: prefix+"thm/"+fname,
-          // TODO: obtain upload filename
-          filename: "uploaded file",
-        })
-      }
+      model.attachments = append(model.attachments, atts...)
     }
     
     repls = append(repls, model)
@@ -750,6 +742,34 @@ func (self PostgresDatabase) GetPostAttachments(messageID string) []string {
     var val string
     rows.Scan(&val)
     atts = append(atts, val)
+  }
+  return atts
+}
+
+
+func (self PostgresDatabase) GetPostAttachmentModels(prefix, messageID string) []AttachmentModel {
+  var atts []AttachmentModel
+  stmt, err := self.Conn().Prepare("SELECT filepath, filename FROM ArticleAttachments WHERE message_id = $1")
+  if err != nil {
+    log.Println("failed to prepare query to get attachments for ", messageID, err)
+    return atts
+  }
+  defer stmt.Close()
+  rows, err := stmt.Query(messageID)
+  if err != nil {
+    log.Println("failed to execute query to get attachments for ", messageID, err)
+    return atts
+  }
+  defer rows.Close()
+  for rows.Next() {
+    var fpath, fname string
+    rows.Scan(&fpath, fname)
+    atts = append(atts, attachment{
+      prefix: prefix,
+      thumbnail: prefix+"thm/"+fpath,
+      source: prefix+"img/"+fpath,
+      filename: fname,
+    })
   }
   return atts
 }

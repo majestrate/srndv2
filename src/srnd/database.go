@@ -48,6 +48,10 @@ type Database interface {
   // get all attachments for this message
   GetPostAttachments(message_id string) []string
 
+  // get all attachments for this message
+  GetPostAttachmentModels(prefix, message_id string) []AttachmentModel
+  
+
   // return true if this newsgroup has posts
   GroupHasPosts(newsgroup string) bool
   

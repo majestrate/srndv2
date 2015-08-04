@@ -44,6 +44,15 @@ func testSign(bufflen int, keys *KeyPair) {
   }
 }
 
+func testFucky(bufflen int, keys *KeyPair) {
+  log.Printf("Test %d fucky sign/verify...", bufflen)
+  msg := RandBytes(bufflen)
+  sig := CryptoSignFucky(msg, keys.sk.Data())
+  if ! CryptoVerifyFucky(msg, sig, keys.pk.Data()) {
+    log.Fatal("Failed")
+  }
+}
+
 func testBox(bufflen int, tokey, fromkey *KeyPair) {
   log.Printf("Test %d box/box_open...", bufflen)
   msg := RandBytes(bufflen)
@@ -73,6 +82,12 @@ func TestAll() {
     key := GenSignKeypair()
     defer key.Free()
     testSign(n * 1024, key)
+  }
+  
+  for n := 1 ; n < 16 ; n++ {
+    key := GenSignKeypair()
+    defer key.Free()
+    testFucky(n * 1024, key)
   }
   
   for n := 1 ; n < 16 ; n++ {

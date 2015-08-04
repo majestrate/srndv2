@@ -8,6 +8,14 @@ import (
   "log"
 )
 
+// verify a fucky detached sig
+func CryptoVerifyFucky(msg, sig, pk []byte) bool {
+  var smsg []byte
+  smsg = append(smsg, sig...)
+  smsg = append(smsg, msg...)
+  return CryptoVerify(smsg, pk)
+}
+
 // verify a signed message
 func CryptoVerify(smsg, pk []byte) bool {
   smsg_buff := NewBuffer(smsg)
@@ -22,7 +30,8 @@ func CryptoVerify(smsg, pk []byte) bool {
   mlen := C.ulonglong(0)
   msg := malloc(C.size_t(len(smsg)))
   defer msg.Free()
-  return C.crypto_sign_open(msg.uchar(), &mlen, smsg_buff.uchar(), C.ulonglong(len(smsg)), pk_buff.uchar()) == 0
+  smlen := C.ulonglong(smsg_buff.size)
+  return C.crypto_sign_open(msg.uchar(), &mlen, smsg_buff.uchar(), smlen, pk_buff.uchar()) != -1
 }
 
 // verfiy a detached signature

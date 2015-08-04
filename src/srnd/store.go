@@ -6,12 +6,14 @@ package srnd
 
 import (
 
+  "github.com/majestrate/srndv2/src/nacl"
   "github.com/gographics/imagick/imagick"
   
   "bytes"
   "crypto/sha512"
   "encoding/base32"
   "encoding/base64"
+  "errors"
   "fmt"
   "io"
   //"io/ioutil"
@@ -210,7 +212,24 @@ func (self articleStore) ReadMessage(r io.Reader) (NNTPMessage, error) {
 
     } else if media_type == "message/rfc822" {
       // tripcoded message
-      // TODO: handle
+      sig := nntp.headers.Get("X-Signature-Ed25519-Sha512", "")
+      pk := nntp.headers.Get("X-Pubkey-Ed25519", "")
+      if pk == "" || sig == "" {
+        log.Println("invalid sig or pubkey", sig, pk)
+        return nil, errors.New("invalid headers")
+      }
+      log.Printf("got signed message from %s", pk)
+      var smsg bytes.Buffer
+      _, err = io.Copy(&smsg, msg.Body)
+      if err == nil {
+        pk_bytes := unhex(pk)
+        sig_bytes := unhex(sig)
+        if nacl.CryptoVerifyFucky(smsg.Bytes(), sig_bytes, pk_bytes) {
+          log.Println("signature is valid :^)")
+        } else {
+          log.Println("!!!signature is invalid!!!")
+        }
+      }
     } else {   
       _, err = nntp.message.body.ReadFrom(msg.Body)
     }

@@ -362,3 +362,8 @@ func isSage(str string) bool {
   str = strings.ToLower(str)
   return str == "sage" || strings.HasPrefix(str, "sage ")
 }
+
+func unhex(str string) []byte {
+  buff, _ := hex.DecodeString(str)
+  return buff
+}

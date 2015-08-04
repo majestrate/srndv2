@@ -74,7 +74,7 @@ type NNTPMessage interface {
   // get the plaintext message if it exists
   Message() string
   // pack the whole message and prepare for write
-  Pack()
+  Pack()  
 }
 
 type MessageReader interface {
@@ -132,10 +132,11 @@ func (self nntpArticle) MessageID() string {
 func (self nntpArticle) Pack() {
   if len(self.attachments) > 0 {
     if len(self.boundary) == 0 {
-      self.boundary = randStr(24) 
+      // we have no boundry, set it
+      self.boundary = randStr(24)
+      // set headers
       self.headers.Set("Mime-Version", "1.0")
       self.headers.Set("Content-Type", fmt.Sprintf("multipart/mixed; boundary=%s", self.boundary))
-      log.Println("pack article boundary is", self.boundary)
     }
   } else {
     self.headers.Set("Content-Type", "text/plain; charset=utf-8")

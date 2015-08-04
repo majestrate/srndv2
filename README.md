@@ -4,7 +4,7 @@ Some Random News Daemon version 2
 
 overchan nntp daemon
 
-status: sorta working
+status: working
 
 donate: bitcoin 15yuMzuueV8y5vPQQ39ZqQVz5Ey98DNrjE
 	
@@ -19,35 +19,31 @@ donate: bitcoin 15yuMzuueV8y5vPQQ39ZqQVz5Ey98DNrjE
 
 ## building
 
+    # make sure your version of go is correct
+    # if it's not, go to https://golang.org/dl/ and get the latest stable release
+    go version | grep -E 'go1\.(4|5)' && echo "supported" || echo "not supported"
 
-
-    # get libsodium and imagemagick
-    sudo apt-get install libsodium-dev libmagickwand-dev
-    
-    # get go dependancies
-    go get github.com/gorilla/sessions
-    go get github.com/gorilla/mux
-    go get github.com/dchest/captcha
-    go get github.com/majestrate/configparser
-    go get github.com/lib/pq
-    go get github.com/hoisie/mustache
-    go get github.com/gographics/imagick/imagick
 
     # set gopath if it's not already set
     export GOPATH=$HOME/go
     mkdir -p $GOPATH
+    # make sure your path is set to include binaries built by go
+    export PATH=$GOPATH/bin:$PATH
 
-    # get source code
-    go get github.com/majestrate/srndv2
-    cd $GOPATH/src/github.com/majestrate/srndv2
+    # get libsodium and imagemagick
+    sudo apt-get install libsodium-dev libmagickwand-dev
+    # download build and install
+    go install github.com/majestrate/srndv2
 
-    # build it
-    make
 
 ## initial run
 
+    # set up a directory for us to run in
+    mkdir -p $HOME/nntpchan
+    cd $HOME/nntpchan
+    
     # this will generate base config files if they aren't present
-    ./srnd setup
+    srndv2 setup
 
 ## database configuration
 

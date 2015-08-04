@@ -14,8 +14,10 @@ import (
 func main() {
   var daemon srnd.NNTPDaemon
   if len(os.Args) > 1 {
+    fmt.Fprintf(os.Stdout,"Starting up %s\n\n\n", srnd.Version())
     action := os.Args[1]
     if action == "setup" {
+
       log.Println("Setting up SRNd base...")
       daemon.Setup()
       log.Println("Setup Done")

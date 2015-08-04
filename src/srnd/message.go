@@ -228,7 +228,11 @@ func (self nntpArticle) Attach(att NNTPAttachment) NNTPMessage {
 }
 
 func (self nntpArticle) WriteBody(wr io.Writer) (err error) {
-  log.Printf("writing %d attachments", len(self.attachments))
+  if len(self.attachments) == 0 {
+    // write plaintext and be done
+    _, err = self.message.body.WriteTo(wr)
+    return
+  }
   content_type := self.ContentType()
   _, params, err := mime.ParseMediaType(content_type)
   if err != nil {

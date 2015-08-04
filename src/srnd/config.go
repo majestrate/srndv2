@@ -254,11 +254,10 @@ func (self *SRNdConfig) Validate() {
   store_dirs := []string{"store", "incoming", "attachments", "thumbs"}
   for _, d := range store_dirs {
     k := d + "_dir"
-    dir, ok := self.store[k]
+    _, ok := self.store[k]
     if ! ok {
       log.Fatalf("in section [store], no parameter '%s' provided", k)
     }
-    checkPerms(dir)
   }
 
   // check database parameters existing

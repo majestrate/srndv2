@@ -71,7 +71,7 @@ func (self PostgresDatabase) CreateTables() {
 
   // table for ip and their encryption key
   tables["EncryptedAddrs"] = `(
-                                #enckey VARCHAR(255) NOT NULL,
+                                enckey VARCHAR(255) NOT NULL,
                                 addr VARCHAR(255) NOT NULL,
                                 encaddr VARCHAR(255) NOT NULL
                               )`

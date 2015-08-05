@@ -374,7 +374,7 @@ func (self PostgresDatabase) GetAllNewsgroups() []string {
 }
 
 func (self PostgresDatabase) GetGroupPageCount(newsgroup string) int64 {
-  stmt, err := self.Conn().Prepare("SELECT COUNT(*) FROM ArticlePosts WHERE newsgroup = $1 AND ref_id = ''")
+  stmt, err := self.Conn().Prepare("SELECT COUNT(*) FROM ArticleThreads WHERE newsgroup = $1")
   if err != nil {
     log.Println("failed to prepare query to get board page count", err)
     return -1

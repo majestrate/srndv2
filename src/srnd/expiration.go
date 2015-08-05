@@ -69,6 +69,7 @@ func (self expire) ExpireGroup(newsgroup string, keep int) {
   threads := self.database.GetRootPostsForExpiration(newsgroup, keep)
   for _, root := range threads {
     self.DeletePost(root)
+    self.database.DeleteThread(root)
   }
 }
 

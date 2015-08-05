@@ -166,7 +166,10 @@ func (self httpFrontend) regenUkko() {
       }
       posts = append(posts, repls...)
     }
-    threads = append(threads, NewThreadModel(self.prefix, posts))
+    threads = append(threads, thread{
+      prefix: self.prefix,
+      posts: posts,
+    })
   }
   wr, err := OpenFileWriter(filepath.Join(self.webroot_dir, "ukko.html"))
   if err == nil {
@@ -196,9 +199,19 @@ func (self httpFrontend) regenerateThread(rootMessageID string) {
     }
     posts = append(posts, repls...)
   }
-  
+  // the link that points back to the board index
+  back_link := linkModel{
+    text: "back to board index",
+    link: fmt.Sprintf("%s%s-0.html", self.prefix, post.Board()),
+  }
+  // the links for this thread
+  links := []LinkModel{back_link}
   // make thread model
-  thread := NewThreadModel(self.prefix, posts)
+  thread := thread{
+    prefix: self.prefix,
+    links: links,
+    posts: posts,
+  }
   // get filename for thread
   fname := self.getFilenameForThread(rootMessageID)
   // open writer for file

@@ -393,6 +393,8 @@ func (self PostgresDatabase) GetGroupForPage(prefix, frontend, newsgroup string,
   // TODO: hard coded value
   roots := self.GetLastBumpedThreads(newsgroup, 100)
 
+  pages := self.GetGroupPageCount(newsgroup)
+  
   min_thread := pageno * perpage
   max_thread := ( ( pageno + 1 ) * perpage ) 
   
@@ -422,11 +424,20 @@ func (self PostgresDatabase) GetGroupForPage(prefix, frontend, newsgroup string,
       posts = append(posts, repls...)
     }
     // add thread to board page
-    thread := NewThreadModel(prefix, posts)
-    threads = append(threads, thread)
+    threads = append(threads, thread{
+      prefix: prefix,
+      posts: posts,
+    })
   }
   
-  return createBoardModel(prefix, frontend, newsgroup, pageno, threads)
+  return boardModel{
+    prefix: prefix,
+    frontend: frontend,
+    board: newsgroup,
+    page: pageno,
+    pages: int(pages),
+    threads: threads,
+  }
 }
 
 func (self PostgresDatabase) GetPostModel(prefix, messageID string) PostModel {

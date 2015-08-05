@@ -426,7 +426,7 @@ func (self PostgresDatabase) GetGroupForPage(prefix, frontend, newsgroup string,
     threads = append(threads, thread)
   }
   
-  return createBoardModel(prefix, frontend, newsgroup, threads)
+  return createBoardModel(prefix, frontend, newsgroup, pageno, threads)
 }
 
 func (self PostgresDatabase) GetPostModel(prefix, messageID string) PostModel {

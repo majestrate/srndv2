@@ -459,8 +459,7 @@ func (self httpFrontend) handle_postform(wr http.ResponseWriter, r *http.Request
   if len(post_fail) > 0 {
     wr.WriteHeader(200)
     resp_map["reason"] = post_fail
-    fname := filepath.Join(defaultTemplateDir(), "post_fail.mustache")
-    io.WriteString(wr, templateRender(fname, resp_map))
+    io.WriteString(wr, renderTemplate("post_fail.mustache", resp_map))
     return
   }
   // set message
@@ -480,8 +479,7 @@ func (self httpFrontend) handle_postform(wr http.ResponseWriter, r *http.Request
   msg_id := nntp.headers.Get("References", nntp.MessageID())
   // render response as success
   url = fmt.Sprintf("%sthread-%s.html", self.prefix, ShortHashMessageID(msg_id))
-  fname := filepath.Join(defaultTemplateDir(), "post_success.mustache")
-  io.WriteString(wr, templateRender(fname, map[string]string {"message_id" : nntp.MessageID(), "redirect_url" : url}))
+  io.WriteString(wr, renderTemplate("post_success.mustache", map[string]string {"message_id" : nntp.MessageID(), "redirect_url" : url}))
 }
 
 

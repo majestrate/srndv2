@@ -17,11 +17,12 @@ type boardModel struct {
   frontend string
   prefix string
   board string
+  page int
   threads []ThreadModel
 }
 
 
-func (self boardModel) RenderNavbar() string {
+func (self boardModel) Navbar() string {
   param := make(map[string]interface{})
   param["board"] = self
   return renderTemplate("navbar.mustache", param)
@@ -52,8 +53,8 @@ func (self boardModel) RenderTo(wr io.Writer) error {
   return err
 }
 
-func createBoardModel(prefix, frontend, name string, threads []ThreadModel) BoardModel {
-  return boardModel{frontend, prefix, name, threads}
+func createBoardModel(prefix, frontend, name string, pageno int, threads []ThreadModel) BoardModel {
+  return boardModel{frontend, prefix, name, pageno, threads}
 }
 
 type post struct {
@@ -211,6 +212,10 @@ func (self thread) Prefix() string {
   return self.prefix
 }
 
+func (self thread) Navbar() string {
+  return ""
+}
+
 func (self thread) Board() string {
   return self.posts[0].Board()
 }
@@ -255,12 +260,14 @@ func NewThreadModel(prefix string, posts []PostModel) ThreadModel {
   return th
 }
 
-func templateRender(fname string, obj interface{}) string {
+
+
+func templateRenderFile(fname string, obj interface{}) string {
   return mustache.RenderFile(fname, obj)
 }
 
 func renderTemplate(name string, obj interface{}) string {
-  return templateRender(filepath.Join(defaultTemplateDir(), name), obj)
+  return templateRenderFile(filepath.Join(defaultTemplateDir(), name), obj)
 }
 
 

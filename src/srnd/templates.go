@@ -56,10 +56,18 @@ type PostModel interface {
   
 }
 
+// interface for models that have a navbar
+type NavbarModel interface {
+
+  Navbar() string
+
+}
+
 // for threads
 type ThreadModel interface {
 
   BaseModel
+  NavbarModel
   
   OP() PostModel
   Replies() []PostModel
@@ -71,9 +79,15 @@ type ThreadModel interface {
 type BoardModel interface {
 
   BaseModel
+  NavbarModel
   
-  RenderNavbar() string
   Frontend() string
   Name() string
   Threads() []ThreadModel
+}
+
+type LinkModel interface {
+
+  Text() string
+  LinkURL() string
 }

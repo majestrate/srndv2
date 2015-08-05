@@ -71,7 +71,7 @@ func (self PostgresDatabase) CreateTables() {
 
   // table for ip and their encryption key
   tables["EncryptedAddrs"] = `(
-                                enckey VARCHAR(255) NOT NULL,
+                                #enckey VARCHAR(255) NOT NULL,
                                 addr VARCHAR(255) NOT NULL,
                                 encaddr VARCHAR(255) NOT NULL
                               )`
@@ -374,7 +374,7 @@ func (self PostgresDatabase) GetAllNewsgroups() []string {
 }
 
 func (self PostgresDatabase) GetGroupPageCount(newsgroup string) int64 {
-  stmt, err := self.Conn().Prepare("SELECT COUNT(*) FROM ArticlePosts WHERE newsgroup = $1 AND ref_id = ''")
+  stmt, err := self.Conn().Prepare("SELECT COUNT(*) FROM ArticleThreads WHERE newsgroup = $1")
   if err != nil {
     log.Println("failed to prepare query to get board page count", err)
     return -1
@@ -393,6 +393,8 @@ func (self PostgresDatabase) GetGroupForPage(prefix, frontend, newsgroup string,
   // TODO: hard coded value
   roots := self.GetLastBumpedThreads(newsgroup, 100)
 
+  pages := self.GetGroupPageCount(newsgroup)
+  
   min_thread := pageno * perpage
   max_thread := ( ( pageno + 1 ) * perpage ) 
   
@@ -422,11 +424,20 @@ func (self PostgresDatabase) GetGroupForPage(prefix, frontend, newsgroup string,
       posts = append(posts, repls...)
     }
     // add thread to board page
-    thread := NewThreadModel(prefix, posts)
-    threads = append(threads, thread)
+    threads = append(threads, thread{
+      prefix: prefix,
+      posts: posts,
+    })
   }
   
-  return createBoardModel(prefix, frontend, newsgroup, threads)
+  return boardModel{
+    prefix: prefix,
+    frontend: frontend,
+    board: newsgroup,
+    page: pageno,
+    pages: int(pages),
+    threads: threads,
+  }
 }
 
 func (self PostgresDatabase) GetPostModel(prefix, messageID string) PostModel {

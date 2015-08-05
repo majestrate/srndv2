@@ -17,13 +17,24 @@ type boardModel struct {
   frontend string
   prefix string
   board string
+  page int
+  pages int
   threads []ThreadModel
 }
 
 
-func (self boardModel) RenderNavbar() string {
+func (self boardModel) Navbar() string {
   param := make(map[string]interface{})
-  param["board"] = self
+  param["name"] = fmt.Sprintf("page %d for %s", self.page, self.board)
+  param["frontend"] = self.frontend
+  var links []LinkModel
+  for i := 0 ; i < self.pages ; i ++ {
+    links = append(links, linkModel{
+      link: fmt.Sprintf("%s%s-%d.html", self.prefix, self.board, i),
+      text: fmt.Sprintf("[ %d ]", i),
+    })
+  }
+  param["links"] = links
   return renderTemplate("navbar.mustache", param)
 }
 
@@ -50,10 +61,6 @@ func (self boardModel) RenderTo(wr io.Writer) error {
   param["form"] = renderPostForm(self.Prefix(), self.board, "")
   _, err := io.WriteString(wr, mustache.RenderFile(fname, param))
   return err
-}
-
-func createBoardModel(prefix, frontend, name string, threads []ThreadModel) BoardModel {
-  return boardModel{frontend, prefix, name, threads}
 }
 
 type post struct {
@@ -193,8 +200,7 @@ func (self post) RenderTo(wr io.Writer) error {
 }
 
 func (self post) RenderPost() string {
-  fname := filepath.Join(self.TemplateDir(), "post.mustache")
-  return mustache.RenderFile(fname, self)
+  return renderTemplate("post.mustache", self)
 }
 
 func (self post) RenderBody() string {
@@ -204,11 +210,20 @@ func (self post) RenderBody() string {
 
 type thread struct {
   prefix string
+  links []LinkModel
   posts []PostModel
 }
 
 func (self thread) Prefix() string {
   return self.prefix
+}
+
+func (self thread) Navbar() string {
+  param := make(map[string]interface{})
+  param["name"] = fmt.Sprintf("Thread %s", self.posts[0].ShortHash())
+  param["frontend"] = "nntpchan" // TODO: make this different?
+  param["links"] = self.links
+  return renderTemplate("navbar.mustache", param)
 }
 
 func (self thread) Board() string {
@@ -224,15 +239,9 @@ func defaultTemplateDir() string {
   return  filepath.Join("contrib", "templates", "default")
 }
 
-func (self thread) TemplateDir() string {
-  return defaultTemplateDir()
-}
-
 func (self thread) RenderTo(wr io.Writer) error {
-  fname := filepath.Join(self.TemplateDir(), "thread.mustache")
-  rpls := self.Replies()
   postform := renderPostForm(self.prefix, self.Board(), self.posts[0].MessageID())
-  data := mustache.RenderFile(fname, map[string]interface{} { "thread": self, "repls" : rpls, "form" : postform})
+  data := renderTemplate("thread.mustache", map[string]interface{} { "thread": self, "form" : postform})
   io.WriteString(wr, data)
   return nil
 }
@@ -248,19 +257,22 @@ func (self thread) Replies() []PostModel {
   return []PostModel{}
 }
 
-func NewThreadModel(prefix string, posts []PostModel) ThreadModel {
-  th := thread{}
-  th.posts = posts
-  th.prefix = prefix
-  return th
+
+type linkModel struct {
+  text string
+  link string
 }
 
-func templateRender(fname string, obj interface{}) string {
-  return mustache.RenderFile(fname, obj)
+func (self linkModel) LinkURL() string {
+  return self.link
+}
+
+func (self linkModel) Text() string {
+  return self.text
 }
 
 func renderTemplate(name string, obj interface{}) string {
-  return templateRender(filepath.Join(defaultTemplateDir(), name), obj)
+  return mustache.RenderFile(filepath.Join(defaultTemplateDir(), name), obj)
 }
 
 

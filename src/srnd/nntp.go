@@ -286,13 +286,13 @@ func (self *NNTPConnection) HandleInbound(d *NNTPDaemon) {
                     newsgroup := line[12:]
                     if ! newsgroupValidFormat(newsgroup) {
                       // bad newsgroup
-                      code = 439
+                      code = 438
                     }
                   }
                 } else if strings.HasPrefix(lower_line, "x-tor-poster: 1") {
                   if ! self.allow_tor {
                     // we don't want this post
-                    code = 439
+                    code = 438
                     read_more = false
                   }
                 } else if strings.HasPrefix(lower_line, "x-encrypted-ip: ") {
@@ -323,7 +323,7 @@ func (self *NNTPConnection) HandleInbound(d *NNTPDaemon) {
               _ = d.store.GetTempFilename(article)
             }
           } else {
-            self.txtconn.PrintfLine("439 %s", article)
+            self.txtconn.PrintfLine("438 %s invalid message-id", article)
           }
         }
       }

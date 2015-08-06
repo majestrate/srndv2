@@ -275,7 +275,6 @@ func renderTemplate(name string, obj interface{}) string {
   return mustache.RenderFile(filepath.Join(defaultTemplateDir(), name), obj)
 }
 
-
 func renderUkko(prefix string, threads []ThreadModel) string {
   return renderTemplate("ukko.mustache", map[string]interface{} { "prefix" : prefix, "threads" : threads } )
 }

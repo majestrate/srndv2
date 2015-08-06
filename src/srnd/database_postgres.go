@@ -189,6 +189,23 @@ func (self PostgresDatabase) CheckModPubkeyCanModGroup(pubkey, newsgroup string)
   return result > 0
 }
 
+func (self PostgresDatabase) CountPostsInGroup(newsgroup string, time_frame int64) (result int64) {
+  stmt, err := self.Conn().Prepare("SELECT COUNT(*) FROM ArticlePosts WHERE time_posted > $2 AND newsgroup = $1")
+  if err == nil {
+    defer stmt.Close()
+    if time_frame > 0 {
+      time_frame = timeNow() - time_frame
+    } else if time_frame < 0 {
+      time_frame = 0
+    }
+    stmt.QueryRow(newsgroup, time_frame).Scan(&result)
+  } else {
+    result = -1
+    log.Println("cannot count posts", err)
+  }
+  return
+}
+
 func (self PostgresDatabase) CheckModPubkey(pubkey string) bool {
   stmt, err := self.Conn().Prepare("SELECT COUNT(*) FROM ModPrivs WHERE pubkey = $1 AND newsgroup = $2 AND permission = $3")
   var result int64

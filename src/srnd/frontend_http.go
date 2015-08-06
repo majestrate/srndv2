@@ -17,6 +17,7 @@ import (
   "net/http"
   "os"
   "path/filepath"
+  "sort"
   "strings"
 )
 
@@ -141,7 +142,75 @@ func (self httpFrontend) regenerateBoardPage(newsgroup string, pageno int) {
   } else {
     log.Println("cannot open", fname, err)
   }
-  log.Println("regenerated file", fname)
+}
+
+type boardPageRow struct {
+  Board string
+  Hour int64 
+  Day int64 
+  All int64 
+}
+
+type boardPageRows []boardPageRow
+
+func (self boardPageRows) Len() int {
+  return len(self)
+}
+
+func (self boardPageRows) Less(i, j int) bool {
+  return self[i].Day > self[j].Day
+}
+
+func (self boardPageRows) Swap(i, j int) {
+  self[i] , self[j] = self[j], self[i]
+}
+
+// regenerate the main index.html with boards list
+// TODO: optimize
+func (self httpFrontend) regenFrontPage() {
+  // the graph for the front page
+  var frontpage_graph boardPageRows
+
+  db := self.daemon.database
+
+  // top 50 boards
+  top_count := 50
+  
+  // for each group
+  groups := db.GetAllNewsgroups()
+  for idx, group := range groups {
+    if idx >= top_count {
+      break
+    }
+    // posts per hour
+    hour := db.CountPostsInGroup(group, 3600)
+    // posts per day
+    day := db.CountPostsInGroup(group, 86400)
+    // posts total
+    all := db.CountPostsInGroup(group, 0)
+    frontpage_graph = append(frontpage_graph, boardPageRow{
+      All: all,
+      Day: day,
+      Hour: hour,
+      Board: group,
+    })
+  }
+  wr, err := OpenFileWriter(filepath.Join(self.webroot_dir, "index.html"))
+  if err != nil {
+    log.Println("cannot render front page", err)
+    return
+  }
+
+  param := make(map[string]interface{})
+  sort.Sort(frontpage_graph)
+  param["graph"] = frontpage_graph
+  param["frontend"] = self.name
+  param["totalposts"] = db.ArticleCount()
+  _, err = io.WriteString(wr, renderTemplate("frontpage.mustache", param))
+  if err != nil {
+    log.Println("error writing front page", err)
+  }
+  wr.Close()
 }
 
 // regenerate the ukko page
@@ -224,7 +293,6 @@ func (self httpFrontend) regenerateThread(rootMessageID string) {
   err = thread.RenderTo(wr)
   wr.Close()
   if err == nil {
-    log.Printf("regenerated file %s", fname)
   } else {
     log.Printf("failed to render %s", err)
   }  
@@ -280,7 +348,7 @@ func (self httpFrontend) pollukko() {
   for {
     _ : <- self.ukkoChan
     self.regenUkko()
-    log.Println("ukko regenerated")
+    self.regenFrontPage()
   }
 }
 

@@ -41,6 +41,10 @@ type Database interface {
   // return true if this thread has any replies
   ThreadHasReplies(root_message_id string) bool
 
+  // get the number of posts in a certain newsgroup since N seconds ago
+  // if N <= 0 then count all we have now
+  CountPostsInGroup(group string, time_frame int64) int64
+  
   // get all replies to a thread
   // if last > 0 then get that many of the last replies
   GetThreadReplies(root_message_id string, last int) []string

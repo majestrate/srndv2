@@ -249,7 +249,10 @@ func (self nntpArticle) WriteBody(wr io.Writer) (err error) {
       if err == nil {
         w.Write(line[:len(line)-2])
         w.WriteByte(10)
+      } else if err == io.EOF {
+        return
       } else {
+        log.Println("error while writing", err)
         return
       }
     }

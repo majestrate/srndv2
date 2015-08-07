@@ -236,11 +236,13 @@ func (self *NNTPConnection) HandleInbound(d *NNTPDaemon) {
           if ValidMessageID(article) {
             code := 239
             file := d.store.CreateTempFile(article)
-            has_ip_header := false
+            ip_header := ""
+            ip_banned := false
             headers_done := false
             read_more := true
             has_attachment := false
             is_signed := false
+            message := "we are gud"
             for {
               var line string
               line, err = self.ReadLine()
@@ -252,23 +254,32 @@ func (self *NNTPConnection) HandleInbound(d *NNTPDaemon) {
               if line == "" && ! headers_done {
                 // headers done
                 headers_done = true
-                if self.allow_tor {
+                if len(ip_header) > 0 {
+                  ip_banned, err = d.database.CheckEncIPBanned(ip_header)
+                  if err == nil {
+                    if ip_banned {
+                      code = 438
+                      read_more = false
+                      message = "poster is banned"
+                    }
+                  } else {
+                    log.Println("cannot check for banned encrypted ip", err)
+                    // send it later
+                    code = 436
+                    message = "could be banned by us but we do not know"
+                  }
+                } else if self.allow_tor {
                   // do we want tor posts with attachments?
                   if has_attachment && ! self.allow_tor_attachments {
-                    if has_ip_header {
-                      // it's fine
-                    } else {
-                      // dropit
-                      code = 439
-                      read_more = false
-                    }
+                    // this guy is banned
+                    code = 438
+                    read_more = false
+                    message = "we do not take attachments from tor"
                   }
-                  // we'll allow it
-                } else if has_ip_header {
-                  // we'll allow it
                 } else {
-                  // we don'e want the body
-                  code = 439
+                  // we don'e want it
+                  code = 438
+                  message = "we do not take anonymous posts"
                   read_more = false
                 }
                 if is_signed {
@@ -287,16 +298,19 @@ func (self *NNTPConnection) HandleInbound(d *NNTPDaemon) {
                     if ! newsgroupValidFormat(newsgroup) {
                       // bad newsgroup
                       code = 438
+                      message = "invalid newsgroup"
                     }
                   }
                 } else if strings.HasPrefix(lower_line, "x-tor-poster: 1") {
                   if ! self.allow_tor {
                     // we don't want this post
                     code = 438
+                    message = "we do not take anonymous posts"
                     read_more = false
                   }
                 } else if strings.HasPrefix(lower_line, "x-encrypted-ip: ") {
-                  has_ip_header = true
+                  ip_header = strings.Split(line, " ")[1]
+                  ip_header = strings.Trim(line, " \t\r\n")
                 } else if strings.HasPrefix(lower_line, "content-type: multipart") {
                   has_attachment = true
                 } else if strings.HasPrefix(lower_line, "x-signature-ed25519-sha512: ") {
@@ -311,7 +325,7 @@ func (self *NNTPConnection) HandleInbound(d *NNTPDaemon) {
             }
             file.Close()
             // tell them our result
-            self.txtconn.PrintfLine("%d %s", code, article)
+            self.txtconn.PrintfLine("%d %s %s", code, article, message)
             // the send was good
             if code == 239 {
               log.Println(self.conn.RemoteAddr(), "got article", article)

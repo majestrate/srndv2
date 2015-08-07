@@ -221,10 +221,8 @@ func (self httpModUI) handleDeletePost(msg ArticleEntry, r *http.Request) map[st
       if replies != nil {
         delmsgs = append(delmsgs, replies...)
       }
-      // delete thread
+      // delete thread presence from the database
       self.database.DeleteThread(msgid)
-      // pre-emptively delete thread html page
-      self.delete(msgid)
     }
     delmsgs = append(delmsgs, msgid)
     deleted := []string{}

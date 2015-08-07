@@ -4,6 +4,7 @@
 package srnd
 
 import (
+  "bufio"
   "encoding/base64"
   "fmt"
   "io"
@@ -237,6 +238,22 @@ func (self nntpArticle) Attach(att NNTPAttachment) NNTPMessage {
 }
 
 func (self nntpArticle) WriteBody(wr io.Writer) (err error) {
+  // this is a signed message, don't treat it special
+  if self.signedPart.body.Len() > 0 {
+    r := bufio.NewReader(&self.signedPart.body)
+    w := bufio.NewWriter(wr)
+    var line []byte
+    for {
+      // convert line endings :\
+      line, err = r.ReadBytes('\n')
+      if err == nil {
+        w.Write(line[:len(line)-2])
+        w.WriteByte(10)
+      } else {
+        return
+      }
+    }
+  }
   if len(self.attachments) == 0 {
     // write plaintext and be done
     _, err = self.message.body.WriteTo(wr)

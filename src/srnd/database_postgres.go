@@ -179,8 +179,8 @@ func (self PostgresDatabase) CheckModPubkeyGlobal(pubkey string) bool {
   stmt, err := self.Conn().Prepare("SELECT COUNT(*) FROM ModPrivs WHERE pubkey = $1 AND newsgroup = $2 AND permission = $3")
   var result int64
   if err == nil {
-    defer stmt.Close()
     stmt.QueryRow(pubkey, "overchan", "all").Scan(&result)
+    stmt.Close()
   }
   return result > 0
 }
@@ -189,8 +189,8 @@ func (self PostgresDatabase) CheckModPubkeyCanModGroup(pubkey, newsgroup string)
   stmt, err := self.Conn().Prepare("SELECT COUNT(*) FROM ModPrivs WHERE pubkey = $1 AND newsgroup = $2")
   var result int64
   if err == nil {
-    defer stmt.Close()
     stmt.QueryRow(pubkey, newsgroup).Scan(&result)
+    stmt.Close()
   }
   return result > 0
 }
@@ -704,9 +704,10 @@ func (self PostgresDatabase) HasArticle(message_id string) bool {
     log.Println("failed to prepare query to check for article", message_id, err)
     return false
   }
-  defer stmt.Close()
+
   var count int64
   stmt.QueryRow(message_id).Scan(&count)
+  stmt.Close()
   return count > 0
 }
 

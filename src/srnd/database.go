@@ -115,6 +115,15 @@ type Database interface {
 
   // check if an ip is banned from our local
   CheckIPBanned(addr string) (bool, error)
+
+  // check if an encrypted ip is banned from our local
+  CheckEncIPBanned(encAddr string) (bool, error)
+
+  // ban an ip address from the local
+  BanAddr(addr string) error
+
+  // ban an encrypted ip address from the remote
+  BanEncAddr(encAddr string) error
   
   // return the encrypted version of an IPAddress
   // if it's not already there insert it into the database

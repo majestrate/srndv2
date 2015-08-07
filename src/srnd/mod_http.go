@@ -94,10 +94,69 @@ func (self httpModUI) writeTemplateParam(wr http.ResponseWriter, name string, pa
 
 func (self httpModUI) HandleAddPubkey(wr http.ResponseWriter, r *http.Request) {
 }
+
 func (self httpModUI) HandleDelPubkey(wr http.ResponseWriter, r *http.Request) {
 }
+
+// ban the address of a poster
 func (self httpModUI) HandleBanAddress(wr http.ResponseWriter, r *http.Request) {
+  if self.checkSession(r) {
+    resp := make(map[string]interface{})
+    path := r.URL.Path
+    if strings.Count(path, "/") > 2 {
+      // get the long hash
+      // TOOD: prefix detection
+      longhash := strings.Split(path, "/")[3]
+      // get the message id
+      msg, err := self.database.GetMessageIDByHash(longhash)
+      if err == nil {
+        // get the article headers
+        msgid := msg.MessageID()
+        hdr := self.articles.GetHeaders(msgid)
+        if hdr == nil {
+          // we don't got it?!
+          resp["error"] = fmt.Sprintf("message %s not on the filesystem wtf?", msgid)
+        } else {
+          // get the associated encrypted ip
+          encip := hdr.Get("X-Encrypted-Ip", hdr.Get("X-Encrypted-IP", ""))
+          encip = strings.Trim(encip, "\t ")
+          
+          if len(encip) == 0 {
+            // no ip header detected
+            resp["error"] = fmt.Sprintf("%s has no IP, ban Tor instead", msgid)
+          } else {
+            // get the ip address if we have it
+            ip, err := self.database.GetIPAddress(encip)
+            if len(ip) > 0 {
+              // we have it
+              // ban the address
+              err = self.database.BanAddr(ip)
+            } else {
+              // we don't have it
+              // ban the encrypted version
+              err = self.database.BanEncAddr(encip)
+            }
+            if err == nil {
+              resp["banned"] = fmt.Sprintf("We banned %s", encip)
+            } else {
+              resp["error"] = err.Error()
+            }
+          }
+        }
+      } else {
+        resp["error"] = err.Error()
+      }
+      // send the response
+      enc := json.NewEncoder(wr)
+      enc.Encode(resp)
+    } else {
+      wr.WriteHeader(404)
+    }
+  } else {
+    wr.WriteHeader(403)
+  }
 }
+
 func (self httpModUI) HandleDeletePost(wr http.ResponseWriter, r *http.Request) {
   if self.checkSession(r) {
     resp := make(map[string]interface{})
@@ -162,6 +221,8 @@ func (self httpModUI) HandleDeletePost(wr http.ResponseWriter, r *http.Request) 
       // send response
       enc := json.NewEncoder(wr)
       enc.Encode(resp)
+    } else {
+      wr.WriteHeader(404)
     }
   } else {
     wr.WriteHeader(403)

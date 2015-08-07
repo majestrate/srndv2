@@ -142,6 +142,12 @@ func (self PostgresDatabase) CreateTables() {
                         made INTEGER NOT NULL,
                         expires INTEGER NOT NULL
                       )`
+  // bans for encrypted addresses that we don't have the ip for
+  tables["EncIPBans"] = `(
+                           encaddr VARCHAR(255) NOT NULL,
+                           made INTEGER NOT NULL,
+                           expires INTEGER NOT NULL
+                         )`
   
   for k, v := range(tables) {
     _, err := self.Conn().Exec(fmt.Sprintf("CREATE TABLE IF NOT EXISTS %s%s", k, v))
@@ -975,3 +981,35 @@ func (self PostgresDatabase) GetMessageIDByHash(hash string) (article ArticleEnt
   }
   return article, err
 }
+
+func (self PostgresDatabase) BanAddr(addr string) (err error) {
+  stmt, err := self.Conn().Prepare("INSERT INTO IPBans(addr, made, expires) VALUES($1, $2, $3)")
+  if err == nil {
+    defer stmt.Close()
+    // ban forever :^)
+    _, err = stmt.Exec(addr, timeNow(), -1)
+  }
+  return
+}
+
+func (self PostgresDatabase) CheckEncIPBanned(encaddr string) (banned bool, err error) {
+  stmt, err := self.Conn().Prepare("SELECT COUNT(*) FROM EncIPBans WHERE encaddr = $1")
+  var result int64
+  if err == nil {
+    defer stmt.Close()
+    stmt.QueryRow(encaddr).Scan(result)
+    banned = result > 0
+  }
+  return 
+}
+
+func (self PostgresDatabase) BanEncAddr(encaddr string) (err error) {
+  stmt, err := self.Conn().Prepare("INSERT INTO EncIPBans(encaddr, made, expires) VALUES($1, $2, $3)")
+  if err == nil {
+    defer stmt.Close()
+    // ban forever :^)
+    _, err = stmt.Exec(encaddr, timeNow(), -1)
+  }
+  return
+}
+

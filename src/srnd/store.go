@@ -8,7 +8,7 @@ import (
 
   "github.com/majestrate/srndv2/src/nacl"
   "github.com/gographics/imagick/imagick"
-  
+  "bufio"
   "bytes"
   "crypto/sha512"
   "encoding/base32"
@@ -17,7 +17,6 @@ import (
   "errors"
   "fmt"
   "io"
-  //"io/ioutil"
   "log"
   "mime"
   "mime/multipart"
@@ -220,18 +219,26 @@ func (self articleStore) ReadMessage(r io.Reader) (NNTPMessage, error) {
         return nil, errors.New("invalid headers")
       }
       log.Printf("got signed message from %s", pk)
-      var smsg bytes.Buffer
-      _, err = io.Copy(&smsg, msg.Body)
-      if err == nil {
-        pk_bytes := unhex(pk)
-        sig_bytes := unhex(sig)
-        body_bytes := sha512.Sum512(smsg.Bytes())
-        log.Printf("body sum=%s", hex.EncodeToString(body_bytes[:]))
-        if nacl.CryptoVerifyFucky(body_bytes[:], sig_bytes, pk_bytes) {
-          log.Println("signature is valid :^)")
-        } else {
-          log.Println("!!!signature is invalid!!!")
+      var buff bytes.Buffer
+      pk_bytes := unhex(pk)
+      sig_bytes := unhex(sig)
+      r := bufio.NewReader(msg.Body)
+      crlf := []byte{13,10}
+      for {
+        line, err := r.ReadBytes('\n')
+        if err == io.EOF {
+          break
         }
+        buff.Write(line[:len(line)-1])
+        buff.Write(crlf)
+      }
+      body := buff.Bytes()[:buff.Len()-2]
+      body_hash := sha512.Sum512(body)
+      log.Printf("body sum=%s", hex.EncodeToString(body_hash[:]))
+      if nacl.CryptoVerifyFucky(body_hash[:], sig_bytes, pk_bytes) {
+        log.Println("signature is valid :^)")
+      } else {
+        log.Println("!!!signature is invalid!!!")
       }
     } else {   
       _, err = nntp.message.body.ReadFrom(msg.Body)

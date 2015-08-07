@@ -143,7 +143,7 @@ func (self nntpArticle) Pack() {
       self.headers.Set("Mime-Version", "1.0")
       self.headers.Set("Content-Type", fmt.Sprintf("multipart/mixed; boundary=%s", self.boundary))
     }
-  } else {
+  } else if self.signedPart.body.Len() == 0 {
     self.headers.Set("Content-Type", "text/plain; charset=utf-8")
   }
     

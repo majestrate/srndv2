@@ -240,6 +240,7 @@ func (self nntpArticle) Attach(att NNTPAttachment) NNTPMessage {
 func (self nntpArticle) WriteBody(wr io.Writer) (err error) {
   // this is a signed message, don't treat it special
   if self.signedPart.body.Len() > 0 {
+    log.Println("we are a signed message, not touching anything")
     r := bufio.NewReader(&self.signedPart.body)
     w := bufio.NewWriter(wr)
     var line []byte

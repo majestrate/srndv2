@@ -179,12 +179,6 @@ func (self articleStore) WriteMessage(nntp NNTPMessage, wr io.Writer) (err error
 }
 
 
-
-func (self articleStore) VerifyMessage(nntp NNTPMessage) (NNTPMessage, error) {
-  // TODO: implement
-  return nntp, nil
-}
-
 // get the filepath for an attachment
 func (self articleStore) AttachmentFilepath(fname string) string {
   return filepath.Join(self.attachments, fname)

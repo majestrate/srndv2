@@ -992,6 +992,18 @@ func (self PostgresDatabase) BanAddr(addr string) (err error) {
   return
 }
 
+// assumes it is there
+func (self PostgresDatabase) UnbanAddr(addr string) (err error) {
+  stmt, err := self.Conn().Prepare("DELETE FROM IPBans WHERE addr >>= $1")
+  if err == nil {
+    defer stmt.Close()
+    // unban all applicable rules
+    // TODO: don't do this for range bans
+    _, err = stmt.Exec(addr)
+  }
+  return
+}
+
 func (self PostgresDatabase) CheckEncIPBanned(encaddr string) (banned bool, err error) {
   stmt, err := self.Conn().Prepare("SELECT COUNT(*) FROM EncIPBans WHERE encaddr = $1")
   var result int64

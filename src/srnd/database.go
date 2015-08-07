@@ -122,6 +122,9 @@ type Database interface {
   // ban an ip address from the local
   BanAddr(addr string) error
 
+  // unban an ip address from the local
+  UnbanAddr(addr string) error
+  
   // ban an encrypted ip address from the remote
   BanEncAddr(encAddr string) error
   

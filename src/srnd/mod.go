@@ -30,6 +30,8 @@ type ModUI interface {
   HandleDeletePost(wr http.ResponseWriter, r *http.Request)
   // handle a ban address request
   HandleBanAddress(wr http.ResponseWriter, r *http.Request)
+  // handle an unban address request
+  HandleUnbanAddress(wr http.ResponseWriter, r *http.Request)
   // handle add a pubkey
   HandleAddPubkey(wr http.ResponseWriter, r *http.Request)
   // handle removing a pubkey

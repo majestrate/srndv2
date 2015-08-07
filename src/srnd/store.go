@@ -13,7 +13,6 @@ import (
   "crypto/sha512"
   "encoding/base32"
   "encoding/base64"
-  "encoding/hex"
   "errors"
   "fmt"
   "io"
@@ -31,8 +30,6 @@ import (
 type ArticleStore interface {
   MessageReader
   MessageWriter
-  MessageVerifier
-  AttachmentReader
   
   // get the filepath for an attachment
   AttachmentFilepath(fname string) string
@@ -119,6 +116,10 @@ func (self articleStore) GenerateThumbnail(infname string) (err error) {
   return
 }
 
+func (self articleStore) ReadMessage(r io.Reader) (NNTPMessage, error) {
+  return read_message(r)
+}
+
 func (self articleStore) StorePost(nntp NNTPMessage) (err error) {
   f := self.CreateFile(nntp.MessageID())
   if f != nil {
@@ -126,129 +127,36 @@ func (self articleStore) StorePost(nntp NNTPMessage) (err error) {
     f.Close()
   }
   for _, att := range nntp.Attachments() {
-    fpath := att.Filepath()
-
-    upload := self.AttachmentFilepath(fpath)
-
-    
-    
-    // save attachment
-    log.Println("save attachment", att.Filename(), "to", upload)
-    f, err = os.Create(upload)
-    if err == nil {
-      err = att.WriteTo(f)
-      f.Close()
-    }
-    if err != nil {
-      return
-    }
-    
-    // generate thumbanils
-    if att.NeedsThumbnail() {
-      err = self.GenerateThumbnail(fpath)
-      if err != nil {
-        log.Println("failed to generate thumbnail", err)
-        return 
-      }
-    }
+    // save attachments in parallel
+    go self.saveAttachment(att)
   }
   return 
 }
 
-func (self articleStore) ReadMessage(r io.Reader) (NNTPMessage, error) {
-
-  msg, err := mail.ReadMessage(r)
-  nntp := nntpArticle{}
-
+// save an attachment
+func (self articleStore) saveAttachment(att NNTPAttachment) {
+  fpath := att.Filepath()
+  upload := self.AttachmentFilepath(fpath) 
+  // save attachment
+  log.Println("save attachment", att.Filename(), "to", upload)
+  f, err := os.Create(upload)
   if err == nil {
-    nntp.headers = ArticleHeaders(msg.Header)
-    content_type := msg.Header.Get("Content-Type")
-    media_type, params, err := mime.ParseMediaType(content_type)
-    if err != nil {
-      log.Println("failed to parse media type", err)
-      return nil, err
-    }
-    boundary, ok := params["boundary"]
-    if ok {
-      partReader := multipart.NewReader(msg.Body, boundary)
-      for {
-        part, err := partReader.NextPart()
-        if err == io.EOF {
-          return nntp, nil
-        } else if err == nil {
-          hdr := part.Header
-          // get content type of part
-          part_type := hdr.Get("Content-Type")
-          log.Println("part has content type", part_type)
-          // parse content type
-          media_type, _, err = mime.ParseMediaType(part_type)
-          if err == nil {
-            if media_type == "text/plain" {
-              att := self.ReadAttachmentFromMimePart(part, true)
-              if att != nil {
-                att.WriteTo(&nntp.message.body)
-              }
-              if nntp.message.header == nil {
-                nntp.message.header = make(textproto.MIMEHeader)
-              }
-              nntp.message.header.Set("Content-Type", part_type)
-         
-            } else {
-              // non plaintext gets added to attachments
-              att := self.ReadAttachmentFromMimePart(part, true)
-              if att != nil {
-                nntp = nntp.Attach(att).(nntpArticle)
-              }
-            }
-          } else {
-            log.Println("part has no content type", err)
-          }
-          part.Close()
-        } else {
-          log.Println("failed to load part! ", err)
-          return nntp, err
-        }
-      }
-
-    } else if media_type == "message/rfc822" {
-      // tripcoded message
-      sig := nntp.headers.Get("X-Signature-Ed25519-Sha512", "")
-      pk := nntp.headers.Get("X-Pubkey-Ed25519", "")
-      if pk == "" || sig == "" {
-        log.Println("invalid sig or pubkey", sig, pk)
-        return nil, errors.New("invalid headers")
-      }
-      log.Printf("got signed message from %s", pk)
-      var buff bytes.Buffer
-      pk_bytes := unhex(pk)
-      sig_bytes := unhex(sig)
-      r := bufio.NewReader(msg.Body)
-      crlf := []byte{13,10}
-      for {
-        line, err := r.ReadBytes('\n')
-        if err == io.EOF {
-          break
-        }
-        buff.Write(line[:len(line)-1])
-        buff.Write(crlf)
-      }
-      body := buff.Bytes()[:buff.Len()-2]
-      body_hash := sha512.Sum512(body)
-      log.Printf("body sum=%s", hex.EncodeToString(body_hash[:]))
-      if nacl.CryptoVerifyFucky(body_hash[:], sig_bytes, pk_bytes) {
-        log.Println("signature is valid :^)")
-      } else {
-        log.Println("!!!signature is invalid!!!")
-      }
-    } else {   
-      _, err = nntp.message.body.ReadFrom(msg.Body)
-    }
-  } else {
-    log.Println("failed to read message", err)
+    err = att.WriteTo(f)
+    f.Close()
   }
-  return nntp, err
+  if err != nil {
+    return
+  }
+  
+  // generate thumbanils
+  if att.NeedsThumbnail() {
+    err = self.GenerateThumbnail(fpath)
+    if err != nil {
+      log.Println("failed to generate thumbnail", err)
+      return 
+    }
+  }
 }
-
 
 func (self articleStore) WriteMessage(nntp NNTPMessage, wr io.Writer) (err error) {
   // write headers
@@ -386,7 +294,106 @@ func (self articleStore) GetHeaders(messageID string) ArticleHeaders {
   return nntp.Headers()
 }
 
-func (self articleStore) ReadAttachmentFromMimePart(part *multipart.Part, decode bool) NNTPAttachment {
+
+func read_message(r io.Reader) (NNTPMessage, error) {
+
+  msg, err := mail.ReadMessage(r)
+  nntp := nntpArticle{}
+
+  if err == nil {
+    nntp.headers = ArticleHeaders(msg.Header)
+    content_type := msg.Header.Get("Content-Type")
+    media_type, params, err := mime.ParseMediaType(content_type)
+    if err != nil {
+      log.Println("failed to parse media type", err)
+      return nil, err
+    }
+    boundary, ok := params["boundary"]
+    if ok {
+      partReader := multipart.NewReader(msg.Body, boundary)
+      for {
+        part, err := partReader.NextPart()
+        if err == io.EOF {
+          return nntp, nil
+        } else if err == nil {
+          hdr := part.Header
+          // get content type of part
+          part_type := hdr.Get("Content-Type")
+          log.Println("part has content type", part_type)
+          // parse content type
+          media_type, _, err = mime.ParseMediaType(part_type)
+          if err == nil {
+            if media_type == "text/plain" {
+              att := readAttachmentFromMimePart(part)
+              if att != nil {
+                att.WriteTo(&nntp.message.body)
+              }
+              if nntp.message.header == nil {
+                nntp.message.header = make(textproto.MIMEHeader)
+              }
+              nntp.message.header.Set("Content-Type", part_type)
+         
+            } else {
+              // non plaintext gets added to attachments
+              att := readAttachmentFromMimePart(part)
+              if att != nil {
+                nntp = nntp.Attach(att).(nntpArticle)
+              }
+            }
+          } else {
+            log.Println("part has no content type", err)
+          }
+          part.Close()
+        } else {
+          log.Println("failed to load part! ", err)
+          return nntp, err
+        }
+      }
+
+    } else if media_type == "message/rfc822" {
+      // tripcoded message
+      sig := nntp.headers.Get("X-Signature-Ed25519-Sha512", "")
+      pk := nntp.headers.Get("X-Pubkey-Ed25519", "")
+      if pk == "" || sig == "" {
+        log.Println("invalid sig or pubkey", sig, pk)
+        return nil, errors.New("invalid headers")
+      }
+      log.Printf("got signed message from %s", pk)
+      pk_bytes := unhex(pk)
+      sig_bytes := unhex(sig)
+      r := bufio.NewReader(msg.Body)
+      crlf := []byte{13,10}
+      for {
+        line, err := r.ReadBytes('\n')
+        if err == io.EOF {
+          break
+        }
+        nntp.signedPart.body.Write(line[:len(line)-1])
+        nntp.signedPart.body.Write(crlf)
+      }
+      if nntp.signedPart.body.Len() < 2 {
+        log.Println("signed body is too small")
+      } else {
+        body := nntp.signedPart.body.Bytes()[:nntp.signedPart.body.Len()-2]
+        body_hash := sha512.Sum512(body)
+        if nacl.CryptoVerifyFucky(body_hash[:], sig_bytes, pk_bytes) {
+          log.Println("signature is valid :^)")
+        } else {
+          log.Println("!!!signature is invalid!!!")
+        }
+      }
+    } else {   
+      _, err = nntp.message.body.ReadFrom(msg.Body)
+    }
+  } else {
+    log.Println("failed to read message", err)
+  }
+  return nntp, err
+}
+
+
+
+func readAttachmentFromMimePart(part *multipart.Part) NNTPAttachment {
   var buff bytes.Buffer
   content_type := part.Header.Get("Content-Type")
   media_type, _ , err := mime.ParseMediaType(content_type)

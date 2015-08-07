@@ -74,7 +74,9 @@ type NNTPMessage interface {
   // get the plaintext message if it exists
   Message() string
   // pack the whole message and prepare for write
-  Pack()  
+  Pack()
+  // get the inner nntp article that is signed and valid, returns nil if not present or invalid
+  Signed() NNTPMessage
 }
 
 type MessageReader interface {
@@ -87,21 +89,12 @@ type MessageWriter interface {
   WriteMessage(nntp NNTPMessage, wr io.Writer) error
 }
 
-type MessageSigner interface {
-  // sign a message, return a new message that is signed
-  SignMessage(nntp NNTPMessage) (NNTPMessage, error)
-}
-
-type MessageVerifier interface {
-  // verify a message, return the message that is verified
-  VerifyMessage(nntp NNTPMessage) (NNTPMessage, error)
-}
-
 type nntpArticle struct {
   headers ArticleHeaders
   boundary string
   message nntpAttachment
   attachments []NNTPAttachment
+  signedPart nntpAttachment
 }
 
 // create a simple plaintext nntp message
@@ -124,6 +117,17 @@ func newPlaintextArticle(message, email, subject, name, instance, newsgroup stri
   return nntp
 }
 
+
+func (self nntpArticle) Signed() NNTPMessage {
+  if self.signedPart.body.Len() > 0 {
+    msg, err := read_message(&self.signedPart.body)
+    if err == nil {
+      return msg
+    }
+    log.Println("failed to load signed message", err)
+  }
+  return nil
+}
 
 func (self nntpArticle) MessageID() string {
   return self.headers.Get("Message-ID", self.headers.Get("Messageid", self.headers.Get("MessageID", self.headers.Get("Message-Id", ""))))

@@ -268,40 +268,35 @@ func (self *NNTPDaemon) pollfeeds() {
       // check for validity
       msgid := nntp.MessageID()
       log.Println("daemon got", msgid)
-      nntp, err := self.store.VerifyMessage(nntp)
+      // register article
+      self.database.RegisterArticle(nntp)
+      
+      // store article and attachments
+      // this also generates thumbnails
+      err := self.store.StorePost(nntp)
+      
+      // prepare for content rollover
+      // fallback rollover
+      rollover := 100
+      
+      group := nntp.Newsgroup()
+      tpp, err := self.database.GetThreadsPerPage(group)
+      ppb, err := self.database.GetPagesPerBoard(group)
       if err == nil {
-        // register article
-        self.database.RegisterArticle(nntp)
-
-        // store article and attachments
-        // this also generates thumbnails
-        err = self.store.StorePost(nntp)
-
-        // prepare for content rollover
-        // fallback rollover
-        rollover := 100
-        
-        group := nntp.Newsgroup()
-        tpp, err := self.database.GetThreadsPerPage(group)
-        ppb, err := self.database.GetPagesPerBoard(group)
-        if err == nil {
-          rollover = tpp * ppb
-        }
-        
-        // roll over old content
-        self.expire.ExpireGroup(group, rollover)
-        if err == nil {
-          // queue to all outfeeds
-          self.send_all_feeds <- msgid
-          // tell frontend
-          if chnl != nil {
-            chnl <- nntp
-          }
-        } else {
-          log.Printf("%s failed to store: %s", msgid, err)
+        rollover = tpp * ppb
+      }
+      
+      // roll over old content
+      self.expire.ExpireGroup(group, rollover)
+      if err == nil {
+        // queue to all outfeeds
+        self.send_all_feeds <- msgid
+        // tell frontend
+        if chnl != nil {
+          chnl <- nntp
         }
       } else {
-        log.Printf("%s has invalid signature: %s", msgid, err)
+        log.Printf("%s failed to store: %s", msgid, err)
       }
     }
   }

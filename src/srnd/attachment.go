@@ -8,7 +8,6 @@ import (
   "bytes"
   "crypto/sha512"
   "io"
-  "mime/multipart"
   "net/textproto"
   "strings"
 )
@@ -100,10 +99,6 @@ type AttachmentSaver interface {
   Save(filename string, r io.Reader) error
 }
 
-
-type AttachmentReader interface {
-  ReadAttachmentFromMimePart(part *multipart.Part, decode bool) NNTPAttachment
-}
 
 // create a plaintext attachment
 func createPlaintextAttachment(msg string) nntpAttachment {

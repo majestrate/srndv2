@@ -1009,7 +1009,13 @@ func (self PostgresDatabase) CheckEncIPBanned(encaddr string) (banned bool, err 
   var result int64
   if err == nil {
     defer stmt.Close()
-    stmt.QueryRow(encaddr).Scan(result)
+    rows, err := stmt.Query(encaddr)
+    if err == nil {
+      if rows != nil {
+        defer rows.Close()
+        rows.Scan(&result)
+      }
+    }
     banned = result > 0
   }
   return 

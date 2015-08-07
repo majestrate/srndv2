@@ -224,7 +224,8 @@ func (self articleStore) ReadMessage(r io.Reader) (NNTPMessage, error) {
       if err == nil {
         pk_bytes := unhex(pk)
         sig_bytes := unhex(sig)
-        if nacl.CryptoVerifyFucky(smsg.Bytes(), sig_bytes, pk_bytes) {
+        body_bytes := sha512.Sum512(smsg.Bytes())
+        if nacl.CryptoVerifyFucky(body_bytes[:], sig_bytes, pk_bytes) {
           log.Println("signature is valid :^)")
         } else {
           log.Println("!!!signature is invalid!!!")

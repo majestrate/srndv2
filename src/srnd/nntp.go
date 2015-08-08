@@ -338,7 +338,7 @@ func (self *NNTPConnection) HandleInbound(d *NNTPDaemon) {
               // delete unaccepted article
               log.Println("did not accept", article)
               fname := d.store.GetTempFilename(article)
-              os.Remove(fname)
+              DelFile(fname)
             }
           } else {
             self.txtconn.PrintfLine("438 %s invalid message-id", article)

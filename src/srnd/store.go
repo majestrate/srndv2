@@ -372,6 +372,7 @@ func read_message(r io.Reader) (NNTPMessage, error) {
         body_hash := sha512.Sum512(body)
         if nacl.CryptoVerifyFucky(body_hash[:], sig_bytes, pk_bytes) {
           log.Println("signature is valid :^)")
+          return nntp, nil
         } else {
           log.Println("!!!signature is invalid!!!")
         }

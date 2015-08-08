@@ -113,6 +113,7 @@ func GenSRNdConfig() error {
   sect.Add("prefix", "/")
   sect.Add("static_files", "contrib")
   sect.Add("templates", "contrib/templates/default")
+  sect.Add("domain", "localhost")
   secret_bytes := nacl.RandBytes(8)
   secret := base32.StdEncoding.EncodeToString(secret_bytes)
   sect.Add("api-secret", secret)

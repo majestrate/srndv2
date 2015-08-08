@@ -59,7 +59,7 @@ type httpFrontend struct {
 func (self httpFrontend) AllowNewsgroup(group string) bool {
   // XXX: hardcoded nntp prefix
   // TODO: make configurable nntp prefix
-  return strings.HasPrefix(group, "overchan.")
+  return strings.HasPrefix(group, "overchan.") && newsgroupValidFormat(group)
 }
 
 // try to delete root post's page
@@ -355,10 +355,9 @@ func (self httpFrontend) pollukko() {
 // handle new post via http request for a board
 func (self httpFrontend) handle_postform(wr http.ResponseWriter, r *http.Request, board string) {
 
-  // captcha stuff
-  captcha_id := ""
-  captcha_solution := ""
-
+  // always lower case newsgroups
+  board = strings.ToLower(board)
+  
   // post fail message
   post_fail := ""
 
@@ -500,10 +499,35 @@ func (self httpFrontend) handle_postform(wr http.ResponseWriter, r *http.Request
           
 
       } else if partname == "captcha" {
-        captcha_id = part_buff.String()
-      } else if partname == "captcha_solution" {
-        captcha_solution = part_buff.String()
-      }      
+        captcha_solution := part_buff.String()
+        s, err := self.store.Get(r, self.name)
+        captcha_id , ok := s.Values["captcha_id"]
+        if err == nil {
+          if ok {
+            if captcha.VerifyString(captcha_id.(string), captcha_solution) {
+              // captcha is valid
+            } else {
+              // captcha is not valid
+              post_fail += "failed captcha. "
+            }
+          } else {
+            // something is wrong with the session.
+            post_fail += "bad session: "
+            post_fail += err.Error()
+            post_fail += " . clear cookies. "
+          }
+          // we now invalidate the session
+          if s == nil || s.Options == nil {
+            // invalid state, idk what to do here
+            post_fail += "cannot invalidate session for some reason, complain to chi :^) . "
+          } else {
+            // invalidate session
+          s.Options.MaxAge = -1
+          }
+        } else {
+          post_fail += "enable cookies. "
+        }
+      }
       // we done
       // reset buffer for reading parts
       part_buff.Reset()
@@ -525,14 +549,6 @@ func (self httpFrontend) handle_postform(wr http.ResponseWriter, r *http.Request
   // make error template param
   resp_map := make(map[string]string)
   resp_map["redirect_url"] = url
-  
-  if len(captcha_solution) == 0 || len(captcha_id) == 0 {
-    post_fail += "no captcha provided. "
-  }
-  
-  if ! captcha.VerifyString(captcha_id, captcha_solution) {
-    post_fail += "failed captcha. "
-  }
 
   if len(nntp.attachments) == 0 && len(msg) == 0 {
     post_fail += "no message. "
@@ -585,7 +601,18 @@ func (self httpFrontend) handle_poster(wr http.ResponseWriter, r *http.Request) 
 }
 
 func (self httpFrontend) new_captcha(wr http.ResponseWriter, r *http.Request) {
-  io.WriteString(wr, captcha.NewLen(5))
+  id := captcha.NewLen(5)
+  s , err := self.store.Get(r, self.name)
+  if err == nil {
+    s.Values["captcha_id"] = id
+    s.Save(r, wr)
+    redirect_url := fmt.Sprintf("%scaptcha/%s.png", self.prefix, id)
+    // redirect to the image
+    http.Redirect(wr, r, redirect_url, 302)
+  } else {
+    // todo: send a "this is broken" image
+    wr.WriteHeader(500)
+  }
 }
 
 func (self httpFrontend) Mainloop() {
@@ -626,7 +653,7 @@ func (self httpFrontend) Mainloop() {
   // post handler
   self.httpmux.Path("/post/{f}").HandlerFunc(self.handle_poster).Methods("POST")
   // captcha handlers
-  self.httpmux.Path("/captcha/new").HandlerFunc(self.new_captcha).Methods("GET")
+  self.httpmux.Path("/captcha/img").HandlerFunc(self.new_captcha).Methods("GET")
   self.httpmux.Path("/captcha/{f}").Handler(captcha.Server(350, 175)).Methods("GET")
 
   
@@ -674,6 +701,14 @@ func NewHTTPFrontend(daemon *NNTPDaemon, config map[string]string) Frontend {
   front.prefix = config["prefix"]
   front.regen_threads = mapGetInt(config, "regen_threads", 1)
   front.store = sessions.NewCookieStore([]byte(config["api-secret"]))
+  domain, ok := config["domain"]
+  if ok {
+    front.store.Options = &sessions.Options{
+      Path: front.prefix,
+      MaxAge: 600,
+      Domain: domain,
+    }
+  }
   front.postchan = make(chan NNTPMessage, 16)
   front.recvpostchan = make(chan NNTPMessage, 16)
   front.regenThreadChan = make(chan string, 16)

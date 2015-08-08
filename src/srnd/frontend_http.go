@@ -360,6 +360,7 @@ func (self httpFrontend) handle_postform(wr http.ResponseWriter, r *http.Request
   
   // post fail message
   post_fail := ""
+  captcha_solved := false
 
   // post message
   msg := ""
@@ -506,6 +507,7 @@ func (self httpFrontend) handle_postform(wr http.ResponseWriter, r *http.Request
           if ok {
             if captcha.VerifyString(captcha_id.(string), captcha_solution) {
               // captcha is valid
+              captcha_solved = true
             } else {
               // captcha is not valid
               post_fail += "failed captcha. "
@@ -521,8 +523,6 @@ func (self httpFrontend) handle_postform(wr http.ResponseWriter, r *http.Request
             // invalid state, idk what to do here
             post_fail += "cannot invalidate session for some reason, complain to chi :^) . "
           } else {
-            // invalidate session
-          s.Options.MaxAge = -1
           }
         } else {
           post_fail += "enable cookies. "
@@ -548,11 +548,16 @@ func (self httpFrontend) handle_postform(wr http.ResponseWriter, r *http.Request
 
   // make error template param
   resp_map := make(map[string]string)
-  resp_map["redirect_url"] = url
+  resp_map["redirect_url"] = self.prefix + url
 
   if len(nntp.attachments) == 0 && len(msg) == 0 {
     post_fail += "no message. "
   }
+
+  if ! captcha_solved {
+    post_fail += "no captcha."
+  }
+  
   if len(post_fail) > 0 {
     wr.WriteHeader(200)
     resp_map["reason"] = post_fail
@@ -603,14 +608,11 @@ func (self httpFrontend) handle_poster(wr http.ResponseWriter, r *http.Request) 
 func (self httpFrontend) new_captcha(wr http.ResponseWriter, r *http.Request) {
   s , err := self.store.Get(r, self.name)
   if err == nil {
-    _, ok := s.Values["captcha_id"]
-    if ! ok {
-      id := captcha.NewLen(5)
-      s.Values["captcha_id"] = id
-      s.Save(r, wr)
-    }
-    captcha_id := s.Values["captcha_id"]
+    captcha_id := captcha.New()
+    s.Values["captcha_id"] = captcha_id
+    s.Save(r, wr)
     redirect_url := fmt.Sprintf("%scaptcha/%s.png", self.prefix, captcha_id)
+
     // redirect to the image
     http.Redirect(wr, r, redirect_url, 302)
   } else {

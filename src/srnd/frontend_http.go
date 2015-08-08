@@ -503,26 +503,13 @@ func (self httpFrontend) handle_postform(wr http.ResponseWriter, r *http.Request
         captcha_solution := part_buff.String()
         s, err := self.store.Get(r, self.name)
         captcha_id , ok := s.Values["captcha_id"]
-        if err == nil {
-          if ok {
-            if captcha.VerifyString(captcha_id.(string), captcha_solution) {
-              // captcha is valid
-              captcha_solved = true
-            } else {
-              // captcha is not valid
-              post_fail += "failed captcha. "
-            }
+        if err == nil && ok {
+          if captcha.VerifyString(captcha_id.(string), captcha_solution) {
+            // captcha is valid
+            captcha_solved = true
           } else {
-            // something is wrong with the session.
-            post_fail += "bad session: "
-            post_fail += err.Error()
-            post_fail += " . clear cookies. "
-          }
-          // we now invalidate the session
-          if s == nil || s.Options == nil {
-            // invalid state, idk what to do here
-            post_fail += "cannot invalidate session for some reason, complain to chi :^) . "
-          } else {
+            // captcha is not valid
+            post_fail += "failed captcha. "
           }
         } else {
           post_fail += "enable cookies. "

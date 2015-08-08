@@ -9,7 +9,9 @@ import (
   "github.com/dchest/captcha"
   "github.com/gorilla/mux"
   "github.com/gorilla/sessions"
+  "github.com/gorilla/websocket"
   "bytes"
+  "encoding/json"
   "fmt"
   "io"
   "log"
@@ -43,7 +45,8 @@ type httpFrontend struct {
   webroot_dir string
   template_dir string
   static_dir string
-
+  liveui_static_dir string
+  
   regen_threads int
   attachments bool
   
@@ -53,6 +56,8 @@ type httpFrontend struct {
   ukkoChan chan bool
   
   store *sessions.CookieStore
+
+  upgrader websocket.Upgrader
 }
 
 // do we allow this newsgroup?
@@ -352,6 +357,60 @@ func (self httpFrontend) pollukko() {
   }
 }
 
+// create a new captcha, return as json object
+func (self httpFrontend) new_captcha_json(wr http.ResponseWriter, r *http.Request) {
+  captcha_id := captcha.New()
+  resp := make(map[string]string)
+  // the captcha id
+  resp["id"] = captcha_id
+  // url of the image
+  resp["url"] = fmt.Sprintf("%s%s.png", self.prefix, captcha_id)
+  enc := json.NewEncoder(wr)
+  enc.Encode(resp)
+}
+
+// handle a request to the websocket ui
+func (self httpFrontend) handle_liveui(wr http.ResponseWriter, r *http.Request) {
+  ws, err := self.upgrader.Upgrade(wr, r, nil)
+  if err == nil {
+    // we upgraded fine
+    // make a connection
+    //conn := createConnection(ws)
+
+    // reader loop
+    go func() {
+      for {
+
+          ws.Close()
+          return
+      }
+    }()
+    
+    for {
+      select {
+      //case json_data := <- conn.to_daemon_chan:
+      //case msg := <- conn.from_daemon_chan:
+      //  err := ws.WriteJSON(msg)
+        
+      }
+    }
+  }
+}
+
+
+// write out a json object of the liveui's options
+// this includes site prefix so the js ui knows where it is
+func (self httpFrontend) handle_liveui_options(wr http.ResponseWriter, r *http.Request) {
+  resp := make(map[string]string)
+  resp["prefix"] = self.prefix
+  enc := json.NewEncoder(wr)
+  enc.Encode(resp)
+}
+
+func (self httpFrontend) handle_liveui_index(wr http.ResponseWriter, r *http.Request) {
+  io.WriteString(wr, renderTemplate("live.mustache", map[string]string{ "prefix" : self.prefix }))
+}
+
 // handle new post via http request for a board
 func (self httpFrontend) handle_postform(wr http.ResponseWriter, r *http.Request, board string) {
 
@@ -649,7 +708,6 @@ func (self httpFrontend) Mainloop() {
   self.httpmux.Path("/mod/unban/{address}").HandlerFunc(self.modui.HandleUnbanAddress).Methods("GET")
   self.httpmux.Path("/mod/addkey/{pubkey}").HandlerFunc(self.modui.HandleAddPubkey).Methods("GET")
   self.httpmux.Path("/mod/delkey/{pubkey}").HandlerFunc(self.modui.HandleDelPubkey).Methods("GET")
-  
   // webroot handler
   self.httpmux.Path("/").Handler(http.FileServer(http.Dir(self.webroot_dir)))
   self.httpmux.Path("/thm/{f}").Handler(http.FileServer(http.Dir(self.webroot_dir)))
@@ -661,6 +719,14 @@ func (self httpFrontend) Mainloop() {
   // captcha handlers
   self.httpmux.Path("/captcha/img").HandlerFunc(self.new_captcha).Methods("GET")
   self.httpmux.Path("/captcha/{f}").Handler(captcha.Server(350, 175)).Methods("GET")
+  self.httpmux.Path("/captcha/new.json").HandlerFunc(self.new_captcha_json).Methods("GET")
+  // liveui handlers
+
+  self.httpmux.Path("/live/").HandlerFunc(self.handle_liveui_index).Methods("GET")
+  self.httpmux.Path("/live/options").HandlerFunc(self.handle_liveui_options).Methods("GET")
+  self.httpmux.Path("/live/ws").HandlerFunc(self.handle_liveui).Methods("GET")
+
+
 
   
   // make regen threads

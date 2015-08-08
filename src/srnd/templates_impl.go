@@ -34,6 +34,7 @@ func (self boardModel) Navbar() string {
       text: fmt.Sprintf("[ %d ]", i),
     })
   }
+  param["prefix"] = self.prefix
   param["links"] = links
   return renderTemplate("navbar.mustache", param)
 }
@@ -233,6 +234,7 @@ func (self thread) Navbar() string {
   param["name"] = fmt.Sprintf("Thread %s", self.posts[0].ShortHash())
   param["frontend"] = "nntpchan" // TODO: make this different?
   param["links"] = self.links
+  param["prefix"] = self.prefix
   return renderTemplate("navbar.mustache", param)
 }
 

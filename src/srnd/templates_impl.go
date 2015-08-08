@@ -133,7 +133,7 @@ func (self post) ShortHash() string {
 
 func (self post) Pubkey() string {
   if len(self.pubkey) > 0 {
-    return makeTripcode(self.pubkey)
+    return fmt.Sprintf("<label title=\"%s\">%s</label>", self.pubkey, makeTripcode(self.pubkey))
   }
   return ""
 }

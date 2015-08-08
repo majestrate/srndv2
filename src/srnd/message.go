@@ -246,10 +246,10 @@ func (self nntpArticle) WriteBody(wr io.Writer) (err error) {
     for {
       // convert line endings :\
       line, err = r.ReadBytes('\n')
-      log.Println(line)
       if err == nil {
         w.Write(line[:len(line)-2])
         w.WriteByte(10)
+        w.Flush() // flush it
       } else if err == io.EOF {
         return
       } else {

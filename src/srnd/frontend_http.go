@@ -601,12 +601,16 @@ func (self httpFrontend) handle_poster(wr http.ResponseWriter, r *http.Request) 
 }
 
 func (self httpFrontend) new_captcha(wr http.ResponseWriter, r *http.Request) {
-  id := captcha.NewLen(5)
   s , err := self.store.Get(r, self.name)
   if err == nil {
-    s.Values["captcha_id"] = id
-    s.Save(r, wr)
-    redirect_url := fmt.Sprintf("%scaptcha/%s.png", self.prefix, id)
+    _, ok := s.Values["captcha_id"]
+    if ! ok {
+      id := captcha.NewLen(5)
+      s.Values["captcha_id"] = id
+      s.Save(r, wr)
+    }
+    captcha_id := s.Values["captcha_id"]
+    redirect_url := fmt.Sprintf("%scaptcha/%s.png", self.prefix, captcha_id)
     // redirect to the image
     http.Redirect(wr, r, redirect_url, 302)
   } else {

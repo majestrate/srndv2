@@ -265,13 +265,11 @@ func (self *NNTPDaemon) pollfeeds() {
     case nntp := <- self.infeed:
       // ammend path
       nntp.AppendPath(self.instance_name)
-      // check for validity
       msgid := nntp.MessageID()
       log.Println("daemon got", msgid)
-      // register article
-      self.database.RegisterArticle(nntp)
       
       // store article and attachments
+      // register with database
       // this also generates thumbnails
       err := self.store.StorePost(nntp)
       

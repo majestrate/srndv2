@@ -126,11 +126,27 @@ func (self articleStore) StorePost(nntp NNTPMessage) (err error) {
     err = self.WriteMessage(nntp, f)
     f.Close()
   }
-  for _, att := range nntp.Attachments() {
-    // save attachments in parallel
-    go self.saveAttachment(att)
+
+  // recursion
+  nntp_inner := nntp.Signed()
+  if nntp_inner == nil {
+    // no inner article
+    // store the data
+    self.database.RegisterArticle(nntp)
+    for _, att := range nntp.Attachments() {
+      // save attachments in parallel
+      go self.saveAttachment(att)
+    }
+  } else {
+    // we have inner data
+    // store the signed data
+    self.database.RegisterArticle(nntp_inner)
+    for _, att := range nntp_inner.Attachments() {
+      // save attachments in parallel
+      go self.saveAttachment(att)
+    }
   }
-  return 
+  return
 }
 
 // save an attachment

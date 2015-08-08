@@ -837,6 +837,7 @@ func (self PostgresDatabase) RegisterArticle(message NNTPMessage) {
     log.Println("cannot execute query to update newsgroup last post", err)
     return
   }
+  
   // insert article post
   stmt, err = self.Conn().Prepare("INSERT INTO ArticlePosts(newsgroup, message_id, ref_id, name, subject, path, time_posted, message) VALUES($1, $2, $3, $4, $5, $6, $7, $8)")
   if err != nil {

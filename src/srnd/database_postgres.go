@@ -580,7 +580,13 @@ func (self PostgresDatabase) GetThreadReplyPostModels(prefix, rootpost string, l
     if atts != nil {
       model.attachments = append(model.attachments, atts...)
     }
-    
+    // get pubkey if it exists
+    stmt, err := self.Conn().Prepare("SELECT pubkey FROM ArticleKeys WHERE message_id = $1")
+    if err == nil {
+      // silent fail, will not populate pubkey if it's not there
+      _ : stmt.QueryRow(model.message_id).Scan(&model.pubkey)
+      stmt.Close()
+    }
     repls = append(repls, model)
   }
   return repls  

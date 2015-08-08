@@ -108,7 +108,7 @@ func (self PostgresDatabase) CreateTables() {
   // table for storing nntp article posts to pubkey mapping
   tables["ArticleKeys"] = `(
                              message_id VARCHAR(255) NOT NULL,
-                             pubkey VARCHAR(255) NOT NULL,
+                             pubkey VARCHAR(255) NOT NULL
                            )`
   
   // table for thread state

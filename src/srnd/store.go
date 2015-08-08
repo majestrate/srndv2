@@ -145,6 +145,8 @@ func (self articleStore) StorePost(nntp NNTPMessage) (err error) {
       // save attachments in parallel
       go self.saveAttachment(att)
     }
+    // record a tripcode
+    self.database.RegisterSigned(nntp.MessageID(), nntp.Pubkey())
   }
   return
 }

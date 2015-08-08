@@ -489,8 +489,8 @@ func (self PostgresDatabase) GetPostModel(prefix, messageID string) PostModel {
 func (self PostgresDatabase) DeleteThread(msgid string) (err error) {
   stmt, err := self.Conn().Prepare("DELETE FROM ArticleThreads WHERE root_message_id = $1")
   if err == nil {
-    defer stmt.Close()
-     _ = stmt.QueryRow(msgid)
+    _ = stmt.QueryRow(msgid)
+    stmt.Close()
   }
   return
 }

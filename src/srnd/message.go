@@ -78,6 +78,9 @@ type NNTPMessage interface {
   Pack()
   // get the inner nntp article that is signed and valid, returns nil if not present or invalid
   Signed() NNTPMessage
+  // get the pubkey for this message if it was signed, otherwise empty string
+  Pubkey() string
+  
 }
 
 type MessageReader interface {
@@ -118,6 +121,10 @@ func newPlaintextArticle(message, email, subject, name, instance, newsgroup stri
   return nntp
 }
 
+
+func (self nntpArticle) Pubkey() string {
+  return self.headers.Get("X-Pubkey-Ed25519", "")
+}
 
 func (self nntpArticle) Signed() NNTPMessage {
   if self.signedPart.body.Len() > 0 {

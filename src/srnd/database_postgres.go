@@ -105,6 +105,12 @@ func (self PostgresDatabase) CreateTables() {
                               message TEXT NOT NULL
                             )`
 
+  // table for storing nntp article posts to pubkey mapping
+  tables["ArticleKeys"] = `(
+                             message_id VARCHAR(255) NOT NULL,
+                             pubkey VARCHAR(255) NOT NULL,
+                           )`
+  
   // table for thread state
   tables["ArticleThreads"] = `(
                                 newsgroup VARCHAR(255) NOT NULL,
@@ -469,11 +475,12 @@ func (self PostgresDatabase) GetPostModel(prefix, messageID string) PostModel {
     log.Println("failed to prepare query for geting post model for", messageID, err)
     return nil
   }
-  defer stmt.Close()
+
   model := post{}
   model.prefix = prefix
   row := stmt.QueryRow(messageID)
   row.Scan(&model.board, &model.message_id, &model.parent, &model.name, &model.subject, &model.path, &model.posted, &model.message)
+  stmt.Close() // explicit close
   model.op = len(model.parent) == 0
   if len(model.parent) == 0 {
       model.parent = model.message_id
@@ -483,6 +490,14 @@ func (self PostgresDatabase) GetPostModel(prefix, messageID string) PostModel {
   if atts != nil {
     model.attachments = append(model.attachments, atts...)
   }
+  // get pubkey if it exists
+  stmt, err = self.Conn().Prepare("SELECT pubkey FROM ArticleKeys WHERE message_id = $1")
+  if err == nil {
+    // silent fail, will not populate pubkey if it's not there
+    _ : stmt.QueryRow(model.message_id).Scan(&model.pubkey)
+    stmt.Close()
+  }
+  
   return model
 }
 
@@ -499,15 +514,23 @@ func (self PostgresDatabase) DeleteArticle(msgid string) (err error) {
   
   stmt, err := self.Conn().Prepare("DELETE FROM ArticlePosts WHERE message_id = $1")
   if err == nil {
-    defer stmt.Close()
-    _ = stmt.QueryRow(msgid)
-    // delete attachments too
-    stmt, err = self.Conn().Prepare("DELETE FROM ArticleAttachments WHERE message_id = $1")
-    if err == nil {
-      defer stmt.Close()
-      _ = stmt.QueryRow(msgid)
-    }
+    stmt.Exec(msgid)
+    stmt.Close()
   }
+  // delete attachments too
+  stmt, err = self.Conn().Prepare("DELETE FROM ArticleAttachments WHERE message_id = $1")
+  if err == nil {
+    stmt.Exec(msgid)
+    stmt.Close()
+  }
+  // delete tripcode entries
+  stmt, err = self.Conn().Prepare("DELETE FROM ArticleKeys WHERE message_id = $1")
+  if err == nil {
+    stmt.Exec(msgid)
+    stmt.Close()
+  }
+  
+  
   return
 }
 
@@ -915,6 +938,15 @@ func (self PostgresDatabase) RegisterArticle(message NNTPMessage) {
       continue
     }
   }
+}
+
+func (self PostgresDatabase) RegisterSigned(message_id , pubkey string) error {
+  stmt, err := self.Conn().Prepare("INSERT INTO ArticleKeys(message_id, pubkey) VALUES ($1, $2)")
+  if err == nil {
+    _, err = stmt.Exec(message_id, pubkey)
+    stmt.Close()
+  }
+  return err
 }
 
 // get all articles in a newsgroup

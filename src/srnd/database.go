@@ -34,6 +34,9 @@ type Database interface {
   // get an article's MessageID given the hash of the MessageID
   // return an article entry or nil when it doesn't exist + and error if it happened
   GetMessageIDByHash(hash string) (ArticleEntry, error)
+
+  // record that a message given a message id was posted signed by this pubkey
+  RegisterSigned(message_id, pubkey string) error
   
   // get the number of articles we have
   ArticleCount() int64

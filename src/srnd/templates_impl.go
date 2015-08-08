@@ -75,6 +75,7 @@ type post struct {
   posted int64
   parent string
   sage bool
+  pubkey string
   attachments []AttachmentModel
 }
 
@@ -119,6 +120,7 @@ func PostModelFromMessage(parent, prefix string, nntp NNTPMessage) PostModel {
   p.prefix = prefix
   p.parent = parent
   p.sage = nntp.Sage()
+  p.pubkey = nntp.Pubkey()
   for _, att := range nntp.Attachments() {
     p.attachments = append(p.attachments, att.ToModel(prefix))
   }
@@ -128,6 +130,14 @@ func PostModelFromMessage(parent, prefix string, nntp NNTPMessage) PostModel {
 func (self post) ShortHash() string {
   return ShortHashMessageID(self.message_id)
 }
+
+func (self post) Pubkey() string {
+  if len(self.pubkey) > 0 {
+    return makeTripcode(self.pubkey)
+  }
+  return ""
+}
+
 
 func (self post) Sage() bool {
   return self.sage

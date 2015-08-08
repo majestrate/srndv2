@@ -50,6 +50,7 @@ type PostModel interface {
   Attachments() []AttachmentModel
   Board() string
   Sage() bool
+  Pubkey() string
   
   RenderBody() string
   RenderPost() string

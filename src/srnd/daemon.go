@@ -372,9 +372,9 @@ func (self *NNTPDaemon) Init() bool {
   // set up daemon configs
   self.Setup()
 
-  self.infeed = make(chan NNTPMessage, 64)
-  self.infeed_load = make(chan string, 64)
-  self.send_all_feeds = make(chan string, 64)
+  self.infeed = make(chan NNTPMessage, 8)
+  self.infeed_load = make(chan string, 4)
+  self.send_all_feeds = make(chan string, 8)
   self.feeds = make(map[NNTPConnection]bool)
 
   self.bind_addr = self.conf.daemon["bind"]

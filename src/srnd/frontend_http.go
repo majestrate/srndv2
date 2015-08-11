@@ -694,13 +694,10 @@ func NewHTTPFrontend(daemon *NNTPDaemon, config map[string]string) Frontend {
   front.prefix = config["prefix"]
   front.regen_threads = mapGetInt(config, "regen_threads", 1)
   front.store = sessions.NewCookieStore([]byte(config["api-secret"]))
-  domain, ok := config["domain"]
-  if ok {
-    front.store.Options = &sessions.Options{
-      Path: front.prefix,
-      MaxAge: 600,
-      Domain: domain,
-    }
+  front.store.Options = &sessions.Options{
+    // TODO: detect http:// etc in prefix
+    Path: front.prefix,
+    MaxAge: 600,
   }
   front.postchan = make(chan NNTPMessage, 16)
   front.recvpostchan = make(chan NNTPMessage, 16)

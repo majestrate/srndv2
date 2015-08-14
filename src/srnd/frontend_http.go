@@ -642,7 +642,7 @@ func (self httpFrontend) Mainloop() {
   threads := self.regen_threads 
 
   // check for invalid number of threads
-  if threads > 0 {
+  if threads <= 0 {
     threads = 1
   }
   

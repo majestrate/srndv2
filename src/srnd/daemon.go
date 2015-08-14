@@ -271,7 +271,7 @@ func (self *NNTPDaemon) pollfeeds() {
       // store article and attachments
       // register with database
       // this also generates thumbnails
-      err := self.store.StorePost(nntp)
+      go self.store.StorePost(nntp)
       
       // prepare for content rollover
       // fallback rollover

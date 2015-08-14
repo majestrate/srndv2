@@ -14,7 +14,6 @@ import (
   "encoding/base32"
   "encoding/base64"
   "errors"
-  "fmt"
   "io"
   "log"
   "mime"
@@ -127,7 +126,6 @@ func (self articleStore) StorePost(nntp NNTPMessage) (err error) {
     f.Close()
   }
 
-  // recursion
   nntp_inner := nntp.Signed()
   if nntp_inner == nil {
     // no inner article
@@ -176,24 +174,9 @@ func (self articleStore) saveAttachment(att NNTPAttachment) {
   }
 }
 
+// eh this isn't really needed is it?
 func (self articleStore) WriteMessage(nntp NNTPMessage, wr io.Writer) (err error) {
-  // write headers
-  for hdr, hdr_vals := range(nntp.Headers()) {
-    for _ , hdr_val := range hdr_vals {
-      _, err = io.WriteString(wr, fmt.Sprintf("%s: %s\n", hdr, hdr_val))
-      if err != nil {
-        return
-      }
-    }
-  }
-  // done headers
-  _, err = io.WriteString(wr, "\n")
-  if err != nil {
-    return
-  }
-  // write body
-  err = nntp.WriteBody(wr)
-  return
+  return nntp.WriteTo(wr, "\n")
 }
 
 
@@ -388,6 +371,7 @@ func read_message(r io.Reader) (NNTPMessage, error) {
       } else {
         body := nntp.signedPart.body.Bytes()[:nntp.signedPart.body.Len()-2]
         body_hash := sha512.Sum512(body)
+        log.Printf("hash=%s", hexify(body_hash[:]))
         if nacl.CryptoVerifyFucky(body_hash[:], sig_bytes, pk_bytes) {
           log.Println("signature is valid :^)")
           return nntp, nil

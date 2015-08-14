@@ -5,7 +5,9 @@ package srnd
 
 import (
   "bufio"
+  "bytes"
   "encoding/base64"
+  "errors"
   "fmt"
   "io"
   "log"
@@ -68,8 +70,10 @@ type NNTPMessage interface {
   Attachments() []NNTPAttachment
   // all headers
   Headers() ArticleHeaders
+  // write out everything
+  WriteTo(wr io.Writer, delim string) error
   // write out body
-  WriteBody(wr io.Writer) error
+  WriteBody(wr io.Writer, delim string) error
   // attach a file
   Attach(att NNTPAttachment) NNTPMessage
   // get the plaintext message if it exists
@@ -101,6 +105,7 @@ type nntpArticle struct {
   signedPart nntpAttachment
 }
 
+
 // create a simple plaintext nntp message
 func newPlaintextArticle(message, email, subject, name, instance, newsgroup string) NNTPMessage {
   nntp := nntpArticle{
@@ -121,7 +126,59 @@ func newPlaintextArticle(message, email, subject, name, instance, newsgroup stri
   return nntp
 }
 
+// sign an article with a secret key
+func signArticle(nntp NNTPMessage, privkey []byte) (signed nntpArticle, err error) {
+  signed.headers = make(ArticleHeaders)
+  h := nntp.Headers()
+  // copy headers
+  // copy into signed part
+  for k := range(h) {
+    if k == "Content-Type" {
+      signed.headers.Set(k, "message/rfc822; charset=UTF-8")
+    } else {
+      v := h[k][0]
+      signed.headers.Set(k, v)
+    }
+  }
+  var signbuff bytes.Buffer
+  // write body to sign buffer
+  err = nntp.WriteTo(&signbuff, "\r\n")
+  if err == nil {
+    // get public key
+    pk := getSignPubkey(privkey)
+    // sign it nigguh
+    sig := cryptoSign(signbuff.Bytes(), privkey)
+    // log that we signed it
+    log.Printf("signed %s pubkey=%s sig=%s", nntp.MessageID(), pk, sig)
+    signed.headers.Set("X-Signature-Ed25519-SHA512", sig)
+    signed.headers.Set("X-PubKey-Ed25519", pk)
+  }
+  // copy sign buffer into signed part
+  _, err = io.Copy(&signed.signedPart.body, &signbuff)
+  return 
+}
 
+func (self nntpArticle) WriteTo(wr io.Writer, delim string) (err error) {
+  // write headers
+  for hdr, hdr_vals := range(self.Headers()) {
+    for _ , hdr_val := range hdr_vals {
+      _, err = io.WriteString(wr, fmt.Sprintf("%s: %s%s", hdr, hdr_val, delim))
+      if err != nil {
+        return
+      }
+    }
+  }
+  // done headers
+  _, err = io.WriteString(wr, delim)
+  if err != nil {
+    return
+  }
+
+  // write body
+  err = self.WriteBody(wr, delim)
+  return
+}
+  
 func (self nntpArticle) Pubkey() string {
   return self.headers.Get("X-Pubkey-Ed25519", "")
 }
@@ -244,25 +301,36 @@ func (self nntpArticle) Attach(att NNTPAttachment) NNTPMessage {
   return self
 }
 
-func (self nntpArticle) WriteBody(wr io.Writer) (err error) {
+func (self nntpArticle) WriteBody(wr io.Writer, delim string) (err error) {
   // this is a signed message, don't treat it special
-  if self.signedPart.body.Len() > 0 {
-    r := bufio.NewReader(&self.signedPart.body)
-    w := bufio.NewWriter(wr)
-    var line []byte
-    for {
-      // convert line endings :\
-      line, err = r.ReadBytes('\n')
-      if err == nil {
-        w.Write(line[:len(line)-2])
-        w.WriteByte(10)
-        w.Flush() // flush it
-      } else if err == io.EOF {
-        return
-      } else {
-        log.Println("error while writing", err)
-        return
+  if self.signedPart.body.Len() > 0 {    
+    if delim ==  "\r\n" {
+      // delimiter is \r\n
+      // for signing we copy verbatum
+      // TODO: do we cut off the last line ending?
+      _, err = io.Copy(wr, &self.signedPart.body)
+    } else if delim == "\n" {
+      // assumes signedpart is in \r\n
+      r := bufio.NewReader(&self.signedPart.body)
+      w := bufio.NewWriter(wr)
+      var line []byte
+      for {
+        // convert line endings :\
+        line, err = r.ReadBytes(10)
+        if err == nil {
+          _, err = w.Write(line[:len(line)-2])
+          _, err = w.Write([]byte{10})
+          err = w.Flush() // flush it
+        } else if err == io.EOF {
+          return
+        } else {
+          log.Println("error while writing", err)
+          return
+        }
       }
+    } else {
+      err = errors.New("unsupported delimiter")
+      return
     }
   }
   if len(self.attachments) == 0 {

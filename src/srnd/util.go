@@ -7,6 +7,7 @@ package srnd
 import (
   "github.com/majestrate/srndv2/src/nacl"
   "crypto/sha1"
+  "crypto/sha512"
   "encoding/base64"
   "encoding/hex"
   "fmt"
@@ -19,14 +20,6 @@ import (
   "strings"
   "time"
 )
-
-func B64Decode(data string) []byte {
-  ba, err := base64.URLEncoding.DecodeString(data)
-  if err != nil {
-    log.Fatal(err)
-  }
-  return ba
-}
 
 func DelFile(fname string) {
   if CheckFile(fname) {
@@ -366,4 +359,45 @@ func isSage(str string) bool {
 func unhex(str string) []byte {
   buff, _ := hex.DecodeString(str)
   return buff
+}
+
+func hexify(data []byte) string {
+  return hex.EncodeToString(data)
+}
+
+// extract pubkey from secret key
+// return as base32
+func getSignPubkey(sk []byte) string {
+  return hexify(nacl.GetSignPubkey(sk))
+}
+
+// sign data with secret key the fucky srnd way
+// return signature as base32
+func cryptoSign(data, sk []byte) string {
+  // hash
+  hash := sha512.Sum512(data)
+  log.Printf("hash=%s", hexify(hash[:]))
+  // sign
+  sig := nacl.CryptoSignFucky(hash[:], sk)
+  return hexify(sig)
+}
+
+// given a tripcode after the #
+// make a private key byteslice
+func parseTripcodeSecret(str string) []byte {
+  // try decoding hex
+  raw := unhex(str)
+  keylen := nacl.CryptoSignSecretLen()
+  if raw == nil || len(raw) != keylen {
+    // treat this as a "regular" chan tripcode
+    // decode as bytes then pad the rest with 0s if it doesn't fit
+    raw = make([]byte, keylen)
+    str_bytes := []byte(str)
+    if len(str_bytes) > keylen {
+      copy(raw, str_bytes[:keylen])
+    } else {
+      copy(raw, str_bytes)
+    }
+  } 
+  return raw
 }

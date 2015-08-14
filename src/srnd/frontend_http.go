@@ -9,6 +9,7 @@ import (
   "github.com/dchest/captcha"
   "github.com/gorilla/mux"
   "github.com/gorilla/sessions"
+  "github.com/majestrate/srndv2/src/nacl"
   "bytes"
   "fmt"
   "io"
@@ -370,6 +371,10 @@ func (self httpFrontend) handle_postform(wr http.ResponseWriter, r *http.Request
   nntp.headers = make(ArticleHeaders)
 
 
+  // tripcode private key
+  var tripcode_privkey []byte
+
+
 
   // encrypt IP Addresses
   // when a post is recv'd from a frontend, the remote address is given its own symetric key that the local srnd uses to encrypt the address with, for privacy
@@ -472,7 +477,14 @@ func (self httpFrontend) handle_postform(wr http.ResponseWriter, r *http.Request
         name := part_buff.String()
         if len(name) == 0 {
           name = "Anonymous"
-        }  
+        } else {
+          idx := strings.Index(name, "#")
+          // tripcode
+          if idx >= 0 {
+            tripcode_privkey = parseTripcodeSecret(name[idx+1:])
+            name = name[:idx]
+          }
+        }
         nntp.headers.Set("From", nntpSanitize(fmt.Sprintf("%s <%s@%s>", name, name, self.name)))
         nntp.headers.Set("Message-ID", genMessageID(self.name))
       } else if partname == "message" {
@@ -560,6 +572,19 @@ func (self httpFrontend) handle_postform(wr http.ResponseWriter, r *http.Request
   // send message off to daemon
   log.Printf("uploaded %d attachments", len(nntp.Attachments()))
   nntp.Pack()
+
+  // sign if needed
+  if len(tripcode_privkey) == nacl.CryptoSignSecretLen() {
+    nntp, err = signArticle(nntp, tripcode_privkey)
+    if err != nil {
+      // wtf? error!?
+      log.Println("error signing", err)
+      wr.WriteHeader(500)
+      io.WriteString(wr, err.Error())
+      return 
+    }
+  }
+  
   self.postchan <- nntp
 
   // send success reply

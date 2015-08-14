@@ -180,3 +180,13 @@ func SeedBoxKey(seed []byte) *KeyPair {
 func (self *KeyPair) String() string {
   return fmt.Sprintf("pk=%s sk=%s", hex.EncodeToString(self.pk.Data()), hex.EncodeToString(self.sk.Data()))
 }
+
+func CryptoSignPublicLen() int {
+  return int(C.crypto_sign_publickeybytes())
+}
+
+
+func CryptoSignSecretLen() int {
+  return int(C.crypto_sign_secretkeybytes())
+}
+

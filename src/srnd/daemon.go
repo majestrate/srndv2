@@ -256,12 +256,14 @@ func (self *NNTPDaemon) pollfeeds() {
           }
         }
       }
+      break;
     case msgid := <- self.infeed_load:
       log.Println("load from infeed", msgid)
       msg := self.store.ReadTempMessage(msgid)
       if msg != nil {
         self.infeed <- msg
       }
+      break;
     case nntp := <- self.infeed:
       // ammend path
       nntp.AppendPath(self.instance_name)
@@ -296,6 +298,7 @@ func (self *NNTPDaemon) pollfeeds() {
       } else {
         log.Printf("%s failed to store: %s", msgid, err)
       }
+      break;
     }
   }
 }

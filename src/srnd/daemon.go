@@ -290,8 +290,10 @@ func (self *NNTPDaemon) pollfeeds() {
       self.expire.ExpireGroup(group, rollover)
       if err == nil {
         // queue to all outfeeds
+        // XXX: blocking ?
         self.send_all_feeds <- msgid
         // tell frontend
+        // XXX: blocking ?
         if chnl != nil {
           chnl <- nntp
         }

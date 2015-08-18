@@ -584,8 +584,14 @@ func (self httpFrontend) handle_postform(wr http.ResponseWriter, r *http.Request
       return 
     }
   }
-  
-  self.postchan <- nntp
+  // XXX: write it temp instead
+  // self.postchan <- nntp
+  f := self.daemon.store.CreateTempFile(nntp.MessageID())
+  if f != nil {
+    nntp.WriteTo(f, "\n")
+    f.Close()
+  }
+  self.daemon.infeed_load <- nntp.MessageID()
 
   // send success reply
   wr.WriteHeader(200)

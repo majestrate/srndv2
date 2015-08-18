@@ -137,10 +137,9 @@ func (self articleStore) StorePost(nntp NNTPMessage) (err error) {
     }
   } else {
     // we have inner data
-    // store the signed data inside the article
+    // store the signed data
     self.database.RegisterArticle(nntp_inner)
     for _, att := range nntp_inner.Attachments() {
-      // save attachments in parallel
       self.saveAttachment(att)
     }
     // record a tripcode

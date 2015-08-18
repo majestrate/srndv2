@@ -848,24 +848,26 @@ func (self PostgresDatabase) RegisterArticle(message NNTPMessage) {
     log.Println("failed to prepare query to register article", msgid, err)
     return
   }
-  defer stmt.Close()
   now := time.Now().Unix()
   _, err = stmt.Exec(msgid, HashMessageID(msgid), group, now, message.Reference())
   if err != nil {
     log.Println("failed to register article", err)
   }
+  stmt.Close()
   // update newsgroup
   stmt, err = self.Conn().Prepare("UPDATE Newsgroups SET last_post = $1 WHERE name = $2")
   if err != nil {
     log.Println("cannot prepare query to update newsgroup last post", err)
     return
   }
-  defer stmt.Close()
+  
   _, err = stmt.Exec(now, group)
+  stmt.Close()
   if err != nil {
     log.Println("cannot execute query to update newsgroup last post", err)
     return
   }
+  
   
   // insert article post
   stmt, err = self.Conn().Prepare("INSERT INTO ArticlePosts(newsgroup, message_id, ref_id, name, subject, path, time_posted, message) VALUES($1, $2, $3, $4, $5, $6, $7, $8)")
@@ -873,8 +875,8 @@ func (self PostgresDatabase) RegisterArticle(message NNTPMessage) {
     log.Println("cannot prepare query to insert article post", err)
     return
   }
-  defer stmt.Close()
   _, err = stmt.Exec(group, msgid, message.Reference(), message.Name(), message.Subject(), message.Path(), message.Posted(), message.Message())
+  stmt.Close()
   if err != nil {
     log.Println("cannot insert article post", err)
     return
@@ -889,8 +891,8 @@ func (self PostgresDatabase) RegisterArticle(message NNTPMessage) {
       log.Println("cannot prepare query to register thread", msgid, err)
       return
     }
-    defer stmt.Close()
     _, err = stmt.Exec(message.MessageID(), message.Posted(), group)
+    stmt.Close()
     if err != nil {
       log.Println("cannot execute query to register thread", msgid, err)
       return
@@ -904,8 +906,8 @@ func (self PostgresDatabase) RegisterArticle(message NNTPMessage) {
         log.Println("failed to prepare query to bump thread", ref, err)
         return
       }
-      defer stmt.Close()
       _, err = stmt.Exec(ref, message.Posted())
+      stmt.Close()
       if err != nil {
         log.Println("failed to execute query to bump thread", ref, err)
         return
@@ -917,8 +919,8 @@ func (self PostgresDatabase) RegisterArticle(message NNTPMessage) {
       log.Println("failed to prepare query to update post time for", ref, err)
       return
     }
-    defer stmt.Close()
     _, err = stmt.Exec(ref, message.Posted())
+    stmt.Close()
     if err != nil {
       log.Println("failed to execute query to update post time for", ref, err)
       return
@@ -937,8 +939,8 @@ func (self PostgresDatabase) RegisterArticle(message NNTPMessage) {
       log.Println("failed to prepare query to register attachment", err)
       continue
     }
-    defer stmt.Close()
     _, err = stmt.Exec(msgid, hex.EncodeToString(att.Hash()), att.Filename(), att.Filepath())
+    stmt.Close()
     if err != nil {
       log.Println("failed to execute query to register attachment", err)
       continue

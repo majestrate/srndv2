@@ -673,11 +673,12 @@ func (self PostgresDatabase) GetLastBumpedThreads(newsgroup string, threads int)
   var rows *sql.Rows
   if len(newsgroup) > 0 { 
     stmt, err := self.Conn().Prepare("SELECT root_message_id FROM ArticleThreads WHERE newsgroup = $1 ORDER BY last_bump DESC LIMIT $2")
+    defer stmt.Close()
     if err == nil {
-      defer stmt.Close()
       rows, err = stmt.Query(newsgroup, threads)
     } else {
       log.Println("failed to prepare query for get last bumped", err)
+      return nil
     }
   } else {
     stmt, err := self.Conn().Prepare("SELECT root_message_id FROM ArticleThreads ORDER BY last_bump DESC LIMIT $1")
@@ -686,15 +687,16 @@ func (self PostgresDatabase) GetLastBumpedThreads(newsgroup string, threads int)
       rows, err = stmt.Query(threads)
     } else {
       log.Println("failed to prepare query for get last bumped", err)
+      return nil
     }
   }
   if err != nil {
     log.Println("failed to execute query for get last bumped", err)
   }
+  
   if rows == nil {
     return nil
   }
-  defer rows.Close()
 
   var roots []string
   for rows.Next() {
@@ -702,6 +704,7 @@ func (self PostgresDatabase) GetLastBumpedThreads(newsgroup string, threads int)
     rows.Scan(&root)
     roots = append(roots, root)
   }
+  rows.Close()
   return roots
 }
 

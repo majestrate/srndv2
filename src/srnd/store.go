@@ -151,7 +151,11 @@ func (self articleStore) StorePost(nntp NNTPMessage) (err error) {
 // save an attachment
 func (self articleStore) saveAttachment(att NNTPAttachment) {
   fpath := att.Filepath()
-  upload := self.AttachmentFilepath(fpath) 
+  upload := self.AttachmentFilepath(fpath)
+  if CheckFile(upload) {
+    log.Println("already have file")
+    return
+  }
   // save attachment
   log.Println("save attachment", att.Filename(), "to", upload)
   f, err := os.Create(upload)

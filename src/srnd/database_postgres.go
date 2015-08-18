@@ -40,17 +40,22 @@ func (self PostgresDatabase) Login() string {
 // finalize all transactions 
 // close database connections
 func (self PostgresDatabase) Close() {
-  self.Conn().Close()
+  if self.conn != nil {
+    self.conn.Close()
+    self.conn = nil
+  }
 }
 
 func (self PostgresDatabase) Conn() *sql.DB {
   if self.conn == nil {
     var err error
+    
+    log.Println("Connecting to postgres...")
     self.conn, err = sql.Open("postgres", self.Login())
     if err != nil {
       log.Fatalf("cannot open connection to db: %s", err)
     }
-    log.Println("Connection to postgres backend made")
+    log.Println("okay connected to postgres")
   }
   return self.conn
 }

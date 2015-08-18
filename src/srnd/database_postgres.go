@@ -483,9 +483,11 @@ func (self PostgresDatabase) GetPostModel(prefix, messageID string) PostModel {
 
   model := post{}
   model.prefix = prefix
-  row := stmt.QueryRow(messageID)
-  row.Scan(&model.board, &model.message_id, &model.parent, &model.name, &model.subject, &model.path, &model.posted, &model.message)
-  stmt.Close() // explicit close
+  rows, err := stmt.Query(messageID)
+  rows.Scan(&model.board, &model.message_id, &model.parent, &model.name, &model.subject, &model.path, &model.posted, &model.message)
+  // explicit close
+  rows.Close()
+  stmt.Close()
   model.op = len(model.parent) == 0
   if len(model.parent) == 0 {
       model.parent = model.message_id
@@ -498,8 +500,14 @@ func (self PostgresDatabase) GetPostModel(prefix, messageID string) PostModel {
   // get pubkey if it exists
   stmt, err = self.Conn().Prepare("SELECT pubkey FROM ArticleKeys WHERE message_id = $1")
   if err == nil {
-    // silent fail, will not populate pubkey if it's not there
-    _ : stmt.QueryRow(model.message_id).Scan(&model.pubkey)
+    // silent ish fail
+    rows, err = stmt.Query(model.message_id)
+    if err == nil {
+      rows.Scan(&model.pubkey)
+      // explicit close
+      rows.Close()
+    }
+    // explicit close
     stmt.Close()
   }
   

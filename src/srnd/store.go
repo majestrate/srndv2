@@ -169,11 +169,14 @@ func (self articleStore) saveAttachment(att NNTPAttachment) {
   
   // generate thumbanils
   if att.NeedsThumbnail() {
-    err = self.GenerateThumbnail(fpath)
-    if err != nil {
-      log.Println("failed to generate thumbnail", err)
-      return 
-    }
+    // fork it
+    go func() {
+      err = self.GenerateThumbnail(fpath)
+      if err != nil {
+        log.Println("failed to generate thumbnail", err)
+        
+      }
+    }()
   }
 }
 

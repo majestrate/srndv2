@@ -4,7 +4,6 @@
 package srnd
 
 import (
-  "database/sql"
   "log"
 )
 
@@ -21,7 +20,6 @@ func (self ArticleEntry) MessageID() string {
 }
 
 type Database interface {
-  Login() string
   CreateTables()
   HasNewsgroup(group string) bool
   HasArticle(message_id string) bool
@@ -140,9 +138,6 @@ type Database interface {
   
   // detele the existance of a thread from the threads table, does NOT remove replies
   DeleteThread(root_msg_id string) error
-  
-  // underlying database connection
-  Conn() *sql.DB
 
   // get threads per page for a newsgroup
   GetThreadsPerPage(group string) (int, error)

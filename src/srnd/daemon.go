@@ -216,94 +216,96 @@ func (self *NNTPDaemon) Run() {
   if self.frontend != nil {
     go self.pollfrontend()
   }
-  self.pollfeeds()
-
+  go self.pollinfeed()
+  go self.polloutfeeds()
+  self.pollmessages()
 }
 
 
 func (self *NNTPDaemon) pollfrontend() {
   chnl := self.frontend.NewPostsChan()
   for {
-    select {
-    case nntp := <- chnl:
-      // new post from frontend
-      log.Println("frontend post", nntp.MessageID())
-      self.infeed <- nntp
+    nntp := <- chnl
+    // new post from frontend
+    log.Println("frontend post", nntp.MessageID())
+    self.infeed <- nntp
+  }
+}
+func (self *NNTPDaemon) pollinfeed() {
+  for {
+    msgid := <- self.infeed_load
+    log.Println("load from infeed", msgid)
+    msg := self.store.ReadTempMessage(msgid)
+    if msg != nil {
+      self.infeed <- msg
     }
   }
 }
 
-func (self *NNTPDaemon) pollfeeds() {
+func (self *NNTPDaemon) polloutfeeds() {
+  for {
+    msgid := <- self.send_all_feeds
+    // send all feeds
+    nntp := self.store.GetMessage(msgid)
+    if nntp == nil {
+      log.Printf("failed to load %s for federation", msgid)
+    } else {
+      for feed , use := range self.feeds {
+        if use && feed.policy != nil {
+          if feed.policy.AllowsNewsgroup(nntp.Newsgroup()) {
+            feed.sync <- nntp.MessageID()
+          } else {
+            log.Println("not syncing", msgid)
+          }
+        }
+      }
+    }
+  }
+}
+
+func (self *NNTPDaemon) pollmessages() {
   var chnl chan NNTPMessage
   if self.frontend != nil {
     chnl = self.frontend.PostsChan()
   }
   for {
-    select {
-    case msgid := <- self.send_all_feeds:
-      // send all feeds
-      nntp := self.store.GetMessage(msgid)
-      if nntp == nil {
-        log.Printf("failed to load %s for federation", msgid)
-      } else {
-        for feed , use := range self.feeds {
-          if use && feed.policy != nil {
-            if feed.policy.AllowsNewsgroup(nntp.Newsgroup()) {
-              feed.sync <- nntp.MessageID()
-            } else {
-              log.Println("not syncing", msgid)
-            }
-          }
-        }
-      }
-      break;
-    case msgid := <- self.infeed_load:
-      log.Println("load from infeed", msgid)
-      msg := self.store.ReadTempMessage(msgid)
-      if msg != nil {
-        self.infeed <- msg
-      }
-      break;
-    case nntp := <- self.infeed:
-      // ammend path
-      nntp.AppendPath(self.instance_name)
-      msgid := nntp.MessageID()
-      log.Println("daemon got", msgid)
-      
-      // store article and attachments
-      // register with database
-      // this also generates thumbnails
-      go self.store.StorePost(nntp)
-      
-      // prepare for content rollover
-      // fallback rollover
-      rollover := 100
-      
-      group := nntp.Newsgroup()
-      tpp, err := self.database.GetThreadsPerPage(group)
-      ppb, err := self.database.GetPagesPerBoard(group)
-      if err == nil {
-        rollover = tpp * ppb
-      }
-      
-      // roll over old content
-      self.expire.ExpireGroup(group, rollover)
-      if err == nil {
-        // queue to all outfeeds
-        // XXX: blocking ?
-        self.send_all_feeds <- msgid
-        // tell frontend
-        // XXX: blocking ?
-        if chnl != nil {
-          chnl <- nntp
-        }
-      } else {
-        log.Printf("%s failed to store: %s", msgid, err)
-      }
-      break;
+    
+    nntp := <- self.infeed
+    // ammend path
+    nntp.AppendPath(self.instance_name)
+    msgid := nntp.MessageID()
+    log.Println("daemon got", msgid)
+    
+    // store article and attachments
+    // register with database
+    // this also generates thumbnails
+    go self.store.StorePost(nntp)
+    
+    // prepare for content rollover
+    // fallback rollover
+    rollover := 100
+    
+    group := nntp.Newsgroup()
+    tpp, err := self.database.GetThreadsPerPage(group)
+    ppb, err := self.database.GetPagesPerBoard(group)
+    if err == nil {
+      rollover = tpp * ppb
+    }
+    
+    // roll over old content
+    self.expire.ExpireGroup(group, rollover)
+    
+    // queue to all outfeeds
+    // XXX: blocking ?
+    self.send_all_feeds <- msgid
+    // tell frontend
+    // XXX: blocking ?
+    if chnl != nil {
+      chnl <- nntp
     }
   }
 }
+
 
 func (self *NNTPDaemon) acceptloop() {	
   for {

@@ -482,7 +482,7 @@ func (self PostgresDatabase) GetLastBumpedThreads(newsgroup string, threads int)
   if len(newsgroup) > 0 { 
     rows, err = self.conn.Query("SELECT root_message_id FROM ArticleThreads WHERE newsgroup = $1 ORDER BY last_bump DESC LIMIT $2", newsgroup, threads)
   } else {
-    rows, err = self.conn.Query("SELECT root_message_id FROM ArticleThreads ORDER BY last_bump DESC LIMIT $1", newsgroup)
+    rows, err = self.conn.Query("SELECT root_message_id FROM ArticleThreads ORDER BY last_bump DESC LIMIT $1", threads)
   }
 
   if err == nil {

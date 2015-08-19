@@ -573,8 +573,7 @@ func (self PostgresDatabase) GetPostAttachments(messageID string) (atts []string
 }
 
 
-func (self PostgresDatabase) GetPostAttachmentModels(prefix, messageID string) (att []AttachmentModel) {
-  var atts []AttachmentModel
+func (self PostgresDatabase) GetPostAttachmentModels(prefix, messageID string) (atts []AttachmentModel) {
   rows, err := self.conn.Query("SELECT filepath, filename FROM ArticleAttachments WHERE message_id = $1", messageID)
   if err == nil {
     for rows.Next() {
@@ -584,7 +583,7 @@ func (self PostgresDatabase) GetPostAttachmentModels(prefix, messageID string) (
         prefix: prefix,
         thumbnail: prefix+"thm/"+fpath,
         source: prefix+"img/"+fpath,
-      filename: fname,
+        filename: fname,
       })
     }
     rows.Close()

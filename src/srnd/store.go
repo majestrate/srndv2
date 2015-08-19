@@ -133,14 +133,14 @@ func (self articleStore) StorePost(nntp NNTPMessage) (err error) {
     self.database.RegisterArticle(nntp)
     for _, att := range nntp.Attachments() {
       // save attachments in parallel
-      self.saveAttachment(att)
+      go self.saveAttachment(att)
     }
   } else {
     // we have inner data
     // store the signed data
     self.database.RegisterArticle(nntp_inner)
     for _, att := range nntp_inner.Attachments() {
-      self.saveAttachment(att)
+      go self.saveAttachment(att)
     }
     // record a tripcode
     self.database.RegisterSigned(nntp.MessageID(), nntp.Pubkey())

@@ -344,8 +344,7 @@ func (self PostgresDatabase) GetGroupForPage(prefix, frontend, newsgroup string,
       }
       for _, repl := range(repls) {
         // TODO: hardcoded
-        repl.Truncate(512)
-        posts = append(posts, repl)
+        posts = append(posts, repl.Truncate(512))
       }
     }
     // add thread to board page

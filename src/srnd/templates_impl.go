@@ -214,10 +214,11 @@ func (self post) RenderPost() string {
   return renderTemplate("post.mustache", self)
 }
 
-func (self post) Truncate(amount int) {
+func (self post) Truncate(amount int) PostModel {
   if len(self.message) > amount && amount > 0 {
     self.message = self.message[:amount]
   }
+  return self
 }
 
 func (self post) RenderShortBody() string {

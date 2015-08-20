@@ -236,8 +236,7 @@ func (self httpFrontend) regenUkko() {
       }
       for _, repl := range repls {
         // truncate reply size
-        repl.Truncate(512)
-        posts = append(posts, repl)
+        posts = append(posts, repl.Truncate(512))
       }
     }
     threads = append(threads, thread{

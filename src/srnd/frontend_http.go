@@ -227,7 +227,8 @@ func (self httpFrontend) regenUkko() {
       log.Println("failed to get root post", rootpost)
       return
     }
-    posts := []PostModel{post}
+    // TODO: hardcoded value
+    posts := []PostModel{post.Truncate(512)}
     if self.daemon.database.ThreadHasReplies(rootpost) {
       repls := self.daemon.database.GetThreadReplyPostModels(self.prefix, rootpost, 5)
       if repls == nil {

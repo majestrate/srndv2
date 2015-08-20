@@ -333,7 +333,8 @@ func (self PostgresDatabase) GetGroupForPage(prefix, frontend, newsgroup string,
       log.Println("failed to get OP, was nil:", root_msg_id)
       return nil
     }
-    posts = append(posts, op)
+    // TODO: hardcoded value
+    posts = append(posts, op.Truncate(512))
     // append replies
     if self.ThreadHasReplies(root_msg_id) {
       // TODO: harcoded value

@@ -8,48 +8,66 @@ import (
   "html"
   "strings"
 )
+// meme arrow a line
+func memeline(line string) (markup string) {
+  // check for meme arrows
+  if strings.HasPrefix(line, "&gt;") {
+    markup += "<p><span class='memearrows'>"
+    markup += line
+    markup += "</span></p>"
+  } else {
+    markup += "<p>"
+    markup += line
+    markup += "</p>"
+  }
+  return
+}
 
-func memeposting(src string) string {
+func memeposting(src string) (markup string) {
   // escape
   src = html.EscapeString(src)
-  // make newlines
+
   found_code_tag := false
   code_content := ""
-  markup := ""
+  // for each line...
   for _, line := range strings.Split(src, "\n") {
-    if strings.Count(line, "[code]") == 1 {
+    // beginning of code tag ?
+    if strings.Count(line, "[code]") > 0 {
+      // yes there's a code tag
       found_code_tag = true
-      code_content = strings.Split(line, "[code]")[0]
-    } else if found_code_tag {
-      code_content += line + "\n"
-      if strings.Count(line, "[/code]") == 1 {
-        found_code_tag = false
-        markup += "<pre>"
-        code_content = strings.Replace(code_content, "[/code]", "", -1)
-        for _, code_line := range strings.Split(code_content, "\n") {
-          markup += "<p>"
-          markup += code_line
-          markup += "</p>"
-        }
-        markup += "</pre>"
-        code_content = ""
-      } else {
-        continue
-      }
-    } else {
-      // check for meme arrows
-      if strings.HasPrefix(line, "&gt;") {
-        markup += "<p><span class='memearrows'>"
-        markup += line
-        markup += "</span></p>"
-      } else {
-        markup += "<p>"
-        markup += line
-        markup += "</p>"
-      }
     }
+    if found_code_tag {
+      // collect content of code tag
+      code_content += line + "\n"
+      // end of code tag ?
+      if strings.Count(line, "[/code]") == 1 {
+        // yah
+        found_code_tag = false
+        // open pre tag
+        markup += "<pre>"
+        // remove open tag, only once so we can have a code tag verbatum inside
+        code_content = strings.Replace(code_content, "[code]", "", 1)
+        // remove all close tags, should only have 1
+        code_content = strings.Replace(code_content, "[/code]", "", -1)
+        // make into lines
+        for _, code_line := range strings.Split(code_content, "\n") {
+          //TODO: This also memearrows, should we?
+          markup += memeline(code_line)
+        }
+        // close pre tag
+        markup += "</pre>"
+        // reset content buffer
+        code_content = ""
+      }
+      // next line
+      continue
+    }
+    // format line regularlly
+    markup += memeline(line)
   }
-  
-  // return
-  return markup
+  // flush the rest of an incomplete code tag
+  for _, line := range strings.Split(code_content, "\n") {
+    markup += memeline(line)
+  }
+  return 
 }

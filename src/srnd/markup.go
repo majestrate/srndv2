@@ -5,38 +5,33 @@
 package srnd
 
 import (
-  "bytes"
-  "fmt"
   "html"
+  "regexp"
   "strings"
-
 )
+// regex for code tags
+var re_code_tag = regexp.MustCompile(`\[code\]([\s\S]*)\[/code\]`)
 
 func memeposting(src string) string {
-  var buff bytes.Buffer
-  // split into lines
-  lines := strings.Split(src, "\n")
-  // for each line
-
-  
-  
-  for _, line := range lines {
-    // trim whitespaces from line
-    line = strings.Trim(line, " \r")
-
-    // escape it nigga!
-    esc_line := html.EscapeString(line)
-    
-    // write start of line
-    buff.WriteString("<p>")
-
-    if strings.HasPrefix(line, ">") {
-      buff.WriteString(fmt.Sprintf("<span class='memearrows'>%s<span>", esc_line))
+  // escape
+  src = html.EscapeString(src)
+  // find and format code tags
+  src = re_code_tag.ReplaceAllString(src, "\n<pre>\n${1}\n</pre>\n")
+  // make newlines
+  markup := ""
+  for _, line := range strings.Split(src, "\n") {
+    // check for meme arrows
+    if strings.HasPrefix(line, "&gt;") {
+      markup += "<p><span class='memearrows'>"
+      markup += line
+      markup += "</span></p>"
     } else {
-      buff.WriteString(esc_line)
+      markup += "<p>"
+      markup += line
+      markup += "</p>"
     }
-    // write end of line
-    buff.WriteString("</p>")
   }
-  return buff.String()
+  
+  // return
+  return markup
 }

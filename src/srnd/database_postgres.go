@@ -342,7 +342,11 @@ func (self PostgresDatabase) GetGroupForPage(prefix, frontend, newsgroup string,
         log.Println("failed to get replies to", root_msg_id)
         return nil
       }
-      posts = append(posts, repls...)
+      for _, repl := range(repls) {
+        // TODO: hardcoded
+        repl.Truncate(512)
+        posts = append(posts, repl)
+      }
     }
     // add thread to board page
     threads = append(threads, thread{

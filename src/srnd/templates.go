@@ -54,6 +54,9 @@ type PostModel interface {
   
   RenderBody() string
   RenderPost() string
+
+  // truncate body to a certain size
+  Truncate(amount int)
   
 }
 

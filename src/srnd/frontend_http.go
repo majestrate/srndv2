@@ -234,7 +234,11 @@ func (self httpFrontend) regenUkko() {
         log.Println("failed to get replies for", rootpost)
         return
       }
-      posts = append(posts, repls...)
+      for _, repl := range repls {
+        // truncate reply size
+        repl.Truncate(512)
+        posts = append(posts, repl)
+      }
     }
     threads = append(threads, thread{
       prefix: self.prefix,

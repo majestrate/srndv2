@@ -214,6 +214,17 @@ func (self post) RenderPost() string {
   return renderTemplate("post.mustache", self)
 }
 
+func (self post) Truncate(amount int) {
+  if len(self.message) > amount && amount > 0 {
+    self.message = self.message[:amount]
+  }
+}
+
+func (self post) RenderShortBody() string {
+  // TODO: hardcoded limit
+  return memeposting(self.message)
+}
+
 func (self post) RenderBody() string {
   // :^)
   return memeposting(self.message)

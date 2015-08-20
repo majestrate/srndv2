@@ -6,29 +6,43 @@ package srnd
 
 import (
   "html"
-  "regexp"
   "strings"
 )
-// regex for code tags
-var re_code_tag = regexp.MustCompile(`\[code\]([\s\S]*)\[/code\]`)
 
 func memeposting(src string) string {
   // escape
   src = html.EscapeString(src)
-  // find and format code tags
-  src = re_code_tag.ReplaceAllString(src, "\n<pre>\n${1}\n</pre>\n")
   // make newlines
+  found_code_tag := false
+  code_content := ""
   markup := ""
   for _, line := range strings.Split(src, "\n") {
-    // check for meme arrows
-    if strings.HasPrefix(line, "&gt;") {
-      markup += "<p><span class='memearrows'>"
-      markup += line
-      markup += "</span></p>"
+    if strings.Count(line, "[code]") == 1 {
+      found_code_tag = true
+      code_content = strings.Split(line, "[code]")[0]
+    }
+    if found_code_tag {
+      code_content += line
+      if strings.Count(line, "[/code]") == 1 {
+        found_code_tag = false
+        markup += "<pre>"
+        markup += strings.Trim(code_content, "[/code]")
+        markup += "</pre>"
+        code_content = ""
+      } else {
+        continue
+      }
     } else {
-      markup += "<p>"
-      markup += line
-      markup += "</p>"
+      // check for meme arrows
+      if strings.HasPrefix(line, "&gt;") {
+        markup += "<p><span class='memearrows'>"
+        markup += line
+        markup += "</span></p>"
+      } else {
+        markup += "<p>"
+        markup += line
+        markup += "</p>"
+      }
     }
   }
   

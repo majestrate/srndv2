@@ -244,7 +244,7 @@ func (self thread) Prefix() string {
 func (self thread) Navbar() string {
   param := make(map[string]interface{})
   param["name"] = fmt.Sprintf("Thread %s", self.posts[0].ShortHash())
-  param["frontend"] = "nntpchan" // TODO: make this different?
+  param["frontend"] = self.Board()
   param["links"] = self.links
   param["prefix"] = self.prefix
   return renderTemplate("navbar.mustache", param)

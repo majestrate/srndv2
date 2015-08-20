@@ -22,7 +22,7 @@ func memeposting(src string) string {
       code_content = strings.Split(line, "[code]")[0]
     }
     if found_code_tag {
-      code_content += line
+      code_content += line + "\n"
       if strings.Count(line, "[/code]") == 1 {
         found_code_tag = false
         markup += "<pre>"

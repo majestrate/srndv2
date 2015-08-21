@@ -49,22 +49,21 @@ func (self *NNTPConnection) askSync(msgid string) {
 }
 
 func (self *NNTPConnection) HandleOutbound(d *NNTPDaemon, quarks map[string]string) {
-  var err error
-  code, line, err := self.txtconn.ReadCodeLine(-1)
+  code, line, _ := self.txtconn.ReadCodeLine(-1)
   self.info.allowsPosting = code == 200
   if ! self.info.allowsPosting {
     log.Printf("outbound feed posting not allowed: %d %s", code, line)
     self.Close()
     return
   }
+  // TODO: autodetect quarks
   if quarks != nil {
     // check for twisted news server quark
     t, ok := quarks["twisted"]
     if ok {
       if t == "1" {
-        // force into stream mode
-        self.info.supportsStream = true
-        self.info.mode = "stream"
+        // force into post mode
+        self.info.mode = "post"
       }
     }
   }
@@ -72,14 +71,15 @@ func (self *NNTPConnection) HandleOutbound(d *NNTPDaemon, quarks map[string]stri
   if self.info.mode == "" {
     // they allow posting
     // send capabilities command
-    err = self.txtconn.PrintfLine("CAPABILITIES")
+    _ = self.txtconn.PrintfLine("CAPABILITIES")
     capreader := bufio.NewReader(self.txtconn.DotReader())
     
     // get capabilites
     for {
       line, err := capreader.ReadString('\n') 
       if err != nil {
-      break
+        log.Println(err)
+        break
       }
       line = strings.ToLower(line)
       if line == "streaming\n" {
@@ -91,17 +91,51 @@ func (self *NNTPConnection) HandleOutbound(d *NNTPDaemon, quarks map[string]stri
       }
     }
   }
-
   // if they support streaming and allow posting continue
   // otherwise quit
-  if ! self.info.supportsStream || ! self.info.allowsPosting {
-    if self.debug {
-      log.Println(self.info.supportsStream, self.info.allowsPosting)
-    }
-
-    self.Quit()
-    return
+  if self.info.supportsStream && self.info.allowsPosting {
+    self.streaming_mode(d)
+  } else if self.info.mode == "post" {
+    // we are forced into post mode
+    self.post_mode(d)
   }
+}
+
+// enter posting mode
+func (self *NNTPConnection) post_mode(d *NNTPDaemon) {
+  // TODO: improve this, it's dumb right now
+  for {
+    msg_id := <- self.sync
+    fname := d.store.GetFilename(msg_id)
+    f, err := os.Open(fname)
+    if f == nil {
+      continue
+    } 
+    self.txtconn.PrintfLine("POST %s", msg_id)
+    var code int
+    code, _, err = self.txtconn.ReadCodeLine(-1)
+    if err == nil {
+      if code == 340 {
+        // post it
+        w := self.txtconn.DotWriter()
+        _, err = io.Copy(w, f)
+        w.Close()
+      }
+      code, _, err = self.txtconn.ReadCodeLine(240)
+      if err != nil {
+        log.Println("failed to send article",msg_id, "via POST", err)
+      }
+    }
+    f.Close()
+  }
+}
+
+
+// enter streaming mode
+func (self *NNTPConnection) streaming_mode(d *NNTPDaemon) {
+  var err error
+  var line string
+  var code int
   err = self.txtconn.PrintfLine("MODE STREAM")
   if err != nil {
     log.Println("failed to initiated streaming mode on feed", err)
@@ -145,7 +179,6 @@ func (self *NNTPConnection) HandleOutbound(d *NNTPDaemon, quarks map[string]stri
       fname := d.store.GetFilename(commands[0])
       f, err := os.Open(fname)
       if f == nil {
-        log.Println("wut? don't have message", commands[0])
         continue
       } 
       err = self.SendMessage(commands[0], f, d)
@@ -199,7 +232,7 @@ func (self *NNTPConnection) HandleInbound(d *NNTPDaemon) {
   self.info.mode = "STREAM"
   log.Println("Incoming nntp connection from", self.conn.RemoteAddr())
   // send welcome
-  greet := "2nd generation overchan NNTP Daemon"
+  greet := "2nd generation overchan NNTP Daemon posting allowed"
   self.txtconn.PrintfLine("200 %s", greet)
   for {
     if err != nil {

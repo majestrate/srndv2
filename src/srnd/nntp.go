@@ -118,12 +118,6 @@ func (self *NNTPConnection) post_mode(d *NNTPDaemon) {
       w := self.txtconn.DotWriter()
       _, err = io.Copy(w, f)
       w.Close()
-      _, _, err = self.txtconn.ReadCodeLine(240)
-      if err != nil {
-        log.Println("failed to send article",msg_id, "via POST", err)
-        self.Quit()
-        return
-      }
     }
     f.Close()
   }

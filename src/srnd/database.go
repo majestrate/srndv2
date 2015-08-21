@@ -133,6 +133,10 @@ type Database interface {
   // if it's not already there insert it into the database
   GetEncAddress(addr string) (string, error)
 
+  // get the decryption key for an encrypted address
+  // return empty string if we don't have it
+  GetEncKey(encAddr string) (string, error)
+  
   // delete an article from the database
   DeleteArticle(msg_id string) error
   

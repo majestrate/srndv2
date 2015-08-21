@@ -5,10 +5,11 @@
 package srnd
 
 import (
+  "bytes"
   "fmt"
+  "io"
   "net/http"
   "strings"
-  "time"
 )
 
 
@@ -83,30 +84,58 @@ func (self simpleModEvent) Expires() int64 {
   return -1
 }
 
-// moderation message
-type ModMessage struct {
-  Date time.Time
-  Events []ModEvent
+// create an overchan-delete mod event
+func overchanDelete(msgid string) ModEvent {
+  return simpleModEvent(fmt.Sprintf("overchan-delete %s", msgid))
 }
 
-// write this mod message out
+// create an overchan-inet-ban mod event
+func overchanInetBan(encAddr, key string, expire int64) ModEvent {
+  return simpleModEvent(fmt.Sprintf("overchan-inet-ban %s:%s:%s", encAddr, key, expire))
+}
+
+// moderation message
+// wraps multiple mod events
+// is turned into an NNTPMessage later
+type ModMessage []ModEvent
+
+// write this mod message's body
 func (self ModMessage) WriteTo(wr io.Writer, delim []byte) (err error) {
-  err = io.WriteString(wr, "Content-Type: text/plain; charset=UTF-8")
-  err = wr.Write(delim)
-  err = io.WriteString(wr, fmt.Sprintf("Date: %s", self.Date.Format(time.RFC1123Z)))
-  err = wr.Write(delim)
-  // done headers
-  err = wr.Write(delim)
   // write body
-  for _, ev := range(self.Events) {
-    err = io.WriteString(wr, ev.String())
-    err = wr.Write(delim)
+  for _, ev := range(self) { 
+    _, err = io.WriteString(wr, ev.String())
+    _, err = wr.Write(delim)
   }
-  return body
+  return
 }
 
 
 
 func ParseModEvent(line string) ModEvent {
   return simpleModEvent(line)
+}
+
+// wrap mod message in an nntp message
+// does not sign
+func wrapModMessage(mm ModMessage) NNTPMessage {
+  pathname := "nntpchan.censor"
+  nntp := nntpArticle{
+    headers: make(ArticleHeaders),
+  }
+  nntp.headers.Set("Newsgroups", "ctl")
+  nntp.headers.Set("Content-Type", "text/plain; charset=UTF-8")
+  nntp.headers.Set("Message-ID", genMessageID(pathname))
+  nntp.headers.Set("Date", timeNowStr())
+  nntp.headers.Set("Path", pathname)
+  // todo: set these maybe?
+  nntp.headers.Set("From", "anon <a@n.on>")
+  nntp.headers.Set("Subject", "censor")
+
+  var buff bytes.Buffer
+  // crlf delimited
+  _ = mm.WriteTo(&buff, []byte{13,10})
+  // create plaintext attachment, cut off last 2 bytes
+  str := buff.String()
+  nntp.message = createPlaintextAttachment(str[:len(str)-2])
+  return nntp
 }

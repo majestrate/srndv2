@@ -227,6 +227,11 @@ func (self PostgresDatabase) GetEncAddress(addr string) (encaddr string, err err
   return
 }
 
+func (self PostgresDatabase) GetEncKey(encAddr string) (enckey string, err error) {
+  err = self.conn.QueryRow("SELECT enckey FROM EncryptedAddrs WHERE encaddr = $1 LIMIT 1", encAddr).Scan(&enckey)
+  return
+}
+
 func (self PostgresDatabase) CheckIPBanned(addr string) (banned bool, err error) {
   var amount int64
   err = self.conn.QueryRow("SELECT COUNT(*) FROM IPBans WHERE addr >>= $1 ", addr).Scan(&amount)

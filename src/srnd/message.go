@@ -98,10 +98,15 @@ type MessageWriter interface {
 }
 
 type nntpArticle struct {
+  // mime header
   headers ArticleHeaders
+  // multipart boundary
   boundary string
+  // the text part of the message
   message nntpAttachment
+  // any attachments
   attachments []NNTPAttachment
+  // the inner nntp message to be verified
   signedPart nntpAttachment
 }
 
@@ -147,7 +152,8 @@ func signArticle(nntp NNTPMessage, privkey []byte) (signed nntpArticle, err erro
     // get public key
     pk := getSignPubkey(privkey)
     // sign it nigguh
-    sig := cryptoSign(signbuff.Bytes(), privkey)
+    data := signbuff.Bytes()
+    sig := cryptoSign(data, privkey)
     // log that we signed it
     log.Printf("signed %s pubkey=%s sig=%s", nntp.MessageID(), pk, sig)
     signed.headers.Set("X-Signature-Ed25519-SHA512", sig)
@@ -155,6 +161,8 @@ func signArticle(nntp NNTPMessage, privkey []byte) (signed nntpArticle, err erro
   }
   // copy sign buffer into signed part
   _, err = io.Copy(&signed.signedPart.body, &signbuff)
+  // add this so the writer writes the entire post
+  signed.signedPart.body.Write([]byte{13,10})
   return 
 }
 
@@ -164,6 +172,7 @@ func (self nntpArticle) WriteTo(wr io.Writer, delim string) (err error) {
     for _ , hdr_val := range hdr_vals {
       _, err = io.WriteString(wr, fmt.Sprintf("%s: %s%s", hdr, hdr_val, delim))
       if err != nil {
+        log.Println(err)
         return
       }
     }
@@ -171,6 +180,7 @@ func (self nntpArticle) WriteTo(wr io.Writer, delim string) (err error) {
   // done headers
   _, err = io.WriteString(wr, delim)
   if err != nil {
+    log.Println(err)
     return
   }
 
@@ -185,6 +195,7 @@ func (self nntpArticle) Pubkey() string {
 
 func (self nntpArticle) Signed() NNTPMessage {
   if self.signedPart.body.Len() > 0 {
+    log.Println("loading signed message")
     msg, err := read_message(&self.signedPart.body)
     if err == nil {
       return msg
@@ -283,7 +294,7 @@ func (self nntpArticle) ContentType() string {
 }
 
 func (self nntpArticle) Sage() bool {
-  return self.headers.Has("X-Sage")
+  return self.headers.Get("X-Sage", "") == "1"
 }
 
 func (self nntpArticle) OP() bool {
@@ -318,7 +329,9 @@ func (self nntpArticle) WriteBody(wr io.Writer, delim string) (err error) {
         // convert line endings :\
         line, err = r.ReadBytes(10)
         if err == nil {
-          _, err = w.Write(line[:len(line)-2])
+          if len(line) > 2 {
+            _, err = w.Write(line[:len(line)-2])
+          }
           _, err = w.Write([]byte{10})
           err = w.Flush() // flush it
         } else if err == io.EOF {
@@ -335,7 +348,9 @@ func (self nntpArticle) WriteBody(wr io.Writer, delim string) (err error) {
   }
   if len(self.attachments) == 0 {
     // write plaintext and be done
-    _, err = self.message.body.WriteTo(wr)
+    var n int64
+    n, err = io.Copy(wr, &self.message.body)
+    log.Printf("plain body was %i bytes", n)
     return
   }
   content_type := self.ContentType()
@@ -364,7 +379,7 @@ func (self nntpArticle) WriteBody(wr io.Writer, delim string) (err error) {
         enc := base64.NewEncoder(base64.StdEncoding, part)
         err = att.WriteTo(enc)
         enc.Close()  
-        
+
         if err != nil {
           break
         }

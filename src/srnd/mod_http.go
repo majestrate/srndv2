@@ -64,6 +64,22 @@ func (self httpModUI) getSession(r *http.Request) *sessions.Session {
   return s
 }
 
+// get the session's private key as bytes or nil if we don't have it
+func (self httpModUI) getSessionPrivkeyBytes(r *http.Request) []byte {
+  s := self.getSession(r)
+  k, ok := s.Values["privkey"]
+  if ok {
+    privkey_bytes, err := hex.DecodeString(k.(string))
+    if err == nil {
+      return privkey_bytes
+    }
+    log.Println("failed to decode private key bytes from session", err)
+  } else {
+    log.Println("failed to get private key from session, no private key in session?")
+  }
+  return nil
+}
+
 // returns true if the session is okay
 // otherwise redirect to login page
 func (self httpModUI) checkSession(r *http.Request) bool {
@@ -184,6 +200,27 @@ func (self httpModUI) handleBanAddress(msg ArticleEntry, r *http.Request) map[st
         // we have it
         // ban the address
         err = self.database.BanAddr(ip)
+        // then we tell everyone about it
+        var key string
+        // TODO: we SHOULD have the key, but what if we do not? 
+        key, err = self.database.GetEncKey(encip)
+        // create mod message
+        // TODO: hardcoded ban period
+        mm := ModMessage{overchanInetBan(encip, key, -1),}
+        privkey_bytes := self.getSessionPrivkeyBytes(r)
+        if privkey_bytes == nil {
+          // this should not happen
+          log.Println("failed to get privkey bytes from session")
+          resp["error"] = "failed to get private key from session. wtf?"
+        } else {
+          // wrap and sign
+          nntp := wrapModMessage(mm)
+          nntp, err = signArticle(nntp, privkey_bytes)
+          if err == nil {
+            // federate
+            self.modMessageChan <- nntp
+          }
+        }
       } else {
         // we don't have it
         // ban the encrypted version
@@ -198,12 +235,14 @@ func (self httpModUI) handleBanAddress(msg ArticleEntry, r *http.Request) map[st
       } else {
         resp["error"] = err.Error()
       }
+      
     }
   }
   return resp
 }
 
 func (self httpModUI) handleDeletePost(msg ArticleEntry, r *http.Request) map[string]interface{} {
+  var mm ModMessage
   resp := make(map[string]interface{})
   msgid := msg.MessageID()
   delmsgs := []string{}
@@ -219,12 +258,19 @@ func (self httpModUI) handleDeletePost(msg ArticleEntry, r *http.Request) map[st
       // load replies
       replies := self.database.GetThreadReplies(msgid, 0)
       if replies != nil {
-        delmsgs = append(delmsgs, replies...)
+        for _, repl := range(replies) {
+          // append mod line to mod message for reply
+          mm = append(mm, overchanDelete(repl))
+          // add to delete queue
+          delmsgs = append(delmsgs, repl)
+        }
       }
       // delete thread presence from the database
       self.database.DeleteThread(msgid)
     }
     delmsgs = append(delmsgs, msgid)
+    // append mod line to mod message
+    mm = append(mm, overchanDelete(msgid))
     deleted := []string{}
     report := []string{}
     // now delete them all
@@ -245,6 +291,20 @@ func (self httpModUI) handleDeletePost(msg ArticleEntry, r *http.Request) map[st
       self.regen(ArticleEntry{
         ref, group,
       })
+    }
+    privkey_bytes := self.getSessionPrivkeyBytes(r)
+    if privkey_bytes == nil {
+      // crap this should never happen
+      log.Println("failed to get private keys from session, not federating")
+    } else {
+      // wrap and sign mod message
+      nntp, err := signArticle(wrapModMessage(mm), privkey_bytes)
+      if err == nil {
+        // send it off to federate
+        self.modMessageChan <- nntp
+      } else {
+        resp["error"] = fmt.Sprintf("signing error: %s", err.Error())
+      }
     }
   }
   return resp

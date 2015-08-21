@@ -18,7 +18,6 @@ type NNTPDaemon struct {
   conf *SRNdConfig
   store ArticleStore
   database Database
-  mod Moderation
   expire ExpirationCore
   listener net.Listener
   debug bool
@@ -399,9 +398,6 @@ func (self *NNTPDaemon) Init() bool {
   if self.debug {
     log.Println("debug mode activated")
   }
-
-  // initialize moderation engine
-  self.mod.Init(self)
   
   // do we enable the frontend?
   if self.conf.frontend["enable"] == "1" {

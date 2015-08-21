@@ -10,6 +10,7 @@ import (
   "github.com/gorilla/mux"
   "github.com/gorilla/sessions"
   "github.com/gorilla/websocket"
+  "github.com/majestrate/srndv2/src/nacl"
   "bytes"
   "encoding/json"
   "fmt"

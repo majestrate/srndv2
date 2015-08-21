@@ -377,7 +377,7 @@ func read_message(r io.Reader) (NNTPMessage, error) {
       } else {
         body := nntp.signedPart.body.Bytes()[:nntp.signedPart.body.Len()-2]
         body_hash := sha512.Sum512(body)
-        log.Printf("hash=%s", hexify(body_hash[:]))
+        log.Printf("hash=%s len=%s", hexify(body_hash[:]), len(body))
         if nacl.CryptoVerifyFucky(body_hash[:], sig_bytes, pk_bytes) {
           log.Println("signature is valid :^)")
           return nntp, nil

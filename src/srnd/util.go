@@ -376,7 +376,7 @@ func getSignPubkey(sk []byte) string {
 func cryptoSign(data, sk []byte) string {
   // hash
   hash := sha512.Sum512(data)
-  log.Printf("hash=%s", hexify(hash[:]))
+  log.Printf("hash=%s len=%s", hexify(hash[:]), len(data))
   // sign
   sig := nacl.CryptoSignFucky(hash[:], sk)
   return hexify(sig)

@@ -86,7 +86,7 @@ func (self simpleModEvent) Expires() int64 {
 
 // create an overchan-delete mod event
 func overchanDelete(msgid string) ModEvent {
-  return simpleModEvent(fmt.Sprintf("overchan-delete %s", msgid))
+  return simpleModEvent(fmt.Sprintf("delete %s", msgid))
 }
 
 // create an overchan-inet-ban mod event

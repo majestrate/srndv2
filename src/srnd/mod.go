@@ -40,24 +40,6 @@ type ModUI interface {
   HandleKeyGen(wr http.ResponseWriter, r *http.Request)
 }
 
-// moderation engine
-type Moderation struct {
-  // channel to send commands down line by line after they are authenticated
-  feed chan string
-  daemon *NNTPDaemon
-}
-
-
-func (self Moderation) Init(d *NNTPDaemon) {
-  self.daemon = d
-}
-
-// TODO: implement
-func (self Moderation) AllowPubkey(key string) bool {
-  return false
-}
-
-
 type ModEvent interface {
   // turn it into a string for putting into an article
   String() string
@@ -107,11 +89,18 @@ type ModMessage struct {
   Events []ModEvent
 }
 
-func (self ModMessage) String() string {
-  body := "Content-Type: text/plain; charset=UTF-8\n"
-  body += fmt.Sprintf("Date: %s\n", self.Date.Format(time.RFC1123Z))
+// write this mod message out
+func (self ModMessage) WriteTo(wr io.Writer, delim []byte) (err error) {
+  err = io.WriteString(wr, "Content-Type: text/plain; charset=UTF-8")
+  err = wr.Write(delim)
+  err = io.WriteString(wr, fmt.Sprintf("Date: %s", self.Date.Format(time.RFC1123Z)))
+  err = wr.Write(delim)
+  // done headers
+  err = wr.Write(delim)
+  // write body
   for _, ev := range(self.Events) {
-    body += ev.String()
+    err = io.WriteString(wr, ev.String())
+    err = wr.Write(delim)
   }
   return body
 }

@@ -36,8 +36,10 @@ func (self multiFrontend) Mainloop() {
     select {
     case nntp := <- chnl:
       for _ , frontend := range self.frontends {
-        ch := frontend.PostsChan()
-        ch <- nntp
+        if frontend.AllowNewsgroup(nntp.Newsgroup()) {
+          ch := frontend.PostsChan()
+          ch <- nntp
+        }
       }
       break
     }

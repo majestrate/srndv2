@@ -300,7 +300,9 @@ func (self *NNTPDaemon) pollmessages() {
     // tell frontend
     // XXX: blocking ?
     if chnl != nil {
-      chnl <- nntp
+      if self.frontend.AllowNewsgroup(group) {
+        chnl <- nntp
+      }
     }
   }
 }

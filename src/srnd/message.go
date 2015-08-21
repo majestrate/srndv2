@@ -348,9 +348,7 @@ func (self nntpArticle) WriteBody(wr io.Writer, delim string) (err error) {
   }
   if len(self.attachments) == 0 {
     // write plaintext and be done
-    var n int64
-    n, err = io.Copy(wr, &self.message.body)
-    log.Printf("plain body was %i bytes", n)
+    _, err = io.Copy(wr, &self.message.body)
     return
   }
   content_type := self.ContentType()
@@ -368,7 +366,6 @@ func (self nntpArticle) WriteBody(wr io.Writer, delim string) (err error) {
     if err == nil {
       attachments := []NNTPAttachment{self.message}
       attachments = append(attachments, self.attachments...)
-      log.Println("writing nntp body")
       for _ , att := range(attachments) {
         hdr := att.Header()
         if hdr == nil {

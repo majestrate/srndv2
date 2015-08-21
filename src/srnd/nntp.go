@@ -48,7 +48,7 @@ func (self *NNTPConnection) askSync(msgid string) {
   }
 }
 
-func (self *NNTPConnection) HandleOutbound(d *NNTPDaemon) {
+func (self *NNTPConnection) HandleOutbound(d *NNTPDaemon, quarks map[string]string) {
   var err error
   code, line, err := self.txtconn.ReadCodeLine(-1)
   self.info.allowsPosting = code == 200
@@ -57,27 +57,38 @@ func (self *NNTPConnection) HandleOutbound(d *NNTPDaemon) {
     self.Close()
     return
   }
-  // they allow posting
-  // send capabilities command
-  err = self.txtconn.PrintfLine("CAPABILITIES")
-  capreader := bufio.NewReader(self.txtconn.DotReader())
-  
-  // get capabilites
-  for {
-    line, err := capreader.ReadString('\n') 
-    if err != nil {
-      break
+  if quarks != nil {
+    // check for twisted news server quark
+    t, ok := quarks["twisted"]
+    if ok {
+      if t == "1" {
+        // force into stream mode
+        self.info.supportsStream = true
+        self.info.mode = "stream"
+      }
     }
-    line = strings.ToLower(line)
-    if line == "streaming\n" {
-      self.info.supportsStream = true
-    } else if line == "postihavestreaming\n" {
-      self.info.supportsStream = true
-    } else if strings.HasPrefix(line, "500 ") {
-      // fuckit we don't know just send
-      self.info.supportsStream = true
-    } else {
-      // what do now? idk
+  }
+
+  if self.info.mode == "" {
+    // they allow posting
+    // send capabilities command
+    err = self.txtconn.PrintfLine("CAPABILITIES")
+    capreader := bufio.NewReader(self.txtconn.DotReader())
+    
+    // get capabilites
+    for {
+      line, err := capreader.ReadString('\n') 
+      if err != nil {
+      break
+      }
+      line = strings.ToLower(line)
+      if line == "streaming\n" {
+        self.info.supportsStream = true
+      } else if line == "postihavestreaming\n" {
+        self.info.supportsStream = true
+      } else {
+        // wtf now?
+      }
     }
   }
 

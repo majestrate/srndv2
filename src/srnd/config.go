@@ -14,6 +14,7 @@ import (
 
 type FeedConfig struct {
   policy FeedPolicy
+  quarks map[string]string
   addr string
   proxy_type string
   proxy_addr string
@@ -236,6 +237,22 @@ func ReadConfig() *SRNdConfig {
     }
   }
 
+  // feed quarks
+  sections, err = conf.Find("quarks-*")
+  if err == nil {
+    // we have quarks? neat, let's load them
+    // does not check for anything specific
+    for _, sect := range sections {
+      sect_name := sect.Name()[7:]
+      // find the feed for this quark
+      for idx, fconf := range sconf.feeds {
+        if fconf.addr == sect_name {
+          // yup this is the one
+          sconf.feeds[idx].quarks = sect.Options()
+        }
+      }
+    }
+  }
   
   
   return &sconf

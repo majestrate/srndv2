@@ -155,7 +155,7 @@ func (self *NNTPDaemon) persistFeed(conf FeedConfig) {
           log.Println("outfeed end sync")
         }
       }()
-      nntp.HandleOutbound(self)
+      nntp.HandleOutbound(self, conf.quarks)
       log.Println("remove outfeed")
       delete(self.feeds, nntp)
     }

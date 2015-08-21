@@ -111,17 +111,14 @@ func (self *NNTPConnection) post_mode(d *NNTPDaemon) {
     if f == nil {
       continue
     } 
-    self.txtconn.PrintfLine("POST %s", msg_id)
-    var code int
-    code, _, err = self.txtconn.ReadCodeLine(-1)
+    self.txtconn.PrintfLine("POST")
+
+    _ , _, err = self.txtconn.ReadCodeLine(340)
     if err == nil {
-      if code == 340 {
-        // post it
-        w := self.txtconn.DotWriter()
-        _, err = io.Copy(w, f)
-        w.Close()
-      }
-      code, _, err = self.txtconn.ReadCodeLine(240)
+      w := self.txtconn.DotWriter()
+      _, err = io.Copy(w, f)
+      w.Close()
+      _, _, err = self.txtconn.ReadCodeLine(240)
       if err != nil {
         log.Println("failed to send article",msg_id, "via POST", err)
       }

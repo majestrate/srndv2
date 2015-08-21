@@ -73,6 +73,11 @@ func (self *NNTPConnection) HandleOutbound(d *NNTPDaemon) {
       self.info.supportsStream = true
     } else if line == "postihavestreaming\n" {
       self.info.supportsStream = true
+    } else if strings.HasPrefix(line, "500 ") {
+      // fuckit we don't know just send
+      self.info.supportsStream = true
+    } else {
+      // what do now? idk
     }
   }
 

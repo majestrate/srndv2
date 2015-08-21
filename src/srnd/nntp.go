@@ -121,6 +121,8 @@ func (self *NNTPConnection) post_mode(d *NNTPDaemon) {
       _, _, err = self.txtconn.ReadCodeLine(240)
       if err != nil {
         log.Println("failed to send article",msg_id, "via POST", err)
+        self.Quit()
+        return
       }
     }
     f.Close()

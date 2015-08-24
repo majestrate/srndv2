@@ -307,7 +307,6 @@ func (self nntpArticle) Attachments() []NNTPAttachment {
 
 
 func (self nntpArticle) Attach(att NNTPAttachment) NNTPMessage {
-  log.Println("attaching file", att.Filename())
   self.attachments = append(self.attachments, att)
   return self
 }

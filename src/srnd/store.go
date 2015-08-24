@@ -320,7 +320,6 @@ func read_message(r io.Reader) (NNTPMessage, error) {
           hdr := part.Header
           // get content type of part
           part_type := hdr.Get("Content-Type")
-          log.Println("part has content type", part_type)
           // parse content type
           media_type, _, err = mime.ParseMediaType(part_type)
           if err == nil {

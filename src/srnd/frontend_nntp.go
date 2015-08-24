@@ -74,6 +74,7 @@ func (self nntpFrontend) Mainloop() {
 }
 
 func (self nntpFrontend) handle_connection(sock net.Conn) {
+  log.Println("incoming nntp frontend connection", sock.RemoteAddr())
   // wrap the socket
   r := textproto.NewReader(bufio.NewReader(sock))
   w := textproto.NewWriter(bufio.NewWriter(sock))

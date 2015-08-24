@@ -404,7 +404,9 @@ func (self *NNTPDaemon) Init() bool {
   // do we enable the frontend?
   if self.conf.frontend["enable"] == "1" {
     log.Printf("frontend %s enabled", self.conf.frontend["name"]) 
-    self.frontend = NewHTTPFrontend(self, self.conf.frontend) 
+    http_frontend := NewHTTPFrontend(self, self.conf.frontend)
+    nntp_frontend := NewNNTPFrontend(self, self.conf.frontend["nntp"])
+    self.frontend = MuxFrontends(http_frontend, nntp_frontend)
     go self.frontend.Mainloop()
   }
 

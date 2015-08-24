@@ -151,6 +151,16 @@ type Database interface {
   
   // get every newsgroup we know of
   GetAllNewsgroups() []string
+
+  // get all post models in a newsgroup
+  // ordered from oldest to newest
+  GetPostsInGroup(group string) ([]PostModel, error)
+  
+  // get the numerical id of the last , first article for a given group
+  GetLastAndFirstForGroup(group string) (int64, int64, error)
+
+  // get a message id give a newsgroup and the nntp id
+  GetMessageIDForNNTPID(group string, id int64) (string, error)
 }
 
 func NewDatabase(db_type, schema, host, port, user, password string) Database  {

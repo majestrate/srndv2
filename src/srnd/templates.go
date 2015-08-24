@@ -51,6 +51,7 @@ type PostModel interface {
   Board() string
   Sage() bool
   Pubkey() string
+  Reference() string
   
   RenderBody() string
   RenderPost() string

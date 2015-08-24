@@ -77,6 +77,7 @@ type post struct {
   parent string
   sage bool
   pubkey string
+  reference string
   attachments []AttachmentModel
 }
 
@@ -126,6 +127,10 @@ func PostModelFromMessage(parent, prefix string, nntp NNTPMessage) PostModel {
     p.attachments = append(p.attachments, att.ToModel(prefix))
   }
   return p
+}
+
+func (self post) Reference() string {
+  return self.parent
 }
 
 func (self post) ShortHash() string {

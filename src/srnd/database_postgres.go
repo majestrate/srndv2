@@ -103,7 +103,7 @@ func (self PostgresDatabase) CreateTables() {
                              message_id VARCHAR(255) NOT NULL,
                              pubkey VARCHAR(255) NOT NULL
                            )`
-  
+
   // table for thread state
   tables["ArticleThreads"] = `(
                                 newsgroup VARCHAR(255) NOT NULL,
@@ -368,6 +368,21 @@ func (self PostgresDatabase) GetGroupForPage(prefix, frontend, newsgroup string,
     pages: int(pages),
     threads: threads,
   }
+}
+
+
+func (self PostgresDatabase) GetPostsInGroup(newsgroup string) (models []PostModel, err error) {
+
+  rows, err := self.conn.Query("SELECT newsgroup, message_id, ref_id, name, subject, path, time_posted, message FROM ArticlePosts WHERE newsgroup = $1 ORDER BY time_posted", newsgroup)
+  if err == nil {
+    for rows.Next() {
+      model := post{}
+      rows.Scan(&model.board, &model.message_id, &model.parent, &model.name, &model.subject, &model.path, &model.posted, &model.message)
+      models = append(models, model)
+    }
+    rows.Close()
+  }
+  return
 }
 
 func (self PostgresDatabase) GetPostModel(prefix, messageID string) PostModel {
@@ -758,3 +773,23 @@ func (self PostgresDatabase) BanEncAddr(encaddr string) (err error) {
   return
 }
 
+func (self PostgresDatabase) GetLastAndFirstForGroup(group string) (last, first int64, err error) {
+  err = self.conn.QueryRow("SELECT COUNT(message_id) FROM ArticlePosts WHERE newsgroup = $1", group).Scan(&last)
+  if last == 0 {
+    last = 0
+    first = 1
+  } else {
+    last += 1
+    first = 1
+  }
+  return
+}
+
+
+func (self PostgresDatabase) GetMessageIDForNNTPID(group string, id int64) (msgid string, err error) {
+  if id == 0 {
+    id = 1
+  }
+  err = self.conn.QueryRow("SELECT message_id FROM ArticlePosts WHERE newsgroup = $1 ORDER BY time_posted LIMIT 1 OFFSET $2", group, id - 1).Scan(&msgid)
+  return
+}

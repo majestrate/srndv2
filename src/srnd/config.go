@@ -108,6 +108,7 @@ func GenSRNdConfig() error {
   sect.Add("enable", "1")
   sect.Add("allow_files", "1")
   sect.Add("regen_threads", "1")
+  sect.Add("nntp", "[::]:1119")
   sect.Add("bind", "[::]:18000")
   sect.Add("name", "web.srndv2.test")
   sect.Add("webroot", "webroot")

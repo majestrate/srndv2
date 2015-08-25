@@ -545,7 +545,10 @@ func (self httpFrontend) handle_postform(wr http.ResponseWriter, r *http.Request
           // tripcode
           if idx >= 0 {
             tripcode_privkey = parseTripcodeSecret(name[idx+1:])
-            name = name[:idx]
+            name = strings.Trim(name[:idx], "\t ")
+            if name == "" {
+              name = "Anonymous"
+            }
           }
         }
         nntp.headers.Set("From", nntpSanitize(fmt.Sprintf("%s <%s@%s>", name, name, self.name)))

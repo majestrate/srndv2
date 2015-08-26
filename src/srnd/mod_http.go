@@ -15,7 +15,6 @@ import (
   "io"
   "log"
   "net/http"
-  "os"
   "strings"
 )
 
@@ -270,20 +269,8 @@ func (self httpModUI) handleDeletePost(msg ArticleEntry, r *http.Request) map[st
     delmsgs = append(delmsgs, msgid)
     // append mod line to mod message
     mm = append(mm, overchanDelete(msgid))
-    deleted := []string{}
-    report := []string{}
-    // now delete them all
-    for _, delmsgid := range delmsgs {
-      err := self.deletePost(delmsgid)
-      if err == nil {
-        deleted = append(deleted, delmsgid)
-      } else {
-        report = append(report, delmsgid)
-        log.Printf("error when removing %s, %s", delmsgid, err)
-      }
-    }
-    resp["deleted"] = deleted
-    resp["notdeleted"] = report
+    
+    resp["deleted"] = delmsgs
     // only regen threads when we delete a non root port
     if ref != "" {
       group := hdr.Get("Newsgroups", "")
@@ -318,24 +305,7 @@ func (self httpModUI) HandleBanAddress(wr http.ResponseWriter, r *http.Request) 
 func (self httpModUI) HandleDeletePost(wr http.ResponseWriter, r *http.Request) {
   self.asAuthedWithMessage(self.handleDeletePost, wr, r)
 }
-  
-func (self httpModUI) deletePost(msgid string) (err error) {
-  msgfilepath := self.articles.GetFilename(msgid)
-  delfiles := []string{msgfilepath}
-  atts := self.database.GetPostAttachments(msgid)
-  if atts != nil {
-    for _, att := range atts {
-      img := self.articles.AttachmentFilepath(att)
-      thm := self.articles.ThumbnailFilepath(att)
-      delfiles = append(delfiles, img, thm)
-    }
-  }
-  for _ , fpath := range delfiles {
-    log.Printf("remove file %s", fpath)
-    os.Remove(fpath)
-  }
-  return self.database.DeleteArticle(msgid)
-}
+ 
 
 func (self httpModUI) HandleLogin(wr http.ResponseWriter, r *http.Request) {
   privkey := r.FormValue("privkey")

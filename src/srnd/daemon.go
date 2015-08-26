@@ -18,6 +18,7 @@ type NNTPDaemon struct {
   conf *SRNdConfig
   store ArticleStore
   database Database
+  mod ModEngine
   expire ExpirationCore
   listener net.Listener
   debug bool
@@ -264,6 +265,7 @@ func (self *NNTPDaemon) polloutfeeds() {
 
 func (self *NNTPDaemon) pollmessages() {
   var chnl chan NNTPMessage
+  modchnl := self.mod.MessageChan()
   if self.frontend != nil {
     chnl = self.frontend.PostsChan()
   }
@@ -293,6 +295,10 @@ func (self *NNTPDaemon) pollmessages() {
     
     // roll over old content
     self.expire.ExpireGroup(group, rollover)
+    // handle mod events
+    if group == "ctl" {
+      modchnl <- nntp
+    }
     
     // queue to all outfeeds
     // XXX: blocking ?
@@ -358,7 +364,11 @@ func (self *NNTPDaemon) Setup() {
   log.Println("set up article store...")
   self.store = createArticleStore(self.conf.store, self.database)
 
-  
+  self.mod = modEngine{
+    store: self.store,
+    database:  self.database,
+    chnl: make(chan NNTPMessage),
+  }
 }
 
 // bind to address
@@ -420,5 +430,6 @@ func (self *NNTPDaemon) Init() bool {
       log.Printf("failed to add admin mod key, %s", err)
     }
   }
+  go RunModEngine(self.mod)
   return true
 }

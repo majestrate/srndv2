@@ -6,10 +6,12 @@ package srnd
 
 import (
   "bytes"
+  "errors"
   "fmt"
   "io"
   "log"
   "net/http"
+  "os"
   "strings"
 )
 
@@ -92,7 +94,7 @@ func overchanDelete(msgid string) ModEvent {
 
 // create an overchan-inet-ban mod event
 func overchanInetBan(encAddr, key string, expire int64) ModEvent {
-  return simpleModEvent(fmt.Sprintf("overchan-inet-ban %s:%s:%s", encAddr, key, expire))
+  return simpleModEvent(fmt.Sprintf("overchan-inet-ban %s:%s:%d", encAddr, key, expire))
 }
 
 // moderation message
@@ -149,12 +151,81 @@ type ModEngine interface {
 
   // delete post of a poster
   DeletePost(msgid string) error
-  // ban the address of a poster
-  BanPoster(msgid string) error
+  // ban a cidr
+  BanAddress(cidr string) error
   // do we allow this public key to delete?
   AllowDelete(pubkey string) bool
   // do we allow this public key to ban?
   AllowBan(pubkey string) bool
+}
+
+type modEngine struct {
+  database Database
+  store ArticleStore
+  chnl chan NNTPMessage
+}
+
+func (self modEngine) MessageChan() chan NNTPMessage {
+  return self.chnl
+}
+
+func (self modEngine) BanAddress(cidr string) (err error) {
+  return self.database.BanAddr(cidr)
+}
+
+func (self modEngine) DeletePost(msgid string) (err error) {
+  hdr := self.store.GetHeaders(msgid)
+  if hdr == nil {
+    return errors.New("no such message on filesystem: "+msgid)
+  } else {
+    ref := hdr.Get("References", "")
+    var delposts []string
+    if ref == "" {
+      // is root post
+      // delete replies too
+      repls := self.database.GetThreadReplies(msgid, 0)
+      if repls == nil {
+        log.Println("cannot get thread replies for", msgid)
+      } else {
+        delposts = append(delposts, repls...)
+      }
+      // delete thread presence
+      self.database.DeleteThread(msgid)
+    }
+    delposts = append(delposts, msgid)
+    // get list of files to delete
+    var delfiles []string
+    for _, delmsg := range delposts {
+      article := self.store.GetFilename(delmsg)
+      delfiles = append(delfiles, article)
+      // get attachments for post
+      atts := self.database.GetPostAttachments(delmsg)
+      if atts != nil {
+        for _, att := range(atts) {
+          img := self.store.AttachmentFilepath(att)
+          thm := self.store.ThumbnailFilepath(att)
+          delfiles = append(delfiles, img, thm)
+        }
+      }
+      // delete article from database
+      self.database.DeleteArticle(delmsg)
+    }
+    // delete all files
+    for _, f := range delfiles {
+      log.Printf("delete file: %s", f)
+      os.Remove(f)
+    }
+  }
+  return nil
+}
+
+// TODO: permissions
+func (self modEngine) AllowBan(pubkey string) bool {
+  return self.database.CheckModPubkeyGlobal(pubkey)
+}
+// TODO: permissions
+func (self modEngine) AllowDelete(pubkey string) bool {
+  return self.database.CheckModPubkeyGlobal(pubkey)
 }
 
 // run a mod engine logic mainloop
@@ -172,19 +243,32 @@ func RunModEngine(mod ModEngine) {
         for _, line := range strings.Split(inner_nntp.Message(), "\n") {
           ev := ParseModEvent(line)
           action := ev.Action()
-
           if action == "delete" {
             msgid := ev.Target()
             // this is a delete action
             if mod.AllowDelete(pubkey) {
-              
+              mod.DeletePost(msgid)
             } else {
-              log.Println("pubkey=%s will not delete %s not trusted", pubkey, msgid)
+              log.Printf("pubkey=%s will not delete %s not trusted", pubkey, msgid)
+            }
+          } else if action == "overchan-inet-ban" {
+            // ban action
+            target := ev.Target()
+            parts := strings.Split(target, ":")
+            if len(parts) == 3 {
+              encaddr, key := parts[0], parts[1]
+              cidr := decAddr(encaddr, key)
+              if cidr == "" {
+                log.Println("failed to decrypt inet ban")
+              } else if mod.AllowBan(pubkey) {
+                mod.BanAddress(cidr)
+              }
+            } else {
+              log.Printf("invalid overchan-inet-ban: target=%s", target)
             }
           }
         }
       }
     }
-  }
-  
+  }  
 }

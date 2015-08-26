@@ -41,9 +41,8 @@ func (self httpModUI) CheckKey(privkey string) (bool, error) {
     pubkey_bytes := nacl.GetSignPubkey(privkey_bytes)
     if pubkey_bytes != nil {
       pubkey := hex.EncodeToString(pubkey_bytes)
-      if self.database.CheckModPubkey(pubkey) {
-        return true, nil
-      } else if self.database.CheckModPubkeyGlobal(pubkey) {
+      if self.database.CheckModPubkeyGlobal(pubkey) {
+        // this user is an admin
         return true, nil
       } else {
         return false, nil

@@ -358,6 +358,13 @@ func (self *NNTPConnection) HandleInbound(d *NNTPDaemon) {
                 } else if strings.HasPrefix(lower_line, "x-signature-ed25519-sha512: ") {
                   is_signed = true
                   has_attachment = true
+                } else if strings.HasPrefix(lower_line, "references: ") {
+                  reference := line[12:]
+                  if d.database.IsExpired(reference) {
+                    code = 438
+                    message = "this article belongs to an expired root post"
+                    read_more = false
+                  }
                 }
               }
               if read_more {

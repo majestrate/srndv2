@@ -263,14 +263,32 @@ func (self httpFrontend) regenUkko() {
 // TODO: don't load from store
 func (self httpFrontend) regenerateThread(rootMessageID string) {
   // get the root post
-  post := self.daemon.database.GetPostModel(self.prefix, rootMessageID)
-  if post == nil {
-    log.Println("failed to regen thread, root post is nil", rootMessageID)
-    return
-  }
-  posts := []PostModel{post}
-  // get replies
-  if self.daemon.database.ThreadHasReplies(rootMessageID) {
+  var posts []PostModel
+  op := self.daemon.database.GetPostModel(self.prefix, rootMessageID)
+  // get op if null get placeholder
+  if op == nil {
+    log.Println("no root post for", rootMessageID)
+    repls := self.daemon.database.GetThreadReplyPostModels(self.prefix, rootMessageID, 0)
+    if repls == nil {
+      // wtf do we do? idk
+      log.Println("no replies for? wtf", rootMessageID)
+      return
+    } else {
+      posts = append(posts, post{
+        prefix: self.prefix,
+        subject: "[no root post yet]",
+        message: "this is a placeholder for "+rootMessageID,
+        message_id: rootMessageID,
+        name: "???",
+        path: "missing.frontend",
+        board: repls[0].Board(),
+      })
+      posts = append(posts, repls...)
+      op = posts[0]
+    }
+  } else {
+    posts = append(posts, op)
+    if self.daemon.database.ThreadHasReplies(rootMessageID) {
     repls :=  self.daemon.database.GetThreadReplyPostModels(self.prefix, rootMessageID, 0)
     if repls == nil {
       log.Println("failed to regen thread, replies was nil for op", rootMessageID)
@@ -278,10 +296,12 @@ func (self httpFrontend) regenerateThread(rootMessageID string) {
     }
     posts = append(posts, repls...)
   }
+
+  }
   // the link that points back to the board index
   back_link := linkModel{
     text: "back to board index",
-    link: fmt.Sprintf("%s%s-0.html", self.prefix, post.Board()),
+    link: fmt.Sprintf("%s%s-0.html", self.prefix, op.Board()),
   }
   // the links for this thread
   links := []LinkModel{back_link}

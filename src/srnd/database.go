@@ -29,6 +29,9 @@ type Database interface {
   GetAllArticlesInGroup(group string, send chan string)
   GetAllArticles() []ArticleEntry
 
+  // return true if this is root post has expired
+  IsExpired(root_message_id string) bool
+  
   // get an article's MessageID given the hash of the MessageID
   // return an article entry or nil when it doesn't exist + and error if it happened
   GetMessageIDByHash(hash string) (ArticleEntry, error)
@@ -103,6 +106,12 @@ type Database interface {
 
   // check if a mod with this pubkey can moderate on the given newsgroup
   CheckModPubkeyCanModGroup(pubkey, newsgroup string) bool
+
+  // add a pubkey to be able to mod a newsgroup
+  MarkModPubkeyCanModGroup(pubkey, newsgroup string) error
+  
+  // remote a pubkey to they can't mod a newsgroup
+  UnMarkModPubkeyCanModGroup(pubkey, newsgroup string) error
   
   // ban an article
   BanArticle(messageID, reason string) error

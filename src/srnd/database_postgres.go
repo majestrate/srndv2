@@ -162,7 +162,6 @@ func (self PostgresDatabase) AddModPubkey(pubkey string) error {
     return nil
   }
   _, err := self.conn.Exec("INSERT INTO ModPrivs(pubkey, newsgroup, permission) VALUES ( $1, $2, $3 )", pubkey, "ctl", "login")
-  // TODO: modlogs
   return err
 }
 
@@ -785,11 +784,24 @@ func (self PostgresDatabase) GetLastAndFirstForGroup(group string) (last, first 
   return
 }
 
-
 func (self PostgresDatabase) GetMessageIDForNNTPID(group string, id int64) (msgid string, err error) {
   if id == 0 {
     id = 1
   }
   err = self.conn.QueryRow("SELECT message_id FROM ArticlePosts WHERE newsgroup = $1 ORDER BY time_posted LIMIT 1 OFFSET $2", group, id - 1).Scan(&msgid)
   return
+}
+
+func (self PostgresDatabase) MarkModPubkeyCanModGroup(pubkey, group string) (err error) {
+  _, err = self.conn.Exec("INSERT INTO ModPrivs(pubkey, newsgroup) VALUES($1, $2)", pubkey, group)
+  return
+}
+
+func (self PostgresDatabase) UnMarkModPubkeyCanModGroup(pubkey, group string) (err error) {
+  _, err = self.conn.Exec("DELETE FROM ModPrivs WHERE pubkey = $1 AND newsgroup = $2", pubkey, group)
+  return
+}
+
+func (self PostgresDatabase) IsExpired(root_message_id string) bool {
+  return self.HasArticle(root_message_id) && ! self.HasArticleLocal(root_message_id)
 }

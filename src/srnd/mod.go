@@ -8,6 +8,7 @@ import (
   "bytes"
   "fmt"
   "io"
+  "log"
   "net/http"
   "strings"
 )
@@ -138,4 +139,52 @@ func wrapModMessage(mm ModMessage) NNTPMessage {
   str := buff.String()
   nntp.message = createPlaintextAttachment(str[:len(str)-2])
   return nntp
+}
+
+
+type ModEngine interface {
+  // chan to send the mod engine posts
+  // assumes ctl newsgroup only
+  MessageChan() chan NNTPMessage
+
+  // delete post of a poster
+  DeletePost(msgid string) error
+  // ban the address of a poster
+  BanPoster(msgid string) error
+  // do we allow this public key to delete?
+  AllowDelete(pubkey string) bool
+  // do we allow this public key to ban?
+  AllowBan(pubkey string) bool
+}
+
+// run a mod engine logic mainloop
+func RunModEngine(mod ModEngine) {
+  
+  chnl := mod.MessageChan()
+  for {
+    nntp := <- chnl
+    // sanity check
+    if nntp.Newsgroup() == "ctl" {
+      inner_nntp := nntp.Signed()
+      if inner_nntp != nil {
+        // okay this message should be good
+        pubkey := nntp.Pubkey()
+        for _, line := range strings.Split(inner_nntp.Message(), "\n") {
+          ev := ParseModEvent(line)
+          action := ev.Action()
+
+          if action == "delete" {
+            msgid := ev.Target()
+            // this is a delete action
+            if mod.AllowDelete(pubkey) {
+              
+            } else {
+              log.Println("pubkey=%s will not delete %s not trusted", pubkey, msgid)
+            }
+          }
+        }
+      }
+    }
+  }
+  
 }

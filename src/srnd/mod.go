@@ -241,13 +241,17 @@ func RunModEngine(mod ModEngine) {
         // okay this message should be good
         pubkey := nntp.Pubkey()
         for _, line := range strings.Split(inner_nntp.Message(), "\n") {
+          line = strings.Trim(line, "\r\t\n")
           ev := ParseModEvent(line)
           action := ev.Action()
           if action == "delete" {
             msgid := ev.Target()
             // this is a delete action
             if mod.AllowDelete(pubkey) {
-              mod.DeletePost(msgid)
+              err := mod.DeletePost(msgid)
+              if err != nil {
+                log.Println(msgid, err)
+              }
             } else {
               log.Printf("pubkey=%s will not delete %s not trusted", pubkey, msgid)
             }
@@ -261,7 +265,10 @@ func RunModEngine(mod ModEngine) {
               if cidr == "" {
                 log.Println("failed to decrypt inet ban")
               } else if mod.AllowBan(pubkey) {
-                mod.BanAddress(cidr)
+                err := mod.BanAddress(cidr)
+                if err != nil {
+                  log.Println(cidr, err)
+                }
               }
             } else {
               log.Printf("invalid overchan-inet-ban: target=%s", target)

@@ -75,24 +75,23 @@ func (self expire) ExpireGroup(newsgroup string, keep int) {
 
 func (self expire) Mainloop() {
   for {
-    select {
-    case ev := <- self.delChan:
-      atts := self.database.GetPostAttachments(ev.MessageID())
-      // remove all attachments
-      if atts != nil {
-        for _, att := range atts {
-          img := self.store.AttachmentFilepath(att)
-          os.Remove(img)
+    ev := <- self.delChan
+    atts := self.database.GetPostAttachments(ev.MessageID())
+    // remove all attachments
+    if atts != nil {
+      for _, att := range atts {
+        img := self.store.AttachmentFilepath(att)
+        os.Remove(img)
           thm := self.store.ThumbnailFilepath(att)
-          os.Remove(thm)
-        }
+        os.Remove(thm)
       }
-      // remove article
-      os.Remove(ev.Path())
-      err := self.database.DeleteArticle(ev.MessageID())
-      if err != nil {
-        log.Println("failed to delete article", err)
-      }
+    }
+    // remove article
+    os.Remove(ev.Path())
+    log.Println("expire")
+    err := self.database.DeleteArticle(ev.MessageID())
+    if err != nil {
+      log.Println("failed to delete article", err)
     }
   }
 }

@@ -222,7 +222,7 @@ func (self *NNTPConnection) HandleInbound(d *NNTPDaemon) {
   
   // intitiate handshake
   var err error
-  self.info.mode = "STREAM"
+  self.info.mode = "stream"
   log.Println("Incoming nntp connection from", self.conn.RemoteAddr())
   // send welcome
   greet := "2nd generation overchan NNTP Daemon posting allowed"
@@ -359,7 +359,7 @@ func (self *NNTPConnection) HandleInbound(d *NNTPDaemon) {
                   is_signed = true
                   has_attachment = true
                 } else if strings.HasPrefix(lower_line, "references: ") {
-                  reference := line[12:]
+                  reference := strings.Trim(line[12:]," \t\r\n")
                   if d.database.IsExpired(reference) {
                     code = 438
                     message = "this article belongs to an expired root post"

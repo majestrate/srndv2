@@ -221,7 +221,7 @@ func (self post) RenderPost() string {
 
 func (self post) Truncate(amount int) PostModel {
   if len(self.message) > amount && amount > 0 {
-    self.message = self.message[:amount]
+    self.message = self.message[:amount] + "\n...\n"
   }
   return self
 }

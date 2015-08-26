@@ -239,7 +239,7 @@ func RunModEngine(mod ModEngine) {
       inner_nntp := nntp.Signed()
       if inner_nntp != nil {
         // okay this message should be good
-        pubkey := nntp.Pubkey()
+        pubkey := inner_nntp.Pubkey()
         for _, line := range strings.Split(inner_nntp.Message(), "\n") {
           ev := ParseModEvent(line)
           action := ev.Action()

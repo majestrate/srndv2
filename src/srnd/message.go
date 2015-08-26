@@ -190,7 +190,7 @@ func (self nntpArticle) WriteTo(wr io.Writer, delim string) (err error) {
 }
   
 func (self nntpArticle) Pubkey() string {
-  return self.headers.Get("X-Pubkey-Ed25519", "")
+  return self.headers.Get("X-PubKey-Ed25519", self.headers.Get("X-Pubkey-Ed25519" , ""))
 }
 
 func (self nntpArticle) Signed() NNTPMessage {

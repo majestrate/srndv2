@@ -353,7 +353,7 @@ func read_message(r io.Reader) (NNTPMessage, error) {
     } else if media_type == "message/rfc822" {
       // tripcoded message
       sig := nntp.headers.Get("X-Signature-Ed25519-Sha512", "")
-      pk := nntp.headers.Get("X-Pubkey-Ed25519", "")
+      pk := nntp.Pubkey()
       if pk == "" || sig == "" {
         log.Println("invalid sig or pubkey", sig, pk)
         return nil, errors.New("invalid headers")

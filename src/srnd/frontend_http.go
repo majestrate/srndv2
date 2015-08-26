@@ -138,6 +138,7 @@ func (self httpFrontend) regenerateBoardPage(newsgroup string, pageno int) {
     return
   }
   fname := self.getFilenameForBoardPage(newsgroup, pageno)
+  log.Println("regen page", fname)
   wr, err := OpenFileWriter(fname)
   if err == nil {
     err = board_page.RenderTo(wr)
@@ -174,6 +175,7 @@ func (self boardPageRows) Swap(i, j int) {
 // regenerate the main index.html with boards list
 // TODO: optimize
 func (self httpFrontend) regenFrontPage() {
+  log.Println("regen front page")
   // the graph for the front page
   var frontpage_graph boardPageRows
 
@@ -221,6 +223,7 @@ func (self httpFrontend) regenFrontPage() {
 
 // regenerate the ukko page
 func (self httpFrontend) regenUkko() {
+  log.Println("regen ukko")
   // get the last 5 bumped threads
   roots := self.daemon.database.GetLastBumpedThreads("", 5)
   var threads []ThreadModel
@@ -313,6 +316,7 @@ func (self httpFrontend) regenerateThread(rootMessageID string) {
   }
   // get filename for thread
   fname := self.getFilenameForThread(rootMessageID)
+  log.Println("regen page", fname)
   // open writer for file
   wr, err := OpenFileWriter(fname)
   if err != nil {

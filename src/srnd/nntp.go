@@ -300,7 +300,7 @@ func (self *NNTPConnection) HandleInbound(d *NNTPDaemon) {
                   ip_banned, err = d.database.CheckEncIPBanned(ip_header)
                   if err == nil {
                     if ip_banned {
-                      code = 438
+                      code = 439
                       read_more = false
                       message = "poster is banned"
                     }
@@ -314,13 +314,13 @@ func (self *NNTPConnection) HandleInbound(d *NNTPDaemon) {
                   // do we want tor posts with attachments?
                   if has_attachment && ! self.allow_tor_attachments {
                     // this guy is banned
-                    code = 438
+                    code = 439
                     read_more = false
                     message = "we do not take attachments from tor"
                   }
                 } else {
                   // we don'e want it
-                  code = 438
+                  code = 439
                   message = "we do not take anonymous posts"
                   read_more = false
                 }
@@ -339,14 +339,14 @@ func (self *NNTPConnection) HandleInbound(d *NNTPDaemon) {
                     newsgroup := line[12:]
                     if ! newsgroupValidFormat(newsgroup) {
                       // bad newsgroup
-                      code = 438
+                      code = 439
                       message = "invalid newsgroup"
                     }
                   }
                 } else if strings.HasPrefix(lower_line, "x-tor-poster: 1") {
                   if ! self.allow_tor {
                     // we don't want this post
-                    code = 438
+                    code = 439
                     message = "we do not take anonymous posts"
                     read_more = false
                   }
@@ -361,7 +361,7 @@ func (self *NNTPConnection) HandleInbound(d *NNTPDaemon) {
                 } else if strings.HasPrefix(lower_line, "references: ") {
                   reference := strings.Trim(line[12:]," \t\r\n")
                   if d.database.IsExpired(reference) {
-                    code = 438
+                    code = 439
                     message = "this article belongs to an expired root post"
                     read_more = false
                   }
@@ -390,7 +390,7 @@ func (self *NNTPConnection) HandleInbound(d *NNTPDaemon) {
               DelFile(fname)
             }
           } else {
-            self.txtconn.PrintfLine("438 %s invalid message-id", article)
+            self.txtconn.PrintfLine("439 %s invalid message-id", article)
           }
         }
       }

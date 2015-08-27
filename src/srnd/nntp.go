@@ -307,7 +307,7 @@ func (self *NNTPConnection) HandleInbound(d *NNTPDaemon) {
                   } else {
                     log.Println("cannot check for banned encrypted ip", err)
                     // send it later
-                    code = 431
+                    code = 439
                     message = "could be banned by us but we do not know"
                   }
                 } else if self.allow_tor {
@@ -380,9 +380,6 @@ func (self *NNTPConnection) HandleInbound(d *NNTPDaemon) {
               log.Println(self.conn.RemoteAddr(), "got article", article)
               // inform daemon
               d.infeed_load <- article
-            } else if code == 431 {
-              // defer
-              log.Println("defering receival, keeping article in tmp dir:", article)
             } else {
               // delete unaccepted article
               log.Println("did not accept", article)

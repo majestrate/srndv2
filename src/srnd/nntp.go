@@ -307,7 +307,7 @@ func (self *NNTPConnection) HandleInbound(d *NNTPDaemon) {
                 } else {
                   log.Println("cannot check for banned encrypted ip", err)
                   // send it later
-                  code = 439
+                  code = 400
                   message = "could be banned by us but we do not know"
                 }
               } else if self.allow_tor {
@@ -334,6 +334,7 @@ func (self *NNTPConnection) HandleInbound(d *NNTPDaemon) {
             } else if ! headers_done {
               lower_line := strings.ToLower(line)
               // newsgroup header
+              // TODO: check feed policy if we allow this
               if strings.HasPrefix(lower_line, "newsgroups: ") {
                 if len(newsgroup) == 0 {
                   newsgroup := line[12:]
@@ -382,7 +383,7 @@ func (self *NNTPConnection) HandleInbound(d *NNTPDaemon) {
             d.infeed_load <- article
           } else {
             // delete unaccepted article
-            log.Println("did not accept", article)
+            log.Println("did not accept", article, code)
             fname := d.store.GetTempFilename(article)
             DelFile(fname)
           }

@@ -6,6 +6,7 @@ package srnd
 import (
   "bufio"
   "io"
+  "io/ioutil"
   "log"
   "net"
   "net/textproto"
@@ -273,126 +274,129 @@ func (self *NNTPConnection) HandleInbound(d *NNTPDaemon) {
     } else if self.info.mode == "stream" { // we are in stream mode
       if cmd == "TAKETHIS" {
         var newsgroup string
-        if len(commands) == 2 {
+        if len(commands) == 2 && ValidMessageID(commands[1]) {
           article := commands[1]
-          if ValidMessageID(article) {
-            code := 239
-            file := d.store.CreateTempFile(article)
-            ip_header := ""
-            ip_banned := false
-            headers_done := false
-            read_more := true
-            has_attachment := false
-            is_signed := false
-            message := "we are gud"
-            for {
-              var line string
-              line, err = self.ReadLine()
-              if err != nil {
-                log.Println("error reading", article, err)
-                break
-              }
-
-              if line == "" && ! headers_done {
-                // headers done
-                headers_done = true
-                if len(ip_header) > 0 {
-                  ip_banned, err = d.database.CheckEncIPBanned(ip_header)
-                  if err == nil {
-                    if ip_banned {
-                      code = 439
-                      read_more = false
-                      message = "poster is banned"
-                    }
-                  } else {
-                    log.Println("cannot check for banned encrypted ip", err)
-                    // send it later
-                    code = 439
-                    message = "could be banned by us but we do not know"
-                  }
-                } else if self.allow_tor {
-                  // do we want tor posts with attachments?
-                  if has_attachment && ! self.allow_tor_attachments {
-                    // this guy is banned
+          code := 239
+          file := d.store.CreateTempFile(article)
+          ip_header := ""
+          ip_banned := false
+          headers_done := false
+          read_more := true
+          has_attachment := false
+          is_signed := false
+          message := "we are gud"
+          for {
+            var line string
+            line, err = self.ReadLine()
+            if err != nil {
+              log.Println("error reading", article, err)
+              break
+            }
+            
+            if line == "" && ! headers_done {
+              // headers done
+              headers_done = true
+              if len(ip_header) > 0 {
+                ip_banned, err = d.database.CheckEncIPBanned(ip_header)
+                if err == nil {
+                  if ip_banned {
                     code = 439
                     read_more = false
-                    message = "we do not take attachments from tor"
+                    message = "poster is banned"
                   }
                 } else {
-                  // we don'e want it
+                  log.Println("cannot check for banned encrypted ip", err)
+                  // send it later
+                  code = 439
+                  message = "could be banned by us but we do not know"
+                }
+              } else if self.allow_tor {
+                // do we want tor posts with attachments?
+                if has_attachment && ! self.allow_tor_attachments {
+                  // this guy is banned
+                  code = 439
+                  read_more = false
+                  message = "we do not take attachments from tor"
+                }
+              } else {
+                // we don'e want it
+                code = 439
+                message = "we do not take anonymous posts"
+                read_more = false
+              }
+              if is_signed {
+                log.Println("we got a signed message")
+              }
+            }
+            
+            if line == "." {
+              break
+            } else if ! headers_done {
+              lower_line := strings.ToLower(line)
+              // newsgroup header
+              if strings.HasPrefix(lower_line, "newsgroups: ") {
+                if len(newsgroup) == 0 {
+                  newsgroup := line[12:]
+                  if ! newsgroupValidFormat(newsgroup) {
+                    // bad newsgroup
+                    code = 439
+                    message = "invalid newsgroup"
+                  }
+                }
+              } else if strings.HasPrefix(lower_line, "x-tor-poster: 1") {
+                if ! self.allow_tor {
+                  // we don't want this post
                   code = 439
                   message = "we do not take anonymous posts"
                   read_more = false
                 }
-                if is_signed {
-                  log.Println("we got a signed message")
+              } else if strings.HasPrefix(lower_line, "x-encrypted-ip: ") {
+                ip_header = strings.Split(line, " ")[1]
+                ip_header = strings.Trim(line, " \t\r\n")
+              } else if strings.HasPrefix(lower_line, "content-type: multipart") {
+                has_attachment = true
+              } else if strings.HasPrefix(lower_line, "x-signature-ed25519-sha512: ") {
+                is_signed = true
+                has_attachment = true
+              } else if strings.HasPrefix(lower_line, "references: ") {
+                reference := strings.Trim(line[12:]," \t\r\n")
+                if d.database.IsExpired(reference) {
+                  code = 439
+                  message = "this article belongs to an expired root post"
+                  read_more = false
                 }
               }
-              
-              if line == "." {
-                break
-              } else if ! headers_done {
-                lower_line := strings.ToLower(line)
-                // newsgroup header
-                if strings.HasPrefix(lower_line, "newsgroups: ") {
-                  if len(newsgroup) == 0 {
-                    newsgroup := line[12:]
-                    if ! newsgroupValidFormat(newsgroup) {
-                      // bad newsgroup
-                      code = 439
-                      message = "invalid newsgroup"
-                    }
-                  }
-                } else if strings.HasPrefix(lower_line, "x-tor-poster: 1") {
-                  if ! self.allow_tor {
-                    // we don't want this post
-                    code = 439
-                    message = "we do not take anonymous posts"
-                    read_more = false
-                  }
-                } else if strings.HasPrefix(lower_line, "x-encrypted-ip: ") {
-                  ip_header = strings.Split(line, " ")[1]
-                  ip_header = strings.Trim(line, " \t\r\n")
-                } else if strings.HasPrefix(lower_line, "content-type: multipart") {
-                  has_attachment = true
-                } else if strings.HasPrefix(lower_line, "x-signature-ed25519-sha512: ") {
-                  is_signed = true
-                  has_attachment = true
-                } else if strings.HasPrefix(lower_line, "references: ") {
-                  reference := strings.Trim(line[12:]," \t\r\n")
-                  if d.database.IsExpired(reference) {
-                    code = 439
-                    message = "this article belongs to an expired root post"
-                    read_more = false
-                  }
-                }
-              }
-              if read_more {
-                file.Write([]byte(line))
-                file.Write([]byte("\n")) 
-              }
             }
-            file.Close()
-            // tell them our result
-            self.txtconn.PrintfLine("%d %s %s", code, article, message)
-            // the send was good
-            if code == 239 {
-              log.Println(self.conn.RemoteAddr(), "got article", article)
-              // inform daemon
-              d.infeed_load <- article
-            } else {
-              // delete unaccepted article
-              log.Println("did not accept", article)
-              fname := d.store.GetTempFilename(article)
-              DelFile(fname)
+            if read_more {
+              file.Write([]byte(line))
+              file.Write([]byte("\n")) 
             }
+          }
+          file.Close()
+          // tell them our result
+          self.txtconn.PrintfLine("%d %s %s", code, article, message)
+          // the send was good
+          if code == 239 {
+            log.Println(self.conn.RemoteAddr(), "got article", article)
+            // inform daemon
+            d.infeed_load <- article
           } else {
-            self.txtconn.PrintfLine("439 %s invalid message-id", article)
+            // delete unaccepted article
+            log.Println("did not accept", article)
+            fname := d.store.GetTempFilename(article)
+            DelFile(fname)
+          }
+        } else {
+          // discard
+          dr := self.txtconn.DotReader()
+          io.Copy(ioutil.Discard, dr)
+          if len(commands) == 2 {
+            self.txtconn.PrintfLine("439 %s invalid message-id", commands[1])
+          } else {
+            self.txtconn.PrintfLine("439 no message id")
           }
         }
-      }
-      // check command
-      if cmd == "CHECK" {
+      } else if cmd == "CHECK" {
         if len(commands) == 2 {
           // check syntax
           // send error if needed
@@ -411,7 +415,13 @@ func (self *NNTPConnection) HandleInbound(d *NNTPDaemon) {
             // tell them to send it
             self.txtconn.PrintfLine("238 %s we want this article please give it", article)
           }
+        } else {
+          // incorrect format for CHECK
+          self.txtconn.PrintfLine("500 syntax error")
         }
+      } else {
+        // unknown command
+        self.txtconn.PrintfLine("500 we don't know command %s", cmd)
       }
     }
   }

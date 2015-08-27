@@ -194,6 +194,18 @@ func (self nntpFrontend) handle_connection(sock net.Conn) {
     } else if strings.HasPrefix(lline, "mode ") {
       // handle other mode
       w.PrintfLine("%d mode not implemented", 501)
+    } else if lline == "capabilities" {
+      // send capabilities
+      dw := w.DotWriter()
+      io.WriteString(dw, "101 yeh we can do stuff\r\n")
+      io.WriteString(dw, "VERSION 2\r\n")
+      io.WriteString(dw, "IMPLEMENTATION srndv2 nntp frontend\r\n")
+      io.WriteString(dw, "READER\r\n")
+      dw.Close()
+    } else {
+      // idk what command this is, log it and report error
+      log.Println("invalid line from nntp frontend connection:",line)
+      w.PrintfLine("500 idk what that means")
     }
   }
   sock.Close()

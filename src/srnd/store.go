@@ -5,13 +5,14 @@
 package srnd
 
 import (
-
+  "github.com/streadway/amqp"
   "github.com/majestrate/srndv2/src/nacl"
   "github.com/gographics/imagick/imagick"
   "bufio"
   "bytes"
   "crypto/sha512"
   "errors"
+  "fmt"
   "io"
   "log"
   "mime"
@@ -59,9 +60,11 @@ type articleStore struct {
   attachments string
   thumbs string
   database Database
+  r_conn *amqp.Connection
+  r_chnl *amqp.Channel
 }
 
-func createArticleStore(config map[string]string, database Database) ArticleStore {
+func createArticleStore(config map[string]string, rmq_url string, database Database) ArticleStore {
   store := articleStore{
     directory: config["store_dir"],
     temp: config["incoming_dir"],
@@ -70,6 +73,13 @@ func createArticleStore(config map[string]string, database Database) ArticleStor
     database: database,
   }
   store.Init()
+  if rmq_url != "" {
+    var err error
+    store.r_conn, store.r_chnl, err = rabbitConnect(rmq_url)
+    if err != nil {
+      log.Fatal("failed to connect to rabbitmq message broker", err)
+    }
+  }
   return store
 }
 
@@ -85,8 +95,8 @@ func (self articleStore) Init() {
   EnsureDir(self.thumbs)
 }
 
-
-func (self articleStore) GenerateThumbnail(infname string) (err error) {
+// generate thumbnail in same process
+func (self articleStore) generateThumbnail(infname string) (err error) {
   wand := imagick.NewMagickWand()
   // read image source
   err = wand.ReadImage(self.AttachmentFilepath(infname))
@@ -97,7 +107,7 @@ func (self articleStore) GenerateThumbnail(infname string) (err error) {
 
     // calculate scale parameters
     var scale, th, tw float64 
-    scale = 180
+    scale = 200
     modifier := scale / float64(w)
     th = modifier * float64(h)
     tw = modifier * float64(w)
@@ -110,6 +120,30 @@ func (self articleStore) GenerateThumbnail(infname string) (err error) {
   // explicitly destroy
   wand.Destroy()
   return
+}
+
+// queue thumbnail generation to rabbitmq
+func (self articleStore) queueGenerateThumbnail(infname string) (err error) {
+  log.Println("queue file for thumbnailing", infname)
+  err = self.r_chnl.Publish(
+    rabbit_exchange,
+    "",
+    false,
+    false,
+    amqp.Publishing{
+      ContentType: "text/plain",
+      Body: []byte(fmt.Sprintf("%s %s",self.AttachmentFilepath(infname), self.ThumbnailFilepath(infname))),
+      
+    })
+  return err
+}
+
+func (self articleStore) GenerateThumbnail(infname string) (err error) {
+  if self.r_conn == nil {
+    return self.generateThumbnail(infname)
+  } else {
+    return self.queueGenerateThumbnail(infname)
+  }
 }
 
 func (self articleStore) ReadMessage(r io.Reader) (NNTPMessage, error) {
@@ -166,14 +200,10 @@ func (self articleStore) saveAttachment(att NNTPAttachment) {
   
   // generate thumbanils
   if att.NeedsThumbnail() {
-    // fork it
-    go func() {
-      err = self.GenerateThumbnail(fpath)
-      if err != nil {
-        log.Println("failed to generate thumbnail", err)
-        
-      }
-    }()
+    err = self.GenerateThumbnail(fpath)
+    if err != nil {
+      log.Println("failed to generate thumbnail", err) 
+    }
   }
 }
 

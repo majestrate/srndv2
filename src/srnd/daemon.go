@@ -360,9 +360,11 @@ func (self *NNTPDaemon) Setup() {
   log.Println("ensure that the database is created...")
   self.database.CreateTables()
 
+  r_url := self.conf.worker["url"]
+  
   // set up store
   log.Println("set up article store...")
-  self.store = createArticleStore(self.conf.store, self.database)
+  self.store = createArticleStore(self.conf.store, r_url, self.database)
 
   self.mod = modEngine{
     store: self.store,

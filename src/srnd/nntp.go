@@ -217,6 +217,16 @@ func (self *NNTPConnection) SendMessage(msgid string, msg io.Reader, d *NNTPDaem
   return nil
 }
 
+func (self *NNTPConnection) ReadLine() (string, error) {
+  b, err := self.txtconn.ReadLineBytes()
+  var line string
+  if err == nil {
+    line = string(b)
+    b = nil
+  }
+  return line, err
+}
+
 // handle inbound connection
 func (self *NNTPConnection) HandleInbound(d *NNTPDaemon) {
 
@@ -272,6 +282,8 @@ func (self *NNTPConnection) HandleInbound(d *NNTPDaemon) {
       
       self.txtconn.PrintfLine("%d %s", code, msg)
     } else if self.info.mode == "stream" { // we are in stream mode
+      // clear reference
+      line = ""
       if cmd == "TAKETHIS" {
         var newsgroup string
         if len(commands) == 2 && ValidMessageID(commands[1]) {
@@ -286,13 +298,11 @@ func (self *NNTPConnection) HandleInbound(d *NNTPDaemon) {
           is_signed := false
           message := "we are gud"
           for {
-            var line string
-            line, err = self.ReadLine()
             if err != nil {
               log.Println("error reading", article, err)
               break
             }
-            
+            line , err := self.ReadLine()
             if line == "" && ! headers_done {
               // headers done
               headers_done = true
@@ -328,8 +338,8 @@ func (self *NNTPConnection) HandleInbound(d *NNTPDaemon) {
                 log.Println("we got a signed message")
               }
             }
-            
             if line == "." {
+              line = ""
               break
             } else if ! headers_done {
               lower_line := strings.ToLower(line)
@@ -372,6 +382,7 @@ func (self *NNTPConnection) HandleInbound(d *NNTPDaemon) {
               file.Write([]byte(line))
               file.Write([]byte("\n")) 
             }
+            line = ""
           }
           file.Close()
           // tell them our result
@@ -444,18 +455,6 @@ func (self *NNTPConnection) Quit() {
     self.txtconn.PrintfLine("QUIT")
   }
   self.Close()
-}
-
-func (self *NNTPConnection) ReadLine() (string, error) {
-  line, err := self.txtconn.ReadLine()
-  if err != nil {
-    log.Println("error reading line in feed", err)
-    return "", err
-  }
-  if self.debug {
-    log.Println(self.conn.RemoteAddr(), "recv line", line)
-  }
-  return line, nil
 }
 
 // close the connection

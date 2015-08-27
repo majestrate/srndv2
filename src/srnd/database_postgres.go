@@ -647,8 +647,6 @@ func (self PostgresDatabase) RegisterArticle(message NNTPMessage) {
     log.Println("failed to update newsgroup last post", err)
     return
   }
-  
-  
   // insert article post
   _, err = self.conn.Exec("INSERT INTO ArticlePosts(newsgroup, message_id, ref_id, name, subject, path, time_posted, message) VALUES($1, $2, $3, $4, $5, $6, $7, $8)", group, msgid, message.Reference(), message.Name(), message.Subject(), message.Path(), message.Posted(), message.Message())
   if err != nil {

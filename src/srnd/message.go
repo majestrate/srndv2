@@ -145,9 +145,9 @@ func signArticle(nntp NNTPMessage, privkey []byte) (signed nntpArticle, err erro
       signed.headers.Set(k, v)
     }
   }
-  var signbuff bytes.Buffer
+  signbuff := new(bytes.Buffer)
   // write body to sign buffer
-  err = nntp.WriteTo(&signbuff, "\r\n")
+  err = nntp.WriteTo(signbuff, "\r\n")
   if err == nil {
     // get public key
     pk := getSignPubkey(privkey)
@@ -160,7 +160,7 @@ func signArticle(nntp NNTPMessage, privkey []byte) (signed nntpArticle, err erro
     signed.headers.Set("X-PubKey-Ed25519", pk)
   }
   // copy sign buffer into signed part
-  _, err = io.Copy(&signed.signedPart.body, &signbuff)
+  _, err = io.Copy(&signed.signedPart.body, signbuff)
   // add this so the writer writes the entire post
   signed.signedPart.body.Write([]byte{13,10})
   return 
@@ -290,7 +290,7 @@ func (self nntpArticle) AppendPath(part string) NNTPMessage {
 }
 func (self nntpArticle) ContentType() string {
   // assumes text/plain if unspecified
-  return self.headers.Get("Content-Type", "text/plain")
+  return self.headers.Get("Content-Type", "text/plain; charset=UTF-8")
 }
 
 func (self nntpArticle) Sage() bool {

@@ -6,12 +6,19 @@ import (
   "github.com/majestrate/srndv2/src/srnd"
   "os"
   "log"
+//   _ "net/http/pprof"
+//  "net/http"
 )
 
 
 
-
 func main() {
+
+  // debugger
+  // go func() {
+  //   log.Println(http.ListenAndServe("[::]:6060", nil))
+  // }()
+  
   var daemon srnd.NNTPDaemon
   if len(os.Args) > 1 {
     fmt.Fprintf(os.Stdout,"Starting up %s\n\n\n", srnd.Version())

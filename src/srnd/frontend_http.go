@@ -49,6 +49,7 @@ type httpFrontend struct {
   liveui_static_dir string
   
   regen_threads int
+  regen_on_start bool
   attachments bool
   
   prefix string
@@ -149,6 +150,8 @@ func (self httpFrontend) regenerateBoardPage(newsgroup string, pageno int) {
   } else {
     log.Println("cannot open", fname, err)
   }
+  // clear reference
+  board_page = nil
 }
 
 type boardPageRow struct {
@@ -369,7 +372,8 @@ func (self httpFrontend) pollregen() {
       // listen for regen thread requests
     case msgid := <- self.regenThreadChan:
       self.regenerateThread(msgid)
-      
+      // clear reference
+      msgid = ""
       // listen for regen board requests
     case req := <- self.regenGroupChan:
       self.regenerateBoardPage(req.group, req.page)
@@ -789,9 +793,10 @@ func (self httpFrontend) Mainloop() {
   
   // poll channels
   go self.poll()
-  
   // trigger regen
-  go self.regenAll()
+  if self.regen_on_start {
+    go self.regenAll()
+  }
 
   // start webserver here
   log.Printf("frontend %s binding to %s", self.name, self.bindaddr)
@@ -820,6 +825,7 @@ func NewHTTPFrontend(daemon *NNTPDaemon, config map[string]string) Frontend {
   front.static_dir = config["static_files"]
   front.template_dir = config["templates"]
   front.prefix = config["prefix"]
+  front.regen_on_start = config["regen_on_start"] == "1"
   front.regen_threads = mapGetInt(config, "regen_threads", 1)
   front.store = sessions.NewCookieStore([]byte(config["api-secret"]))
   front.store.Options = &sessions.Options{

@@ -7,7 +7,12 @@ package srnd
 import (
   "bytes"
   "crypto/sha512"
+  "encoding/base32"
+  "encoding/base64"
   "io"
+  "log"
+  "mime"
+  "mime/multipart"
   "net/textproto"
   "strings"
 )
@@ -102,15 +107,75 @@ type AttachmentSaver interface {
 
 // create a plaintext attachment
 func createPlaintextAttachment(msg string) nntpAttachment {
-  var buff bytes.Buffer
-  _, _ = io.WriteString(&buff, msg)
+  buff := new(bytes.Buffer)
+  _, _ = io.WriteString(buff, msg)
   header := make(textproto.MIMEHeader)
   mime := "text/plain; charset=UTF-8"
   header.Set("Content-Type", mime)
   return nntpAttachment{
     mime: mime,
     ext: ".txt",
-    body: buff,
+    body: *buff,
     header: header,
+  }
+}
+
+
+
+
+
+func readAttachmentFromMimePart(part *multipart.Part) NNTPAttachment {
+  hdr := part.Header
+
+  content_type := hdr.Get("Content-Type")
+  media_type, _ , err := mime.ParseMediaType(content_type)
+  buff := new(bytes.Buffer)
+  fname := part.FileName()
+  idx := strings.LastIndex(fname, ".")
+  ext := ".txt"
+  if idx > 0 {
+    ext = fname[idx:]
+  }
+
+  transfer_encoding := hdr.Get("Content-Transfer-Encoding")
+  
+  if transfer_encoding == "base64" {
+    // read the attachment entirely
+    io.Copy(buff, part)
+    // clear reference
+    part = nil
+    // allocate a buffer for the decoded part
+    att_bytes := make([]byte, base64.StdEncoding.DecodedLen(buff.Len()))
+    decoded_bytes := make([]byte, len(att_bytes))
+    // decode
+    _, err = base64.StdEncoding.Decode(decoded_bytes, buff.Bytes())
+    // reset original attachment buffer
+    buff.Reset()
+    // copy and wrap
+    copy(att_bytes, decoded_bytes)
+    buff = bytes.NewBuffer(att_bytes)
+    att_bytes = nil
+    // clear reference
+    decoded_bytes = nil
+  } else {
+    _, err = io.Copy(buff, part)
+    // clear reference
+    part = nil
+  }
+  if err != nil {
+    log.Println("failed to read attachment from mimepart", err)
+    return nil
+  }
+  sha := sha512.Sum512(buff.Bytes())
+  hashstr := base32.StdEncoding.EncodeToString(sha[:])
+  fpath := hashstr+ext
+  return nntpAttachment{
+    body: *buff,
+    header: hdr,
+    mime: media_type,
+    filename: fname,
+    filepath: fpath,
+    ext: ext,
+    hash: sha[:],
   }
 }

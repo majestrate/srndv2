@@ -270,7 +270,7 @@ func (self PostgresDatabase) UnMarkModPubkeyGlobal(pubkey string) (err error) {
 
 
 func (self PostgresDatabase) GetRootPostsForExpiration(newsgroup string, threadcount int) (roots []string) {
-
+  
   rows, err := self.conn.Query("SELECT root_message_id FROM ArticleThreads WHERE newsgroup = $1 AND root_message_id NOT IN ( SELECT root_message_id FROM ArticleThreads WHERE newsgroup = $1 ORDER BY last_bump DESC LIMIT $2)", newsgroup, threadcount)
   if err == nil {
     // get results
@@ -278,6 +278,7 @@ func (self PostgresDatabase) GetRootPostsForExpiration(newsgroup string, threadc
       var root string
       rows.Scan(&root)
       roots = append(roots, root)
+      log.Println(root)
     }
     rows.Close()
   } else {
@@ -314,51 +315,56 @@ func (self PostgresDatabase) GetGroupPageCount(newsgroup string) int64 {
 // TODO: optimize
 func (self PostgresDatabase) GetGroupForPage(prefix, frontend, newsgroup string, pageno, perpage int) BoardModel {
   var threads []ThreadModel
-
-  // TODO: hard coded value
-  roots := self.GetLastBumpedThreads(newsgroup, 100)
-
   pages := self.GetGroupPageCount(newsgroup)
-  
-  min_thread := pageno * perpage
-  max_thread := ( ( pageno + 1 ) * perpage ) 
-  
-  // for each OP
-  for thread_no, root_msg_id := range roots {
-    // is this in our range?
-    if thread_no < min_thread || thread_no >= max_thread {
-      // no
-      continue
-    }
-    var posts []PostModel
-    // get op
-    op := self.GetPostModel(prefix, root_msg_id)
-    if op == nil {
-      log.Println("failed to get OP, was nil:", root_msg_id)
-      return nil
-    }
-    // TODO: hardcoded value
-    posts = append(posts, op.Truncate(512))
-    // append replies
-    if self.ThreadHasReplies(root_msg_id) {
-      // TODO: harcoded value
-      repls := self.GetThreadReplyPostModels(prefix, root_msg_id, 5)
-      if repls == nil {
-        log.Println("failed to get replies to", root_msg_id)
-        return nil
+  rows, err := self.conn.Query("SELECT newsgroup, message_id, name, subject, path, time_posted, message FROM ArticlePosts WHERE message_id IN ( SELECT root_message_id FROM ArticleThreads WHERE newsgroup = $1 ORDER BY last_bump DESC OFFSET $2 LIMIT $3 )", newsgroup, pageno * perpage, perpage)
+  if err == nil {
+    for rows.Next() {
+
+      op := post{
+        prefix: prefix,
       }
-      for _, repl := range(repls) {
-        // TODO: hardcoded
-        posts = append(posts, repl.Truncate(512))
+      rows.Scan(&op.board, &op.message_id, &op.name, &op.subject, &op.path, &op.posted, &op.message)
+
+      op.op = true
+      op.parent = op.message_id
+      _ = self.conn.QueryRow("SELECT pubkey FROM ArticleKeys WHERE message_id = $1", op.message_id).Scan(&op.pubkey)
+      
+      op.sage = isSage(op.subject)
+      atts := self.GetPostAttachmentModels(prefix, op.message_id)
+      if atts != nil {
+        op.attachments = append(op.attachments, atts...)
       }
+      p := op.Truncate(512)
+      rows_repl, err := self.conn.Query("SELECT newsgroup, message_id, ref_id, name, subject, path, time_posted, message FROM ArticlePosts WHERE message_id IN ( SELECT message_id FROM ArticlePosts WHERE ref_id = $1 ORDER BY time_posted DESC LIMIT $2 ) ORDER BY time_posted ASC", op.message_id, 5)
+      posts := []PostModel{p}
+      if err == nil {
+        for rows_repl.Next() {
+          repl := post{
+            prefix: prefix, 
+          }
+          rows_repl.Scan(&repl.board,  &repl.message_id, &repl.parent, &repl.name, &repl.subject, &repl.path, &repl.posted, &repl.message)
+          
+          repl.sage = isSage(repl.subject)
+          atts = self.GetPostAttachmentModels(prefix, repl.message_id)
+          if atts != nil {
+            repl.attachments = append(repl.attachments, atts...)
+          }
+          _ = self.conn.QueryRow("SELECT pubkey FROM ArticleKeys WHERE message_id = $1", repl.message_id).Scan(&repl.pubkey)
+          
+          r := repl.Truncate(512)
+          posts = append(posts, r)
+        }
+        rows_repl.Close()
+      }
+      threads = append(threads, thread{
+        prefix: prefix,
+        posts: posts,
+      })
     }
-    // add thread to board page
-    threads = append(threads, thread{
-      prefix: prefix,
-      posts: posts,
-    })
+    rows.Close()
+  } else {
+    log.Println(err)
   }
-  
   return boardModel{
     prefix: prefix,
     frontend: frontend,

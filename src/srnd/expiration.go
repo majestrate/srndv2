@@ -21,7 +21,7 @@ type ExpirationCore interface {
 }
 
 func createExpirationCore(database Database, store ArticleStore) ExpirationCore {
-  return expire{database, store, make(chan deleteEvent, 24)}
+  return expire{database, store, make(chan deleteEvent)}
 }
 
 type deleteEvent string
@@ -66,6 +66,7 @@ func (self expire) DeletePost(messageID string) {
 }
 
 func (self expire) ExpireGroup(newsgroup string, keep int) {
+  log.Println("Expire group",newsgroup, keep)
   threads := self.database.GetRootPostsForExpiration(newsgroup, keep)
   for _, root := range threads {
     self.DeletePost(root)
@@ -76,13 +77,14 @@ func (self expire) ExpireGroup(newsgroup string, keep int) {
 func (self expire) Mainloop() {
   for {
     ev := <- self.delChan
+    log.Println("expire")
     atts := self.database.GetPostAttachments(ev.MessageID())
     // remove all attachments
     if atts != nil {
       for _, att := range atts {
         img := self.store.AttachmentFilepath(att)
         os.Remove(img)
-          thm := self.store.ThumbnailFilepath(att)
+        thm := self.store.ThumbnailFilepath(att)
         os.Remove(thm)
       }
     }

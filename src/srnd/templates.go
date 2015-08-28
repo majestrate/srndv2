@@ -257,13 +257,12 @@ func genBoardPage(outfile, prefix, frontend, newsgroup string, pageno int, datab
   var perpage int
   perpage, err = database.GetThreadsPerPage(newsgroup)
   if err != nil {
-    log.Println("board regen fallback to default threads per page because", err)
-    // fallback
-    perpage = 10
+    log.Println("failed to regen board", newsgroup, err)
+    return
   }
   board_page := database.GetGroupForPage(prefix, frontend, newsgroup, pageno, perpage)
   if board_page == nil {
-    log.Println("failed to regen board", newsgroup)
+    log.Println("failed to regen board", newsgroup, "model was nil")
     return
   }
   wr, err := OpenFileWriter(outfile)
@@ -276,6 +275,4 @@ func genBoardPage(outfile, prefix, frontend, newsgroup string, pageno int, datab
   } else {
     log.Println("cannot open", outfile, err)
   }
-  // clear reference
-  board_page = nil
 }

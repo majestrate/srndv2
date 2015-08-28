@@ -354,8 +354,10 @@ func read_message(r io.Reader) (NNTPMessage, error) {
           if err == nil {
             if media_type == "text/plain" {
               att := readAttachmentFromMimePart(part)
-              nntp.message = att.(nntpAttachment)
-              nntp.message.header.Set("Content-Type", part_type)
+              if att != nil {
+                nntp.message = att.(nntpAttachment)
+                nntp.message.header.Set("Content-Type", part_type) 
+              }
             } else {
               // non plaintext gets added to attachments
               att := readAttachmentFromMimePart(part)

@@ -6,6 +6,7 @@ package srnd
 import (
   "log"
   "os/exec"
+  "strconv"
   "strings"
 )
 
@@ -23,6 +24,16 @@ func WorkerRun() {
     log.Println("failed to load config")
     return
   }
+
+  db_host := conf.database["host"]
+  db_port := conf.database["port"]
+  db_user := conf.database["user"]
+  db_passwd := conf.database["password"]
+  
+  log.Println("connecting to database...")
+  database := NewDatabase(conf.database["type"], conf.database["schema"], db_host, db_port, db_user, db_passwd)
+  
+  
   url := conf.worker["url"]
   convert := conf.worker["convert"]
   conn, chnl, err := rabbitConnect(url)
@@ -61,12 +72,26 @@ func WorkerRun() {
             line := string(m.Body)
             log.Println("[MQ] line:", line)
             parts := strings.Split(line, " ")
-            if len(parts) == 2 {
+            action := parts[0]
+            if len(parts) < 2 {
+              continue
+            }
+            args := parts[1:]
+            if action == "thumbnail" {
               // assume full filepath
-              infname, outfname := parts[0], parts[1]
+              infname, outfname := args[0], args[1]
               cmd := exec.Command(convert, "-thumbnail", "200", infname, outfname)
               exec_out, exec_err := cmd.CombinedOutput()
               log.Println("[MQ] result:", exec_err, exec_out)
+            } else if action == "ukko" {
+              genUkko(args[0], args[1], database)
+            } else if action == "front" {
+              genFrontPage(10, args[1], args[2], database)
+            } else if action == "board" {
+              page, _ := strconv.ParseInt(args[4], 10, 32)
+              genBoardPage(args[0], args[1], args[2], args[3], int(page), database)
+            } else if action == "thread" {
+              genThread(args[0], args[1], args[2], database)
             }
           }
         }

@@ -132,7 +132,7 @@ func (self articleStore) queueGenerateThumbnail(infname string) (err error) {
     false,
     amqp.Publishing{
       ContentType: "text/plain",
-      Body: []byte(fmt.Sprintf("%s %s",self.AttachmentFilepath(infname), self.ThumbnailFilepath(infname))),
+      Body: []byte(fmt.Sprintf("thumbnail %s %s",self.AttachmentFilepath(infname), self.ThumbnailFilepath(infname))),
       
     })
   return err

@@ -64,6 +64,7 @@ type httpFrontend struct {
 
   r_conn *amqp.Connection
   r_chnl *amqp.Channel
+  r_q amqp.Queue
   r_url string
 }
 
@@ -159,6 +160,10 @@ func (self httpFrontend) poll() {
     return
   }
 
+  self.r_q, err = rabbitQueue("srndv2", self.r_chnl)
+  if err != nil {
+    log.Println("failed to create queue", err)
+  }
   chnl := self.PostsChan()
   modChnl := self.modui.MessageChan()
   for {
@@ -273,7 +278,7 @@ func (self httpFrontend) send_rabbit(line string) {
   var err error
   err = self.r_chnl.Publish(
     rabbit_exchange, // exchange
-    "",     // routing key
+    self.r_q.Name,     // routing key
     false,  // mandatory
     false,  // immediate
     amqp.Publishing{

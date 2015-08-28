@@ -38,22 +38,13 @@ func WorkerRun() {
   convert := conf.worker["convert"]
   conn, chnl, err := rabbitConnect(url)
   if err == nil {
-    log.Println("[MQ] Declare Queue...")
-    q, err := chnl.QueueDeclare(
-      "", // name
-      true, // durable
-      false, // delete when unused
-      false,  // exclusive
-      false, // no-wait
-      nil,   // arguments
-    )
+    q, err := rabbitQueue("srndv2", chnl)
     if err == nil {
-      log.Println("[MQ] Queue Bind...", q.Name)
-      err = chnl.QueueBind(
-        q.Name, // name
-        "",     // routing key
-        rabbit_exchange, // exchange
-        false, nil)
+      err = chnl.Qos(
+        1,     // prefetch count
+        0,     // prefetch size
+        false, // global
+      )
       if err == nil {
         log.Println("[MQ] Consume...")
         msgs, err := chnl.Consume(

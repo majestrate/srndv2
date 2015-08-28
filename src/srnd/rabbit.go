@@ -34,3 +34,16 @@ func rabbitConnect(url string) (conn *amqp.Connection, chnl *amqp.Channel, err e
   }
   return
 }
+
+func rabbitQueue(queue string, chnl *amqp.Channel) (q amqp.Queue, err error) {
+  log.Println("[MQ] Declare Queue:", queue)
+  q, err = chnl.QueueDeclare(
+    queue, // name
+    true, // durable
+    false, // delete when unused
+    false,  // exclusive
+    false, // no-wait
+    nil,   // arguments
+  )
+  return 
+}

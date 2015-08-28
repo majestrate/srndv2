@@ -59,7 +59,7 @@ func WorkerRun() {
         msgs, err := chnl.Consume(
           q.Name, // name
           "", // consumer
-          true, // auto ack
+          false, // auto ack
           false, // exclusive
           false, // no local
           false, // no wait
@@ -69,6 +69,7 @@ func WorkerRun() {
           // we can now process messages
           log.Println("[MQ] GO!")
           for m := range msgs {
+            m.Ack(false)
             line := string(m.Body)
             log.Println("[MQ] line:", line)
             parts := strings.Split(line, " ")

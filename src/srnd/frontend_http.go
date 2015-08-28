@@ -22,7 +22,7 @@ import (
   "os"
   "path/filepath"
   "strings"
-  "time"
+
 )
 
 
@@ -151,57 +151,48 @@ func (self boardPageRows) Swap(i, j int) {
 
 
 func (self httpFrontend) poll() {
+  var err error
+  self.r_conn, self.r_chnl, err = rabbitConnect(self.r_url)
+  
+  if err != nil {
+    log.Println("failed to connect to rabbimq", err)
+    return
+  }
+
   chnl := self.PostsChan()
   modChnl := self.modui.MessageChan()
   for {
     select {
+      // listen for regen thread requests
+    case msgid := <- self.regenThreadChan:
+      self.regenerateThread(msgid)
+      // listen for regen board requests
+    case req := <- self.regenGroupChan:
+      self.regenerateBoardPage(req.group, req.page)
     case nntp := <- modChnl:
       // forward signed messages to daemon
       self.postchan <- nntp
     case nntp := <- chnl:
       // get root post and tell frontend to regen that thread
+      var msgid string
       if len(nntp.Reference()) > 0 {
-        self.regenThreadChan <- nntp.Reference()
+        msgid = nntp.Reference()
       } else {
-        self.regenThreadChan <- nntp.MessageID()
+        msgid = nntp.MessageID()
       }
+      self.regenerateThread(msgid)
       // regen the newsgroup we're in
       // TODO: regen only what we need to
       pages := self.daemon.database.GetGroupPageCount(nntp.Newsgroup())
       // regen all pages
       var page int64
       for ; page < pages ; page ++ {
-        req := groupRegenRequest{nntp.Newsgroup(), int(page)}
-        self.regenGroupChan <- req
+        self.regenerateBoardPage(nntp.Newsgroup(), int(page))
       }
       // regen ukko
-      self.ukkoChan <- true
+      self.regenUkko()
+      self.regenFrontPage()
     }
-  }
-}
-
-// select loop for channels
-func (self httpFrontend) pollregen() {
-  for {
-    select {
-      // listen for regen thread requests
-    case msgid := <- self.regenThreadChan:
-      self.regenerateThread(msgid)
-      // clear reference
-      msgid = ""
-      // listen for regen board requests
-    case req := <- self.regenGroupChan:
-      self.regenerateBoardPage(req.group, req.page)
-    }
-  }
-}
-
-
-func (self httpFrontend) pollukko() {
-  for {
-    _ : <- self.ukkoChan
-    self.regenUkko()
-    self.regenFrontPage()
   }
 }
 
@@ -261,12 +252,12 @@ func (self httpFrontend) handle_liveui_index(wr http.ResponseWriter, r *http.Req
 
 func (self httpFrontend) regenerateThread(msgid string) {
   fname := self.getFilenameForThread(msgid)
-  self.send_rabbit(fmt.Sprintln("thread %s %s %s", msgid, self.prefix, fname))
+  self.send_rabbit(fmt.Sprintf("thread %s %s %s", msgid, self.prefix, fname))
 }
 
 func (self httpFrontend) regenerateBoardPage(board string, page int) {
   fname := self.getFilenameForBoardPage(board, page)
-  self.send_rabbit(fmt.Sprintln("board %s %s %s %s %d", fname, self.prefix, self.name, board, page))
+  self.send_rabbit(fmt.Sprintf("board %s %s %s %s %d", fname, self.prefix, self.name, board, page))
 }
 
 func (self httpFrontend) regenFrontPage() {
@@ -280,20 +271,13 @@ func (self httpFrontend) regenUkko() {
 
 func (self httpFrontend) send_rabbit(line string) {
   var err error
-  // connect to rabbit mq
-  for self.r_conn == nil {
-    self.r_conn, self.r_chnl, err = rabbitConnect(self.r_url)
-    if err == nil {
-      break
-    }
-    time.Sleep(1 * time.Second)
-  }
   err = self.r_chnl.Publish(
     rabbit_exchange, // exchange
     "",     // routing key
     false,  // mandatory
     false,  // immediate
     amqp.Publishing{
+      DeliveryMode: amqp.Persistent,
       ContentType: "text/plain",
       Body:        []byte(line),
     })
@@ -639,18 +623,12 @@ func (self httpFrontend) Mainloop() {
 
   var err error
 
-  go self.pollregen()
-
-  // poll for ukko regen
-  go self.pollukko()
-  
   // poll channels
   go self.poll()
   // trigger regen
   if self.regen_on_start {
-    go self.regenAll()
+    self.regenAll()
   }
-
   // start webserver here
   log.Printf("frontend %s binding to %s", self.name, self.bindaddr)
   

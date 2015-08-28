@@ -128,8 +128,8 @@ func (self articleStore) generateThumbnail(infname string) (err error) {
 func (self articleStore) queueGenerateThumbnail(infname string) (err error) {
   log.Println("queue file for thumbnailing", infname)
   err = self.r_chnl.Publish(
-    self.r_q.Name,
     "",
+    self.r_q.Name,
     false,
     false,
     amqp.Publishing{

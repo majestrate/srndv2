@@ -274,7 +274,7 @@ func (self httpFrontend) send_rabbit(line string) {
   err = self.r_chnl.Publish(
     rabbit_exchange, // exchange
     "",     // routing key
-    false,  // mandatory
+    true,  // mandatory
     false,  // immediate
     amqp.Publishing{
       DeliveryMode: amqp.Persistent,

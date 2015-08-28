@@ -292,7 +292,6 @@ func (self httpFrontend) regenUkko() {
 
 func (self httpFrontend) send_rabbit(line string) {
   var err error
-  log.Println("[MQ] Line:", line)
   err = self.r_chnl.Publish(
     "", // exchange
     self.r_q.Name,     // routing key

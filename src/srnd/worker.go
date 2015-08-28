@@ -117,7 +117,6 @@ func WorkerRun() {
           for m := range msgs {
             m.Ack(false)
             line := string(m.Body)
-            log.Println("[MQ] line:", line)
             lineChnl <- line
           }
         }

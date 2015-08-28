@@ -375,6 +375,11 @@ func (self *NNTPConnection) HandleInbound(d *NNTPDaemon) {
                   code = 439
                   message = "this article belongs to an expired root post"
                   read_more = false
+                } else if ! d.database.HasArticleLocal(reference) {
+                  // we don't have the root post yet
+                  code = 400
+                  message = "no root post yet, please send later"
+                  read_more = false
                 }
               }
             }

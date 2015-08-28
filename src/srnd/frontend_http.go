@@ -22,7 +22,7 @@ import (
   "os"
   "path/filepath"
   "strings"
-
+  "time"
 )
 
 
@@ -195,8 +195,11 @@ func (self httpFrontend) poll() {
         self.regenerateBoardPage(nntp.Newsgroup(), int(page))
       }
       // regen ukko
+    case regen_front := <- self.ukkoChan:
       self.regenUkko()
-      self.regenFrontPage()
+      if regen_front {
+        self.regenFrontPage()
+      }
     }
   }
 }
@@ -630,6 +633,13 @@ func (self httpFrontend) Mainloop() {
 
   // poll channels
   go self.poll()
+  // regen ukko / front page
+  tick := time.NewTicker(time.Second * 30)
+  chnl := tick.C
+  go func() {
+    t := <- chnl
+    self.ukkoChan <- t.Minute() == 0 && t.Second() < 30
+  }()
   // trigger regen
   if self.regen_on_start {
     self.regenAll()

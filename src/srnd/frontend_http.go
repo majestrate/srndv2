@@ -57,6 +57,9 @@ type httpFrontend struct {
   regenThreadChan chan string
   regenGroupChan chan groupRegenRequest
   ukkoChan chan bool
+  regenBoard map[string]groupRegenRequest
+
+  regenBoardTicker *time.Ticker
   
   store *sessions.CookieStore
 
@@ -173,7 +176,7 @@ func (self httpFrontend) poll() {
       self.regenerateThread(msgid)
       // listen for regen board requests
     case req := <- self.regenGroupChan:
-      self.regenerateBoardPage(req.group, req.page)
+      self.regenBoard[fmt.Sprintf("%s|%s", req.group, req.page)] = req
     case nntp := <- modChnl:
       // forward signed messages to daemon
       self.postchan <- nntp
@@ -200,7 +203,13 @@ func (self httpFrontend) poll() {
       if regen_front {
         self.regenFrontPage()
       }
+    case _ = <- self.regenBoardTicker.C:
+      for _, v := range self.regenBoard {
+        self.regenerateBoardPage(v.group, v.page)
+      }
+      self.regenBoard = make(map[string]groupRegenRequest)
     }
+
   }
 }
 
@@ -665,6 +674,8 @@ func NewHTTPFrontend(daemon *NNTPDaemon, config map[string]string, url string) F
   var front httpFrontend
   front.daemon = daemon
   front.r_url = url
+  front.regenBoardTicker = time.NewTicker(time.Second * 5)
+  front.regenBoard = make(map[string]groupRegenRequest)
   front.attachments = mapGetInt(config, "allow_files", 1) == 1
   front.bindaddr = config["bind"]
   front.name = config["name"]

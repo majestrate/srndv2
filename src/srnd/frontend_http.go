@@ -674,7 +674,7 @@ func NewHTTPFrontend(daemon *NNTPDaemon, config map[string]string, url string) F
   var front httpFrontend
   front.daemon = daemon
   front.r_url = url
-  front.regenBoardTicker = time.NewTicker(time.Second * 5)
+  front.regenBoardTicker = time.NewTicker(time.Second * 10)
   front.regenBoard = make(map[string]groupRegenRequest)
   front.attachments = mapGetInt(config, "allow_files", 1) == 1
   front.bindaddr = config["bind"]

@@ -62,6 +62,7 @@ type articleStore struct {
   database Database
   r_conn *amqp.Connection
   r_chnl *amqp.Channel
+  r_q amqp.Queue
 }
 
 func createArticleStore(config map[string]string, rmq_url string, database Database) ArticleStore {
@@ -79,6 +80,7 @@ func createArticleStore(config map[string]string, rmq_url string, database Datab
     if err != nil {
       log.Fatal("failed to connect to rabbitmq message broker", err)
     }
+    store.r_q, err = rabbitQueue("srndv2", store.r_chnl)
   }
   return store
 }
@@ -126,7 +128,7 @@ func (self articleStore) generateThumbnail(infname string) (err error) {
 func (self articleStore) queueGenerateThumbnail(infname string) (err error) {
   log.Println("queue file for thumbnailing", infname)
   err = self.r_chnl.Publish(
-    rabbit_exchange,
+    "",
     "",
     false,
     false,

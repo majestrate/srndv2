@@ -277,7 +277,7 @@ func (self httpFrontend) regenUkko() {
 func (self httpFrontend) send_rabbit(line string) {
   var err error
   err = self.r_chnl.Publish(
-    rabbit_exchange, // exchange
+    "", // exchange
     self.r_q.Name,     // routing key
     false,  // mandatory
     false,  // immediate

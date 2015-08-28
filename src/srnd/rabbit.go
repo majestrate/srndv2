@@ -19,18 +19,6 @@ func rabbitConnect(url string) (conn *amqp.Connection, chnl *amqp.Channel, err e
   if err == nil {
     log.Println("[MQ] Create Channel...")
     chnl, err = conn.Channel()
-    if err == nil {
-      log.Println("[MQ] Declare exchange...")
-      err = chnl.ExchangeDeclare(
-        rabbit_exchange,    // name
-        "fanout",           // type
-        true,               // durable
-        false,              // auto-deleted
-        false,              // internal
-        false,              // no-wait
-        nil,                // arguments
-      )
-    }
   }
   return
 }

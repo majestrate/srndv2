@@ -68,7 +68,7 @@ func (self *NNTPDaemon) persistFeed(conf FeedConfig) {
         conn, err = net.Dial("tcp", conf.addr)
         if err != nil {
           log.Println("cannot connect to outfeed", conf.addr, err)
-					time.Sleep(time.Second)
+					time.Sleep(time.Second * 5)
           continue
         }
       } else if proxy_type == "socks4a" {
@@ -77,7 +77,7 @@ func (self *NNTPDaemon) persistFeed(conf FeedConfig) {
         conn, err = net.Dial("tcp", conf.proxy_addr)
         if err != nil {
           log.Println("cannot connect to proxy", conf.proxy_addr)
-					time.Sleep(time.Second)
+					time.Sleep(time.Second * 5)
           continue
         }
         // generate request

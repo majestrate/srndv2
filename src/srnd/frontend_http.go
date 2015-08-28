@@ -106,14 +106,13 @@ func (self httpFrontend) PostsChan() chan NNTPMessage {
 // regen every newsgroup
 func (self httpFrontend) regenAll() {
   log.Println("regen all on http frontend")
-  // tell to regen ukko first
-  self.ukkoChan <- true
+  
   // get all groups
   groups := self.daemon.database.GetAllNewsgroups()
   if groups != nil {
     for _, group := range groups {
       // send every thread for this group down the regen thread channel
-      self.daemon.database.GetGroupThreads(group, self.regenThreadChan)
+      go self.daemon.database.GetGroupThreads(group, self.regenThreadChan)
       self.regenerateBoard(group)
     }
   }
@@ -122,14 +121,7 @@ func (self httpFrontend) regenAll() {
 
 // regen every page of the board
 func (self httpFrontend) regenerateBoard(group string) {
-  // regen the entire board too
-  pages := self.daemon.database.GetGroupPageCount(group)
-  // regen all pages
-  var page int64
-  for ; page < pages ; page ++ {
-    req := groupRegenRequest{group, int(page)}
-    self.regenGroupChan <- req
-  }
+  self.send_rabbit(fmt.Sprintf("board-all %s %s %s %s", self.prefix, self.name,  group, self.webroot_dir))
 }
 
 type boardPageRow struct {
@@ -167,6 +159,13 @@ func (self httpFrontend) poll() {
   if err != nil {
     log.Println("failed to create queue", err)
   }
+
+  // trigger regen
+  if self.regen_on_start {
+    self.regenAll()
+  }
+
+  
   chnl := self.PostsChan()
   modChnl := self.modui.MessageChan()
   for {
@@ -269,17 +268,17 @@ func (self httpFrontend) handle_liveui_options(wr http.ResponseWriter, r *http.R
 }
 
 func (self httpFrontend) handle_liveui_index(wr http.ResponseWriter, r *http.Request) {
-  io.WriteString(wr, renderTemplate("live.mustache", map[string]string{ "prefix" : self.prefix }))
+  io.WriteString(wr, template.renderTemplate("live.mustache", map[string]string{ "prefix" : self.prefix }))
 }
 
 func (self httpFrontend) regenerateThread(msgid string) {
   fname := self.getFilenameForThread(msgid)
-  self.send_rabbit(fmt.Sprintf("thread %s %s %s", msgid, self.prefix, fname))
+  self.send_rabbit(fmt.Sprintf("thread %s %s %s %s", msgid, self.prefix, self.name, fname))
 }
 
 func (self httpFrontend) regenerateBoardPage(board string, page int) {
   fname := self.getFilenameForBoardPage(board, page)
-  self.send_rabbit(fmt.Sprintf("board %s %s %s %s %d", fname, self.prefix, self.name, board, page))
+  self.send_rabbit(fmt.Sprintf("board-page %s %s %s %d %s", self.prefix, self.name, board, page, fname))
 }
 
 func (self httpFrontend) regenFrontPage() {
@@ -287,12 +286,13 @@ func (self httpFrontend) regenFrontPage() {
 }
 
 func (self httpFrontend) regenUkko() {
-  self.send_rabbit(fmt.Sprintf("ukko %s %s", self.prefix, filepath.Join(self.webroot_dir, "ukko.html")))
+  self.send_rabbit(fmt.Sprintf("ukko %s %s %s", self.prefix, self.name,  filepath.Join(self.webroot_dir, "ukko.html")))
 }
 
 
 func (self httpFrontend) send_rabbit(line string) {
   var err error
+  log.Println("[MQ] Line:", line)
   err = self.r_chnl.Publish(
     "", // exchange
     self.r_q.Name,     // routing key
@@ -518,7 +518,7 @@ func (self httpFrontend) handle_postform(wr http.ResponseWriter, r *http.Request
   if len(post_fail) > 0 {
     wr.WriteHeader(200)
     resp_map["reason"] = post_fail
-    io.WriteString(wr, renderTemplate("post_fail.mustache", resp_map))
+    io.WriteString(wr, template.renderTemplate("post_fail.mustache", resp_map))
     return
   }
   // set message
@@ -557,7 +557,7 @@ func (self httpFrontend) handle_postform(wr http.ResponseWriter, r *http.Request
   msg_id := nntp.headers.Get("References", nntp.MessageID())
   // render response as success
   url = fmt.Sprintf("%sthread-%s.html", self.prefix, ShortHashMessageID(msg_id))
-  io.WriteString(wr, renderTemplate("post_success.mustache", map[string]string {"message_id" : nntp.MessageID(), "redirect_url" : url}))
+  io.WriteString(wr, template.renderTemplate("post_success.mustache", map[string]string {"message_id" : nntp.MessageID(), "redirect_url" : url}))
 }
 
 
@@ -654,10 +654,6 @@ func (self httpFrontend) Mainloop() {
     t := <- chnl
     self.ukkoChan <- t.Minute() == 0 && t.Second() < 30
   }()
-  // trigger regen
-  if self.regen_on_start {
-    self.regenAll()
-  }
   // start webserver here
   log.Printf("frontend %s binding to %s", self.name, self.bindaddr)
   

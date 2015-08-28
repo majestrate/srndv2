@@ -123,7 +123,7 @@ func GenSRNdConfig() error {
 
   // rabbitmq worker config section
   sect = conf.NewSection("rabbitmq")
-  sect.Add("enable", "1")
+  sect.Add("threads", "1")
   sect.Add("url", "amqp://127.0.0.1/")
   sect.Add("convert", "/usr/bin/convert")
   sect.Add("ffmpeg", "/usr/bin/ffmpeg")

@@ -16,6 +16,50 @@ func WorkerInit() bool {
   return true
 }
 
+// process a line
+// do an action given the command
+func workerDoLine(line string, conf map[string]string, database Database) {
+  parts := strings.Split(line, " ")
+  action := parts[0]
+  if len(parts) < 2 {
+    return
+  }
+  args := parts[1:]
+  if action == "thumbnail" {
+    // assume full filepath
+    infname, outfname := args[0], args[1]
+    cmd := exec.Command(conf["convert"], "-thumbnail", "200", infname, outfname)
+    exec_out, exec_err := cmd.CombinedOutput()
+    log.Println("[MQ] result:", exec_err, string(exec_out))
+  } else if action == "ukko" {
+    template.genUkko(args[0], args[1], args[2], database)
+  } else if action == "front" {
+    template.genFrontPage(10, args[1], args[2], database)
+  } else if action == "board-page" {
+    page, _ := strconv.ParseInt(args[3], 10, 32)
+    template.genBoardPage(args[0], args[1], args[2], int(page), args[4], database)
+  } else if action == "board-all" {
+    template.genBoard(args[0], args[1], args[2], args[3], database)
+  } else if action == "thread" {
+    template.genThread(args[0], args[1], args[2], args[3], database)
+  }
+}
+
+func workerRun(chnl chan string, conf map[string]string, database Database) {
+  log.Println("Start Worker")
+  for {
+    select {
+    case line, ok := <- chnl:
+      if ok {
+        workerDoLine(line, conf, database)
+      } else {
+        break
+      }
+    }
+  }
+  log.Println("Worker Died")
+}
+
 // connect to rabbitmq daemon and run
 func WorkerRun() {
   // ReadConfig fatals on error
@@ -32,10 +76,21 @@ func WorkerRun() {
   
   log.Println("connecting to database...")
   database := NewDatabase(conf.database["type"], conf.database["schema"], db_host, db_port, db_user, db_passwd)
-  
-  
+
+  // line dispatcher channel
+  lineChnl := make(chan string)
+
+  thread_count := conf.worker["threads"]
+  threads, _ := strconv.ParseInt(thread_count, 10, 32)
+  if threads <= 0 {
+    go workerRun(lineChnl, conf.worker, database)
+  } else {
+    for threads > 0 {
+      threads --
+      go workerRun(lineChnl, conf.worker, database)
+    }
+  }
   url := conf.worker["url"]
-  convert := conf.worker["convert"]
   conn, chnl, err := rabbitConnect(url)
   if err == nil {
     q, err := rabbitQueue("srndv2", chnl)
@@ -63,28 +118,7 @@ func WorkerRun() {
             m.Ack(false)
             line := string(m.Body)
             log.Println("[MQ] line:", line)
-            parts := strings.Split(line, " ")
-            action := parts[0]
-            if len(parts) < 2 {
-              continue
-            }
-            args := parts[1:]
-            if action == "thumbnail" {
-              // assume full filepath
-              infname, outfname := args[0], args[1]
-              cmd := exec.Command(convert, "-thumbnail", "200", infname, outfname)
-              exec_out, exec_err := cmd.CombinedOutput()
-              log.Println("[MQ] result:", exec_err, string(exec_out))
-            } else if action == "ukko" {
-              genUkko(args[0], args[1], database)
-            } else if action == "front" {
-              genFrontPage(10, args[1], args[2], database)
-            } else if action == "board" {
-              page, _ := strconv.ParseInt(args[4], 10, 32)
-              genBoardPage(args[0], args[1], args[2], args[3], int(page), database)
-            } else if action == "thread" {
-              genThread(args[0], args[1], args[2], database)
-            }
+            lineChnl <- line
           }
         }
       }
@@ -101,4 +135,6 @@ func WorkerRun() {
   if conn != nil {
     conn.Close()
   }
+  database.Close()
+  close(lineChnl)
 }

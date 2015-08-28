@@ -103,7 +103,7 @@ func (self httpModUI) writeTemplateParam(wr http.ResponseWriter, name string, pa
   }
   param["prefix"] = self.prefix
   param["mod_prefix"] = self.mod_prefix
-  io.WriteString(wr, renderTemplate(name, param))  
+  io.WriteString(wr, template.renderTemplate(name, param))  
 }
 
 // do a function as authenticated

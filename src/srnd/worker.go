@@ -74,7 +74,7 @@ func WorkerRun() {
               infname, outfname := args[0], args[1]
               cmd := exec.Command(convert, "-thumbnail", "200", infname, outfname)
               exec_out, exec_err := cmd.CombinedOutput()
-              log.Println("[MQ] result:", exec_err, exec_out)
+              log.Println("[MQ] result:", exec_err, string(exec_out))
             } else if action == "ukko" {
               genUkko(args[0], args[1], database)
             } else if action == "front" {

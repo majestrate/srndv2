@@ -194,8 +194,13 @@ func (self httpFrontend) poll() {
       pages := self.daemon.database.GetGroupPageCount(nntp.Newsgroup())
       // regen all pages
       var page int64
+      group := nntp.Newsgroup()
       for ; page < pages ; page ++ {
-        self.regenerateBoardPage(nntp.Newsgroup(), int(page))
+        req := groupRegenRequest{
+          group: group,
+          page: int(page),
+        }
+        self.regenBoard[fmt.Sprintf("%s|%s", req.group, req.page)] = req
       }
       // regen ukko
     case regen_front := <- self.ukkoChan:

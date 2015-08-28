@@ -360,9 +360,11 @@ func (self *NNTPDaemon) Setup() {
   log.Println("ensure that the database is created...")
   self.database.CreateTables()
 
+  r_url := self.conf.worker["url"]
+  
   // set up store
   log.Println("set up article store...")
-  self.store = createArticleStore(self.conf.store, self.database)
+  self.store = createArticleStore(self.conf.store, r_url, self.database)
 
   self.mod = modEngine{
     store: self.store,
@@ -414,7 +416,7 @@ func (self *NNTPDaemon) Init() bool {
   // do we enable the frontend?
   if self.conf.frontend["enable"] == "1" {
     log.Printf("frontend %s enabled", self.conf.frontend["name"]) 
-    http_frontend := NewHTTPFrontend(self, self.conf.frontend)
+    http_frontend := NewHTTPFrontend(self, self.conf.frontend, self.conf.worker["url"])
     nntp_frontend := NewNNTPFrontend(self, self.conf.frontend["nntp"])
     self.frontend = MuxFrontends(http_frontend, nntp_frontend)
     go self.frontend.Mainloop()

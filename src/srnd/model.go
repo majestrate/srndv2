@@ -1,17 +1,146 @@
 //
-// templates_impl.go
+// model.go
 // template model implementation
 //
 package srnd
 
 import (
   "fmt"
-  "github.com/hoisie/mustache"
   "io"
   "path/filepath"
   "strings"
   "time"
 )
+
+
+// base model type
+type BaseModel interface {
+
+  // site url prefix
+  Prefix() string
+
+  // render to a writer
+  RenderTo(wr io.Writer) error
+
+}
+
+
+// for attachments
+type AttachmentModel interface {
+
+  BaseModel
+  
+  Thumbnail() string
+  Source() string
+  Filename() string
+  
+}
+
+// for individual posts
+type PostModel interface {
+
+  BaseModel
+
+  CSSClass() string
+  
+  MessageID() string
+  PostHash() string
+  ShortHash() string
+  PostURL() string
+  Frontend() string
+  Subject() string
+  Name() string
+  Date() string
+  OP() bool
+  Attachments() []AttachmentModel
+  Board() string
+  Sage() bool
+  Pubkey() string
+  Reference() string
+  
+  RenderBody() string
+  RenderPost() string
+
+  // truncate body to a certain size
+  // return copy
+  Truncate() PostModel
+  
+}
+
+// interface for models that have a navbar
+type NavbarModel interface {
+
+  Navbar() string
+
+}
+
+// for threads
+type ThreadModel interface {
+
+  BaseModel
+  NavbarModel
+  
+  OP() PostModel
+  Replies() []PostModel
+  Board() string
+  BoardURL() string
+  // return a short version of the thread
+  // does not include all replies
+  Truncate() ThreadModel
+  // update the thread's replies
+  // return the updated model
+  Update(db Database) ThreadModel
+}
+
+// board interface
+// for 1 page on a board
+type BoardModel interface {
+
+  BaseModel
+  NavbarModel
+  
+  Frontend() string
+  Name() string
+  Threads() []ThreadModel
+
+  // JUST update this thread
+  // if we don't have it already loaded do nothing
+  UpdateThread(message_id string, db Database) BoardModel
+  
+  // update the board's contents
+  // return the updated model
+  Update(db Database) BoardModel
+}
+
+type LinkModel interface {
+
+  Text() string
+  LinkURL() string
+}
+
+// newsgroup model
+// every page on a newsgroup
+type GroupModel []BoardModel
+
+// TODO: optimize using 1 query?
+// update every page
+// return updated model
+func (self GroupModel) UpdateAll(db Database) GroupModel {
+  for idx, page := range self {
+    self[idx] = page.Update(db)
+  }
+  return self
+}
+
+// update a certain page
+// does nothing if out of bounds
+func (self GroupModel) Update(page int, db Database) GroupModel {
+  if page <= len(self) {
+    self[page] = self[page].Update(db)
+  }
+  return self
+}
+
 
 type boardModel struct {
   frontend string
@@ -36,7 +165,17 @@ func (self boardModel) Navbar() string {
   }
   param["prefix"] = self.prefix
   param["links"] = links
-  return renderTemplate("navbar.mustache", param)
+  return template.renderTemplate("navbar.mustache", param)
+}
+
+func (self boardModel) UpdateThread(messageID string, db Database) BoardModel {
+  for idx, th := range self.threads {
+    if th.OP().MessageID() == messageID {
+      // found it
+      self.threads[idx] = th.Update(db)
+    }
+  }
+  return self
 }
 
 func (self boardModel) Frontend() string {
@@ -56,12 +195,31 @@ func (self boardModel) Threads() []ThreadModel {
 }
 
 func (self boardModel) RenderTo(wr io.Writer) error {
-  fname := filepath.Join(defaultTemplateDir(), "board.mustache")
   param := make(map[string]interface{})
   param["board"] = self
   param["form"] = renderPostForm(self.Prefix(), self.board, "")
-  _, err := io.WriteString(wr, mustache.RenderFile(fname, param))
+  _, err := io.WriteString(wr, template.renderTemplate("board.mustache", param))
   return err
+}
+
+// refetch all threads on this page
+func (self boardModel) Update(db Database) BoardModel {
+  // ignore error
+  perpage, _ := db.GetThreadsPerPage(self.board)
+  // refetch all on this page
+  model := db.GetGroupForPage(self.prefix, self.frontend, self.board, self.page, int(perpage))
+  var threads []ThreadModel
+  for _, th := range model.Threads() {
+    threads = append(threads, th.Update(db))
+  }
+  return boardModel{
+    frontend: self.frontend,
+    prefix: self.prefix,
+    board: self.board,
+    page: self.page,
+    pages: self.pages,
+    threads: threads,
+  }
 }
 
 type post struct {
@@ -216,12 +374,28 @@ func (self post) RenderTo(wr io.Writer) error {
 }
 
 func (self post) RenderPost() string {
-  return renderTemplate("post.mustache", self)
+  return template.renderTemplate("post.mustache", self)
 }
 
-func (self post) Truncate(amount int) PostModel {
-  if len(self.message) > amount && amount > 0 {
-    self.message = self.message[:amount] + "\n...\n"
+func (self post) Truncate() PostModel {
+  if len(self.message) > 500 {
+    message := self.message[:500] + "\n...\n[Post Truncated]\n"
+    return post{
+      message: message,
+      prefix: self.prefix,
+      board: self.board,
+      name: self.name,
+      subject: self.subject,
+      message_id: self.message_id,
+      path: self.path,
+      op: self.op,
+      posted: self.posted,
+      parent: self.parent,
+      sage: self.sage,
+      pubkey: self.pubkey,
+      reference: self.reference,
+      attachments: self.attachments,
+    }
   }
   return self
 }
@@ -252,7 +426,7 @@ func (self thread) Navbar() string {
   param["frontend"] = self.Board()
   param["links"] = self.links
   param["prefix"] = self.prefix
-  return renderTemplate("navbar.mustache", param)
+  return template.renderTemplate("navbar.mustache", param)
 }
 
 func (self thread) Board() string {
@@ -270,7 +444,7 @@ func defaultTemplateDir() string {
 
 func (self thread) RenderTo(wr io.Writer) error {
   postform := renderPostForm(self.prefix, self.Board(), self.posts[0].MessageID())
-  data := renderTemplate("thread.mustache", map[string]interface{} { "thread": self, "form" : postform})
+  data := template.renderTemplate("thread.mustache", map[string]interface{} { "thread": self, "form" : postform})
   io.WriteString(wr, data)
   return nil
 }
@@ -286,6 +460,31 @@ func (self thread) Replies() []PostModel {
   return []PostModel{}
 }
 
+func (self thread) Truncate() ThreadModel {
+  trunc := 5
+  if len(self.posts) > trunc {
+    return thread{
+      links: self.links,
+      posts: append([]PostModel{self.posts[0]}, self.posts[len(self.posts)-trunc:]...),
+      prefix: self.prefix,
+    }
+  }
+  return self
+}
+
+// refetch all replies if anything differs
+func (self thread) Update(db Database) ThreadModel {
+  root := self.posts[0].MessageID()
+  reply_count := db.CountThreadReplies(root)
+
+  if int(reply_count) != len(self.posts) {
+    // fetch all replies
+    self.posts = []PostModel{self.posts[0]}
+    self.posts = append(self.posts, db.GetThreadReplyPostModels(self.prefix, root, 0)...)
+  }
+  return self
+}
+
 
 type linkModel struct {
   text string
@@ -298,22 +497,4 @@ func (self linkModel) LinkURL() string {
 
 func (self linkModel) Text() string {
   return self.text
-}
-
-func renderTemplate(name string, obj interface{}) string {
-  return mustache.RenderFile(filepath.Join(defaultTemplateDir(), name), obj)
-}
-
-func renderUkko(prefix string, threads []ThreadModel) string {
-  return renderTemplate("ukko.mustache", map[string]interface{} { "prefix" : prefix, "threads" : threads } )
-}
-
-
-func renderPostForm(prefix, board, op_msg_id string) string {
-  url := prefix + "post/" + board
-  button := "New Thread"
-  if op_msg_id != "" {
-    button = "Reply"
-  }
-  return renderTemplate("postform.mustache", map[string]string { "post_url" : url, "reference" : op_msg_id , "button" : button } )
 }

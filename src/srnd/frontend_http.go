@@ -11,6 +11,7 @@ import (
   "github.com/gorilla/sessions"
   "github.com/gorilla/websocket"
   "github.com/majestrate/srndv2/src/nacl"
+  "github.com/streadway/amqp"
   "bytes"
   "encoding/json"
   "fmt"
@@ -20,8 +21,8 @@ import (
   "net/http"
   "os"
   "path/filepath"
-  "sort"
   "strings"
+  "time"
 )
 
 
@@ -56,10 +57,18 @@ type httpFrontend struct {
   regenThreadChan chan string
   regenGroupChan chan groupRegenRequest
   ukkoChan chan bool
+  regenBoard map[string]groupRegenRequest
+
+  regenBoardTicker *time.Ticker
   
   store *sessions.CookieStore
 
   upgrader websocket.Upgrader
+
+  r_conn *amqp.Connection
+  r_chnl *amqp.Channel
+  r_q amqp.Queue
+  r_url string
 }
 
 // do we allow this newsgroup?
@@ -97,14 +106,13 @@ func (self httpFrontend) PostsChan() chan NNTPMessage {
 // regen every newsgroup
 func (self httpFrontend) regenAll() {
   log.Println("regen all on http frontend")
-  // tell to regen ukko first
-  self.ukkoChan <- true
+  
   // get all groups
   groups := self.daemon.database.GetAllNewsgroups()
   if groups != nil {
     for _, group := range groups {
       // send every thread for this group down the regen thread channel
-      self.daemon.database.GetGroupThreads(group, self.regenThreadChan)
+      go self.daemon.database.GetGroupThreads(group, self.regenThreadChan)
       self.regenerateBoard(group)
     }
   }
@@ -113,45 +121,7 @@ func (self httpFrontend) regenAll() {
 
 // regen every page of the board
 func (self httpFrontend) regenerateBoard(group string) {
-  // regen the entire board too
-  pages := self.daemon.database.GetGroupPageCount(group)
-  // regen all pages
-  var page int64
-  for ; page < pages ; page ++ {
-    req := groupRegenRequest{group, int(page)}
-    self.regenGroupChan <- req
-  }
-}
-
-// regenerate a board page for newsgroup
-func (self httpFrontend) regenerateBoardPage(newsgroup string, pageno int) {
-  var err error
-  var perpage int
-  perpage, err = self.daemon.database.GetThreadsPerPage(newsgroup)
-  if err != nil {
-    log.Println("board regen fallback to default threads per page because", err)
-    // fallback
-    perpage = 10
-  }
-  board_page := self.daemon.database.GetGroupForPage(self.prefix, self.name, newsgroup, pageno, perpage)
-  if board_page == nil {
-    log.Println("failed to regen board", newsgroup)
-    return
-  }
-  fname := self.getFilenameForBoardPage(newsgroup, pageno)
-  log.Println("regen page", fname)
-  wr, err := OpenFileWriter(fname)
-  if err == nil {
-    err = board_page.RenderTo(wr)
-    wr.Close()
-    if err != nil {
-      log.Println("did not write board page",fname, err)
-    }
-  } else {
-    log.Println("cannot open", fname, err)
-  }
-  // clear reference
-  board_page = nil
+  self.send_rabbit(fmt.Sprintf("board-all %s %s %s %s", self.prefix, self.name,  group, self.webroot_dir))
 }
 
 type boardPageRow struct {
@@ -175,218 +145,75 @@ func (self boardPageRows) Swap(i, j int) {
   self[i] , self[j] = self[j], self[i]
 }
 
-// regenerate the main index.html with boards list
-// TODO: optimize
-func (self httpFrontend) regenFrontPage() {
-  log.Println("regen front page")
-  // the graph for the front page
-  var frontpage_graph boardPageRows
-
-  db := self.daemon.database
-
-  // top 50 boards
-  top_count := 50
-  
-  // for each group
-  groups := db.GetAllNewsgroups()
-  for idx, group := range groups {
-    if idx >= top_count {
-      break
-    }
-    // posts per hour
-    hour := db.CountPostsInGroup(group, 3600)
-    // posts per day
-    day := db.CountPostsInGroup(group, 86400)
-    // posts total
-    all := db.CountPostsInGroup(group, 0)
-    frontpage_graph = append(frontpage_graph, boardPageRow{
-      All: all,
-      Day: day,
-      Hour: hour,
-      Board: group,
-    })
-  }
-  wr, err := OpenFileWriter(filepath.Join(self.webroot_dir, "index.html"))
-  if err != nil {
-    log.Println("cannot render front page", err)
-    return
-  }
-
-  param := make(map[string]interface{})
-  sort.Sort(frontpage_graph)
-  param["graph"] = frontpage_graph
-  param["frontend"] = self.name
-  param["totalposts"] = db.ArticleCount()
-  _, err = io.WriteString(wr, renderTemplate("frontpage.mustache", param))
-  if err != nil {
-    log.Println("error writing front page", err)
-  }
-  wr.Close()
-}
-
-// regenerate the ukko page
-func (self httpFrontend) regenUkko() {
-  log.Println("regen ukko")
-  // get the last 5 bumped threads
-  roots := self.daemon.database.GetLastBumpedThreads("", 5)
-  var threads []ThreadModel
-  for _, rootpost := range roots {
-    // for each root post
-    // get the last 5 posts
-    post := self.daemon.database.GetPostModel(self.prefix, rootpost)
-    if post == nil {
-      log.Println("failed to get root post", rootpost)
-      return
-    }
-    // TODO: hardcoded value
-    posts := []PostModel{post.Truncate(512)}
-    if self.daemon.database.ThreadHasReplies(rootpost) {
-      repls := self.daemon.database.GetThreadReplyPostModels(self.prefix, rootpost, 5)
-      if repls == nil {
-        log.Println("failed to get replies for", rootpost)
-        return
-      }
-      for _, repl := range repls {
-        // truncate reply size
-        posts = append(posts, repl.Truncate(512))
-      }
-    }
-    threads = append(threads, thread{
-      prefix: self.prefix,
-      posts: posts,
-    })
-  }
-  wr, err := OpenFileWriter(filepath.Join(self.webroot_dir, "ukko.html"))
-  if err == nil {
-    io.WriteString(wr, renderUkko(self.prefix, threads))
-    wr.Close()
-  } else {
-    log.Println("error generating ukko", err)
-  }
-}
-
-// regnerate a thread given the messageID of the root post
-// TODO: don't load from store
-func (self httpFrontend) regenerateThread(rootMessageID string) {
-  // get the root post
-  var posts []PostModel
-  op := self.daemon.database.GetPostModel(self.prefix, rootMessageID)
-  // get op if null get placeholder
-  if op == nil {
-    log.Println("no root post for", rootMessageID)
-    repls := self.daemon.database.GetThreadReplyPostModels(self.prefix, rootMessageID, 0)
-    if repls == nil {
-      // wtf do we do? idk
-      log.Println("no replies for? wtf", rootMessageID)
-      return
-    } else {
-      posts = append(posts, post{
-        prefix: self.prefix,
-        subject: "[no root post yet]",
-        message: "this is a placeholder for "+rootMessageID,
-        message_id: rootMessageID,
-        name: "???",
-        path: "missing.frontend",
-        board: repls[0].Board(),
-      })
-      posts = append(posts, repls...)
-      op = posts[0]
-    }
-  } else {
-    posts = append(posts, op)
-    if self.daemon.database.ThreadHasReplies(rootMessageID) {
-    repls :=  self.daemon.database.GetThreadReplyPostModels(self.prefix, rootMessageID, 0)
-    if repls == nil {
-      log.Println("failed to regen thread, replies was nil for op", rootMessageID)
-      return
-    }
-    posts = append(posts, repls...)
-  }
-
-  }
-  // the link that points back to the board index
-  back_link := linkModel{
-    text: "back to board index",
-    link: fmt.Sprintf("%s%s-0.html", self.prefix, op.Board()),
-  }
-  // the links for this thread
-  links := []LinkModel{back_link}
-  // make thread model
-  thread := thread{
-    prefix: self.prefix,
-    links: links,
-    posts: posts,
-  }
-  // get filename for thread
-  fname := self.getFilenameForThread(rootMessageID)
-  log.Println("regen page", fname)
-  // open writer for file
-  wr, err := OpenFileWriter(fname)
-  if err != nil {
-    log.Println(err)
-    return
-  }
-  // render the thread
-  err = thread.RenderTo(wr)
-  wr.Close()
-  if err == nil {
-  } else {
-    log.Printf("failed to render %s", err)
-  }  
-}
 
 func (self httpFrontend) poll() {
+  var err error
+  self.r_conn, self.r_chnl, err = rabbitConnect(self.r_url)
+  
+  if err != nil {
+    log.Println("failed to connect to rabbimq", err)
+    return
+  }
+
+  self.r_q, err = rabbitQueue("srndv2", self.r_chnl)
+  if err != nil {
+    log.Println("failed to create queue", err)
+  }
+
+  // trigger regen
+  if self.regen_on_start {
+    self.regenAll()
+  }
+
+  
   chnl := self.PostsChan()
   modChnl := self.modui.MessageChan()
-  for {
-    select {
-    case nntp := <- modChnl:
-      // forward signed messages to daemon
-      self.postchan <- nntp
-    case nntp := <- chnl:
-      // get root post and tell frontend to regen that thread
-      if len(nntp.Reference()) > 0 {
-        self.regenThreadChan <- nntp.Reference()
-      } else {
-        self.regenThreadChan <- nntp.MessageID()
-      }
-      // regen the newsgroup we're in
-      // TODO: regen only what we need to
-      pages := self.daemon.database.GetGroupPageCount(nntp.Newsgroup())
-      // regen all pages
-      var page int64
-      for ; page < pages ; page ++ {
-        req := groupRegenRequest{nntp.Newsgroup(), int(page)}
-        self.regenGroupChan <- req
-      }
-      // regen ukko
-      self.ukkoChan <- true
-    }
-  }
-}
-
-// select loop for channels
-func (self httpFrontend) pollregen() {
   for {
     select {
       // listen for regen thread requests
     case msgid := <- self.regenThreadChan:
       self.regenerateThread(msgid)
-      // clear reference
-      msgid = ""
       // listen for regen board requests
     case req := <- self.regenGroupChan:
-      self.regenerateBoardPage(req.group, req.page)
+      self.regenBoard[fmt.Sprintf("%s|%s", req.group, req.page)] = req
+    case nntp := <- modChnl:
+      // forward signed messages to daemon
+      self.postchan <- nntp
+    case nntp := <- chnl:
+      // get root post and tell frontend to regen that thread
+      var msgid string
+      if len(nntp.Reference()) > 0 {
+        msgid = nntp.Reference()
+      } else {
+        msgid = nntp.MessageID()
+      }
+      self.regenerateThread(msgid)
+      // regen the newsgroup we're in
+      // TODO: regen only what we need to
+      pages := self.daemon.database.GetGroupPageCount(nntp.Newsgroup())
+      // regen all pages
+      var page int64
+      group := nntp.Newsgroup()
+      for ; page < pages ; page ++ {
+        req := groupRegenRequest{
+          group: group,
+          page: int(page),
+        }
+        self.regenBoard[fmt.Sprintf("%s|%s", req.group, req.page)] = req
+      }
+      // regen ukko
+    case regen_front := <- self.ukkoChan:
+      self.regenUkko()
+      if regen_front {
+        self.regenFrontPage()
+      }
+    case _ = <- self.regenBoardTicker.C:
+      for _, v := range self.regenBoard {
+        self.regenerateBoardPage(v.group, v.page)
+      }
+      self.regenBoard = make(map[string]groupRegenRequest)
     }
-  }
-}
 
-
-func (self httpFrontend) pollukko() {
-  for {
-    _ : <- self.ukkoChan
-    self.regenUkko()
-    self.regenFrontPage()
   }
 }
 
@@ -441,7 +268,44 @@ func (self httpFrontend) handle_liveui_options(wr http.ResponseWriter, r *http.R
 }
 
 func (self httpFrontend) handle_liveui_index(wr http.ResponseWriter, r *http.Request) {
-  io.WriteString(wr, renderTemplate("live.mustache", map[string]string{ "prefix" : self.prefix }))
+  io.WriteString(wr, template.renderTemplate("live.mustache", map[string]string{ "prefix" : self.prefix }))
+}
+
+func (self httpFrontend) regenerateThread(msgid string) {
+  fname := self.getFilenameForThread(msgid)
+  self.send_rabbit(fmt.Sprintf("thread %s %s %s %s", msgid, self.prefix, self.name, fname))
+}
+
+func (self httpFrontend) regenerateBoardPage(board string, page int) {
+  fname := self.getFilenameForBoardPage(board, page)
+  self.send_rabbit(fmt.Sprintf("board-page %s %s %s %d %s", self.prefix, self.name, board, page, fname))
+}
+
+func (self httpFrontend) regenFrontPage() {
+  self.send_rabbit(fmt.Sprintf("front 10 %s %s", self.name, filepath.Join(self.webroot_dir, "index.html")))
+}
+
+func (self httpFrontend) regenUkko() {
+  self.send_rabbit(fmt.Sprintf("ukko %s %s %s", self.prefix, self.name,  filepath.Join(self.webroot_dir, "ukko.html")))
+}
+
+
+func (self httpFrontend) send_rabbit(line string) {
+  var err error
+  log.Println("[MQ] Line:", line)
+  err = self.r_chnl.Publish(
+    "", // exchange
+    self.r_q.Name,     // routing key
+    false,  // mandatory
+    false,  // immediate
+    amqp.Publishing{
+      DeliveryMode: amqp.Persistent,
+      ContentType: "text/plain",
+      Body:        []byte(line),
+    })
+  if err != nil {
+    log.Println("failed to tell rabbit mq:", err)
+  }
 }
 
 // handle new post via http request for a board
@@ -654,7 +518,7 @@ func (self httpFrontend) handle_postform(wr http.ResponseWriter, r *http.Request
   if len(post_fail) > 0 {
     wr.WriteHeader(200)
     resp_map["reason"] = post_fail
-    io.WriteString(wr, renderTemplate("post_fail.mustache", resp_map))
+    io.WriteString(wr, template.renderTemplate("post_fail.mustache", resp_map))
     return
   }
   // set message
@@ -693,7 +557,7 @@ func (self httpFrontend) handle_postform(wr http.ResponseWriter, r *http.Request
   msg_id := nntp.headers.Get("References", nntp.MessageID())
   // render response as success
   url = fmt.Sprintf("%sthread-%s.html", self.prefix, ShortHashMessageID(msg_id))
-  io.WriteString(wr, renderTemplate("post_success.mustache", map[string]string {"message_id" : nntp.MessageID(), "redirect_url" : url}))
+  io.WriteString(wr, template.renderTemplate("post_success.mustache", map[string]string {"message_id" : nntp.MessageID(), "redirect_url" : url}))
 }
 
 
@@ -779,29 +643,21 @@ func (self httpFrontend) Mainloop() {
   self.httpmux.Path("/live/options").HandlerFunc(self.handle_liveui_options).Methods("GET")
   self.httpmux.Path("/live/ws").HandlerFunc(self.handle_liveui).Methods("GET")
 
+  var err error
 
-
-  
-  // make regen threads
-  for threads > 0 {    
-    go self.pollregen()
-    threads -- 
-  }
-
-  // poll for ukko regen
-  go self.pollukko()
-  
   // poll channels
   go self.poll()
-  // trigger regen
-  if self.regen_on_start {
-    go self.regenAll()
-  }
-
+  // regen ukko / front page
+  tick := time.NewTicker(time.Second * 30)
+  chnl := tick.C
+  go func() {
+    t := <- chnl
+    self.ukkoChan <- t.Minute() == 0 && t.Second() < 30
+  }()
   // start webserver here
   log.Printf("frontend %s binding to %s", self.name, self.bindaddr)
   
-  err := http.ListenAndServe(self.bindaddr, self.httpmux)
+  err = http.ListenAndServe(self.bindaddr, self.httpmux)
   if err != nil {
     log.Fatalf("failed to bind frontend %s %s", self.name, err)
   }
@@ -815,9 +671,12 @@ func (self httpFrontend) Regen(msg ArticleEntry) {
 
 
 // create a new http based frontend
-func NewHTTPFrontend(daemon *NNTPDaemon, config map[string]string) Frontend {
+func NewHTTPFrontend(daemon *NNTPDaemon, config map[string]string, url string) Frontend {
   var front httpFrontend
   front.daemon = daemon
+  front.r_url = url
+  front.regenBoardTicker = time.NewTicker(time.Second * 10)
+  front.regenBoard = make(map[string]groupRegenRequest)
   front.attachments = mapGetInt(config, "allow_files", 1) == 1
   front.bindaddr = config["bind"]
   front.name = config["name"]

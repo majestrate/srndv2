@@ -32,6 +32,7 @@ type SRNdConfig struct {
   feeds []FeedConfig
   frontend map[string]string
   system map[string]string
+  worker map[string]string
 }
 
 // check for config files
@@ -52,7 +53,6 @@ func CheckConfig() {
     }
   }
 }
-
 
 // generate default feeds.ini
 func GenFeedsConfig() error {
@@ -120,6 +120,13 @@ func GenSRNdConfig() error {
   secret_bytes := nacl.RandBytes(8)
   secret := base32.StdEncoding.EncodeToString(secret_bytes)
   sect.Add("api-secret", secret)
+
+  // rabbitmq worker config section
+  sect = conf.NewSection("rabbitmq")
+  sect.Add("threads", "1")
+  sect.Add("url", "amqp://127.0.0.1/")
+  sect.Add("convert", "/usr/bin/convert")
+  sect.Add("ffmpeg", "/usr/bin/ffmpeg")
   
   return configparser.Save(conf, "srnd.ini")
 }
@@ -161,6 +168,14 @@ func ReadConfig() *SRNdConfig {
   }
 
   sconf.store = s.Options()
+
+  s, err = conf.Section("rabbitmq")
+  if err != nil {
+    log.Println("no section 'rabbitmq' in srnd.ini")
+    return nil
+  }
+
+  sconf.worker = s.Options()
 
 
   // frontend config

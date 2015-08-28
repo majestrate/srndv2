@@ -165,6 +165,22 @@ func (self PostgresDatabase) AddModPubkey(pubkey string) error {
   return err
 }
 
+func (self PostgresDatabase) GetGroupForMessage(message_id string) (group string, err error) {
+  err = self.conn.QueryRow("SELECT newsgroup FROM ArticlePosts WHERE message_id = $1", message_id).Scan(&group)
+  return 
+}
+
+
+func(self PostgresDatabase) GetPageForRootMessage(root_message_id string) (group string, page int64, err error) {
+  err = self.conn.QueryRow("SELECT newsgroup FROM ArticleThreads WHERE root_message_id = $1", root_message_id).Scan(&group)
+  if err == nil {
+    perpage, _ := self.GetPagesPerBoard(group)
+    err = self.conn.QueryRow("WITH thread(bump) AS (SELECT last_bump FROM ArticleThreads WHERE root_message_id = $1 ) SELECT COUNT(*) FROM ( SELECT last_bump FROM ArticleThreads INNER JOIN thread ON (thread.bump <= ArticleThreads.last_bump AND newsgroup = $2 ) ) AS amount", root_message_id, group).Scan(&page)
+    return group, page / int64(perpage), err
+  }
+  return
+}
+
 func (self PostgresDatabase) CheckModPubkeyGlobal(pubkey string) bool {
   var result int64
   _ = self.conn.QueryRow("SELECT COUNT(*) FROM ModPrivs WHERE pubkey = $1 AND newsgroup = $2 AND permission = $3", pubkey, "overchan", "all").Scan(&result)
@@ -267,7 +283,10 @@ func (self PostgresDatabase) UnMarkModPubkeyGlobal(pubkey string) (err error) {
   return
 }
 
-
+func (self PostgresDatabase) CountThreadReplies(root_message_id string) (repls int64) {
+  _ = self.conn.QueryRow("SELECT COUNT(message_id) FROM ArticlePosts WHERE ref_id = $1", root_message_id).Scan(&repls)
+  return
+}
 
 func (self PostgresDatabase) GetRootPostsForExpiration(newsgroup string, threadcount int) (roots []string) {
   
@@ -312,53 +331,36 @@ func (self PostgresDatabase) GetGroupPageCount(newsgroup string) int64 {
   return ( count / 10 ) + 1
 }
 
-// TODO: optimize
+// only fetches root posts
+// does not update the thread contents
 func (self PostgresDatabase) GetGroupForPage(prefix, frontend, newsgroup string, pageno, perpage int) BoardModel {
   var threads []ThreadModel
   pages := self.GetGroupPageCount(newsgroup)
-  rows, err := self.conn.Query("SELECT newsgroup, message_id, name, subject, path, time_posted, message FROM ArticlePosts WHERE message_id IN ( SELECT root_message_id FROM ArticleThreads WHERE newsgroup = $1 ORDER BY last_bump DESC OFFSET $2 LIMIT $3 )", newsgroup, pageno * perpage, perpage)
+  rows, err := self.conn.Query("WITH roots(root_message_id) AS ( SELECT root_message_id FROM ArticleThreads WHERE newsgroup = $1 ORDER BY last_bump DESC OFFSET $2 LIMIT $3 ) SELECT p.newsgroup, p.message_id, p.name, p.subject, p.path, p.time_posted, p.message FROM ArticlePosts p INNER JOIN roots ON ( roots.root_message_id = p.message_id )", newsgroup, pageno * perpage, perpage)
   if err == nil {
     for rows.Next() {
 
-      op := post{
+      p := post{
         prefix: prefix,
       }
-      rows.Scan(&op.board, &op.message_id, &op.name, &op.subject, &op.path, &op.posted, &op.message)
-
-      op.op = true
-      op.parent = op.message_id
-      _ = self.conn.QueryRow("SELECT pubkey FROM ArticleKeys WHERE message_id = $1", op.message_id).Scan(&op.pubkey)
-      
-      op.sage = isSage(op.subject)
-      atts := self.GetPostAttachmentModels(prefix, op.message_id)
+      rows.Scan(&p.board, &p.message_id, &p.name, &p.subject, &p.path, &p.posted, &p.message)
+      p.parent = p.message_id
+      p.op = true
+      _ = self.conn.QueryRow("SELECT pubkey FROM ArticleKeys WHERE message_id = $1", p.message_id).Scan(&p.pubkey)
+      p.sage = isSage(p.subject)
+      atts := self.GetPostAttachmentModels(prefix, p.message_id)
       if atts != nil {
-        op.attachments = append(op.attachments, atts...)
-      }
-      p := op.Truncate(512)
-      rows_repl, err := self.conn.Query("SELECT newsgroup, message_id, ref_id, name, subject, path, time_posted, message FROM ArticlePosts WHERE message_id IN ( SELECT message_id FROM ArticlePosts WHERE ref_id = $1 ORDER BY time_posted DESC LIMIT $2 ) ORDER BY time_posted ASC", op.message_id, 5)
-      posts := []PostModel{p}
-      if err == nil {
-        for rows_repl.Next() {
-          repl := post{
-            prefix: prefix, 
-          }
-          rows_repl.Scan(&repl.board,  &repl.message_id, &repl.parent, &repl.name, &repl.subject, &repl.path, &repl.posted, &repl.message)
-          
-          repl.sage = isSage(repl.subject)
-          atts = self.GetPostAttachmentModels(prefix, repl.message_id)
-          if atts != nil {
-            repl.attachments = append(repl.attachments, atts...)
-          }
-          _ = self.conn.QueryRow("SELECT pubkey FROM ArticleKeys WHERE message_id = $1", repl.message_id).Scan(&repl.pubkey)
-          
-          r := repl.Truncate(512)
-          posts = append(posts, r)
-        }
-        rows_repl.Close()
+        p.attachments = append(p.attachments, atts...)
       }
       threads = append(threads, thread{
         prefix: prefix,
-        posts: posts,
+        posts: []PostModel{p},
+        links: []LinkModel{
+          linkModel{
+            text: newsgroup,
+            link: fmt.Sprintf("%s%s-0.html", prefix, newsgroup),
+          },
+        },
       })
     }
     rows.Close()
@@ -505,20 +507,20 @@ func (self PostgresDatabase) GetGroupThreads(group string, recv chan string) {
   }
 }
 
-func (self PostgresDatabase) GetLastBumpedThreads(newsgroup string, threads int) (roots []string) {
+func (self PostgresDatabase) GetLastBumpedThreads(newsgroup string, threads int) (roots []ArticleEntry) {
   var err error
   var rows *sql.Rows
   if len(newsgroup) > 0 { 
-    rows, err = self.conn.Query("SELECT root_message_id FROM ArticleThreads WHERE newsgroup = $1 ORDER BY last_bump DESC LIMIT $2", newsgroup, threads)
+    rows, err = self.conn.Query("SELECT root_message_id, newsgroup FROM ArticleThreads WHERE newsgroup = $1 ORDER BY last_bump DESC LIMIT $2", newsgroup, threads)
   } else {
-    rows, err = self.conn.Query("SELECT root_message_id FROM ArticleThreads WHERE newsgroup != 'ctl' ORDER BY last_bump DESC LIMIT $1", threads)
+    rows, err = self.conn.Query("SELECT root_message_id, newsgroup FROM ArticleThreads WHERE newsgroup != 'ctl' ORDER BY last_bump DESC LIMIT $1", threads)
   }
 
   if err == nil {
     for rows.Next() {
-      var root string
-      rows.Scan(&root)
-      roots = append(roots, root)
+      var ent ArticleEntry
+      rows.Scan(&ent[0], &ent[1])
+      roots = append(roots, ent)
     }
     rows.Close()
   } else {

@@ -20,6 +20,7 @@ func (self ArticleEntry) MessageID() string {
 }
 
 type Database interface {
+  Close()
   CreateTables()
   HasNewsgroup(group string) bool
   HasArticle(message_id string) bool
@@ -36,6 +37,10 @@ type Database interface {
   // return an article entry or nil when it doesn't exist + and error if it happened
   GetMessageIDByHash(hash string) (ArticleEntry, error)
 
+  // what page is the thread with this root post on?
+  // return newsgroup, pageno
+  GetPageForRootMessage(root_message_id string) (string, int64, error)
+  
   // record that a message given a message id was posted signed by this pubkey
   RegisterSigned(message_id, pubkey string) error
   
@@ -53,6 +58,9 @@ type Database interface {
   // if last > 0 then get that many of the last replies
   GetThreadReplies(root_message_id string, last int) []string
 
+  // count the number of replies to this thread
+  CountThreadReplies(root_message_id string) int64
+  
   // get all attachments for this message
   GetPostAttachments(message_id string) []string
 
@@ -78,9 +86,9 @@ type Database interface {
   // prefix and frontend are injected
   GetGroupForPage(prefix, frontend,  newsgroup string, pageno, perpage int) BoardModel
 
-  // get the root posts of the last N bumped threads globally, for ukko
-  GetLastBumpedThreads(newsgroup string, threadcount int) []string
-
+  // get the root posts of the last N bumped threads in a given newsgroup or globally for ukko
+  GetLastBumpedThreads(newsgroup string, threadcount int) []ArticleEntry
+  
   // get the PostModels for replies to a thread
   // prefix is injected into the post models
   GetThreadReplyPostModels(prefix, rootMessageID string, limit int) []PostModel

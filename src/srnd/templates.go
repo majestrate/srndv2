@@ -5,95 +5,219 @@
 package srnd
 
 import (
+  "fmt"
+  "github.com/hoisie/mustache"
   "io"
+  "io/ioutil"
+  "log"
+  "path/filepath"
+  "sort"
 )
 
-// base model type
-type BaseModel interface {
+type templateEngine struct {
+  // every newsgroup
+  groups map[string]GroupModel
+  // loaded templates
+  templates map[string]string
+  // root directory for templates
+  template_dir string
+}
 
-  // site url prefix
-  Prefix() string
+func (self templateEngine) templateCached(name string) (ok bool) {
+  _, ok = self.templates[name]
+  return 
+}
 
-  // render to a writer
-  RenderTo(wr io.Writer) error
+func (self templateEngine) getTemplate(name string) (t string) {
+  if self.templateCached(name) {
+    t, _ = self.templates[name]
+  } else {
+    // ignores errors, this is probably bad
+    b, _ := ioutil.ReadFile(filepath.Join(self.template_dir, name))
+    t = string(b)
+    self.templates[name] = t
+  }
+  return
+}
 
+func (self templateEngine) renderTemplate(name string, obj interface{}) string {
+  t := self.getTemplate(name)
+  return mustache.Render(t, obj)
+}
+
+// get a board model given a newsgroup
+// load un updated board model if we don't have it
+func (self templateEngine) obtainBoard(prefix, frontend, group string, db Database) (model GroupModel) {
+  model, ok := self.groups[group]
+  if ! ok  {
+    p := db.GetGroupPageCount(group)
+    pages := int(p)
+    // ignore error
+    perpage, _ := db.GetThreadsPerPage(group)
+    for page := 0 ; page < pages ; page ++ {
+      model = append(model, db.GetGroupForPage(prefix, frontend, group, page, int(perpage)))
+    }
+    self.groups[group] = model
+  }
+  return
+
+}
+// generate a board page
+func (self templateEngine) genBoardPage(prefix, frontend, newsgroup string, page int, outfile string, db Database) {
+  // get it
+  board := self.obtainBoard(prefix, frontend, newsgroup, db)
+  // update it
+  board = board.Update(page, db)
+  // save it
+  self.groups[newsgroup] = board
+  wr, err := OpenFileWriter(outfile)
+  if err == nil {
+    board[page].RenderTo(wr)
+    wr.Close()
+    log.Println("wrote file", outfile)
+  } else {
+    log.Println("error generating board page", page, "for", newsgroup, err)
+  }
+}
+
+// generate every page for a board
+func (self templateEngine) genBoard(prefix, frontend, newsgroup, outdir string, db Database) {
+  // get it
+  board := self.obtainBoard(prefix, frontend, newsgroup, db)
+  // update it
+  board = board.UpdateAll(db)
+  // save it
+  self.groups[newsgroup] = board
+
+  pages := len(board)
+  for page := 0 ; page < pages ; page ++ {
+    outfile := filepath.Join(outdir, fmt.Sprintf("%s-%d.html", newsgroup, page))
+    wr, err := OpenFileWriter(outfile)
+    if err == nil {
+      board[page].RenderTo(wr)
+      wr.Close()
+      log.Println("wrote file", outfile)
+    } else {
+      log.Println("error generating board page", page, "for", newsgroup, err)
+    }
+  }
+}
+
+func (self templateEngine) genUkko(prefix, frontend, outfile string, database Database) {
+  // get the last 15 bumped threads globally
+  var threads []ThreadModel
+  for _, article := range database.GetLastBumpedThreads("", 15) {
+    newsgroup, msgid := article[0], article[1]
+    // obtain board
+    board := self.obtainBoard(prefix, frontend, newsgroup, database)
+    board = board.Update(0, database)
+    board[0] = board[0].UpdateThread(msgid, database)
+    for _, th := range(board[0].Threads()) {
+      if th.OP().MessageID() == msgid {
+        threads = append(threads, th)
+        break
+      }
+    }
+    // save state of board
+    self.groups[newsgroup] = board
+  }
+  wr, err := OpenFileWriter(outfile)
+  if err == nil {
+    io.WriteString(wr, template.renderTemplate("ukko.mustache", map[string]interface{} { "prefix" : prefix, "threads" : threads }))
+    wr.Close()
+    log.Println("wrote file", outfile)
+  } else {
+    log.Println("error generating ukko", err)
+  }
+}
+
+func (self templateEngine) genThread(messageID, prefix, frontend, outfile string, db Database) {
+  
+  newsgroup, page, err := db.GetPageForRootMessage(messageID)
+  if err != nil {
+    log.Println(err)
+  }
+  // get it
+  board := self.obtainBoard(prefix, frontend, newsgroup, db)
+  // update our thread
+  board[page] = board[page].UpdateThread(messageID, db)
+  // save it
+  self.groups[newsgroup] = board
+  for _, th := range board[page].Threads() {
+    if th.OP().MessageID() == messageID {
+      // we found it
+      wr, err := OpenFileWriter(outfile)
+      if err == nil {
+        th.RenderTo(wr)
+        wr.Close()
+        log.Println("wrote file", outfile)
+      } else {
+        log.Println(err)
+      }
+    }
+  }
+}
+
+func newTemplateEngine(dir string) *templateEngine {
+  return &templateEngine{
+    groups: make(map[string]GroupModel),
+    templates: make(map[string]string),
+    template_dir: dir,
+  }
+}
+
+var template = newTemplateEngine(defaultTemplateDir())
+
+
+func renderPostForm(prefix, board, op_msg_id string) string {
+  url := prefix + "post/" + board
+  button := "New Thread"
+  if op_msg_id != "" {
+    button = "Reply"
+  }
+  return template.renderTemplate("postform.mustache", map[string]string { "post_url" : url, "reference" : op_msg_id , "button" : button } )
 }
 
 
-// for attachments
-type AttachmentModel interface {
 
-  BaseModel
-  
-  Thumbnail() string
-  Source() string
-  Filename() string
-  
-}
+func (self templateEngine) genFrontPage(top_count int, frontend_name, outfile string, db Database) {
+  // the graph for the front page
+  var frontpage_graph boardPageRows
 
-// for individual posts
-type PostModel interface {
+  // for each group
+  groups := db.GetAllNewsgroups()
+  for idx, group := range groups {
+    if idx >= top_count {
+      break
+    }
+    // posts per hour
+    hour := db.CountPostsInGroup(group, 3600)
+    // posts per day
+    day := db.CountPostsInGroup(group, 86400)
+    // posts total
+    all := db.CountPostsInGroup(group, 0)
+    frontpage_graph = append(frontpage_graph, boardPageRow{
+      All: all,
+      Day: day,
+      Hour: hour,
+      Board: group,
+    })
+  }
+  wr, err := OpenFileWriter(outfile)
+  if err != nil {
+    log.Println("cannot render front page", err)
+    return
+  }
 
-  BaseModel
-
-  CSSClass() string
-  
-  MessageID() string
-  PostHash() string
-  ShortHash() string
-  PostURL() string
-  Frontend() string
-  Subject() string
-  Name() string
-  Date() string
-  OP() bool
-  Attachments() []AttachmentModel
-  Board() string
-  Sage() bool
-  Pubkey() string
-  Reference() string
-  
-  RenderBody() string
-  RenderPost() string
-
-  // truncate body to a certain size
-  // return copy
-  Truncate(amount int) PostModel
-  
-}
-
-// interface for models that have a navbar
-type NavbarModel interface {
-
-  Navbar() string
-
-}
-
-// for threads
-type ThreadModel interface {
-
-  BaseModel
-  NavbarModel
-  
-  OP() PostModel
-  Replies() []PostModel
-  Board() string
-  BoardURL() string
-}
-
-// board interface
-type BoardModel interface {
-
-  BaseModel
-  NavbarModel
-  
-  Frontend() string
-  Name() string
-  Threads() []ThreadModel
-}
-
-type LinkModel interface {
-
-  Text() string
-  LinkURL() string
+  param := make(map[string]interface{})
+  sort.Sort(frontpage_graph)
+  param["graph"] = frontpage_graph
+  param["frontend"] = frontend_name
+  param["totalposts"] = db.ArticleCount()
+  _, err = io.WriteString(wr, self.renderTemplate("frontpage.mustache", param))
+  if err != nil {
+    log.Println("error writing front page", err)
+  }
+  wr.Close()
+  log.Println("wrote file", outfile)
 }

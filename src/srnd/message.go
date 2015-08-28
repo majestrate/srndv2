@@ -269,7 +269,7 @@ func (self nntpArticle) Posted() int64 {
 }
 
 func (self nntpArticle) Message() string {
-  return self.message.body.String()
+  return strings.Trim(self.message.body.String(), "\x00")
 }
 
 func (self nntpArticle) Path() string {

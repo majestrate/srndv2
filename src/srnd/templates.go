@@ -68,8 +68,6 @@ func (self templateEngine) genBoardPage(prefix, frontend, newsgroup string, page
   board := self.obtainBoard(prefix, frontend, newsgroup, db)
   // update it
   board = board.Update(page, db)
-  // save it
-  self.groups[newsgroup] = board
   wr, err := OpenFileWriter(outfile)
   if err == nil {
     board[page].RenderTo(wr)
@@ -78,6 +76,8 @@ func (self templateEngine) genBoardPage(prefix, frontend, newsgroup string, page
   } else {
     log.Println("error generating board page", page, "for", newsgroup, err)
   }
+  // save it
+  self.groups[newsgroup] = board
 }
 
 // generate every page for a board
@@ -111,7 +111,6 @@ func (self templateEngine) genUkko(prefix, frontend, outfile string, database Da
     // obtain board
     board := self.obtainBoard(prefix, frontend, newsgroup, database)
     board = board.Update(0, database)
-    board[0] = board[0].UpdateThread(msgid, database)
     for _, th := range(board[0].Threads()) {
       if th.OP().MessageID() == msgid {
         threads = append(threads, th)
@@ -140,7 +139,7 @@ func (self templateEngine) genThread(messageID, prefix, frontend, outfile string
   // get it
   board := self.obtainBoard(prefix, frontend, newsgroup, db)
   // update our thread
-  board[page] = board[page].UpdateThread(messageID, db)
+  board[page] = board[page].Update(db)
   // save it
   self.groups[newsgroup] = board
   for _, th := range board[page].Threads() {

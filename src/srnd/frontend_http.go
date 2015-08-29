@@ -160,13 +160,14 @@ func (self httpFrontend) poll() {
     log.Println("failed to create queue", err)
   }
 
+  self.regenFrontPage()
+  
   // trigger regen
   if self.regen_on_start {
     self.regenAll()
   }
 
   
-  chnl := self.PostsChan()
   modChnl := self.modui.MessageChan()
   for {
     select {
@@ -179,7 +180,7 @@ func (self httpFrontend) poll() {
     case nntp := <- modChnl:
       // forward signed messages to daemon
       self.postchan <- nntp
-    case nntp := <- chnl:
+    case nntp := <- self.recvpostchan:
       // get root post and tell frontend to regen that thread
       var msgid string
       if len(nntp.Reference()) > 0 {

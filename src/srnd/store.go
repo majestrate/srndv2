@@ -411,8 +411,8 @@ func read_message(r io.Reader) (NNTPMessage, error) {
       }
     } else {
       // plaintext attachment
-      buff := new(bytes.Buffer)
-      _, err = io.Copy(buff, msg.Body)
+      var buff bytes.Buffer
+      _, err = io.Copy(&buff, msg.Body)
       nntp.message = createPlaintextAttachment(buff.String())
       return nntp, err
     }

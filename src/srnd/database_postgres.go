@@ -336,7 +336,7 @@ func (self PostgresDatabase) GetGroupPageCount(newsgroup string) int64 {
 func (self PostgresDatabase) GetGroupForPage(prefix, frontend, newsgroup string, pageno, perpage int) BoardModel {
   var threads []ThreadModel
   pages := self.GetGroupPageCount(newsgroup)
-  rows, err := self.conn.Query("WITH roots(root_message_id) AS ( SELECT root_message_id FROM ArticleThreads WHERE newsgroup = $1 ORDER BY last_bump DESC OFFSET $2 LIMIT $3 ) SELECT p.newsgroup, p.message_id, p.name, p.subject, p.path, p.time_posted, p.message FROM ArticlePosts p INNER JOIN roots ON ( roots.root_message_id = p.message_id )", newsgroup, pageno * perpage, perpage)
+  rows, err := self.conn.Query("WITH roots(root_message_id, last_bump) AS ( SELECT root_message_id, last_bump FROM ArticleThreads WHERE newsgroup = $1 ORDER BY last_bump DESC OFFSET $2 LIMIT $3 ) SELECT p.newsgroup, p.message_id, p.name, p.subject, p.path, p.time_posted, p.message FROM ArticlePosts p INNER JOIN roots ON ( roots.root_message_id = p.message_id ) ORDER BY roots.last_bump DESC", newsgroup, pageno * perpage, perpage)
   if err == nil {
     for rows.Next() {
 

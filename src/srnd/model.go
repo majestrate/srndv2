@@ -135,7 +135,7 @@ func (self GroupModel) UpdateAll(db Database) GroupModel {
 // update a certain page
 // does nothing if out of bounds
 func (self GroupModel) Update(page int, db Database) GroupModel {
-  if page <= len(self) {
+  if len(self) > page {
     self[page] = self[page].Update(db)
   }
   return self
@@ -478,9 +478,12 @@ func (self thread) Update(db Database) ThreadModel {
   reply_count := db.CountThreadReplies(root)
 
   if int(reply_count) != len(self.posts) {
-    // fetch all replies
-    self.posts = []PostModel{self.posts[0]}
-    self.posts = append(self.posts, db.GetThreadReplyPostModels(self.prefix, root, 0)...)
+
+    return thread{
+      posts: append([]PostModel{self.posts[0]}, db.GetThreadReplyPostModels(self.prefix, root, 0)...),
+      links: self.links,
+      prefix: self.prefix,
+    }
   }
   return self
 }

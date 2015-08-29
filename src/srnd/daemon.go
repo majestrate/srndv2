@@ -264,7 +264,7 @@ func (self *NNTPDaemon) polloutfeeds() {
         if use && feed.policy != nil {
           if feed.policy.AllowsNewsgroup(nntp.Newsgroup()) {
             if feed.info.mode == "reader" {
-              log.Println("ask", feed.conf.addr, "for", nntp.MesaageID())
+              log.Println("ask for", nntp.MesaageID())
               feed.sync <- nntp
             }
           }

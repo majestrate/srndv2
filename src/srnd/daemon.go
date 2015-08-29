@@ -35,8 +35,10 @@ type NNTPDaemon struct {
   infeed chan NNTPMessage
   // channel to load messages to infeed given their message id
   infeed_load chan string
-  // channel for broadcasting a message to all feeds given their message id
-  send_all_feeds chan string
+  // channel for broadcasting a message to all feeds given their newsgroup, message_id
+  send_all_feeds chan ArticleEntry
+  // channel for broadcasting an ARTICLE command to all feeds in reader mode
+  ask_for_article chan ArticleEntry
 }
 
 func (self *NNTPDaemon) End() {
@@ -49,12 +51,12 @@ func (self *NNTPDaemon) End() {
 func (self *NNTPDaemon) newConnection(conn net.Conn, inbound bool, policy *FeedPolicy) NNTPConnection {
   allow_tor := self.conf.daemon["allow_tor"]
   allow_tor_attachments := self.conf.daemon["allow_tor_attachments"]
-  feed := NNTPConnection{conn, textproto.NewConn(conn), inbound, self.debug, new(ConnectionInfo), policy,  make(chan string, 512), self.store, self.store, allow_tor == "1", allow_tor_attachments == "1"}
+  feed := NNTPConnection{conn, textproto.NewConn(conn), inbound, self.debug, new(ConnectionInfo), policy,  make(chan ArticleEntry, 128), self.store, self.store, allow_tor == "1", allow_tor_attachments == "1"}
   self.feeds[feed] = ! inbound
   return feed
 }
 
-func (self *NNTPDaemon) persistFeed(conf FeedConfig) {
+func (self *NNTPDaemon) persistFeed(conf FeedConfig, mode string) {
   for {
     if self.running {
       
@@ -130,33 +132,33 @@ func (self *NNTPDaemon) persistFeed(conf FeedConfig) {
           log.Println("connected to", conf.addr)
         } else {
           log.Println("failed to connect to", conf.addr)
-					time.Sleep(5)
+					time.Sleep(time.Second * 5)
           continue
         }
       }
       policy := &conf.policy
       nntp := self.newConnection(conn, false, policy)
-      // start syncing in background
-      go func() {
-        if self.sync_on_start {
-          log.Println("sync on start")
-          // get every article
-          articles := self.database.GetAllArticles()
-          // wait 5 seconds for feed to handshake
-          time.Sleep(5 * time.Second)
-          log.Println("outfeed begin sync")
-          for _, result := range articles {
-            msgid := result[0]
-            group := result[1]
-            if policy.AllowsNewsgroup(group) {
-              //XXX: will this crash if interrupted?
-              nntp.sync <- msgid
+      // start syncing in background if streaming mode
+      if mode == "stream" {
+        go func() {
+          if self.sync_on_start {
+            log.Println("sync on start")
+            // get every article
+            articles := self.database.GetAllArticles()
+            // wait 5 seconds for feed to handshake
+            time.Sleep(5 * time.Second)
+            log.Println("outfeed begin sync")
+            for _, result := range articles {
+              if policy.AllowsNewsgroup(result.Newsgroup()) {
+                //XXX: will this crash if interrupted?
+                nntp.sync <- result
+              }
             }
+            log.Println("outfeed end sync")
           }
-          log.Println("outfeed end sync")
-        }
-      }()
-      nntp.HandleOutbound(self, conf.quarks)
+        }()
+      }
+      nntp.HandleOutbound(self, conf.quarks, mode)
       log.Println("remove outfeed")
       delete(self.feeds, nntp)
     }
@@ -174,7 +176,8 @@ func (self *NNTPDaemon) Run() {
   
   // persist outfeeds
   for idx := range self.conf.feeds {
-    go self.persistFeed(self.conf.feeds[idx])
+    go self.persistFeed(self.conf.feeds[idx], "stream")
+    go self.persistFeed(self.conf.feeds[idx], "reader")
   }
 
   // start accepting incoming connections
@@ -244,18 +247,22 @@ func (self *NNTPDaemon) pollinfeed() {
 
 func (self *NNTPDaemon) polloutfeeds() {
   for {
-    msgid := <- self.send_all_feeds
-    // send all feeds
-    nntp := self.store.GetMessage(msgid)
-    if nntp == nil {
-      log.Printf("failed to load %s for federation", msgid)
-    } else {
+    select {
+    case nntp := <- self.send_all_feeds:
       for feed , use := range self.feeds {
         if use && feed.policy != nil {
           if feed.policy.AllowsNewsgroup(nntp.Newsgroup()) {
-            feed.sync <- nntp.MessageID()
-          } else {
-            log.Println("not syncing", msgid)
+            if feed.info.mode == "stream" {
+              feed.sync <- nntp
+            }
+          }
+        }
+      }
+    case nntp := <- self.ask_for_article:
+      for feed, use := range self.feeds {
+        if use && feed.policy != nil {
+          if feed.policy.AllowsNewsgroup(nntp.Newsgroup()) {
+            feed.sync <- nntp
           }
         }
       }
@@ -302,7 +309,7 @@ func (self *NNTPDaemon) pollmessages() {
     
     // queue to all outfeeds
     // XXX: blocking ?
-    self.send_all_feeds <- msgid
+    self.send_all_feeds <- ArticleEntry{msgid, group}
     // tell frontend
     // XXX: blocking ?
     if chnl != nil {
@@ -394,8 +401,9 @@ func (self *NNTPDaemon) Init() bool {
 
   self.infeed = make(chan NNTPMessage, 8)
   self.infeed_load = make(chan string)
-  self.send_all_feeds = make(chan string, 64)
+  self.send_all_feeds = make(chan ArticleEntry, 64)
   self.feeds = make(map[NNTPConnection]bool)
+  self.ask_for_article = make(chan ArticleEntry, 64)
 
   self.bind_addr = self.conf.daemon["bind"]
   

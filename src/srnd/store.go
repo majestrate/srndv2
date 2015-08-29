@@ -35,7 +35,7 @@ type ArticleStore interface {
   HasArticle(msgid string) bool
   // create a file for a message
   CreateFile(msgid string) io.WriteCloser
-  // create a file for a temp message
+  // create a file for a temp message, returns nil if it's already open
   CreateTempFile(msgid string) io.WriteCloser
   // get the filename of a message
   GetFilename(msgid string) string
@@ -239,6 +239,10 @@ func (self articleStore) CreateFile(messageID string) io.WriteCloser {
 // create a temp file for inboud articles
 func (self articleStore) CreateTempFile(messageID string) io.WriteCloser {
   fname := self.GetTempFilename(messageID)
+  if CheckFile(fname) {
+    log.Println(fname, "already open")
+    return nil
+  }
   file, err := os.Create(fname)
   if err != nil {
     log.Println("cannot open file", fname)
@@ -249,16 +253,24 @@ func (self articleStore) CreateTempFile(messageID string) io.WriteCloser {
 
 // return true if we have an article
 func (self articleStore) HasArticle(messageID string) bool {
-  return self.database.HasArticle(messageID)
+  return self.database.HasArticleLocal(messageID)
 }
 
 // get the filename for this article
 func (self articleStore) GetFilename(messageID string) string {
+  if ! ValidMessageID(messageID) {
+    log.Println("!!! bug: tried to open invalid message", messageID, "!!!")
+    return ""
+  }
   return filepath.Join(self.directory, messageID)
 }
 
 // get the filename for this article
 func (self articleStore) GetTempFilename(messageID string) string {
+  if ! ValidMessageID(messageID) {
+    log.Println("!!! bug: tried to open invalid temp message", messageID, "!!!")
+    return ""
+  }
   return filepath.Join(self.temp, messageID)
 }
 

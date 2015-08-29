@@ -577,8 +577,12 @@ func (self *NNTPConnection) sendCapabilities() {
   io.WriteString(wr, "101 we can haz do things\r\n")
   io.WriteString(wr, "VERSION 2\r\n")
   io.WriteString(wr, "IMPLEMENTATION srndv2 better than SRNd\r\n")
-  io.WriteString(wr, "STREAMING\r\n")
-  io.WriteString(wr, "READER\r\n")
+  if self.info.mode == "reader" {
+    io.WriteString(wr, "READER")
+  } else {
+    io.WriteString(wr, "STREAMING\r\n")
+    io.WriteString(wr, "MODE-READER\r\n")
+  }
   wr.Close()
 }
 

@@ -128,9 +128,11 @@ func (self *NNTPConnection) reader_mode(d *NNTPDaemon) {
         log.Println("we already have", msgid, "will not ask feed")
         continue
       }
+      self.info.access.Lock()
       self.txtconn.PrintfLine("ARTICLE %s", msgid)
       code, line, err := self.txtconn.ReadCodeLine(-1)
       if code == 430 {
+        self.info.access.Unlock()
         // they don't have it D:
         continue // TODO: back off?
       } else if code == 230 {
@@ -150,6 +152,7 @@ func (self *NNTPConnection) reader_mode(d *NNTPDaemon) {
       } else {
         log.Println("invalid outfeed response for reader mode:", code, line)
       }
+      self.info.access.Unlock()
       if err != nil {
         log.Println("error while outbound feed in reader mode", err)
         self.Quit()

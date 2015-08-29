@@ -602,7 +602,6 @@ func (self *NNTPConnection) Quit() {
 
 // close the connection
 func (self *NNTPConnection) Close() {
-  close(self.sync)
   err := self.conn.Close()
   if err != nil {
     log.Println(self.conn.RemoteAddr(), err)

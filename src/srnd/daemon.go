@@ -161,6 +161,7 @@ func (self *NNTPDaemon) persistFeed(conf FeedConfig, mode string) {
       nntp.HandleOutbound(self, conf.quarks, mode)
       log.Println("remove outfeed")
       delete(self.feeds, nntp)
+      close(nntp.sync)
     }
   }
   time.Sleep(1 * time.Second)

@@ -51,7 +51,7 @@ func (self *NNTPDaemon) End() {
 func (self *NNTPDaemon) newConnection(conn net.Conn, inbound bool, policy *FeedPolicy) NNTPConnection {
   allow_tor := self.conf.daemon["allow_tor"]
   allow_tor_attachments := self.conf.daemon["allow_tor_attachments"]
-  feed := NNTPConnection{conn, textproto.NewConn(conn), inbound, self.debug, new(ConnectionInfo), policy,  make(chan ArticleEntry, 128), self.store, self.store, allow_tor == "1", allow_tor_attachments == "1"}
+  feed := NNTPConnection{conn, textproto.NewConn(conn), inbound, self.debug, ConnectionInfo{}, policy,  make(chan ArticleEntry, 128), self.store, self.store, allow_tor == "1", allow_tor_attachments == "1"}
   self.feeds[feed] = ! inbound
   return feed
 }
@@ -260,11 +260,11 @@ func (self *NNTPDaemon) polloutfeeds() {
         }
       }
     case nntp := <- self.ask_for_article:
+      log.Println("ask for", nntp.MessageID())
       for feed, use := range self.feeds {
         if use && feed.policy != nil {
           if feed.policy.AllowsNewsgroup(nntp.Newsgroup()) {
             if feed.info.mode == "reader" {
-              log.Println("ask for", nntp.MessageID())
               feed.sync <- nntp
             }
           }

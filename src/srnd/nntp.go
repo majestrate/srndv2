@@ -31,7 +31,7 @@ type NNTPConnection struct {
   txtconn *textproto.Conn 
   inbound bool
   debug bool
-  info *ConnectionInfo
+  info ConnectionInfo
   policy *FeedPolicy
   // channel for senging sync messages
   sync chan ArticleEntry

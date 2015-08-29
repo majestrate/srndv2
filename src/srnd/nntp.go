@@ -100,12 +100,10 @@ func (self *NNTPConnection) HandleOutbound(d *NNTPDaemon, quarks map[string]stri
   }
   if mode == "reader" {
     // this is for sending ARTICLE commands
-    self.info.mode = mode
     self.reader_mode(d)
   } else if mode == "stream" {
     // if they support streaming and allow posting continue
     if self.info.supportsStream && self.info.allowsPosting {
-      self.info.mode = mode
       self.streaming_mode(d)
     } else if self.info.mode == "post" {
       // we are forced into post mode

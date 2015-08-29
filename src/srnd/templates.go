@@ -139,7 +139,7 @@ func (self templateEngine) genThread(messageID, prefix, frontend, outfile string
   // get it
   board := self.obtainBoard(prefix, frontend, newsgroup, db)
   // update our thread
-  board[page] = board[page].Update(db)
+  board[page] = board[page].UpdateThread(messageID, db)
   // save it
   self.groups[newsgroup] = board
   for _, th := range board[page].Threads() {

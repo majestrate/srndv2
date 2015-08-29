@@ -358,7 +358,6 @@ func (self *NNTPConnection) HandleInbound(d *NNTPDaemon) {
         if len(commands) == 2 && ValidMessageID(commands[1]) {
           article := commands[1]
           code := 239
-          file := d.store.CreateTempFile(article)
           ip_header := ""
           ip_banned := false
           headers_done := false
@@ -367,6 +366,12 @@ func (self *NNTPConnection) HandleInbound(d *NNTPDaemon) {
           is_signed := false
           message := "we are gud"
           reference := ""
+          file := d.store.CreateTempFile(article)
+          if file == nil {
+            code = 439
+            message = "we have this message"
+            read_more = false
+          }
           for {
             if err != nil {
               log.Println("error reading", article, err)

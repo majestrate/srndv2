@@ -567,6 +567,7 @@ func (self *NNTPConnection) HandleInbound(d *NNTPDaemon) {
             }
             log.Println("error fetching", msgid, err)
           }
+          log.Println("we don't have", msgid, "but we don't have it")
           self.txtconn.PrintfLine("430 No Such Article Found")
         } else {
           // invalid syntax

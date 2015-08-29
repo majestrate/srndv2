@@ -570,7 +570,6 @@ func (self *NNTPConnection) HandleInbound(d *NNTPDaemon) {
         self.txtconn.PrintfLine("500 we don't know command %s", cmd)
       }
     } else if self.info.mode == "reader" {
-      log.Println("our mode is reader")
       // reader mode
       if cmd == "ARTICLE" {
         // they requested an article

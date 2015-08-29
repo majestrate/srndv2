@@ -64,10 +64,15 @@ func (self templateEngine) obtainBoard(prefix, frontend, group string, db Databa
 }
 // generate a board page
 func (self templateEngine) genBoardPage(prefix, frontend, newsgroup string, page int, outfile string, db Database) {
+
   // get it
   board := self.obtainBoard(prefix, frontend, newsgroup, db)
   // update it
   board = board.Update(page, db)
+  if page > len(board) {
+    log.Println("board page should not exist", newsgroup ,page)
+    return
+  }
   wr, err := OpenFileWriter(outfile)
   if err == nil {
     board[page].RenderTo(wr)
@@ -140,10 +145,9 @@ func (self templateEngine) genThread(messageID, prefix, frontend, outfile string
   board := self.obtainBoard(prefix, frontend, newsgroup, db)
   // update our thread
   board[page] = board[page].UpdateThread(messageID, db)
-  // save it
-  self.groups[newsgroup] = board
   for _, th := range board[page].Threads() {
     if th.OP().MessageID() == messageID {
+      th = th.Update(db)
       // we found it
       wr, err := OpenFileWriter(outfile)
       if err == nil {
@@ -155,6 +159,8 @@ func (self templateEngine) genThread(messageID, prefix, frontend, outfile string
       }
     }
   }
+  // save it
+  self.groups[newsgroup] = board
 }
 
 func newTemplateEngine(dir string) *templateEngine {

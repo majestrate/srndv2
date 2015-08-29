@@ -141,11 +141,7 @@ func (self articleStore) queueGenerateThumbnail(infname string) (err error) {
 }
 
 func (self articleStore) GenerateThumbnail(infname string) (err error) {
-  if self.r_conn == nil {
-    return self.generateThumbnail(infname)
-  } else {
-    return self.queueGenerateThumbnail(infname)
-  }
+  return self.queueGenerateThumbnail(infname)
 }
 
 func (self articleStore) ReadMessage(r io.Reader) (NNTPMessage, error) {
@@ -165,18 +161,18 @@ func (self articleStore) StorePost(nntp NNTPMessage) (err error) {
     // store the data in the article
     self.database.RegisterArticle(nntp)
     for _, att := range nntp.Attachments() {
-      // save attachments in parallel
-      go self.saveAttachment(att)
+      // save attachments 
+      self.saveAttachment(att)
     }
   } else {
+    // record a tripcode
+    self.database.RegisterSigned(nntp.MessageID(), nntp.Pubkey())
     // we have inner data
     // store the signed data
     self.database.RegisterArticle(nntp_inner)
     for _, att := range nntp_inner.Attachments() {
       go self.saveAttachment(att)
     }
-    // record a tripcode
-    self.database.RegisterSigned(nntp.MessageID(), nntp.Pubkey())
   }
   return
 }
@@ -197,6 +193,7 @@ func (self articleStore) saveAttachment(att NNTPAttachment) {
     f.Close()
   }
   if err != nil {
+    log.Println(err)
     return
   }
   

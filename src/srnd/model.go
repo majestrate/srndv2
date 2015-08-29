@@ -477,7 +477,7 @@ func (self thread) Update(db Database) ThreadModel {
   root := self.posts[0].MessageID()
   reply_count := db.CountThreadReplies(root)
 
-  if int(reply_count) != len(self.posts) {
+  if int(reply_count) + 1 != len(self.posts) {
 
     return thread{
       posts: append([]PostModel{self.posts[0]}, db.GetThreadReplyPostModels(self.prefix, root, 0)...),

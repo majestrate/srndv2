@@ -482,7 +482,9 @@ func (self *NNTPConnection) HandleInbound(d *NNTPDaemon) {
             }
             line = ""
           }
-          file.Close()
+          if file != nil {
+            file.Close()
+          }
           // tell them our result
           self.txtconn.PrintfLine("%d %s %s", code, article, message)
           // the send was good

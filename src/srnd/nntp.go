@@ -100,7 +100,20 @@ func (self *NNTPConnection) HandleOutbound(d *NNTPDaemon, quarks map[string]stri
   }
   if mode == "reader" {
     // this is for sending ARTICLE commands
-    self.reader_mode(d)
+    self.txtconn.PrintfLine("MODE READER")
+    code, line, err := self.txtconn.ReadCodeLine(-1)
+    if code == 201 || code == 200 {
+      log.Println("mode reader selected")
+      self.reader_mode(d)
+    } else {
+      if err == nil {
+        log.Println("failed to select mode reader", code, line)
+        log.Println("fall back to streaming mode")
+        self.streaming_mode(d)
+      } else {
+        log.Println("failed to select mode reader", err)
+      }
+    }
   } else if mode == "stream" {
     // if they support streaming and allow posting continue
     if self.info.supportsStream && self.info.allowsPosting {
@@ -333,6 +346,7 @@ func (self *NNTPConnection) HandleInbound(d *NNTPDaemon) {
         mode := strings.ToUpper(commands[1])
         // reader mode
         if mode == "READER" {
+          log.Println("mode reader activated")
           self.info.mode = "reader"
           code = 201
           msg = "posting disallowed"
@@ -556,6 +570,7 @@ func (self *NNTPConnection) HandleInbound(d *NNTPDaemon) {
         self.txtconn.PrintfLine("500 we don't know command %s", cmd)
       }
     } else if self.info.mode == "reader" {
+      log.Println("our mode is reader")
       // reader mode
       if cmd == "ARTICLE" {
         // they requested an article

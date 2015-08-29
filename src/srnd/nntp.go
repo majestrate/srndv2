@@ -148,7 +148,7 @@ func (self *NNTPConnection) reader_mode(d *NNTPDaemon) {
         self.info.access.Unlock()
         // they don't have it D:
         continue // TODO: back off?
-      } else if code == 230 {
+      } else if code == 220 {
         // they have it aww yehhh
         dr := self.txtconn.DotReader()
         w := d.store.CreateTempFile(msgid)

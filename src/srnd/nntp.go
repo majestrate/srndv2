@@ -300,10 +300,13 @@ func (self *NNTPConnection) HandleInbound(d *NNTPDaemon) {
           for {
             if err != nil {
               log.Println("error reading", article, err)
+              file.Close()
+              fname := d.store.GetTempFilename(article)
+              DelFile(fname)
               break
             }
             line , err := self.ReadLine()
-            if line == "" && ! headers_done {
+            if err == nil && line == "" && ! headers_done {
               // headers done
               headers_done = true
               if len(ip_header) > 0 {
@@ -337,8 +340,10 @@ func (self *NNTPConnection) HandleInbound(d *NNTPDaemon) {
               if is_signed {
                 log.Println("we got a signed message")
               }
-            }
-            if line == "." {
+            } else if err != nil {
+              log.Println("error reading line", err)
+              continue
+            } else if line == "." {
               line = ""
               break
             } else if ! headers_done {

@@ -500,6 +500,8 @@ func (self *NNTPConnection) HandleInbound(d *NNTPDaemon) {
               log.Println(article, "was defered because we don't have",reference,"asking all feeds for it")
               d.ask_for_article <- ArticleEntry{reference, newsgroup}
             }
+            fname := d.store.GetTempFilename(article)
+            DelFile(fname)
           } else {
             // delete unaccepted article
             log.Println("did not accept", article, code)

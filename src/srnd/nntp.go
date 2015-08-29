@@ -354,7 +354,8 @@ func (self *NNTPConnection) HandleInbound(d *NNTPDaemon) {
       line = ""
       if cmd == "TAKETHIS" {
         var newsgroup string
-        if len(commands) == 2 && ValidMessageID(commands[1]) {
+        if len(commands) == 2 {
+          
           article := commands[1]
           code := 239
           ip_header := ""
@@ -365,11 +366,18 @@ func (self *NNTPConnection) HandleInbound(d *NNTPDaemon) {
           is_signed := false
           message := "we are gud"
           reference := ""
-          file := d.store.CreateTempFile(article)
-          if file == nil {
+          var file io.WriteCloser
+          if ! ValidMessageID(commands[1]) {
             code = 439
-            message = "we have this message"
+            message = "invalid message id"
             read_more = false
+          } else {
+            file = d.store.CreateTempFile(article)
+            if file == nil {
+              code = 439
+              message = "we have this message"
+              read_more = false
+            }
           }
           for {
             if err != nil {

@@ -290,7 +290,7 @@ func (self *NNTPDaemon) pollmessages() {
     // store article and attachments
     // register with database
     // this also generates thumbnails
-    go self.store.StorePost(nntp)
+    self.store.StorePost(nntp)
     
     // prepare for content rollover
     // fallback rollover

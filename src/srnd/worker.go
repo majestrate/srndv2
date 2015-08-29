@@ -31,16 +31,16 @@ func workerDoLine(line string, conf map[string]string, database Database) {
     cmd := exec.Command(conf["convert"], "-thumbnail", "200", infname, outfname)
     exec_out, exec_err := cmd.CombinedOutput()
     log.Println("[MQ] result:", exec_err, string(exec_out))
-  } else if action == "ukko" && len(args) == 3 {
+  } else if action == "ukko" && len(args) >= 3 {
     template.genUkko(args[0], args[1], args[2], database)
-  } else if action == "front" && len(args) == 3 {
+  } else if action == "front" && len(args) >= 3 {
     template.genFrontPage(10, args[1], args[2], database)
-  } else if action == "board-page" && len(args) == 5 {
+  } else if action == "board-page" && len(args) >= 5 {
     page, _ := strconv.ParseInt(args[3], 10, 32)
     template.genBoardPage(args[0], args[1], args[2], int(page), args[4], database)
-  } else if action == "board-all" && len(args) == 4 {
+  } else if action == "board-all" && len(args) >= 4 {
     template.genBoard(args[0], args[1], args[2], args[3], database)
-  } else if action == "thread" && len(args) == 4 {
+  } else if action == "thread" && len(args) >= 4 {
     template.genThread(args[0], args[1], args[2], args[3], database)
   }
 }

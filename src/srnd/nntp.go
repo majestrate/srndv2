@@ -300,7 +300,6 @@ func (self *NNTPConnection) HandleInbound(d *NNTPDaemon) {
   
   // intitiate handshake
   var err error
-  self.info.mode = "stream"
   log.Println("Incoming nntp connection from", self.conn.RemoteAddr())
   // send welcome
   greet := "2nd generation overchan NNTP Daemon posting allowed"

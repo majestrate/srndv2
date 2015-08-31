@@ -262,6 +262,8 @@ func (self *NNTPConnection) streaming_mode(d *NNTPDaemon) {
         }
         if err != nil {
           log.Println("failed to send", commands[0], err)
+          self.Quit()
+          return
         }
         continue
       } else {

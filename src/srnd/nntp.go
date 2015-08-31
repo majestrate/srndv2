@@ -284,6 +284,7 @@ func (self *NNTPConnection) streaming_mode(d *NNTPDaemon) {
 func (self *NNTPConnection) SendMessage(msgid string, msg io.Reader, d *NNTPDaemon) error {
   var err error
   self.info.access.Lock()
+  log.Println("Sending", msgid)
   err = self.txtconn.PrintfLine("TAKETHIS %s", msgid)
   if err == nil {
     wr := self.txtconn.DotWriter()

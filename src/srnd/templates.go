@@ -70,7 +70,7 @@ func (self templateEngine) genBoardPage(prefix, frontend, newsgroup string, page
   // update it
   board = board.Update(page, db)
   if page >= len(board) {
-    log.Println("board page should not exist", newsgroup ,page)
+    log.Println("board page should not exist", newsgroup, "page", page)
     return
   }
   wr, err := OpenFileWriter(outfile)
@@ -145,6 +145,16 @@ func (self templateEngine) genThread(messageID, prefix, frontend, outfile string
   // get it
   board := self.obtainBoard(prefix, frontend, newsgroup, db)
   // update our thread
+  if int(page) >= len(board) {
+    log.Println("we need to update the board model", page, "does not exist yet")
+    board = board.UpdateAll(db)
+    self.groups[newsgroup] = board
+    if int(page) >= len(board) {
+      log.Println("we are going way too fast not regenerating thread", messageID)
+      return
+    }
+  }
+
   board[page] = board[page].UpdateThread(messageID, db)
   for _, th := range board[page].Threads() {
     if th.OP().MessageID() == messageID {

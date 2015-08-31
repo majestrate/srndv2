@@ -19,7 +19,7 @@ func formatline(line string) (markup string) {
   } else if strings.HasPrefix(line, "==") && strings.HasSuffix(line, "==") {
     // redtext
     markup += "<p><span class='redtext'>"
-    markup += line
+    markup += line[2:len(line)-2]
     markup += "</span></p>"
   } else {
     // regular line
@@ -30,42 +30,72 @@ func formatline(line string) (markup string) {
   return
 }
 
+// format lines inside a code tag
+func formatcodeline(line string) (markup string) {
+  markup += "<p>"
+  markup += line
+  markup += "</p>"
+  return
+}
+
 func memeposting(src string) (markup string) {
   // escape
   src = html.EscapeString(src)
 
-  found_code_tag := false
-  code_content := ""
+  found_tag := false
+  tag_content := ""
+  tag := ""
   // for each line...
   for _, line := range strings.Split(src, "\n") {
     // beginning of code tag ?
     if strings.Count(line, "[code]") > 0 {
       // yes there's a code tag
-      found_code_tag = true
+      found_tag = true
+      tag = "code"
+    } else if strings.Count(line, "[spoiler]") > 0 {
+      // spoiler tag
+      found_tag = true
+      tag = "spoiler"
+    } else if strings.Count(line, "[psy]") > 0 {
+      // psy tag
+      found_tag = true
+      tag = "psy"
     }
-    if found_code_tag {
-      // collect content of code tag
-      code_content += line + "\n"
-      // end of code tag ?
-      if strings.Count(line, "[/code]") == 1 {
+    if found_tag {
+      // collect content of tag
+      tag_content += line + "\n"
+      // end of our tag ?
+      if strings.Count(line, "[/"+tag+"]") == 1 {
         // yah
-        found_code_tag = false
-        // open pre tag
-        markup += "<pre>"
+        found_tag = false
+        var tag_open, tag_close string
+        if tag == "code" {
+          tag_open = "<pre>"
+          tag_close = "</pre>"
+        } else if tag == "spoiler" {
+          tag_open = "<span class='spoiler'>"
+          tag_close = "</span>"
+        } else if tag == "psy" {
+          tag_open = "<span class='psy'>"
+          tag_close = "</span>"          
+        }
+        markup += tag_open
         // remove open tag, only once so we can have a code tag verbatum inside
-        code_content = strings.Replace(code_content, "[code]", "", 1)
+        tag_content = strings.Replace(tag_content, "["+tag+"]", "", 1)
         // remove all close tags, should only have 1
-        code_content = strings.Replace(code_content, "[/code]", "", -1)
+        tag_content = strings.Replace(tag_content, "[/"+tag+"]", "", -1)
         // make into lines
-        for _, code_line := range strings.Split(code_content, "\n") {
-          markup += "<p>"
-          markup += code_line
-          markup += "</p>"
+        for _, tag_line := range strings.Split(tag_content, "\n") {
+          if tag == "code" {
+            markup += formatcodeline(tag_line)
+          } else {
+            markup += formatline(tag_line)       
+          }
         }
         // close pre tag
-        markup += "</pre>"
+        markup += tag_close
         // reset content buffer
-        code_content = ""
+        tag_content = ""
       }
       // next line
       continue
@@ -74,7 +104,7 @@ func memeposting(src string) (markup string) {
     markup += formatline(line)
   }
   // flush the rest of an incomplete code tag
-  for _, line := range strings.Split(code_content, "\n") {
+  for _, line := range strings.Split(tag_content, "\n") {
     markup += formatline(line)
   }
   return 

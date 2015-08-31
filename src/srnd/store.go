@@ -217,7 +217,7 @@ func (self articleStore) CreateTempFile(messageID string) io.WriteCloser {
 
 // return true if we have an article
 func (self articleStore) HasArticle(messageID string) bool {
-  return self.database.HasArticleLocal(messageID)
+  return CheckFile(self.GetFilename(messageID))
 }
 
 // get the filename for this article

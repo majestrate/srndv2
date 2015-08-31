@@ -304,6 +304,7 @@ func (self NNTPDaemon) polloutfeeds() {
     case outfeed := <- self.deregister_outfeed:
       log.Println("outfeed", outfeed.info.name, "de-registered")
       delete(self.feeds, outfeed)
+      close(outfeed.sync)
     case nntp := <- self.send_all_feeds:
       for feed, use := range self.feeds {
         if use {

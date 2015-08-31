@@ -112,7 +112,7 @@ func (self templateEngine) genUkko(prefix, frontend, outfile string, database Da
   // get the last 15 bumped threads globally
   var threads []ThreadModel
   for _, article := range database.GetLastBumpedThreads("", 15) {
-    newsgroup, msgid := article[0], article[1]
+    newsgroup, msgid := article[1], article[0]
     // obtain board
     board := self.obtainBoard(prefix, frontend, newsgroup, database)
     board = board.Update(0, database)

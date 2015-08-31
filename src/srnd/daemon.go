@@ -298,6 +298,7 @@ func (self NNTPDaemon) polloutfeeds() {
   
   for {
     select {
+
     case outfeed := <- self.register_outfeed:
       log.Println("outfeed", outfeed.info.name, "registered")
       self.feeds[outfeed] = true
@@ -305,9 +306,10 @@ func (self NNTPDaemon) polloutfeeds() {
       log.Println("outfeed", outfeed.info.name, "de-registered")
       delete(self.feeds, outfeed)
       close(outfeed.sync)
+      outfeed.sync = nil
     case nntp := <- self.send_all_feeds:
       for feed, use := range self.feeds {
-        if use {
+        if use && feed.sync != nil {
           if feed.policy.AllowsNewsgroup(nntp.Newsgroup()) {
             log.Println("send", nntp.MessageID(), "to", feed.info.name)
             feed.sync <- nntp
@@ -317,7 +319,7 @@ func (self NNTPDaemon) polloutfeeds() {
     case nntp := <- self.ask_for_article:
       log.Println("ask for", nntp.MessageID())
       for feed, use := range self.feeds {
-        if use {
+        if use && feed.sync != nil {
           if feed.policy.AllowsNewsgroup(nntp.Newsgroup()) {
             log.Println("asking", feed.info.name, "for", nntp.MessageID())
             feed.sync <- nntp

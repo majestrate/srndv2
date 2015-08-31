@@ -264,16 +264,6 @@ func (self *NNTPConnection) streaming_mode(d *NNTPDaemon) {
         continue
       }
       log.Println("failed to send", commands[0], err)
-    } else if code == 400 {
-      // deferred
-      // send it later
-      nntp, err := d.database.GetMessageIDByHash(HashMessageID(commands[0]))
-      if err == nil {
-        go self.articleDefered(nntp)
-      } else {
-        log.Println("!!! bug: cannot defer article send", err, "!!!")
-      }
-      continue
     } else if code == 239 {
       // accepted
       continue
@@ -488,9 +478,14 @@ func (self *NNTPConnection) HandleInbound(d *NNTPDaemon) {
                     read_more = false
                   } else if ! d.database.HasArticleLocal(reference) {
                     // we don't have the root post yet
-                    code = 400
-                    message = "no root post yet, please send later"
-                    read_more = false
+                    // ask for it async
+                    var nntp ArticleEntry
+                    nntp, err = d.database.GetMessageIDByHash(HashMessageID(reference))
+                    if err == nil {
+                      go self.articleDefered(nntp)
+                    } else {
+                      log.Println("!!! bug: cannot defer article send", err, "!!!")
+                    }
                   }
                 } else {
                   // invalid reference

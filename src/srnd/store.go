@@ -5,20 +5,18 @@
 package srnd
 
 import (
-  "github.com/streadway/amqp"
   "github.com/majestrate/srndv2/src/nacl"
-  "github.com/gographics/imagick/imagick"
   "bufio"
   "bytes"
   "crypto/sha512"
   "errors"
-  "fmt"
   "io"
   "log"
   "mime"
   "mime/multipart"
   "net/mail"
   "os"
+  "os/exec"
   "path/filepath"
 )
 
@@ -60,28 +58,19 @@ type articleStore struct {
   attachments string
   thumbs string
   database Database
-  r_conn *amqp.Connection
-  r_chnl *amqp.Channel
-  r_q amqp.Queue
+  convert_path string
 }
 
-func createArticleStore(config map[string]string, rmq_url string, database Database) ArticleStore {
+func createArticleStore(config map[string]string, database Database) ArticleStore {
   store := articleStore{
     directory: config["store_dir"],
     temp: config["incoming_dir"],
     attachments: config["attachments_dir"],
     thumbs: config["thumbs_dir"],
+    convert_path: config["convert_bin"],
     database: database,
   }
   store.Init()
-  if rmq_url != "" {
-    var err error
-    store.r_conn, store.r_chnl, err = rabbitConnect(rmq_url)
-    if err != nil {
-      log.Fatal("failed to connect to rabbitmq message broker", err)
-    }
-    store.r_q, err = rabbitQueue("srndv2", store.r_chnl)
-  }
   return store
 }
 
@@ -95,53 +84,20 @@ func (self articleStore) Init() {
   EnsureDir(self.temp)
   EnsureDir(self.attachments)
   EnsureDir(self.thumbs)
-}
-
-// generate thumbnail in same process
-func (self articleStore) generateThumbnail(infname string) (err error) {
-  wand := imagick.NewMagickWand()
-  // read image source
-  err = wand.ReadImage(self.AttachmentFilepath(infname))
-  if err == nil {
-    // get size
-    h := wand.GetImageHeight()
-    w := wand.GetImageWidth()
-
-    // calculate scale parameters
-    var scale, th, tw float64 
-    scale = 200
-    modifier := scale / float64(w)
-    th = modifier * float64(h)
-    tw = modifier * float64(w)
-    // scale it
-    err = wand.ScaleImage(uint(tw), uint(th))
-    if err == nil {
-      err = wand.WriteImage(self.ThumbnailFilepath(infname))
-    }
+  if ! CheckFile(self.convert_path) {
+    log.Fatal("cannot find executable for convert:", self.convert_path, "not found")
   }
-  // explicitly destroy
-  wand.Destroy()
-  return
 }
 
-// queue thumbnail generation to rabbitmq
-func (self articleStore) queueGenerateThumbnail(infname string) (err error) {
-  log.Println("queue file for thumbnailing", infname)
-  err = self.r_chnl.Publish(
-    "",
-    self.r_q.Name,
-    false,
-    false,
-    amqp.Publishing{
-      ContentType: "text/plain",
-      Body: []byte(fmt.Sprintf("thumbnail %s %s",self.AttachmentFilepath(infname), self.ThumbnailFilepath(infname))),
-      
-    })
+func (self articleStore) GenerateThumbnail(fname string) error {
+  outfname := self.ThumbnailFilepath(fname)
+  infname := self.AttachmentFilepath(fname)
+  cmd := exec.Command(self.convert_path, "-thumbnail", "200", infname, outfname)
+  exec_out, err := cmd.CombinedOutput()
+  if err != nil {
+    log.Println("error generating thumbnail", string(exec_out))
+  }
   return err
-}
-
-func (self articleStore) GenerateThumbnail(infname string) (err error) {
-  return self.queueGenerateThumbnail(infname)
 }
 
 func (self articleStore) ReadMessage(r io.Reader) (NNTPMessage, error) {

@@ -90,7 +90,8 @@ func GenSRNdConfig() error {
   sect.Add("incoming_dir", "/tmp/articles")
   sect.Add("attachments_dir", "webroot/img")
   sect.Add("thumbs_dir", "webroot/thm")
-
+  sect.Add("convert_bin", "/usr/bin/mogrify")
+  
   // database backend config
   sect = conf.NewSection("database")
 
@@ -120,13 +121,6 @@ func GenSRNdConfig() error {
   secret_bytes := nacl.RandBytes(8)
   secret := base32.StdEncoding.EncodeToString(secret_bytes)
   sect.Add("api-secret", secret)
-
-  // rabbitmq worker config section
-  sect = conf.NewSection("rabbitmq")
-  sect.Add("threads", "1")
-  sect.Add("url", "amqp://127.0.0.1/")
-  sect.Add("convert", "/usr/bin/convert")
-  sect.Add("ffmpeg", "/usr/bin/ffmpeg")
   
   return configparser.Save(conf, "srnd.ini")
 }

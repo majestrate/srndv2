@@ -228,8 +228,10 @@ func (self modEngine) AllowDelete(pubkey string) bool {
   return self.database.CheckModPubkeyGlobal(pubkey)
 }
 
+type RegenFunc func (msgid string)
+
 // run a mod engine logic mainloop
-func RunModEngine(mod ModEngine) {
+func RunModEngine(mod ModEngine, regen RegenFunc) {
   
   chnl := mod.MessageChan()
   for {
@@ -252,6 +254,8 @@ func RunModEngine(mod ModEngine) {
               if err != nil {
                 log.Println(msgid, err)
               }
+              // regen as needed
+              regen(msgid)
             } else {
               log.Printf("pubkey=%s will not delete %s not trusted", pubkey, msgid)
             }

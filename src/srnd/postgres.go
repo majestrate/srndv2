@@ -181,6 +181,19 @@ func(self PostgresDatabase) GetPageForRootMessage(root_message_id string) (group
   return
 }
 
+func (self PostgresDatabase) GetInfoForMessage(msgid string) (root string, newsgroup string, page int64, err error) {
+  err = self.conn.QueryRow("SELECT newsgroup, ref_id FROM ArticlePosts WHERE message_id = $1", msgid).Scan(&newsgroup, &root)
+  if err == nil {
+    if root == "" {
+      root = msgid
+    }
+    perpage, _ := self.GetPagesPerBoard(newsgroup)
+    err = self.conn.QueryRow("WITH thread(bump) AS (SELECT last_bump FROM ArticleThreads WHERE root_message_id = $1 ) SELECT COUNT(*) FROM ( SELECT last_bump FROM ArticleThreads INNER JOIN thread ON (thread.bump <= ArticleThreads.last_bump AND newsgroup = $2 ) ) AS amount", root, newsgroup).Scan(&page)
+    page = page / int64(perpage)
+  }
+  return
+}
+
 func (self PostgresDatabase) CheckModPubkeyGlobal(pubkey string) bool {
   var result int64
   _ = self.conn.QueryRow("SELECT COUNT(*) FROM ModPrivs WHERE pubkey = $1 AND newsgroup = $2 AND permission = $3", pubkey, "overchan", "all").Scan(&result)

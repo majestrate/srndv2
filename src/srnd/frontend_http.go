@@ -11,7 +11,6 @@ import (
   "github.com/gorilla/sessions"
   "github.com/gorilla/websocket"
   "github.com/majestrate/srndv2/src/nacl"
-  "github.com/streadway/amqp"
   "bytes"
   "encoding/json"
   "fmt"
@@ -58,24 +57,19 @@ type httpFrontend struct {
   regenGroupChan chan groupRegenRequest
   ukkoChan chan bool
   regenBoard map[string]groupRegenRequest
-
+  
   regenBoardTicker *time.Ticker
   
   store *sessions.CookieStore
 
   upgrader websocket.Upgrader
-
-  r_conn *amqp.Connection
-  r_chnl *amqp.Channel
-  r_q amqp.Queue
-  r_url string
 }
 
 // do we allow this newsgroup?
 func (self httpFrontend) AllowNewsgroup(group string) bool {
   // XXX: hardcoded nntp prefix
   // TODO: make configurable nntp prefix
-  return strings.HasPrefix(group, "overchan.") && newsgroupValidFormat(group)
+  return strings.HasPrefix(group, "overchan.") && newsgroupValidFormat(group) || group == "ctl"
 }
 
 // try to delete root post's page
@@ -113,16 +107,11 @@ func (self httpFrontend) regenAll() {
     for _, group := range groups {
       // send every thread for this group down the regen thread channel
       go self.daemon.database.GetGroupThreads(group, self.regenThreadChan)
-      self.regenerateBoard(group)
+      go self.regenerateBoard(group)
     }
   }
 }
 
-
-// regen every page of the board
-func (self httpFrontend) regenerateBoard(group string) {
-  self.send_rabbit(fmt.Sprintf("board-all %s %s %s %s", self.prefix, self.name,  group, self.webroot_dir))
-}
 
 type boardPageRow struct {
   Board string
@@ -138,7 +127,9 @@ func (self boardPageRows) Len() int {
 }
 
 func (self boardPageRows) Less(i, j int) bool {
-  return self[i].Day > self[j].Day
+  i_val := self[i]
+  j_val := self[j]
+  return (i_val.Day + i_val.Hour * 24 ) > ( j_val.Day + j_val.Hour * 24)
 }
 
 func (self boardPageRows) Swap(i, j int) {
@@ -147,19 +138,8 @@ func (self boardPageRows) Swap(i, j int) {
 
 
 func (self httpFrontend) poll() {
-  var err error
-  self.r_conn, self.r_chnl, err = rabbitConnect(self.r_url)
-  
-  if err != nil {
-    log.Println("failed to connect to rabbimq", err)
-    return
-  }
 
-  self.r_q, err = rabbitQueue("srndv2", self.r_chnl)
-  if err != nil {
-    log.Println("failed to create queue", err)
-  }
-
+  // regenerate front page
   self.regenFrontPage()
   
   // trigger regen
@@ -201,6 +181,9 @@ func (self httpFrontend) poll() {
           page: int(page),
         }
         self.regenBoard[fmt.Sprintf("%s|%s", req.group, req.page)] = req
+      }
+      if group == "ctl" {
+        // TODO: regen all relevant boards
       }
       // regen ukko
     case regen_front := <- self.ukkoChan:
@@ -272,41 +255,53 @@ func (self httpFrontend) handle_liveui_index(wr http.ResponseWriter, r *http.Req
   io.WriteString(wr, template.renderTemplate("live.mustache", map[string]string{ "prefix" : self.prefix }))
 }
 
+// regen every page of the board
+func (self httpFrontend) regenerateBoard(group string) {
+  template.genBoard(self.prefix, self.name,  group, self.webroot_dir, self.daemon.database)
+}
+
+// regenerate just a thread page
 func (self httpFrontend) regenerateThread(msgid string) {
   fname := self.getFilenameForThread(msgid)
-  self.send_rabbit(fmt.Sprintf("thread %s %s %s %s", msgid, self.prefix, self.name, fname))
+  template.genThread(msgid, self.prefix, self.name, fname, self.daemon.database)
 }
 
+// regenerate just a page on a board
 func (self httpFrontend) regenerateBoardPage(board string, page int) {
   fname := self.getFilenameForBoardPage(board, page)
-  self.send_rabbit(fmt.Sprintf("board-page %s %s %s %d %s", self.prefix, self.name, board, page, fname))
+  template.genBoardPage(self.prefix, self.name, board, page, fname, self.daemon.database)
 }
 
+// regenerate the front page
 func (self httpFrontend) regenFrontPage() {
-  self.send_rabbit(fmt.Sprintf("front 10 %s %s", self.name, filepath.Join(self.webroot_dir, "index.html")))
+  fname := filepath.Join(self.webroot_dir, "index.html")
+  template.genFrontPage(10, self.name, fname, self.daemon.database)
 }
 
+// regenerate the overboard
 func (self httpFrontend) regenUkko() {
-  self.send_rabbit(fmt.Sprintf("ukko %s %s %s", self.prefix, self.name,  filepath.Join(self.webroot_dir, "ukko.html")))
+  fname := filepath.Join(self.webroot_dir, "ukko.html")
+  template.genUkko(self.prefix, self.name, fname, self.daemon.database)
 }
 
-
-func (self httpFrontend) send_rabbit(line string) {
-  var err error
-  err = self.r_chnl.Publish(
-    "", // exchange
-    self.r_q.Name,     // routing key
-    false,  // mandatory
-    false,  // immediate
-    amqp.Publishing{
-      DeliveryMode: amqp.Persistent,
-      ContentType: "text/plain",
-      Body:        []byte(line),
-    })
-  if err != nil {
-    log.Println("failed to tell rabbit mq:", err)
+// regenerate pages after a mod event
+func (self httpFrontend) regenOnModEvent(msgid string) {
+  root, group, page, err := self.daemon.database.GetInfoForMessage(msgid)
+  if err == nil {
+    // this is a root post
+    // get rid of the markup
+    if root == msgid {
+      fname := self.getFilenameForThread(root)
+      os.Remove(fname)
+    } else {
+      self.regenThreadChan <- root
+    }
+    self.regenGroupChan <- groupRegenRequest{group, int(page)}
+  } else {
+    log.Println("error triggering mod regen", err)
   }
 }
+
 
 // handle new post via http request for a board
 func (self httpFrontend) handle_postform(wr http.ResponseWriter, r *http.Request, board string) {
@@ -654,6 +649,9 @@ func (self httpFrontend) Mainloop() {
     t := <- chnl
     self.ukkoChan <- t.Minute() == 0 && t.Second() < 30
   }()
+
+  go RunModEngine(self.daemon.mod, self.regenOnModEvent)
+  
   // start webserver here
   log.Printf("frontend %s binding to %s", self.name, self.bindaddr)
   
@@ -674,7 +672,6 @@ func (self httpFrontend) Regen(msg ArticleEntry) {
 func NewHTTPFrontend(daemon *NNTPDaemon, config map[string]string, url string) Frontend {
   var front httpFrontend
   front.daemon = daemon
-  front.r_url = url
   front.regenBoardTicker = time.NewTicker(time.Second * 10)
   front.regenBoard = make(map[string]groupRegenRequest)
   front.attachments = mapGetInt(config, "allow_files", 1) == 1

@@ -118,7 +118,7 @@ func (self templateEngine) genUkko(prefix, frontend, outfile string, database Da
     board = board.Update(0, database)
     for _, th := range(board[0].Threads()) {
       if th.OP().MessageID() == msgid {
-        threads = append(threads, th)
+        threads = append(threads, th.Update(database))
         break
       }
     }

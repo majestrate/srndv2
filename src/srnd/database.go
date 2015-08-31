@@ -37,6 +37,9 @@ type Database interface {
   // return an article entry or nil when it doesn't exist + and error if it happened
   GetMessageIDByHash(hash string) (ArticleEntry, error)
 
+  // get root message_id, newsgroup, pageno for a post regardless if it's rootpost or not
+  GetInfoForMessage(msgid string) (string, string, int64, error)
+  
   // what page is the thread with this root post on?
   // return newsgroup, pageno
   GetPageForRootMessage(root_message_id string) (string, int64, error)

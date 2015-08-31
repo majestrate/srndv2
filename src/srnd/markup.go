@@ -8,14 +8,21 @@ import (
   "html"
   "strings"
 )
-// meme arrow a line
-func memeline(line string) (markup string) {
+
+func formatline(line string) (markup string) {
+  line = strings.Trim(line, "\t\r\n ")
   // check for meme arrows
   if strings.HasPrefix(line, "&gt;") {
     markup += "<p><span class='memearrows'>"
     markup += line
     markup += "</span></p>"
+  } else if strings.HasPrefix(line, "==") && strings.HasSuffix(line, "==") {
+    // redtext
+    markup += "<p><span class='redtext'>"
+    markup += line
+    markup += "</span></p>"
   } else {
+    // regular line
     markup += "<p>"
     markup += line
     markup += "</p>"
@@ -51,8 +58,9 @@ func memeposting(src string) (markup string) {
         code_content = strings.Replace(code_content, "[/code]", "", -1)
         // make into lines
         for _, code_line := range strings.Split(code_content, "\n") {
-          //TODO: This also memearrows, should we?
-          markup += memeline(code_line)
+          markup += "<p>"
+          markup += code_line
+          markup += "</p>"
         }
         // close pre tag
         markup += "</pre>"
@@ -63,11 +71,11 @@ func memeposting(src string) (markup string) {
       continue
     }
     // format line regularlly
-    markup += memeline(line)
+    markup += formatline(line)
   }
   // flush the rest of an incomplete code tag
   for _, line := range strings.Split(code_content, "\n") {
-    markup += memeline(line)
+    markup += formatline(line)
   }
   return 
 }

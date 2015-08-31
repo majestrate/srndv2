@@ -55,10 +55,10 @@ type httpFrontend struct {
   prefix string
   regenThreadChan chan string
   regenGroupChan chan groupRegenRequest
-  ukkoChan chan bool
   regenBoard map[string]groupRegenRequest
   
   regenBoardTicker *time.Ticker
+  ukkoTicker *time.Ticker
   
   store *sessions.CookieStore
 
@@ -183,18 +183,15 @@ func (self httpFrontend) poll() {
         self.regenBoard[fmt.Sprintf("%s|%s", req.group, req.page)] = req
       }
       // regen ukko
-    case regen_front := <- self.ukkoChan:
+    case _ = <- self.ukkoTicker.C:
       self.regenUkko()
-      if regen_front {
-        self.regenFrontPage()
-      }
+      self.regenFrontPage()
     case _ = <- self.regenBoardTicker.C:
       for _, v := range self.regenBoard {
         self.regenerateBoardPage(v.group, v.page)
       }
       self.regenBoard = make(map[string]groupRegenRequest)
     }
-
   }
 }
 
@@ -629,17 +626,11 @@ func (self httpFrontend) Mainloop() {
   self.httpmux.Path("/live/options").HandlerFunc(self.handle_liveui_options).Methods("GET")
   self.httpmux.Path("/live/ws").HandlerFunc(self.handle_liveui).Methods("GET")
 
+  
   var err error
 
   // poll channels
   go self.poll()
-  // regen ukko / front page
-  tick := time.NewTicker(time.Second * 30)
-  chnl := tick.C
-  go func() {
-    t := <- chnl
-    self.ukkoChan <- t.Minute() == 0 && t.Second() < 30
-  }()
 
   go RunModEngine(self.daemon.mod, self.regenOnModEvent)
   
@@ -655,7 +646,6 @@ func (self httpFrontend) Mainloop() {
 func (self httpFrontend) Regen(msg ArticleEntry) {
   self.regenThreadChan <- msg.MessageID()
   self.regenerateBoard(msg.Newsgroup())
-  self.ukkoChan <- true
 }
 
 
@@ -664,6 +654,7 @@ func NewHTTPFrontend(daemon *NNTPDaemon, config map[string]string, url string) F
   var front httpFrontend
   front.daemon = daemon
   front.regenBoardTicker = time.NewTicker(time.Second * 10)
+  front.ukkoTicker = time.NewTicker(time.Second * 30)
   front.regenBoard = make(map[string]groupRegenRequest)
   front.attachments = mapGetInt(config, "allow_files", 1) == 1
   front.bindaddr = config["bind"]
@@ -684,6 +675,5 @@ func NewHTTPFrontend(daemon *NNTPDaemon, config map[string]string, url string) F
   front.recvpostchan = make(chan NNTPMessage, 16)
   front.regenThreadChan = make(chan string, 16)
   front.regenGroupChan = make(chan groupRegenRequest, 8)
-  front.ukkoChan = make(chan bool)
   return front
 }

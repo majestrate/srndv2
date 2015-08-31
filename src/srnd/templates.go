@@ -136,7 +136,11 @@ func (self templateEngine) genUkko(prefix, frontend, outfile string, database Da
 }
 
 func (self templateEngine) genThread(messageID, prefix, frontend, outfile string, db Database) {
-  
+  if ! self.store.HasArticle(messageID) {
+    // we don't have the root post
+    // don't hit the database asking for the info
+    return
+  }
   newsgroup, page, err := db.GetPageForRootMessage(messageID)
   if err != nil {
     log.Println("did not get root post info when regenerating thread", messageID, err)

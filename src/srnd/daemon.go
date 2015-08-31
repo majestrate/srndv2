@@ -162,7 +162,8 @@ func (self NNTPDaemon) persistFeed(conf FeedConfig, mode string) {
       self.register_outfeed <- nntp
       nntp.HandleOutbound(&self, conf.quarks, mode)
       self.deregister_outfeed <- nntp
-      log.Println("remove outfeed")
+      close(nntp.sync)
+      nntp.sync = nil
     }
   }
   time.Sleep(1 * time.Second)
@@ -305,8 +306,6 @@ func (self NNTPDaemon) polloutfeeds() {
     case outfeed := <- self.deregister_outfeed:
       log.Println("outfeed", outfeed.info.name, "de-registered")
       delete(self.feeds, outfeed)
-      close(outfeed.sync)
-      outfeed.sync = nil
     case nntp := <- self.send_all_feeds:
       for feed, use := range self.feeds {
         if use && feed.sync != nil {

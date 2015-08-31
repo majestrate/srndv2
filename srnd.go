@@ -28,11 +28,7 @@ func main() {
     } else if action == "run" {
       log.Printf("Starting up %s...", srnd.Version())
       var daemon srnd.NNTPDaemon
-      if daemon.Init() {
-        daemon.Run()
-      } else {
-        log.Println("Failed to initialize")
-      }
+      daemon.Setup().Run()
     } else {
       log.Println("Invalid action:",action)
     }

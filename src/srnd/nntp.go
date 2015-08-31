@@ -18,6 +18,7 @@ import (
   
 type ConnectionInfo struct {
   mode string
+  name string
   newsgroup string
   allowsPosting bool 
   supportsStream bool

@@ -136,6 +136,27 @@ func (self boardPageRows) Swap(i, j int) {
   self[i] , self[j] = self[j], self[i]
 }
 
+func (self httpFrontend) pollRegen() {
+  for {
+    select {
+      // listen for regen board requests
+    case req := <- self.regenGroupChan:
+      self.regenBoard[fmt.Sprintf("%s|%s", req.group, req.page)] = req
+      // listen for regen thread requests
+    case msgid := <- self.regenThreadChan:
+      self.regenerateThread(msgid)
+      // regen ukko
+    case _ = <- self.ukkoTicker.C:
+      self.regenUkko()
+      self.regenFrontPage()
+    case _ = <- self.regenBoardTicker.C:
+      for _, v := range self.regenBoard {
+        self.regenerateBoardPage(v.group, v.page)
+      }
+      self.regenBoard = make(map[string]groupRegenRequest)
+    }
+  }
+}
 
 func (self httpFrontend) poll() {
 
@@ -151,12 +172,6 @@ func (self httpFrontend) poll() {
   modChnl := self.modui.MessageChan()
   for {
     select {
-      // listen for regen thread requests
-    case msgid := <- self.regenThreadChan:
-      self.regenerateThread(msgid)
-      // listen for regen board requests
-    case req := <- self.regenGroupChan:
-      self.regenBoard[fmt.Sprintf("%s|%s", req.group, req.page)] = req
     case nntp := <- modChnl:
       // forward signed messages to daemon
       self.postchan <- nntp
@@ -168,7 +183,7 @@ func (self httpFrontend) poll() {
       } else {
         msgid = nntp.MessageID()
       }
-      self.regenerateThread(msgid)
+      self.regenThreadChan <- msgid
       // regen the newsgroup we're in
       // TODO: regen only what we need to
       pages := self.daemon.database.GetGroupPageCount(nntp.Newsgroup())
@@ -182,15 +197,6 @@ func (self httpFrontend) poll() {
         }
         self.regenBoard[fmt.Sprintf("%s|%s", req.group, req.page)] = req
       }
-      // regen ukko
-    case _ = <- self.ukkoTicker.C:
-      self.regenUkko()
-      self.regenFrontPage()
-    case _ = <- self.regenBoardTicker.C:
-      for _, v := range self.regenBoard {
-        self.regenerateBoardPage(v.group, v.page)
-      }
-      self.regenBoard = make(map[string]groupRegenRequest)
     }
   }
 }
@@ -635,7 +641,10 @@ func (self httpFrontend) Mainloop() {
 
   // poll channels
   go self.poll()
-
+  for threads > 0 {
+    go self.pollRegen()
+    threads --
+  }
   go RunModEngine(self.daemon.mod, self.regenOnModEvent)
   
   // start webserver here

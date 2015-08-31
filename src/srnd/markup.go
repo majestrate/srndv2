@@ -76,8 +76,8 @@ func memeposting(src string) (markup string) {
           tag_open = "<span class='spoiler'>"
           tag_close = "</span>"
         } else if tag == "psy" {
-          tag_open = "<span class='psy'>"
-          tag_close = "</span>"          
+          tag_open = "<div class='psy'>"
+          tag_close = "</div>"          
         }
         markup += tag_open
         // remove open tag, only once so we can have a code tag verbatum inside

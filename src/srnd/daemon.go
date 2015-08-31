@@ -26,12 +26,14 @@ type NNTPDaemon struct {
   running bool
   // http frontend
   frontend Frontend
-  
+
+  // map nntp connection -> enabled as outfeed
+  feeds map[NNTPConnection] bool
+  // for registering and deregistering outbound feeds
+  register_outfeed chan NNTPConnection
+  deregister_outfeed chan NNTPConnection
   // thumbnail generator for images
   img_thm ThumbnailGenerator
-  
-  // nntp feeds map, feed, isoutbound
-  feeds map[NNTPConnection]bool
   infeed chan NNTPMessage
   // channel to load messages to infeed given their message id
   infeed_load chan string
@@ -41,22 +43,20 @@ type NNTPDaemon struct {
   ask_for_article chan ArticleEntry
 }
 
-func (self *NNTPDaemon) End() {
+func (self NNTPDaemon) End() {
   self.listener.Close()
 }
 
 
 // register a new connection
 // can be either inbound or outbound
-func (self *NNTPDaemon) newConnection(conn net.Conn, inbound bool, policy *FeedPolicy) NNTPConnection {
+func (self NNTPDaemon) newConnection(conn net.Conn, inbound bool, policy *FeedPolicy) NNTPConnection {
   allow_tor := self.conf.daemon["allow_tor"]
   allow_tor_attachments := self.conf.daemon["allow_tor_attachments"]
-  feed := NNTPConnection{conn, textproto.NewConn(conn), inbound, self.debug, ConnectionInfo{}, policy,  make(chan ArticleEntry, 128), self.store, self.store, allow_tor == "1", allow_tor_attachments == "1"}
-  self.feeds[feed] = ( ! inbound )
-  return feed
+  return NNTPConnection{conn, textproto.NewConn(conn), inbound, self.debug, ConnectionInfo{}, policy,  make(chan ArticleEntry, 128), self.store, self.store, allow_tor == "1", allow_tor_attachments == "1"}
 }
 
-func (self *NNTPDaemon) persistFeed(conf FeedConfig, mode string) {
+func (self NNTPDaemon) persistFeed(conf FeedConfig, mode string) {
   for {
     if self.running {
       
@@ -158,16 +158,65 @@ func (self *NNTPDaemon) persistFeed(conf FeedConfig, mode string) {
           }
         }()
       }
-      nntp.HandleOutbound(self, conf.quarks, mode)
+      nntp.info.name = conf.addr
+      self.register_outfeed <- nntp
+      nntp.HandleOutbound(&self, conf.quarks, mode)
+      self.deregister_outfeed <- nntp
       log.Println("remove outfeed")
-      delete(self.feeds, nntp)
     }
   }
   time.Sleep(1 * time.Second)
 }
 
 // run daemon
-func (self *NNTPDaemon) Run() {	
+func (self NNTPDaemon) Run() {
+
+  self.bind_addr = self.conf.daemon["bind"]
+
+  listener , err := net.Listen("tcp", self.bind_addr)
+  if err != nil {
+    log.Fatal("failed to bind to", self.bind_addr, err)
+  }
+  self.listener = listener
+  log.Printf("SRNd NNTPD bound at %s", listener.Addr())
+
+  self.register_outfeed = make(chan NNTPConnection)
+  self.deregister_outfeed = make(chan NNTPConnection)
+  self.infeed = make(chan NNTPMessage, 8)
+  self.infeed_load = make(chan string)
+  self.send_all_feeds = make(chan ArticleEntry, 64)
+  self.feeds = make(map[NNTPConnection]bool)
+  self.ask_for_article = make(chan ArticleEntry, 64)
+
+  self.expire = createExpirationCore(self.database, self.store)
+  self.sync_on_start = self.conf.daemon["sync_on_start"] == "1"
+  self.debug = self.conf.daemon["log"] == "debug"
+  self.instance_name = self.conf.daemon["instance_name"]
+  if self.debug {
+    log.Println("debug mode activated")
+  }
+  
+  // do we enable the frontend?
+  if self.conf.frontend["enable"] == "1" {
+    log.Printf("frontend %s enabled", self.conf.frontend["name"]) 
+    http_frontend := NewHTTPFrontend(&self, self.conf.frontend, self.conf.worker["url"])
+    nntp_frontend := NewNNTPFrontend(&self, self.conf.frontend["nntp"])
+    self.frontend = MuxFrontends(http_frontend, nntp_frontend)
+    go self.frontend.Mainloop()
+  }
+
+  // set up admin user if it's specified in the config
+  pubkey , ok := self.conf.frontend["admin_key"]
+  if ok {
+    // TODO: check for valid format
+    log.Println("add admin key", pubkey)
+    err = self.database.MarkModPubkeyGlobal(pubkey)
+    if err != nil {
+      log.Printf("failed to add admin mod key, %s", err)
+    }
+  }
+
+  
   defer self.listener.Close()
   // run expiration mainloop
   go self.expire.Mainloop()
@@ -220,12 +269,12 @@ func (self *NNTPDaemon) Run() {
     go self.pollfrontend()
   }
   go self.pollinfeed()
-  go self.polloutfeeds()
-  self.pollmessages()
+  go self.pollmessages()  
+  self.polloutfeeds()
 }
 
 
-func (self *NNTPDaemon) pollfrontend() {
+func (self NNTPDaemon) pollfrontend() {
   chnl := self.frontend.NewPostsChan()
   for {
     nntp := <- chnl
@@ -234,7 +283,7 @@ func (self *NNTPDaemon) pollfrontend() {
     self.infeed <- nntp
   }
 }
-func (self *NNTPDaemon) pollinfeed() {
+func (self NNTPDaemon) pollinfeed() {
   for {
     msgid := <- self.infeed_load
     log.Println("load from infeed", msgid)
@@ -245,27 +294,32 @@ func (self *NNTPDaemon) pollinfeed() {
   }
 }
 
-func (self *NNTPDaemon) polloutfeeds() {
+func (self NNTPDaemon) polloutfeeds() {
+  
   for {
     select {
+    case outfeed := <- self.register_outfeed:
+      log.Println("outfeed", outfeed.info.name, "registered")
+      self.feeds[outfeed] = true
+    case outfeed := <- self.deregister_outfeed:
+      log.Println("outfeed", outfeed.info.name, "de-registered")
+      delete(self.feeds, outfeed)
     case nntp := <- self.send_all_feeds:
-      for feed , use := range self.feeds {
-        if use && feed.policy != nil {
+      for feed, use := range self.feeds {
+        if use {
           if feed.policy.AllowsNewsgroup(nntp.Newsgroup()) {
-            if feed.info.mode == "stream" {
-              feed.sync <- nntp
-            }
+            log.Println("send", nntp.MessageID(), "to", feed.info.name)
+            feed.sync <- nntp
           }
         }
       }
     case nntp := <- self.ask_for_article:
       log.Println("ask for", nntp.MessageID())
       for feed, use := range self.feeds {
-        if use && feed.policy != nil {
+        if use {
           if feed.policy.AllowsNewsgroup(nntp.Newsgroup()) {
-            if feed.info.mode == "reader" {
-              feed.sync <- nntp
-            }
+            log.Println("asking", feed.info.name, "for", nntp.MessageID())
+            feed.sync <- nntp
           }
         }
       }
@@ -273,7 +327,7 @@ func (self *NNTPDaemon) polloutfeeds() {
   }
 }
 
-func (self *NNTPDaemon) pollmessages() {
+func (self NNTPDaemon) pollmessages() {
   var chnl chan NNTPMessage
   modchnl := self.mod.MessageChan()
   if self.frontend != nil {
@@ -324,7 +378,7 @@ func (self *NNTPDaemon) pollmessages() {
 }
 
 
-func (self *NNTPDaemon) acceptloop() {	
+func (self NNTPDaemon) acceptloop() {	
   for {
     // accept
     conn, err := self.listener.Accept()
@@ -337,13 +391,12 @@ func (self *NNTPDaemon) acceptloop() {
   }
 }
 
-func (self *NNTPDaemon) RunInbound(nntp NNTPConnection) {
-  nntp.HandleInbound(self)
-  delete(self.feeds, nntp)
+func (self NNTPDaemon) RunInbound(nntp NNTPConnection) {
+  nntp.HandleInbound(&self)
 }
 
 
-func (self *NNTPDaemon) Setup() {
+func (self NNTPDaemon) Setup() NNTPDaemon {
   log.Println("checking for configs...")
   // check that are configs exist
   CheckConfig()
@@ -379,67 +432,16 @@ func (self *NNTPDaemon) Setup() {
     database:  self.database,
     chnl: make(chan NNTPMessage),
   }
+  return self
 }
 
 // bind to address
-func (self *NNTPDaemon) Bind() error {
-  listener , err := net.Listen("tcp", self.bind_addr)
-  if err != nil {
-    log.Println("failed to bind to", self.bind_addr, err)
-    return err
-  }
-  self.listener = listener
-  log.Printf("SRNd NNTPD bound at %s", listener.Addr())
+func (self NNTPDaemon) Bind() error {
   return nil
 }
 
 // load configuration
 // bind to interface
-func (self *NNTPDaemon) Init() bool {
-  
-  // set up daemon configs
-  self.Setup()
-
-  self.infeed = make(chan NNTPMessage, 8)
-  self.infeed_load = make(chan string)
-  self.send_all_feeds = make(chan ArticleEntry, 64)
-  self.feeds = make(map[NNTPConnection]bool)
-  self.ask_for_article = make(chan ArticleEntry, 64)
-
-  self.bind_addr = self.conf.daemon["bind"]
-  
-  err := self.Bind()
-  if err != nil {
-    log.Println("failed to bind:", err)
-    return false
-  }
-  
-  self.expire = createExpirationCore(self.database, self.store)
-  self.sync_on_start = self.conf.daemon["sync_on_start"] == "1"
-  self.debug = self.conf.daemon["log"] == "debug"
-  self.instance_name = self.conf.daemon["instance_name"]
-  if self.debug {
-    log.Println("debug mode activated")
-  }
-  
-  // do we enable the frontend?
-  if self.conf.frontend["enable"] == "1" {
-    log.Printf("frontend %s enabled", self.conf.frontend["name"]) 
-    http_frontend := NewHTTPFrontend(self, self.conf.frontend, self.conf.worker["url"])
-    nntp_frontend := NewNNTPFrontend(self, self.conf.frontend["nntp"])
-    self.frontend = MuxFrontends(http_frontend, nntp_frontend)
-    go self.frontend.Mainloop()
-  }
-
-  // set up admin user if it's specified in the config
-  pubkey , ok := self.conf.frontend["admin_key"]
-  if ok {
-    // TODO: check for valid format
-    log.Println("add admin key", pubkey)
-    err = self.database.MarkModPubkeyGlobal(pubkey)
-    if err != nil {
-      log.Printf("failed to add admin mod key, %s", err)
-    }
-  }
+func (self NNTPDaemon) Init() bool {
   return true
 }

@@ -199,6 +199,7 @@ func (self modEngine) DeletePost(msgid string, regen RegenFunc) (err error) {
       _, page, err = self.database.GetPageForRootMessage(msgid)
       // delete thread presence
       self.database.DeleteThread(msgid)
+      ref = msgid
     } else {
       _, page, err = self.database.GetPageForRootMessage(ref) 
     }

@@ -285,6 +285,7 @@ func (self httpFrontend) regenUkko() {
 func (self httpFrontend) regenOnModEvent(newsgroup, msgid, root string, page int) {
   if root == msgid {
     fname := self.getFilenameForThread(root)
+    log.Println("remove file", fname)
     os.Remove(fname)
   } else {
     self.regenThreadChan <- root

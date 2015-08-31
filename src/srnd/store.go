@@ -118,7 +118,7 @@ func (self articleStore) StorePost(nntp NNTPMessage) (err error) {
     self.database.RegisterArticle(nntp)
     for _, att := range nntp.Attachments() {
       // save attachments 
-      self.saveAttachment(att)
+      go self.saveAttachment(att)
     }
   } else {
     // record a tripcode
@@ -135,26 +135,37 @@ func (self articleStore) StorePost(nntp NNTPMessage) (err error) {
 
 // save an attachment
 func (self articleStore) saveAttachment(att NNTPAttachment) {
+  var err error
+  var f io.WriteCloser
   fpath := att.Filepath()
   upload := self.AttachmentFilepath(fpath)
+  thumb := self.ThumbnailFilepath(fpath)
   if CheckFile(upload) {
-    log.Println("already have file")
+    log.Println("already have file", fpath)
+    if ! CheckFile(thumb) && att.NeedsThumbnail() {
+      log.Println("create thumbnail for", fpath)
+      err = self.GenerateThumbnail(fpath)
+      if err != nil {
+        log.Println("failed to generate thumbnail", err) 
+      }  
+    }
     return
   }
   // save attachment
   log.Println("save attachment", att.Filename(), "to", upload)
-  f, err := os.Create(upload)
+  f, err = os.Create(upload)
   if err == nil {
     err = att.WriteTo(f)
     f.Close()
   }
   if err != nil {
-    log.Println(err)
+    log.Println("did not save attachment", err)
     return
   }
   
   // generate thumbanils
   if att.NeedsThumbnail() {
+    log.Println("create thumbnail for", fpath)
     err = self.GenerateThumbnail(fpath)
     if err != nil {
       log.Println("failed to generate thumbnail", err) 

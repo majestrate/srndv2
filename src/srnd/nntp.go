@@ -83,9 +83,11 @@ func (self *NNTPConnection) HandleOutbound(d *NNTPDaemon, quarks map[string]stri
     
     // get capabilites
     for {
-      line, err := capreader.ReadString('\n') 
+      line, err := capreader.ReadString('\n')
       if err != nil {
-        log.Println(err)
+        if err != io.EOF {
+          log.Println("error while reading capabilities", err)
+        }
         break
       }
       line = strings.ToLower(line)
@@ -477,7 +479,9 @@ func (self *NNTPConnection) HandleInbound(d *NNTPDaemon) {
                     code = 439
                     message = "this article belongs to an expired root post"
                     read_more = false
-                  } else if ! d.database.HasArticleLocal(reference) {
+                  } else if d.store.HasArticle(reference) {
+                    // aweyeehhh we have the root post
+                  } else {
                     // we don't have the root post yet
                     // ask for it async
                     ask_for_article = true
@@ -506,16 +510,15 @@ func (self *NNTPConnection) HandleInbound(d *NNTPDaemon) {
             log.Println(self.conn.RemoteAddr(), "got article", article)
             // inform daemon
             d.infeed_load <- article
-          } else if ask_for_article {
-            // XXX: assumes that the reference is not in another newsgroup
-            if reference == "" || newsgroup == "" {
-              log.Println("invalid reference or newsgroup when defering article", reference, newsgroup)
-            } else {
-              log.Println(article, "was defered because we don't have",reference,"asking all feeds for it")
-              d.ask_for_article <- ArticleEntry{reference, newsgroup}
+            if ask_for_article {
+              // XXX: assumes that the reference is not in another newsgroup
+              if reference == "" || newsgroup == "" {
+                log.Println("invalid reference or newsgroup when defering article", reference, newsgroup)
+              } else {
+                log.Println(article, "was defered because we don't have",reference,"asking all feeds for it")
+                d.ask_for_article <- ArticleEntry{reference, newsgroup}
+              }
             }
-            fname := d.store.GetTempFilename(article)
-            DelFile(fname)
           } else {
             // delete unaccepted article
             log.Println("did not accept", article, code)

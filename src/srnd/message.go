@@ -172,7 +172,7 @@ func (self nntpArticle) WriteTo(wr io.Writer, delim string) (err error) {
     for _ , hdr_val := range hdr_vals {
       _, err = io.WriteString(wr, fmt.Sprintf("%s: %s%s", hdr, hdr_val, delim))
       if err != nil {
-        log.Println(err)
+        log.Println("error while writing headers", err)
         return
       }
     }
@@ -180,7 +180,7 @@ func (self nntpArticle) WriteTo(wr io.Writer, delim string) (err error) {
   // done headers
   _, err = io.WriteString(wr, delim)
   if err != nil {
-    log.Println(err)
+    log.Println("error while writing body", err)
     return
   }
 
@@ -382,7 +382,7 @@ func (self nntpArticle) WriteBody(wr io.Writer, delim string) (err error) {
       }
     }
     if err != nil {
-      log.Println(err)
+      log.Println("error writing part", err)
     }
     err = w.Close()
   } else {

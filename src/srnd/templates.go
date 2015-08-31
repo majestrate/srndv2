@@ -139,7 +139,8 @@ func (self templateEngine) genThread(messageID, prefix, frontend, outfile string
   
   newsgroup, page, err := db.GetPageForRootMessage(messageID)
   if err != nil {
-    log.Println(err)
+    log.Println("did not get root post info when regenerating thread", messageID, err)
+    return
   }
   // get it
   board := self.obtainBoard(prefix, frontend, newsgroup, db)
@@ -155,7 +156,7 @@ func (self templateEngine) genThread(messageID, prefix, frontend, outfile string
         wr.Close()
         log.Println("wrote file", outfile)
       } else {
-        log.Println(err)
+        log.Println("did not write", outfile, err)
       }
     }
   }

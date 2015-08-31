@@ -90,7 +90,12 @@ func (self nntpAttachment) Hash() []byte {
 
 // TODO: detect
 func (self nntpAttachment) NeedsThumbnail() bool {
-  return strings.HasPrefix(self.mime, "image/")
+  for _, ext := range []string{".png", ".jpeg", ".jpg", ".gif", ".bmp"} {
+    if ext == strings.ToLower(self.ext) {
+      return true
+    }
+  }
+  return false
 }
 
 func (self nntpAttachment) Header() textproto.MIMEHeader {

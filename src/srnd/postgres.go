@@ -378,7 +378,7 @@ func (self PostgresDatabase) GetGroupForPage(prefix, frontend, newsgroup string,
     }
     rows.Close()
   } else {
-    log.Println(err)
+    log.Println("failed to fetch board model for", newsgroup, "page", pageno, err)
   }
   return boardModel{
     prefix: prefix,

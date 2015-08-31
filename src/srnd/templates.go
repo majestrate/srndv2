@@ -69,7 +69,7 @@ func (self templateEngine) genBoardPage(prefix, frontend, newsgroup string, page
   board := self.obtainBoard(prefix, frontend, newsgroup, db)
   // update it
   board = board.Update(page, db)
-  if page > len(board) {
+  if page >= len(board) {
     log.Println("board page should not exist", newsgroup ,page)
     return
   }

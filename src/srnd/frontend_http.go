@@ -107,7 +107,7 @@ func (self httpFrontend) regenAll() {
     for _, group := range groups {
       // send every thread for this group down the regen thread channel
       go self.daemon.database.GetGroupThreads(group, self.regenThreadChan)
-      go self.regenerateBoard(group)
+      self.regenerateBoard(group)
     }
   }
 }
@@ -181,9 +181,6 @@ func (self httpFrontend) poll() {
           page: int(page),
         }
         self.regenBoard[fmt.Sprintf("%s|%s", req.group, req.page)] = req
-      }
-      if group == "ctl" {
-        // TODO: regen all relevant boards
       }
       // regen ukko
     case regen_front := <- self.ukkoChan:

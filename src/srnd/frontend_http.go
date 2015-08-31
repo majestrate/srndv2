@@ -256,8 +256,12 @@ func (self httpFrontend) regenerateBoard(group string) {
 
 // regenerate just a thread page
 func (self httpFrontend) regenerateThread(msgid string) {
-  fname := self.getFilenameForThread(msgid)
-  template.genThread(msgid, self.prefix, self.name, fname, self.daemon.database)
+  if self.daemon.store.HasArticle(msgid) {
+    fname := self.getFilenameForThread(msgid)
+    template.genThread(msgid, self.prefix, self.name, fname, self.daemon.database)
+  } else {
+    log.Println("don't have root post", msgid, "not regenerating thread")
+  }
 }
 
 // regenerate just a page on a board

@@ -259,13 +259,15 @@ func (self *NNTPConnection) streaming_mode(d *NNTPDaemon) {
         if err == nil {
           err = self.SendMessage(commands[0], f, d)
           f.Close()
-          continue
-        } 
+        }
+        if err != nil {
+          log.Println("failed to send", commands[0], err)
+        }
+        continue
       } else {
         log.Println("we didn't send", commands[0], "we don't have it locally")
         continue
       }
-      log.Println("failed to send", commands[0], err)
     } else if code == 239 {
       // accepted
       continue

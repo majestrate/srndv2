@@ -371,6 +371,7 @@ func (self *NNTPConnection) HandleInbound(d *NNTPDaemon) {
           read_more := true
           has_attachment := false
           is_signed := false
+          ask_for_article := false
           message := "we are gud"
           reference := ""
           var file io.WriteCloser
@@ -479,13 +480,7 @@ func (self *NNTPConnection) HandleInbound(d *NNTPDaemon) {
                   } else if ! d.database.HasArticleLocal(reference) {
                     // we don't have the root post yet
                     // ask for it async
-                    var nntp ArticleEntry
-                    nntp, err = d.database.GetMessageIDByHash(HashMessageID(reference))
-                    if err == nil {
-                      go self.articleDefered(nntp)
-                    } else {
-                      log.Println("!!! bug: cannot defer article send", err, "!!!")
-                    }
+                    ask_for_article = true
                   }
                 } else {
                   // invalid reference
@@ -511,7 +506,7 @@ func (self *NNTPConnection) HandleInbound(d *NNTPDaemon) {
             log.Println(self.conn.RemoteAddr(), "got article", article)
             // inform daemon
             d.infeed_load <- article
-          } else if code == 400 {
+          } else if ask_for_article {
             // XXX: assumes that the reference is not in another newsgroup
             if reference == "" || newsgroup == "" {
               log.Println("invalid reference or newsgroup when defering article", reference, newsgroup)

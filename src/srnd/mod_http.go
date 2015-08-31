@@ -263,8 +263,6 @@ func (self httpModUI) handleDeletePost(msg ArticleEntry, r *http.Request) map[st
           delmsgs = append(delmsgs, repl)
         }
       }
-      // delete thread presence from the database
-      self.database.DeleteThread(msgid)
     }
     delmsgs = append(delmsgs, msgid)
     // append mod line to mod message

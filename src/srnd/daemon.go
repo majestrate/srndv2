@@ -308,10 +308,11 @@ func (self NNTPDaemon) polloutfeeds() {
       delete(self.feeds, outfeed)
     case nntp := <- self.send_all_feeds:
       for feed, use := range self.feeds {
-        if use && feed.sync != nil {
+        chnl := feed.sync
+        if use && chnl != nil {
           if feed.policy.AllowsNewsgroup(nntp.Newsgroup()) {
             log.Println("send", nntp.MessageID(), "to", feed.info.name)
-            feed.sync <- nntp
+            chnl <- nntp
           }
         }
       }

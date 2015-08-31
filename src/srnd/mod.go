@@ -16,6 +16,10 @@ import (
 )
 
 
+// regenerate pages function
+type RegenFunc func (newsgroup, msgid, root string, page int)
+
+
 // interface for moderation ui
 type ModUI interface {
 
@@ -150,7 +154,7 @@ type ModEngine interface {
   MessageChan() chan NNTPMessage
 
   // delete post of a poster
-  DeletePost(msgid string) error
+  DeletePost(msgid string, regen RegenFunc) error
   // ban a cidr
   BanAddress(cidr string) error
   // do we allow this public key to delete?
@@ -173,13 +177,15 @@ func (self modEngine) BanAddress(cidr string) (err error) {
   return self.database.BanAddr(cidr)
 }
 
-func (self modEngine) DeletePost(msgid string) (err error) {
+func (self modEngine) DeletePost(msgid string, regen RegenFunc) (err error) {
   hdr := self.store.GetHeaders(msgid)
   if hdr == nil {
     return errors.New("no such message on filesystem: "+msgid)
   } else {
     ref := hdr.Get("References", "")
+    group := hdr.Get("Newsgroups", "")
     var delposts []string
+    var page int64
     if ref == "" {
       // is root post
       // delete replies too
@@ -189,8 +195,12 @@ func (self modEngine) DeletePost(msgid string) (err error) {
       } else {
         delposts = append(delposts, repls...)
       }
+      
+      _, page, err = self.database.GetPageForRootMessage(msgid)
       // delete thread presence
       self.database.DeleteThread(msgid)
+    } else {
+      _, page, err = self.database.GetPageForRootMessage(ref) 
     }
     delposts = append(delposts, msgid)
     // get list of files to delete
@@ -215,6 +225,7 @@ func (self modEngine) DeletePost(msgid string) (err error) {
       log.Printf("delete file: %s", f)
       os.Remove(f)
     }
+    regen(group, msgid, ref, int(page))
   }
   return nil
 }
@@ -227,8 +238,6 @@ func (self modEngine) AllowBan(pubkey string) bool {
 func (self modEngine) AllowDelete(pubkey string) bool {
   return self.database.CheckModPubkeyGlobal(pubkey)
 }
-
-type RegenFunc func (msgid string)
 
 // run a mod engine logic mainloop
 func RunModEngine(mod ModEngine, regen RegenFunc) {
@@ -250,12 +259,10 @@ func RunModEngine(mod ModEngine, regen RegenFunc) {
             msgid := ev.Target()
             // this is a delete action
             if mod.AllowDelete(pubkey) {
-              err := mod.DeletePost(msgid)
+              err := mod.DeletePost(msgid, regen)
               if err != nil {
                 log.Println(msgid, err)
               }
-              // regen as needed
-              regen(msgid)
             } else {
               log.Printf("pubkey=%s will not delete %s not trusted", pubkey, msgid)
             }

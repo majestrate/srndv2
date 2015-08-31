@@ -282,21 +282,14 @@ func (self httpFrontend) regenUkko() {
 }
 
 // regenerate pages after a mod event
-func (self httpFrontend) regenOnModEvent(msgid string) {
-  root, group, page, err := self.daemon.database.GetInfoForMessage(msgid)
-  if err == nil {
-    // this is a root post
-    // get rid of the markup
-    if root == msgid {
-      fname := self.getFilenameForThread(root)
-      os.Remove(fname)
-    } else {
-      self.regenThreadChan <- root
-    }
-    self.regenGroupChan <- groupRegenRequest{group, int(page)}
+func (self httpFrontend) regenOnModEvent(newsgroup, msgid, root string, page int) {
+  if root == msgid {
+    fname := self.getFilenameForThread(root)
+    os.Remove(fname)
   } else {
-    log.Println("error triggering mod regen", err)
+    self.regenThreadChan <- root
   }
+  self.regenGroupChan <- groupRegenRequest{newsgroup, int(page)}
 }
 
 

@@ -312,6 +312,7 @@ func (self NNTPDaemon) polloutfeeds() {
         if use && chnl != nil {
           if feed.policy.AllowsNewsgroup(nntp.Newsgroup()) {
             log.Println("send", nntp.MessageID(), "to", feed.info.name)
+            chnl := feed.sync
             chnl <- nntp
           }
         }

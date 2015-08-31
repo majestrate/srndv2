@@ -580,6 +580,7 @@ func (self *NNTPConnection) HandleInbound(d *NNTPDaemon) {
               _, err = io.Copy(dw, f)
               dw.Close()
               f.Close()
+              log.Println(msgid, "was fetched")
               continue
             }
             log.Println("error fetching", msgid, err)

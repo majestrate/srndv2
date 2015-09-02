@@ -296,7 +296,7 @@ func (self nntpConnection) handleLine(daemon NNTPDaemon, code int, line string, 
             // we have already seen this article
             log.Println(self.name, "already seen", msgid)
             code = 439
-          } else if reference != "" && daemon.database.IsExpired(reference) {
+          } else if reference != "" && ! daemon.store.HasArticle(reference) && daemon.database.IsExpired(reference) {
             // this belongs to a root post that is expired or banned
             code = 439
           } else if is_ctl {

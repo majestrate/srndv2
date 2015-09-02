@@ -291,7 +291,9 @@ func (self NNTPDaemon) polloutfeeds() {
     case nntp := <- self.send_all_feeds:
       feeds := self.feeds
       for _, feed := range feeds {
+        log.Println("send all feeds", nntp.Newsgroup(), nntp.MessageID())
         if feed.policy.AllowsNewsgroup(nntp.Newsgroup()) {
+
           feed.check <- nntp.MessageID()
         }
       }

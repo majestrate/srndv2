@@ -266,13 +266,14 @@ func (self nntpConnection) handleLine(daemon NNTPDaemon, code int, line string, 
       } else if cmd == "TAKETHIS" {
         // read the article headers
         var hdr textproto.MIMEHeader
+        var reason string
         hdr, err = conn.ReadMIMEHeader()
         if err == nil {
           // check the headers and see if we want this article
           newsgroup := hdr.Get("Newsgroups")
           reference := hdr.Get("References")
-          msgid := hdr.Get("Message-Id")
-          encaddr := hdr.Get("X-Encrypted-Ip")
+          msgid := hdr.Get("Message-ID")
+          encaddr := hdr.Get("X-Encrypted-IP")
           torposter := hdr.Get("X-Tor-Poster")
           i2paddr := hdr.Get("X-I2p-Desthash")
           content_type := hdr.Get("Content-Type")
@@ -285,16 +286,19 @@ func (self nntpConnection) handleLine(daemon NNTPDaemon, code int, line string, 
 
           if ! newsgroupValidFormat(newsgroup) {
             // invalid newsgroup format
+            reason = "invalid newsgroup"
             code = 439
           } else if ! ( ValidMessageID(msgid) && ( reference != "" && ValidMessageID(reference) ) ) {
             // invalid message id or reference
+            reason = "invalid reference or message id"
             code = 439
           } else if daemon.store.HasArticle(msgid) {
             // we already have this article locally
+            reason = "have this article locally"
             code = 439
           } else if daemon.database.HasArticle(msgid) {
             // we have already seen this article
-            log.Println(self.name, "already seen", msgid)
+            reason = "already seen"
             code = 439
           } else if is_ctl {
             // we always allow control messages
@@ -309,6 +313,7 @@ func (self nntpConnection) handleLine(daemon NNTPDaemon, code int, line string, 
                   code = 239
                 } else {
                   // we don't take signed messages or attachments posted anonymously
+                  reason = "no anon signed posts or attachments"
                   code = 439
                 }
               } else {
@@ -317,27 +322,34 @@ func (self nntpConnection) handleLine(daemon NNTPDaemon, code int, line string, 
               }
             } else {
               // we don't allow anon posts of any kind
+              reason = "no anon posts allowed"
               code = 439
             }
           } else {
             // check for banned address
             var banned bool
-            banned, err = daemon.database.CheckEncIPBanned(encaddr)
-            if err == nil {
-              if banned {
+            if encaddr != "" {
+              banned, err = daemon.database.CheckEncIPBanned(encaddr)
+              if err == nil {
+                if banned {
                 // this address is banned
-                code = 439
+                  code = 439
+                  reason = "address banned"
+                } else {
+                  // not banned
+                  code = 239
+                }
               } else {
-                // not banned
-                code = 239
+                // an error occured
+                log.Println(self.name, "failed to check ban for", encaddr, err)
+                // do a 400
+                conn.PrintfLine("400 Service temporarily unavailable")
+                conn.Close()
+                return
               }
             } else {
-              // an error occured
-              log.Println(self.name, "failed to check ban for", encaddr, err)
-              // do a 400
-              conn.PrintfLine("400 Service temporarily unavailable")
-              conn.Close()
-              return
+              // idk wtf
+              log.Println(self.name, "wtf? invalid article")
             }
           }
           dr := conn.DotReader()
@@ -374,12 +386,16 @@ func (self nntpConnection) handleLine(daemon NNTPDaemon, code int, line string, 
             }
           } else {
             // discard
+            log.Println(self.name, "rejected", msgid, reason)
             _, err = io.Copy(ioutil.Discard, dr)
           }
         } else {
           log.Println(self.name, "error reading mime header:", err)
         }
-        conn.PrintfLine("%d %s", code, msgid)
+        if reason == "" {
+          reason = "gotten"
+        }
+        conn.PrintfLine("%d %s %s", code, msgid, reason)
       }
     }
   }

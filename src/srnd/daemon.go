@@ -5,9 +5,9 @@ package srnd
 import (
   "log"
   "net"
+  "net/textproto"
   "strconv"
   "strings"
-  "net/textproto"
   "os"
   "time"
 )
@@ -23,15 +23,19 @@ type NNTPDaemon struct {
   listener net.Listener
   debug bool
   sync_on_start bool
+  // anon settings
+  allow_anon bool
+  allow_anon_attachments bool
+  
   running bool
   // http frontend
   frontend Frontend
 
-  // map nntp connection -> enabled as outfeed
-  feeds map[NNTPConnection] bool
+  // map of addr -> NNTPConnection
+  feeds map[string]nntpConnection
   // for registering and deregistering outbound feeds
-  register_outfeed chan NNTPConnection
-  deregister_outfeed chan NNTPConnection
+  register_outfeed chan nntpConnection
+  deregister_outfeed chan nntpConnection
   // thumbnail generator for images
   img_thm ThumbnailGenerator
   infeed chan NNTPMessage
@@ -47,14 +51,6 @@ func (self NNTPDaemon) End() {
   self.listener.Close()
 }
 
-
-// register a new connection
-// can be either inbound or outbound
-func (self NNTPDaemon) newConnection(conn net.Conn, inbound bool, policy *FeedPolicy) NNTPConnection {
-  allow_tor := self.conf.daemon["allow_tor"]
-  allow_tor_attachments := self.conf.daemon["allow_tor_attachments"]
-  return NNTPConnection{conn, textproto.NewConn(conn), inbound, self.debug, ConnectionInfo{}, policy,  make(chan ArticleEntry, 128), self.store, self.store, allow_tor == "1", allow_tor_attachments == "1"}
-}
 
 func (self NNTPDaemon) persistFeed(conf FeedConfig, mode string) {
   for {
@@ -136,34 +132,18 @@ func (self NNTPDaemon) persistFeed(conf FeedConfig, mode string) {
           continue
         }
       }
-      policy := &conf.policy
-      nntp := self.newConnection(conn, false, policy)
-      // start syncing in background if streaming mode
-      if mode == "stream" {
-        go func() {
-          if self.sync_on_start {
-            log.Println("sync on start")
-            // get every article
-            articles := self.database.GetAllArticles()
-            // wait 5 seconds for feed to handshake
-            time.Sleep(5 * time.Second)
-            log.Println("outfeed begin sync")
-            for _, result := range articles {
-              if policy.AllowsNewsgroup(result.Newsgroup()) {
-                //XXX: will this crash if interrupted?
-                nntp.sync <- result
-              }
-            }
-            log.Println("outfeed end sync")
-          }
-        }()
+      nntp := createNNTPConnection()
+      nntp.policy = conf.policy
+      nntp.name = conf.addr
+      c := textproto.NewConn(conn)
+      stream, reader, err := nntp.outboundHandshake(c)
+      if err == nil {
+        self.register_outfeed <- nntp
+        nntp.runConnection(self, false, stream, reader, c)
+        self.deregister_outfeed <- nntp
+      } else {
+        log.Println("error doing outbound hanshake", err)
       }
-      nntp.info.name = conf.addr
-      self.register_outfeed <- nntp
-      nntp.HandleOutbound(&self, conf.quarks, mode)
-      self.deregister_outfeed <- nntp
-      close(nntp.sync)
-      nntp.sync = nil
     }
   }
   time.Sleep(1 * time.Second)
@@ -181,18 +161,21 @@ func (self NNTPDaemon) Run() {
   self.listener = listener
   log.Printf("SRNd NNTPD bound at %s", listener.Addr())
 
-  self.register_outfeed = make(chan NNTPConnection)
-  self.deregister_outfeed = make(chan NNTPConnection)
+  self.register_outfeed = make(chan nntpConnection)
+  self.deregister_outfeed = make(chan nntpConnection)
   self.infeed = make(chan NNTPMessage, 8)
   self.infeed_load = make(chan string)
   self.send_all_feeds = make(chan ArticleEntry, 64)
-  self.feeds = make(map[NNTPConnection]bool)
+  self.feeds = make(map[string]nntpConnection)
   self.ask_for_article = make(chan ArticleEntry, 64)
 
   self.expire = createExpirationCore(self.database, self.store)
   self.sync_on_start = self.conf.daemon["sync_on_start"] == "1"
   self.debug = self.conf.daemon["log"] == "debug"
   self.instance_name = self.conf.daemon["instance_name"]
+  self.allow_anon = self.conf.daemon["allow_anon"] == "1"
+  self.allow_anon_attachments = self.conf.daemon["allow_anon_attachments"] == "1"
+  
   if self.debug {
     log.Println("debug mode activated")
   }
@@ -227,7 +210,6 @@ func (self NNTPDaemon) Run() {
   // persist outfeeds
   for idx := range self.conf.feeds {
     go self.persistFeed(self.conf.feeds[idx], "stream")
-    go self.persistFeed(self.conf.feeds[idx], "reader")
   }
 
   // start accepting incoming connections
@@ -301,31 +283,23 @@ func (self NNTPDaemon) polloutfeeds() {
     select {
 
     case outfeed := <- self.register_outfeed:
-      log.Println("outfeed", outfeed.info.name, "registered")
-      self.feeds[outfeed] = true
+      log.Println("outfeed", outfeed.name, "registered")
+      self.feeds[outfeed.name] = outfeed
     case outfeed := <- self.deregister_outfeed:
-      log.Println("outfeed", outfeed.info.name, "de-registered")
-      delete(self.feeds, outfeed)
-      outfeed.sync = nil
+      log.Println("outfeed", outfeed.name, "de-registered")
+      delete(self.feeds, outfeed.name)
     case nntp := <- self.send_all_feeds:
       feeds := self.feeds
-      for feed, use := range feeds {
-        chnl := feed.sync
-        if use && chnl != nil {
-          if feed.policy.AllowsNewsgroup(nntp.Newsgroup()) {
-            log.Println("send", nntp.MessageID(), "to", feed.info.name)
-            chnl <- nntp
-          }
+      for _, feed := range feeds {
+        if feed.policy.AllowsNewsgroup(nntp.Newsgroup()) {
+          feed.check <- nntp.MessageID()
         }
       }
     case nntp := <- self.ask_for_article:
-      log.Println("ask for", nntp.MessageID())
-      for feed, use := range self.feeds {
-        if use && feed.sync != nil {
-          if feed.policy.AllowsNewsgroup(nntp.Newsgroup()) {
-            log.Println("asking", feed.info.name, "for", nntp.MessageID())
-            feed.sync <- nntp
-          }
+      for _, feed := range self.feeds {
+        if feed.policy.AllowsNewsgroup(nntp.Newsgroup()) {
+          log.Println("asking", feed.name, "for", nntp.MessageID())
+          feed.article <- nntp.MessageID()
         }
       }
     }
@@ -391,15 +365,19 @@ func (self NNTPDaemon) acceptloop() {
       log.Fatal(err)
     }
     // make a new inbound nntp connection handler 
-    nntp := self.newConnection(conn, true, nil)
-    go self.RunInbound(nntp)
+    nntp := createNNTPConnection()
+    c := textproto.NewConn(conn)
+    // send banners and shit
+    err = nntp.inboundHandshake(c)
+    if err == nil {
+      // run, we support stream and reader
+      go nntp.runConnection(self, true, true, true, c)
+    } else {
+      log.Println("failed to send banners", err)
+      c.Close()
+    }
   }
 }
-
-func (self NNTPDaemon) RunInbound(nntp NNTPConnection) {
-  nntp.HandleInbound(&self)
-}
-
 
 func (self NNTPDaemon) Setup() NNTPDaemon {
   log.Println("checking for configs...")
@@ -438,15 +416,4 @@ func (self NNTPDaemon) Setup() NNTPDaemon {
     chnl: make(chan NNTPMessage),
   }
   return self
-}
-
-// bind to address
-func (self NNTPDaemon) Bind() error {
-  return nil
-}
-
-// load configuration
-// bind to interface
-func (self NNTPDaemon) Init() bool {
-  return true
 }

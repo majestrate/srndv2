@@ -207,7 +207,12 @@ func (self nntpConnection) handleStreaming(daemon NNTPDaemon, reader bool, conn 
 
 func (self nntpConnection) handleLine(daemon NNTPDaemon, code int, line string, conn *textproto.Conn) (err error) {
   parts := strings.Split(line, " ")
-  msgid := parts[0]
+  var msgid line
+  if code == 0 {
+    msgid = parts[1]
+  } else {
+    msgid = parts[0]
+  }
   if code == 238 {
     if ValidMessageID(msgid) {
       log.Println("sending", msgid, "to", self.name)

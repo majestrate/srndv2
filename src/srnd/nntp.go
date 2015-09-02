@@ -207,7 +207,7 @@ func (self nntpConnection) handleStreaming(daemon NNTPDaemon, reader bool, conn 
 
 func (self nntpConnection) handleLine(daemon NNTPDaemon, code int, line string, conn *textproto.Conn) (err error) {
   parts := strings.Split(line, " ")
-  var msgid line
+  var msgid string
   if code == 0 {
     msgid = parts[1]
   } else {

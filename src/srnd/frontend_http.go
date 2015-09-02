@@ -195,7 +195,7 @@ func (self httpFrontend) poll() {
           group: group,
           page: int(page),
         }
-        self.regenBoard[fmt.Sprintf("%s|%s", req.group, req.page)] = req
+        self.regenGroupChan <- req
       }
     }
   }

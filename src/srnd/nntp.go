@@ -210,7 +210,7 @@ func (self nntpConnection) handleLine(daemon NNTPDaemon, code int, line string, 
     if ValidMessageID(msgid) {
       log.Println("sending", msgid, "to", self.name)
       // send the article to us
-      self.take <- line
+      self.take <- msgid
     }
   } else if code == 239 {
     // successful TAKETHIS
@@ -219,7 +219,7 @@ func (self nntpConnection) handleLine(daemon NNTPDaemon, code int, line string, 
   } else if code == 431 {
     // CHECK said we would like this article later
     log.Println("defer sending", msgid, "to", self.name)
-    go self.articleDefer(line)
+    go self.articleDefer(msgid)
   } else if code == 439 {
     // TAKETHIS failed
     log.Println(msgid, "was not sent to", self.name, "denied")

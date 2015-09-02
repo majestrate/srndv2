@@ -14,22 +14,14 @@ type FeedPolicy struct {
 
 // do we allow this newsgroup?
 func (self *FeedPolicy) AllowsNewsgroup(newsgroup string) bool {
-  var k string
-  for k = range self.rules {
-    
-    inverse := k[0] == '!'
-    if inverse {
-      k = k[1:]
-    }
+  var k, v string
+  for k, v = range self.rules {
     match, err := regexp.MatchString(k, newsgroup)
     if err != nil {
       log.Fatal(err)
     }
     if match {
-      if inverse {
-        return false
-      }
-      return true
+      return v == "1"
     }
   }
   return false

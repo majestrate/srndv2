@@ -362,9 +362,10 @@ func (self nntpConnection) runConnection(daemon NNTPDaemon, inbound, stream, rea
   for err == nil {
     if self.mode == "" {
       if inbound  {
-        self.name = "inbound"
+        self.name = "inbound-feed"
         // no mode set and inbound
         line, err = conn.ReadLine()
+        log.Println(self.name, line)
         parts := strings.Split(line, " ")
         cmd := parts[0]
         if cmd == "CAPABILITIES" {
@@ -377,6 +378,7 @@ func (self nntpConnection) runConnection(daemon NNTPDaemon, inbound, stream, rea
             io.WriteString(dw, "\n")
           }
           dw.Close()
+          log.Println(self.name, "sent Capabilities")
         } else if cmd == "MODE" {
           if len(parts) == 2 {
             if parts[1] == "READER" {
@@ -388,6 +390,7 @@ func (self nntpConnection) runConnection(daemon NNTPDaemon, inbound, stream, rea
               // set streaming mode
               conn.PrintfLine("203 Stream it brah")
               self.mode = "STREAM"
+              log.Println(self.name, "streaming enabled")
               go self.startStreaming(daemon, reader, conn)
             }
           }

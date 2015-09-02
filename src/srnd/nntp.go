@@ -229,7 +229,7 @@ func (self nntpConnection) handleLine(daemon NNTPDaemon, code int, line string, 
     go self.articleDefer(msgid)
   } else if code == 439 {
     // TAKETHIS failed
-    log.Println(msgid, "was not sent to", self.name, "denied")
+    log.Println(msgid, "was not sent to", self.name, "denied:", line)
     // TODO: remember denial
   } else if code == 438 {
     // they don't want the article

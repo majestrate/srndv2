@@ -392,7 +392,7 @@ func (self nntpConnection) runConnection(daemon NNTPDaemon, inbound, stream, rea
             }
           }
         } else {
-          log.Println(self.name, "got invalid inbound line:", line)
+          log.Println(self.name,"in mode", self.mode, "got invalid inbound line:", line)
           conn.PrintfLine("500 Syntax Error")
         }
       } else {
@@ -408,7 +408,7 @@ func (self nntpConnection) runConnection(daemon NNTPDaemon, inbound, stream, rea
           self.mode = "READER"
         }
         if success {
-          log.Println("mode set to", self.mode)
+          log.Println(self.name, "mode set to", self.mode)
         } else {
           // bullshit
           // we can't do anything so we quit

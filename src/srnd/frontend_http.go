@@ -641,10 +641,8 @@ func (self httpFrontend) Mainloop() {
 
   // poll channels
   go self.poll()
-  for threads > 0 {
-    go self.pollRegen()
-    threads --
-  }
+  go self.pollRegen()
+   
   go RunModEngine(self.daemon.mod, self.regenOnModEvent)
   
   // start webserver here

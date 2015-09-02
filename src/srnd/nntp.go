@@ -414,6 +414,7 @@ func (self nntpConnection) runConnection(daemon NNTPDaemon, inbound, stream, rea
     } else if self.mode == "STREAM" {
       // we're in streaming mode
       code, line, err = conn.ReadCodeLine(-1)
+      log.Println(self.name, line)
       err = self.handleLine(daemon, code, line, conn)
     } else if self.mode == "READER" {
     }

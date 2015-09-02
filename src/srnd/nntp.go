@@ -184,7 +184,7 @@ func (self nntpConnection) handleStreaming(daemon NNTPDaemon, reader bool, conn 
   case msgid := <- self.take:
     // send a file via TAKETHIS
     if ValidMessageID(msgid) {
-      fname := daemon.store.GetFilename(line)
+      fname := daemon.store.GetFilename(msgid)
       if CheckFile(fname) {
         f, err := os.Open(fname)
         if err == nil {

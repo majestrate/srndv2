@@ -9,6 +9,7 @@ import (
   "log"
   "net/textproto"
   "os"
+  "strconv"
   "strings"
   "sync"
   "time"
@@ -203,6 +204,7 @@ func (self nntpConnection) handleStreaming(daemon NNTPDaemon, reader bool, conn 
 }
 
 func (self nntpConnection) handleLine(daemon NNTPDaemon, code int, line string, conn *textproto.Conn) (err error) {
+
   if code == 238 {
     if ValidMessageID(line) {
       log.Println("sending", line, "to", self.name)
@@ -332,6 +334,7 @@ func (self nntpConnection) handleLine(daemon NNTPDaemon, code int, line string, 
             return
           }
         }
+        conn.PrintfLine("%d %s", code, msgid)
       }
     }
   }
@@ -352,7 +355,6 @@ func (self nntpConnection) startStreaming(daemon NNTPDaemon, reader bool, conn *
 func (self nntpConnection) runConnection(daemon NNTPDaemon, inbound, stream, reader bool, conn *textproto.Conn) {
 
   var err error
-  var code int
   var line string
   var success bool
 
@@ -413,9 +415,17 @@ func (self nntpConnection) runConnection(daemon NNTPDaemon, inbound, stream, rea
       }
     } else if self.mode == "STREAM" {
       // we're in streaming mode
-      code, line, err = conn.ReadCodeLine(-1)
-      log.Println(self.name, line)
-      err = self.handleLine(daemon, code, line, conn)
+      line, err = conn.ReadLine()
+      if err == nil {
+        parts := strings.Split(line, " ")
+        var code64 int64
+        code64, err = strconv.ParseInt(parts[0], 10, 32)
+        if err ==  nil {
+          err = self.handleLine(daemon, int(code64), line[4:], conn)
+        } else {
+          err = self.handleLine(daemon, 0, line, conn)
+        }
+      }
     } else if self.mode == "READER" {
     }
   }

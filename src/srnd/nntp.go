@@ -386,6 +386,7 @@ func (self nntpConnection) runConnection(daemon NNTPDaemon, inbound, stream, rea
               // set streaming mode
               conn.PrintfLine("203 Stream it brah")
               self.mode = "STREAM"
+              go self.startStreaming(daemon, reader, conn)
             }
           }
         } else {

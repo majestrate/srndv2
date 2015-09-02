@@ -56,7 +56,7 @@ func EnsureDir(dirname string) {
 // TODO make this work better
 func ValidMessageID(id string) bool {
   id_len := len(id)
-  log.Println(id)
+
   if id_len < 5 {
     return false 
   }

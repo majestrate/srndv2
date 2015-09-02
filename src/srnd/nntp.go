@@ -5,7 +5,9 @@ package srnd
 
 import (
   "bufio"
+  "fmt"
   "io"
+  "io/ioutil"
   "log"
   "net/textproto"
   "os"
@@ -260,85 +262,118 @@ func (self nntpConnection) handleLine(daemon NNTPDaemon, code int, line string, 
         // read the article headers
         var hdr textproto.MIMEHeader
         hdr, err = conn.ReadMIMEHeader()
-        // check the headers and see if we want this article
-        newsgroup := hdr.Get("Newsgroups")
-        reference := hdr.Get("References")
-        msgid := hdr.Get("Message-Id")
-        encaddr := hdr.Get("X-Encrypted-Ip")
-        torposter := hdr.Get("X-Tor-Poster")
-        i2paddr := hdr.Get("X-I2p-Desthash")
-        content_type := hdr.Get("Content-Type")
-        has_attachment := strings.HasPrefix(content_type, "multipart/mixed")
-        pubkey := hdr.Get("X-Pubkey-Ed25519")
-        // TODO: allow certain pubkeys?
-        is_signed := pubkey != ""
-        is_ctl := newsgroup == "ctl" && is_signed
-        anon_poster := torposter != "" || i2paddr != "" || encaddr == ""
+        if err == nil {
+          // check the headers and see if we want this article
+          newsgroup := hdr.Get("Newsgroups")
+          reference := hdr.Get("References")
+          msgid := hdr.Get("Message-Id")
+          encaddr := hdr.Get("X-Encrypted-Ip")
+          torposter := hdr.Get("X-Tor-Poster")
+          i2paddr := hdr.Get("X-I2p-Desthash")
+          content_type := hdr.Get("Content-Type")
+          has_attachment := strings.HasPrefix(content_type, "multipart/mixed")
+          pubkey := hdr.Get("X-Pubkey-Ed25519")
+          // TODO: allow certain pubkeys?
+          is_signed := pubkey != ""
+          is_ctl := newsgroup == "ctl" && is_signed
+          anon_poster := torposter != "" || i2paddr != "" || encaddr == ""
 
-        if ! newsgroupValidFormat(newsgroup) {
-          // invalid newsgroup format
-          code = 439
-        } else if ! ( ValidMessageID(msgid) && ( reference != "" && ValidMessageID(reference) ) ) {
-          // invalid message id or reference
-          code = 439
-        } else if daemon.store.HasArticle(msgid) {
-          // we already have this article locally
-          code = 439
-        } else if daemon.database.HasArticle(msgid) {
-          // we have already seen this article
-          log.Println(self.name, "already seen", msgid)
-          code = 439
-        } else if reference != "" && daemon.database.IsExpired(reference) {
-          // this belongs to a root post that is expired or banned
-          code = 439
-        } else if is_ctl {
-          // we always allow control messages
-          code = 239
-        } else if anon_poster {
-          // this was posted anonymously
-          if daemon.allow_anon {
-            if has_attachment || is_signed {
-              // this is a signed message or has attachment
-              if daemon.allow_anon_attachments {
-                // we'll allow anon attachments
-                code = 239
+          if ! newsgroupValidFormat(newsgroup) {
+            // invalid newsgroup format
+            code = 439
+          } else if ! ( ValidMessageID(msgid) && ( reference != "" && ValidMessageID(reference) ) ) {
+            // invalid message id or reference
+            code = 439
+          } else if daemon.store.HasArticle(msgid) {
+            // we already have this article locally
+            code = 439
+          } else if daemon.database.HasArticle(msgid) {
+            // we have already seen this article
+            log.Println(self.name, "already seen", msgid)
+            code = 439
+          } else if reference != "" && daemon.database.IsExpired(reference) {
+            // this belongs to a root post that is expired or banned
+            code = 439
+          } else if is_ctl {
+            // we always allow control messages
+            code = 239
+          } else if anon_poster {
+            // this was posted anonymously
+            if daemon.allow_anon {
+              if has_attachment || is_signed {
+                // this is a signed message or has attachment
+                if daemon.allow_anon_attachments {
+                  // we'll allow anon attachments
+                  code = 239
+                } else {
+                  // we don't take signed messages or attachments posted anonymously
+                  code = 439
+                }
               } else {
-                // we don't take signed messages or attachments posted anonymously
-                code = 439
+                // we allow anon posts that are plain
+                code = 239
               }
             } else {
-              // we allow anon posts that are plain
-              code = 239
+              // we don't allow anon posts of any kind
+              code = 439
             }
           } else {
-            // we don't allow anon posts of any kind
-            code = 439
+            // check for banned address
+            var banned bool
+            banned, err = daemon.database.CheckEncIPBanned(encaddr)
+            if err == nil {
+              if banned {
+                // this address is banned
+                code = 439
+              } else {
+                // not banned
+                code = 239
+              }
+            } else {
+              // an error occured
+              log.Println(self.name, "failed to check ban for", encaddr, err)
+              // do a 400
+              conn.PrintfLine("400 Service temporarily unavailable")
+              conn.Close()
+              return
+            }
+          }
+          dr := conn.DotReader()
+          // now read it
+          if code == 239 {
+            f := daemon.store.CreateTempFile(msgid)
+            if f == nil {
+              log.Println(self.name, "discarding", msgid, "we are already loading it")
+              // discard
+              io.Copy(ioutil.Discard, dr)
+            } else {
+              // write headers
+              for k, vals := range(hdr) {
+                for _, val := range(vals) {
+                  _, err = io.WriteString(f, fmt.Sprintf("%s: %s\n", k, val))
+                }
+              }
+              // end of headers
+              _, err = io.WriteString(f, "\n")
+              // write body
+              _, err = io.Copy(f, dr)
+              if err == nil || err == io.EOF {
+                f.Close()
+                // we gud, tell daemon
+                daemon.infeed_load <- msgid
+              } else {
+                log.Println(self.name, "error reading message", err)
+              }
+            }
+          } else {
+            // discard
+            log.Println(self.name, "discarding", msgid, code)
+            io.Copy(ioutil.Discard, dr)
           }
         } else {
-          // check for banned address
-          var banned bool
-          banned, err = daemon.database.CheckEncIPBanned(encaddr)
-          if err == nil {
-            if banned {
-              // this address is banned
-              code = 439
-            } else {
-              // not banned
-              code = 239
-            }
-          } else {
-            // an error occured
-            log.Println(self.name, "failed to check ban for", encaddr, err)
-            // do a 400
-            conn.PrintfLine("400 Service temporarily unavailable")
-            conn.Close()
-            return
-          }
+          log.Println(self.name, "error reading mime header:", err)
         }
         conn.PrintfLine("%d %s", code, msgid)
-        if code == 239 {
-          daemon.infeed_load <- msgid
-        }
       }
     }
   }

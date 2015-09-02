@@ -296,9 +296,6 @@ func (self nntpConnection) handleLine(daemon NNTPDaemon, code int, line string, 
             // we have already seen this article
             log.Println(self.name, "already seen", msgid)
             code = 439
-          } else if reference != "" && ! daemon.store.HasArticle(reference) && daemon.database.IsExpired(reference) {
-            // this belongs to a root post that is expired or banned
-            code = 439
           } else if is_ctl {
             // we always allow control messages
             code = 239
@@ -346,6 +343,11 @@ func (self nntpConnection) handleLine(daemon NNTPDaemon, code int, line string, 
           dr := conn.DotReader()
           // now read it
           if code == 239 {
+            // we don't have this the rootpost
+            if reference != "" && ValidMessageID(reference) && ! daemon.store.HasArticle(reference) && ! daemon.database.IsExpired(reference) {
+              log.Println(self.name, "got reply to", reference, "but we don't have it")
+              daemon.ask_for_article <- ArticleEntry{reference, newsgroup}
+            }
             f := daemon.store.CreateTempFile(msgid)
             if f == nil {
               log.Println(self.name, "discarding", msgid, "we are already loading it")

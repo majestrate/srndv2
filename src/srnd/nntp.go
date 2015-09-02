@@ -399,11 +399,13 @@ func (self nntpConnection) runConnection(daemon NNTPDaemon, inbound, stream, rea
         // set out mode we are outbound
         if stream {
           success, err = self.modeSwitch("STREAM", conn)
+          self.mode = "STREAM"
           if success {
             go self.startStreaming(daemon, reader, conn)
           }
         } else if reader {
           success, err = self.modeSwitch("READER", conn)
+          self.mode = "READER"
         }
         if success {
           log.Println("mode set to", self.mode)

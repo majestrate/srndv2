@@ -235,6 +235,7 @@ func (self nntpConnection) runConnection(daemon NNTPDaemon, inbound, stream, rea
           }
         }
       case msgid := <- self.check:
+        log.Println(self.name, "CHECK", msgid)
         conn.PrintfLine("CHECK %s", msgid)
       case msgid := <- self.take:
         // send a file via TAKETHIS

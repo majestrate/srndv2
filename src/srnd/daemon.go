@@ -139,6 +139,17 @@ func (self NNTPDaemon) persistFeed(conf FeedConfig, mode string) {
       stream, reader, err := nntp.outboundHandshake(c)
       if err == nil {
         self.register_outfeed <- nntp
+        if self.sync_on_start {
+          go func() {
+            log.Println(nntp.name, "will do full sync")
+            for _, article := range self.database.GetAllArticles() {
+              if nntp.policy.AllowsNewsgroup(article.Newsgroup()) {
+                nntp.check <- article.MessageID()
+              }
+            }
+            
+          }()
+        }
         nntp.runConnection(self, false, stream, reader, c)
         self.deregister_outfeed <- nntp
       } else {

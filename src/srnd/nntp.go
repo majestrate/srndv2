@@ -43,10 +43,11 @@ func createNNTPConnection() nntpConnection {
 }
 
 // switch modes
-func (self nntpConnection) modeSwitch(mode string, conn *textproto.Conn) (success bool, err error) {
+func (self *nntpConnection) modeSwitch(mode string, conn *textproto.Conn) (success bool, err error) {
   self.access.Lock()
   mode = strings.ToUpper(mode)
   conn.PrintfLine("MODE %s", mode)
+  log.Println("MODE", mode)
   var code int
   code, _, err = conn.ReadCodeLine(-1)
   if code > 200 && code < 300 {
@@ -72,6 +73,7 @@ func (self nntpConnection) inboundHandshake(conn *textproto.Conn) (err error) {
 // outbound setup, check capabilities and set mode
 // returns (supports stream, supports reader) + error
 func (self nntpConnection) outboundHandshake(conn *textproto.Conn) (stream, reader bool, err error) {
+  log.Println(self.name, "outbound handshake")
   var code int
   var line string
   for err == nil {
@@ -99,6 +101,10 @@ func (self nntpConnection) outboundHandshake(conn *textproto.Conn) (stream, read
               } else if line == "STREAMING\n" {
                 stream = true
                 log.Println(self.name, "supports STREAMING")
+              } else if line == "POSTIHAVESTREAMING\n" {
+                stream = true
+                reader = false
+                log.Println(self.name, "is SRNd")
               }
             } else {
               // we got an error

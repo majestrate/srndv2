@@ -81,6 +81,7 @@ func (self nntpConnection) outboundHandshake(conn *textproto.Conn) (stream, read
     if err == nil {
       if code == 200 {
         // send capabilities
+        log.Println(self.name, "ask for capabilities")
         err = conn.PrintfLine("CAPABILITIES")
         if err == nil {
           // read response
@@ -142,6 +143,35 @@ func (self nntpConnection) runConnection(daemon NNTPDaemon, inbound, stream, rea
       if inbound  {
         // no mode set and inbound
         line, err = conn.ReadLine()
+        parts := strings.Split(line, " ")
+        cmd := parts[0]
+        if cmd == "CAPABILITIES" {
+          // write capabilities
+          conn.PrintfLine("101 Capabilities list:")
+          dw := conn.DotWriter()
+          caps := []string{"VERSION 2", "MODE-READER", "STREAMING"}
+          for _, cap := range caps {
+            io.WriteString(dw, cap)
+            io.WriteString(dw, "\n")
+          }
+          dw.Close()
+        } else if cmd == "MODE" {
+          if len(parts) == 2 {
+            if parts[1] == "READER" {
+              // set reader mode
+              self.mode = "READER"
+              // posting is not permitted with reader mode
+              conn.PrintfLine("201 Posting not permitted")
+            } else if parts[1] == "STREAM" {
+              // set streaming mode
+              self.mode = "STREAM"
+              conn.PrintfLine("203 Stream it brah")
+            }
+          }
+        } else {
+          log.Println(self.name, "got invalid inbound line:", line)
+          conn.PrintfLine("500 Syntax Error")
+        }
       } else {
         // set out mode we are outbound
         if stream {
@@ -256,6 +286,7 @@ func (self nntpConnection) runConnection(daemon NNTPDaemon, inbound, stream, rea
               if parts[1] == "READER" {
                 self.mode = "READER"
                 log.Println(self.name, "switched to reader mode")
+                conn.PrintfLine("201 No posting Permitted")
               } else if parts[1] == "STREAM" {
                 // wut? we're already in streaming mode
                 log.Println(self.name, "already in streaming mode")
@@ -362,6 +393,9 @@ func (self nntpConnection) runConnection(daemon NNTPDaemon, inbound, stream, rea
     }
   }
   log.Println("run connection got error", err)
+  if ! inbound {
+    conn.PrintfLine("QUIT")
+  }
   conn.Close()
 }
 

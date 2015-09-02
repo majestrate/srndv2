@@ -177,13 +177,11 @@ func (self httpFrontend) poll() {
       self.postchan <- nntp
     case nntp := <- self.recvpostchan:
       // get root post and tell frontend to regen that thread
-      var msgid string
       if len(nntp.Reference()) > 0 {
-        msgid = nntp.Reference()
+        self.regenThreadChan <-  nntp.Reference()
       } else {
-        msgid = nntp.MessageID()
+        self.regenerateThread(nntp.MessageID())
       }
-      self.regenThreadChan <- msgid
       // regen the newsgroup we're in
       // TODO: regen only what we need to
       pages := self.daemon.database.GetGroupPageCount(nntp.Newsgroup())

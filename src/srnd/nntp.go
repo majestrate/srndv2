@@ -204,24 +204,25 @@ func (self nntpConnection) handleStreaming(daemon NNTPDaemon, reader bool, conn 
 }
 
 func (self nntpConnection) handleLine(daemon NNTPDaemon, code int, line string, conn *textproto.Conn) (err error) {
-
+  parts := strings.Split(line, " ")
+  msgid := parts[0]
   if code == 238 {
-    if ValidMessageID(line) {
-      log.Println("sending", line, "to", self.name)
+    if ValidMessageID(msgid) {
+      log.Println("sending", msgid, "to", self.name)
       // send the article to us
       self.take <- line
     }
   } else if code == 239 {
     // successful TAKETHIS
-    log.Println(line, "sent via", self.name)
+    log.Println(msgid, "sent via", self.name)
     // TODO: remember success 
   } else if code == 431 {
     // CHECK said we would like this article later
-    log.Println("defer sending", line, "to", self.name)
+    log.Println("defer sending", msgid, "to", self.name)
     go self.articleDefer(line)
   } else if code == 439 {
     // TAKETHIS failed
-    log.Println(line, "was not sent to", self.name, "denied")
+    log.Println(msgid, "was not sent to", self.name, "denied")
     // TODO: remember denial
   } else if code == 438 {
     // they don't want the article

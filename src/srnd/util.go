@@ -91,7 +91,7 @@ func ValidMessageID(id string) bool {
         continue
       }
     }
-    log.Printf("bad message ID: %s , invalid char at %d: %c", id, idx, c)
+    log.Printf("bad message ID: len=%d %s , invalid char at %d: %c", id_len, id, idx, c)
     return false
   }
   return true

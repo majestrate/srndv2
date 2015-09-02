@@ -182,7 +182,7 @@ func (self nntpConnection) handleStreaming(daemon NNTPDaemon, reader bool, conn 
     }
   case msgid := <- self.check:
     log.Println(self.name, "CHECK", msgid)
-    conn.PrintfLine("CHECK %s", msgid)
+    err = conn.PrintfLine("CHECK %s", msgid)
   case msgid := <- self.take:
     // send a file via TAKETHIS
     if ValidMessageID(msgid) {

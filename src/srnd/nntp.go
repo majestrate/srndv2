@@ -290,7 +290,7 @@ func (self nntpConnection) handleLine(daemon NNTPDaemon, code int, line string, 
             code = 439
           } else if ! ( ValidMessageID(msgid) && ( reference != "" && ! ValidMessageID(reference) ) ) {
             // invalid message id or reference
-            reason = "invalid reference or message id is '" + msgid + "' reference is '"+refernece + "'"
+            reason = "invalid reference or message id is '" + msgid + "' reference is '"+reference + "'"
             code = 439
           } else if daemon.store.HasArticle(msgid) {
             // we already have this article locally

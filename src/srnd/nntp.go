@@ -336,6 +336,9 @@ func (self nntpConnection) handleLine(daemon NNTPDaemon, code int, line string, 
           }
         }
         conn.PrintfLine("%d %s", code, msgid)
+        if code == 239 {
+          daemon.infeed_load <- msgid
+        }
       }
     }
   }

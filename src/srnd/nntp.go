@@ -374,8 +374,7 @@ func (self nntpConnection) handleLine(daemon NNTPDaemon, code int, line string, 
             }
           } else {
             // discard
-            log.Println(self.name, "discarding", msgid, code)
-            io.Copy(ioutil.Discard, dr)
+            _, err = io.Copy(ioutil.Discard, dr)
           }
         } else {
           log.Println(self.name, "error reading mime header:", err)

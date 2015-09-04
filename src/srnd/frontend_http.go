@@ -178,7 +178,7 @@ func (self httpFrontend) poll() {
     case nntp := <- self.recvpostchan:
       // get root post and tell frontend to regen that thread
       if len(nntp.Reference()) > 0 {
-        self.regenThreadChan <-  nntp.Reference()
+        self.regenerateThread(nntp.Reference())
       } else {
         self.regenerateThread(nntp.MessageID())
       }

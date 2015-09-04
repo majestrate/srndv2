@@ -87,7 +87,7 @@ func (self PostgresDatabase) CreateTables() {
                             )`
 
   // table for storing which nntp articles reference each other
-  tables["References"] = `(
+  tables["ArticleReferences"] = `(
                              message_id VARCHAR(255) NOT NULL,
                              reference_id VARCHAR(255) NOT NULL,
                           
@@ -110,7 +110,7 @@ func (self PostgresDatabase) CreateTables() {
                               last_bump INTEGER,
 
                               FOREIGN KEY(newsgroup) REFERENCES Newsgroups(name),
-                              FOREIGN KEY(message_id) REFERENCES Articles(message_id),
+                              FOREIGN KEY(message_id) REFERENCES NNTPArticles(message_id),
                               PRIMARY KEY(message_id, newsgroup)
                             )`
   

@@ -228,6 +228,7 @@ type post struct {
   name string
   subject string
   message string
+  rendered_message string
   message_id string
   path string
   op bool
@@ -355,12 +356,12 @@ func (self post) Subject() string {
   return self.subject
 }
 
-// TODO: implement
 func (self post) Attachments() []AttachmentModel {
   return self.attachments
 }
 
 func (self post) PostURL() string {
+  // TODO: caching of hashes
   return fmt.Sprintf("%sthread-%s.html#%s", self.Prefix(), ShortHashMessageID(self.parent), self.PostHash())
 }
 
@@ -400,14 +401,12 @@ func (self post) Truncate() PostModel {
   return self
 }
 
-func (self post) RenderShortBody() string {
-  // TODO: hardcoded limit
-  return memeposting(self.message)
-}
-
 func (self post) RenderBody() string {
-  // :^)
-  return memeposting(self.message)
+  if len(self.message_rendered) == 0 {
+    // :^)
+    self.message_rendered = memeposting(self.message)
+  }
+  return self.message_rendered
 }
 
 type thread struct {

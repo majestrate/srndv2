@@ -11,8 +11,10 @@ import (
 
 func formatline(line string) (markup string) {
   line = strings.Trim(line, "\t\r\n ")
-  // check for meme arrows
-  if strings.HasPrefix(line, "&gt;") {
+  if strings.HasPrefix(line, "&gt;&gt;") {
+
+  } else if strings.HasPrefix(line, "&gt;") {
+    // le ebin meme arrows
     markup += "<p><span class='memearrows'>"
     markup += line
     markup += "</span></p>"

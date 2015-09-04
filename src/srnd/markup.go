@@ -17,15 +17,15 @@ var re_external_link = regexp.MustCompile("^(?:(?:https?|ftp):\/\/)(?:\S+(?::\S*
 
 func formatline(line string) (markup string) {
   line = strings.Trim(line, "\t\r\n ")
-  if strings.HasPrefix(line, "&gt;") {
+  if strings.HasPrefix(line, ">") {
     // le ebin meme arrows
     markup += "<p><span class='memearrows'>"
-    markup += line
+    markup += html.EscapeString(line)
     markup += "</span></p>"
   } else if strings.HasPrefix(line, "==") && strings.HasSuffix(line, "==") {
     // redtext
     markup += "<p><span class='redtext'>"
-    markup += line[2:len(line)-2]
+    markup += html.EscapeString(line[2:len(line)-2])
     markup += "</span></p>"
   } else {
     // regular line
@@ -40,15 +40,12 @@ func formatline(line string) (markup string) {
 // format lines inside a code tag
 func formatcodeline(line string) (markup string) {
   markup += "<p>"
-  markup += line
+  markup += html.EscapeString(line)
   markup += "</p>"
   return
 }
 
 func memeposting(src string) (markup string) {
-  // escape
-  src = html.EscapeString(src)
-
   found_tag := false
   tag_content := ""
   tag := ""

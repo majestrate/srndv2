@@ -83,7 +83,8 @@ func (self PostgresDatabase) CreateTables() {
   tables["NNTPArticles"] = `( 
                                message_id VARCHAR(255) UNIQUE NOT NULL,
                                time_posted INTEGER NOT NULL,
-                               message_id_hash VARCHAR(40) UNIQUE NOT NULL
+                               message_id_hash VARCHAR(40) UNIQUE NOT NULL,
+                               PRIMARY KEY(message_id)
                             )`
 
   // table for storing which nntp articles reference each other
@@ -92,7 +93,7 @@ func (self PostgresDatabase) CreateTables() {
                              reference_id VARCHAR(255) NOT NULL,
                           
                              FOREIGN KEY(message_id) NNTPArticles(message_id),
-                             FOREIGN KEY(ref_id) NNTPArticles(message_id),
+                             FOREIGN KEY(reference_id) NNTPArticles(message_id),
                              PRIMARY KEY(message_id, reference_id)
                           )`
   

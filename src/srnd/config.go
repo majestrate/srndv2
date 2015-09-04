@@ -97,7 +97,7 @@ func GenSRNdConfig() error {
   // change this to mysql to use with mariadb or mysql
   sect.Add("type", "postgres")
   // change this to infinity to use with infinity-next
-  sect.Add("schema", "srnd")
+  sect.Add("schema", "srndv2")
   sect.Add("host", "127.0.0.1")
   sect.Add("port", "5432")
   sect.Add("user", "root")

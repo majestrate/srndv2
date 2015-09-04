@@ -341,7 +341,7 @@ func (self NNTPDaemon) pollmessages() {
       // we don't have the root post
       // generate it
       log.Println("creating temp root post for", ref , "in", nntp.Newsgroup())
-      root := newPlaintextArticle("temporary placeholder", "lol@lol", "root post ("+ref+") not found", "system", "temp", ref, nntp.Newsgroup())
+      root := newPlaintextArticle("temporary placeholder", "lol@lol", "root post "+ref+" not found", "system", "temp", ref, nntp.Newsgroup())
       self.store.StorePost(root)
     }
     

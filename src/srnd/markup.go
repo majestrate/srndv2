@@ -11,7 +11,7 @@ import (
 )
 
 
-var re_external_link = regexp.MustCompilePOSIX(`(https?|ftp):\/\/[\w\d\.]*\/[\w\d\.]*`);
+var re_external_link = regexp.MustCompile(`(https?|ftp):\/\/[\w\d\.]*\/[\w\d\.]*`);
 
 
 func formatline(line string) (markup string) {

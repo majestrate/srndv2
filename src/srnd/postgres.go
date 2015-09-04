@@ -76,7 +76,7 @@ func (self PostgresDatabase) CreateTables() {
                                 time_expire INTEGER NOT NULL,
                                 ban_reason TEXT NOT NULL,
 
-                                FOREIGN KEY(message_id) REFERENCES Articles(message_id)
+                                FOREIGN KEY(message_id) REFERENCES NNTPArticles(message_id)
                               )`    
   
   // table for storing nntp article presence
@@ -126,22 +126,10 @@ func (self PostgresDatabase) CreateTables() {
 
   // table for storing current permissions of mod pubkeys
   tables["ModPrivs"] = `(
-                          pubkey VARCHAR(255) NOT NULL,
+                          pubkey VARCHAR(255) PRIMARY KEY,
                           newsgroup VARCHAR(255) NOT NULL,
                           permission VARCHAR(255) NOT NULL
-
-                          PRIMAY KEY(pubkey)
                         )`
-
-  // table for storing moderation events
-  tables["ModLogs"] = `(
-                         pubkey VARCHAR(255),
-                         action VARCHAR(255) NOT NULL,
-                         message_id VARCHAR(255),
-                         time INTEGER NOT NULL,
-                         
-                         FOREIGN KEY(message_id) REFERENCES NNTPArticles(message_id)
-                       )`
 
   // ip range bans
   tables["IPBans"] = `(
@@ -156,7 +144,7 @@ func (self PostgresDatabase) CreateTables() {
                            expires INTEGER NOT NULL
                          )`
   var err error
-  for _, k := range []string{""} {
+  for _, k := range []string{"Newsgroups", "NNTPArticles", "References", "Posts", "Attachments", "IPBans", "EncIPBans", "ModPrivs", "BannedArticles", "EncryptedAddrs"} {
     // create table
     _, err = self.conn.Exec(fmt.Sprintf("CREATE TABLE IF NOT EXISTS %s%s", k, tables[k]))
     if err != nil {

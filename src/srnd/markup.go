@@ -32,6 +32,7 @@ func formatline(line string) (markup string) {
       // regular line
       markup += "<p>"
       // linkify it
+      line = html.EscapeString(line)
       markup += re_external_link.ReplaceAllString(line, `<a href="$1">$1</a>`)
       markup += "</p>"
     }

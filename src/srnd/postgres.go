@@ -148,13 +148,20 @@ func (self PostgresDatabase) CreateTables() {
                            made INTEGER NOT NULL,
                            expires INTEGER NOT NULL
                          )`
-  
+  var err error
   for k, v := range(tables) {
-    _, err := self.conn.Exec(fmt.Sprintf("CREATE TABLE IF NOT EXISTS %s%s", k, v))
+    // create table
+    _, err = self.conn.Exec(fmt.Sprintf("CREATE TABLE IF NOT EXISTS %s%s", k, v))
     if err != nil {
       log.Fatalf("cannot create table %s, %s, login was '%s'", k, err,self.db_str)
     }
   }
+  // create indexes
+  _, err = self.conn.Exec("CREATE INDEX IF NOT EXISTS ON ArticleThreads(root_message_id)")
+  _, err = self.conn.Exec("CREATE INDEX IF NOT EXISTS ON ArticleAttachments(message_id)")
+  _, err = self.conn.Exec("CREATE INDEX IF NOT EXISTS ON ArticlePosts(message_id)")
+  _, err = self.conn.Exec("CREATE INDEX IF NOT EXISTS ON Articles(message_id)")
+  _, err = self.conn.Exec("CREATE INDEX IF NOT EXISTS ON Newsgroups(name)")
 }
 
 func (self PostgresDatabase) AddModPubkey(pubkey string) error {

@@ -144,7 +144,7 @@ func (self PostgresDatabase) CreateTables() {
                            expires INTEGER NOT NULL
                          )`
   var err error
-  for _, k := range []string{"Newsgroups", "NNTPArticles", "References", "Posts", "Attachments", "IPBans", "EncIPBans", "ModPrivs", "BannedArticles", "EncryptedAddrs"} {
+  for _, k := range []string{"Newsgroups", "NNTPArticles", "ArticleReferences", "Posts", "Attachments", "IPBans", "EncIPBans", "ModPrivs", "BannedArticles", "EncryptedAddrs"} {
     // create table
     _, err = self.conn.Exec(fmt.Sprintf("CREATE TABLE IF NOT EXISTS %s%s", k, tables[k]))
     if err != nil {

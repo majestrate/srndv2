@@ -228,7 +228,7 @@ type post struct {
   name string
   subject string
   message string
-  rendered_message string
+  message_rendered string
   message_id string
   path string
   op bool

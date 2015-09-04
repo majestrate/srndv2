@@ -185,8 +185,8 @@ type Database interface {
 func NewDatabase(db_type, schema, host, port, user, password string) Database  {
   if db_type == "postgres" {
     if schema == "srnd" {
-      log.Fatalf("srnd schema deprecated, please run the migration tool")
-    } else if schame == "srndv2" { 
+      log.Fatalf("srnd schema deprecated, please run the migration tool to upgrade to srndv2 schema")
+    } else if schema == "srndv2" { 
       return NewPostgresDatabase(host, port, user, password)
     }
   }

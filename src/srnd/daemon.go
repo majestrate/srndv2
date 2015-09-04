@@ -371,6 +371,8 @@ func (self NNTPDaemon) pollmessages() {
     if chnl != nil {
       if self.frontend.AllowNewsgroup(group) {
         chnl <- nntp
+      } else {
+        log.Println("frontend does not allow", group, "not sending")
       }
     }
   }

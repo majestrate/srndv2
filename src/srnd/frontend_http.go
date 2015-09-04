@@ -261,6 +261,7 @@ func (self httpFrontend) regenerateBoard(group string) {
 // regenerate just a thread page
 func (self httpFrontend) regenerateThread(msgid string) {
   if self.daemon.store.HasArticle(msgid) {
+    log.Println("rengerate thread", msgid)
     fname := self.getFilenameForThread(msgid)
     template.genThread(msgid, self.prefix, self.name, fname, self.daemon.database)
   } else {

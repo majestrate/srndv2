@@ -228,6 +228,7 @@ type post struct {
   name string
   subject string
   message string
+  message_rendered string
   message_id string
   path string
   op bool
@@ -355,7 +356,6 @@ func (self post) Subject() string {
   return self.subject
 }
 
-// TODO: implement
 func (self post) Attachments() []AttachmentModel {
   return self.attachments
 }
@@ -407,7 +407,10 @@ func (self post) RenderShortBody() string {
 
 func (self post) RenderBody() string {
   // :^)
-  return memeposting(self.message)
+  if len(self.message_rendered) == 0 {
+    self.message_rendered = memeposting(self.message)
+  }
+  return self.message_rendered
 }
 
 type thread struct {

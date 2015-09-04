@@ -62,7 +62,6 @@ func (self PostgresDatabase) CreateTables() {
                             restricted BOOLEAN
                           )`
 
-
   // table for ip and their encryption key
   tables["EncryptedAddrs"] = `(
                                 enckey VARCHAR(255) NOT NULL,
@@ -72,68 +71,76 @@ func (self PostgresDatabase) CreateTables() {
   
   // table for articles that have been banned
   tables["BannedArticles"] = `(
-                                message_id VARCHAR(255) PRIMARY KEY,
+                                message_id VARCHAR(255) NOT NULL,
                                 time_banned INTEGER NOT NULL,
-                                ban_reason TEXT NOT NULL
+                                time_expire INTEGER NOT NULL,
+                                ban_reason TEXT NOT NULL,
+
+                                FOREIGN KEY(message_id) REFERENCES Articles(message_id)
                               )`    
   
-  // table for storing nntp article meta data
-  tables["Articles"] = `( 
-                          message_id VARCHAR(255) PRIMARY KEY,
-                          message_id_hash VARCHAR(40) UNIQUE NOT NULL,
-                          message_newsgroup VARCHAR(255),
-                          message_ref_id VARCHAR(255),
-                          time_obtained INTEGER NOT NULL,
-                          FOREIGN KEY(message_newsgroup) REFERENCES Newsgroups(name)
-                        )`
+  // table for storing nntp article presence
+  tables["NNTPArticles"] = `( 
+                               message_id VARCHAR(255) UNIQUE NOT NULL,
+                               time_posted INTEGER NOT NULL,
+                               message_id_hash VARCHAR(40) UNIQUE NOT NULL
+                            )`
 
-  // table for storing nntp article post content
-  tables["ArticlePosts"] = `(
-                              newsgroup VARCHAR(255),
-                              message_id VARCHAR(255),
-                              ref_id VARCHAR(255),
+  // table for storing which nntp articles reference each other
+  tables["References"] = `(
+                             message_id VARCHAR(255) NOT NULL,
+                             reference_id VARCHAR(255) NOT NULL,
+                          
+                             FOREIGN KEY(message_id) NNTPArticles(message_id),
+                             FOREIGN KEY(ref_id) NNTPArticles(message_id),
+                             PRIMARY KEY(message_id, reference_id)
+                          )`
+  
+  // table for storing active board content
+  tables["Posts"] = `(
+                              newsgroup VARCHAR(255) NOT NULL,
+                              message_id VARCHAR(255) NOT NULL,
                               name TEXT NOT NULL,
                               subject TEXT NOT NULL,
                               path TEXT NOT NULL,
                               time_posted INTEGER NOT NULL,
-                              message TEXT NOT NULL
+                              message TEXT NOT NULL,
+                              pubkey VARCHAR(255),
+                              last_post INTEGER,
+                              last_bump INTEGER,
+
+                              FOREIGN KEY(newsgroup) REFERENCES Newsgroups(name),
+                              FOREIGN KEY(message_id) REFERENCES Articles(message_id),
+                              PRIMARY KEY(message_id, newsgroup)
                             )`
   
-  // table for storing nntp article posts to pubkey mapping
-  tables["ArticleKeys"] = `(
-                             message_id VARCHAR(255) NOT NULL,
-                             pubkey VARCHAR(255) NOT NULL
-                           )`
-
-  // table for thread state
-  tables["ArticleThreads"] = `(
-                                newsgroup VARCHAR(255) NOT NULL,
-                                root_message_id VARCHAR(255) NOT NULL,
-                                last_bump INTEGER NOT NULL,
-                                last_post INTEGER NOT NULL
-                              )`
-  
   // table for storing nntp article attachment info
-  tables["ArticleAttachments"] = `(
-                                    message_id VARCHAR(255),
-                                    sha_hash VARCHAR(128) NOT NULL,
-                                    filename TEXT NOT NULL,
-                                    filepath TEXT NOT NULL
-                                  )`
+  tables["Attachments"] = `(
+                             message_id VARCHAR(255),
+                             sha_hash VARCHAR(128) NOT NULL,
+                             filename TEXT NOT NULL,
+                             filepath TEXT NOT NULL,
+
+                             FOREIGN KEY(message_id) REFERENCES Posts(message_id) ON DELETE CASCADE
+                           )`
 
   // table for storing current permissions of mod pubkeys
   tables["ModPrivs"] = `(
-                          pubkey VARCHAR(255),
-                          newsgroup VARCHAR(255),
-                          permission VARCHAR(255)
+                          pubkey VARCHAR(255) NOT NULL,
+                          newsgroup VARCHAR(255) NOT NULL,
+                          permission VARCHAR(255) NOT NULL
+
+                          PRIMAY KEY(pubkey)
                         )`
 
   // table for storing moderation events
   tables["ModLogs"] = `(
                          pubkey VARCHAR(255),
-                         action VARCHAR(255),
-                         target VARCHAR(255),
-                         time INTEGER
+                         action VARCHAR(255) NOT NULL,
+                         message_id VARCHAR(255),
+                         time INTEGER NOT NULL,
+                         
+                         FOREIGN KEY(message_id) REFERENCES NNTPArticles(message_id)
                        )`
 
   // ip range bans
@@ -149,18 +156,17 @@ func (self PostgresDatabase) CreateTables() {
                            expires INTEGER NOT NULL
                          )`
   var err error
-  for k, v := range(tables) {
+  for _, k := range []string{""} {
     // create table
-    _, err = self.conn.Exec(fmt.Sprintf("CREATE TABLE IF NOT EXISTS %s%s", k, v))
+    _, err = self.conn.Exec(fmt.Sprintf("CREATE TABLE IF NOT EXISTS %s%s", k, tables[k]))
     if err != nil {
       log.Fatalf("cannot create table %s, %s, login was '%s'", k, err,self.db_str)
     }
   }
   // create indexes
-  _, err = self.conn.Exec("CREATE INDEX IF NOT EXISTS ON ArticleThreads(root_message_id)")
-  _, err = self.conn.Exec("CREATE INDEX IF NOT EXISTS ON ArticleAttachments(message_id)")
-  _, err = self.conn.Exec("CREATE INDEX IF NOT EXISTS ON ArticlePosts(message_id)")
-  _, err = self.conn.Exec("CREATE INDEX IF NOT EXISTS ON Articles(message_id)")
+  _, err = self.conn.Exec("CREATE INDEX IF NOT EXISTS ON Attachments(message_id)")
+  _, err = self.conn.Exec("CREATE INDEX IF NOT EXISTS ON Posts(message_id)")
+  _, err = self.conn.Exec("CREATE INDEX IF NOT EXISTS ON NNTPArticles(message_id)")
   _, err = self.conn.Exec("CREATE INDEX IF NOT EXISTS ON Newsgroups(name)")
 }
 

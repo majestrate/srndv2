@@ -8,6 +8,7 @@ package srnd
  *  ~ caching of board settings
  *  ~ caching of encrypted address info
  *  ~ multithreading check
+ *  ~ checking for duplicate articles
  */
 
 import (
@@ -97,7 +98,7 @@ func (self PostgresDatabase) CreateTables() {
                               time_posted INTEGER NOT NULL,
                               message TEXT NOT NULL
                             )`
-
+  
   // table for storing nntp article posts to pubkey mapping
   tables["ArticleKeys"] = `(
                              message_id VARCHAR(255) NOT NULL,

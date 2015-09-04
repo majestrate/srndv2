@@ -110,9 +110,8 @@ type nntpArticle struct {
   signedPart nntpAttachment
 }
 
-
 // create a simple plaintext nntp message
-func newPlaintextArticle(message, email, subject, name, instance, newsgroup string) NNTPMessage {
+func newPlaintextArticle(message, email, subject, name, instance, message_id,  newsgroup string) NNTPMessage {
   nntp := nntpArticle{
     headers: make(ArticleHeaders),
   }
@@ -122,7 +121,7 @@ func newPlaintextArticle(message, email, subject, name, instance, newsgroup stri
     nntp.headers.Set("X-Sage", "1")
   }
   nntp.headers.Set("Path", instance)
-  nntp.headers.Set("Message-ID", genMessageID(instance))
+  nntp.headers.Set("Message-ID", message_id)
   // posted now
   nntp.headers.Set("Date", timeNowStr())
   nntp.headers.Set("Newsgroups", newsgroup)

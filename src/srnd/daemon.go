@@ -229,7 +229,7 @@ func (self NNTPDaemon) Run() {
   go func () {
     // if we have no initial posts create one
     if self.database.ArticleCount() == 0 {
-      nntp := newPlaintextArticle("welcome to nntpchan, this post was inserted on startup automatically", "system@"+self.instance_name, "Welcome to NNTPChan", "system", self.instance_name, "overchan.test")
+      nntp := newPlaintextArticle("welcome to nntpchan, this post was inserted on startup automatically", "system@"+self.instance_name, "Welcome to NNTPChan", "system", self.instance_name, genMessageID(self.instance_name), "overchan.test")
       nntp.Pack()
       file := self.store.CreateTempFile(nntp.MessageID())
       if file != nil {
@@ -335,6 +335,15 @@ func (self NNTPDaemon) pollmessages() {
     // register with database
     // this also generates thumbnails
     self.store.StorePost(nntp)
+
+    ref := nntp.Reference()
+    if ref != "" && ValidMessageID(ref) && ! self.database.HasArticleLocal(ref) {
+      // we don't have the root post
+      // generate it
+      log.Println("creating temp root post for", ref , "in", nntp.Newsgroup())
+      root := newPlaintextArticle("temporary placeholder", "lol@lol", "root post ("+ref+") not found", "system", "temp", ref, nntp.Newsgroup())
+      self.store.StorePost(root)
+    }
     
     // prepare for content rollover
     // fallback rollover

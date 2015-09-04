@@ -105,6 +105,7 @@ func (self articleStore) ReadMessage(r io.Reader) (NNTPMessage, error) {
 }
 
 func (self articleStore) StorePost(nntp NNTPMessage) (err error) {
+
   f := self.CreateFile(nntp.MessageID())
   if f != nil {
     err = self.WriteMessage(nntp, f)

@@ -49,9 +49,12 @@ type ArticleStore interface {
   StorePost(nntp NNTPMessage) error
   // get article headers only
   GetHeaders(msgid string) ArticleHeaders
-
   // get our temp directory for articles
   TempDir() string
+  // get a list of all the attachments we have
+  GetAllAttachments() ([]string, error)
+  // generate a thumbnail
+  GenerateThumbnail(fname string) error
 }
 type articleStore struct {
   directory string
@@ -109,6 +112,15 @@ func (self articleStore) GenerateThumbnail(fname string) error {
     log.Println("error generating thumbnail", string(exec_out))
   }
   return err
+}
+
+func (self articleStore) GetAllAttachments() (names []string, err error) {
+  var f *os.File
+  f, err = os.Open(self.attachments)
+  if err == nil {
+    names, err = f.Readdirnames(0)
+  }
+  return
 }
 
 func (self articleStore) ReadMessage(r io.Reader) (NNTPMessage, error) {

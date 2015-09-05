@@ -29,10 +29,24 @@ func main() {
       log.Printf("Starting up %s...", srnd.Version())
       var daemon srnd.NNTPDaemon
       daemon.Setup().Run()
+    } else if action == "tool" {
+      if len(os.Args) > 2 {
+        tool := os.Args[2]
+        if tool == "rethumb" {
+          srnd.ThumbnailTool()
+        } else if tool == "prune-threads" {
+          // TODO: implement pruning old threads
+          // srnd.ClearThreadsTool()
+        } else {
+          fmt.Fprintf(os.Stdout, "Usage: %s tool [rethumb|prune-threads]\n")
+        }
+      } else {
+        fmt.Fprintf(os.Stdout, "Usage: %s tool [rethumb|prune-threads]\n")
+      }
     } else {
       log.Println("Invalid action:",action)
-    }
+    } 
   } else {
-    fmt.Fprintf(os.Stdout, "Usage: %s [setup|run]\n", os.Args[0])
+    fmt.Fprintf(os.Stdout, "Usage: %s [setup|run|tool]\n", os.Args[0])
   }
 }

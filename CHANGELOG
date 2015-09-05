@@ -1,0 +1,9 @@
+	0.3
+
+	* change allow_tor / allow_tor_attachments to allow_anon / allow_anon_attachments in srnd.in
+	* rewrite nntp link code to not suck as bad
+	* remove rabbitmq dependancy
+	* add indexes to postgres tables
+	* for replies to threads with no root post insert a placeholder
+	* all thumbnails are jpegs
+	* use ffmpegthumbnailer for thumbnails except for gif which uses mogrify

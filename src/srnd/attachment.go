@@ -89,7 +89,7 @@ func (self nntpAttachment) Hash() []byte {
 
 // TODO: detect
 func (self nntpAttachment) NeedsThumbnail() bool {
-  for _, ext := range []string{".png", ".jpeg", ".jpg", ".gif", ".bmp"} {
+  for _, ext := range []string{".png", ".jpeg", ".jpg", ".gif", ".bmp", ".webm", ".mp4", ".avi", ".mpeg", ".mpg"} {
     if ext == strings.ToLower(self.ext) {
       return true
     }

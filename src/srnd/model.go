@@ -106,6 +106,9 @@ type BoardModel interface {
   // JUST update this thread
   // if we don't have it already loaded do nothing
   UpdateThread(message_id string, db Database) BoardModel
+
+  // check if we have this thread
+  HasThread(message_id string) bool
   
   // update the board's contents
   // return the updated model
@@ -169,6 +172,7 @@ func (self boardModel) Navbar() string {
 }
 
 func (self boardModel) UpdateThread(messageID string, db Database) BoardModel {
+
   for idx, th := range self.threads {
     if th.OP().MessageID() == messageID {
       // found it
@@ -176,6 +180,15 @@ func (self boardModel) UpdateThread(messageID string, db Database) BoardModel {
     }
   }
   return self
+}
+
+func (self boardModel) HasThread(messageID string) bool {
+  for _, th := range self.threads {
+    if th.OP().MessageID() == messageID {
+      return true
+    }
+  }
+  return false
 }
 
 func (self boardModel) Frontend() string {

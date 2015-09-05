@@ -153,8 +153,13 @@ func (self templateEngine) genThread(messageID, prefix, frontend, outfile string
       return
     }
   }
-
-  board[page] = board[page].UpdateThread(messageID, db)
+  // if we lack this thread, reload the board page
+  // otherwise just reload the thread
+  if board[page].HasThread(messageID) {
+    board[page] = board[page].UpdateThread(messageID, db)
+  } else {
+    board[page] = board[page].Update(db)
+  }
   for _, th := range board[page].Threads() {
     if th.OP().MessageID() == messageID {
       th = th.Update(db)

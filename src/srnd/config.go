@@ -163,14 +163,6 @@ func ReadConfig() *SRNdConfig {
 
   sconf.store = s.Options()
 
-  s, err = conf.Section("rabbitmq")
-  if err != nil {
-    log.Println("no section 'rabbitmq' in srnd.ini")
-    return nil
-  }
-
-  sconf.worker = s.Options()
-
 
   // frontend config
   

@@ -141,38 +141,55 @@ func (self templateEngine) genThread(messageID, prefix, frontend, outfile string
     log.Println("did not get root post info when regenerating thread", messageID, err)
     return
   }
+  var th ThreadModel
   // get it
   board := self.obtainBoard(prefix, frontend, newsgroup, db)
   // update our thread
-  if int(page) >= len(board) {
-    log.Println("we need to update the board model", page, "does not exist yet")
-    board = board.UpdateAll(db)
-    self.groups[newsgroup] = board
-    if int(page) >= len(board) {
-      log.Println("we are going way too fast not regenerating thread", messageID)
-      return
+  if int(page) < len(board) {
+    // if we lack this thread, reload the board page
+    // otherwise just reload the thread
+    if board[page].HasThread(messageID) {
+      board[page] = board[page].UpdateThread(messageID, db)
+    } else {
+      board[page] = board[page].Update(db)
     }
-  }
-  // if we lack this thread, reload the board page
-  // otherwise just reload the thread
-  if board[page].HasThread(messageID) {
-    board[page] = board[page].UpdateThread(messageID, db)
-  } else {
-    board[page] = board[page].Update(db)
-  }
-  for _, th := range board[page].Threads() {
-    if th.OP().MessageID() == messageID {
-      th = th.Update(db)
-      // we found it
-      wr, err := OpenFileWriter(outfile)
-      if err == nil {
-        th.RenderTo(wr)
-        wr.Close()
-        log.Println("wrote file", outfile)
-      } else {
-        log.Println("did not write", outfile, err)
+    for _, th = range board[page].Threads() {
+      if th.OP().MessageID() == messageID {
+        th = th.Update(db)
       }
     }
+  } else {
+    // something is wrong
+    // find it manually
+    board = board.UpdateAll(db)
+    for idx, board_page := range board {
+      if board_page.HasThread(messageID) {
+        // we have it, obtain the thread
+        for _, th = range board_page.Threads() {
+          if th.OP().MessageID() == messageID {
+            // update the thread
+            th = th.Update(db)
+            // break out of inner loop
+            break
+          }
+        }
+        // save the model
+        board[idx] = board_page
+        // break out of outer loop
+        break
+      }
+    }
+  }
+  // by here if we don't have the thread model we'll panic
+  // this is fine
+
+  wr, err := OpenFileWriter(outfile)
+  if err == nil {
+    th.RenderTo(wr)
+    wr.Close()
+    log.Println("wrote file", outfile)
+  } else {
+    log.Println("did not write", outfile, err)
   }
   // save it
   self.groups[newsgroup] = board

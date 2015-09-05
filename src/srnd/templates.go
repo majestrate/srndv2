@@ -129,7 +129,6 @@ func (self templateEngine) genUkko(prefix, frontend, outfile string, database Da
   if err == nil {
     io.WriteString(wr, template.renderTemplate("ukko.mustache", map[string]interface{} { "prefix" : prefix, "threads" : threads }))
     wr.Close()
-    log.Println("wrote file", outfile)
   } else {
     log.Println("error generating ukko", err)
   }
@@ -235,5 +234,4 @@ func (self templateEngine) genFrontPage(top_count int, frontend_name, outfile st
     log.Println("error writing front page", err)
   }
   wr.Close()
-  log.Println("wrote file", outfile)
 }

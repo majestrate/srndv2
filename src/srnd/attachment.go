@@ -51,8 +51,7 @@ type nntpAttachment struct {
 func (self nntpAttachment) ToModel(prefix string) AttachmentModel {
   return attachment{
     prefix: prefix,
-    source: prefix+"img/"+self.Filepath(),
-    thumbnail: prefix+"thm/"+self.Filepath(),
+    filepath: self.Filepath(),
     filename: self.Filename(),
   }
 }

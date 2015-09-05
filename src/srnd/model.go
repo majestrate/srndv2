@@ -242,8 +242,7 @@ type post struct {
 
 type attachment struct {
   prefix string
-  thumbnail string
-  source string
+  filepath string
   filename string
 }
 
@@ -257,11 +256,11 @@ func (self attachment) RenderTo(wr io.Writer) error {
 }
 
 func (self attachment) Thumbnail() string {
-  return self.thumbnail
+  return self.prefix + "thm/" + self.filepath + ".jpg"
 }
 
 func (self attachment) Source() string {
-  return self.source
+  return self.prefix + "img/" + self.filepath
 }
 
 func (self attachment) Filename() string {

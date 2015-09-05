@@ -633,8 +633,7 @@ func (self PostgresDatabase) GetPostAttachmentModels(prefix, messageID string) (
       rows.Scan(&fpath, &fname)
       atts = append(atts, attachment{
         prefix: prefix,
-        thumbnail: prefix+"thm/"+fpath,
-        source: prefix+"img/"+fpath,
+        filepath: fpath,
         filename: fname,
       })
     }

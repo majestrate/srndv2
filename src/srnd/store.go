@@ -59,6 +59,7 @@ type articleStore struct {
   thumbs string
   database Database
   convert_path string
+  ffmpeg_path string
 }
 
 func createArticleStore(config map[string]string, database Database) ArticleStore {
@@ -68,6 +69,7 @@ func createArticleStore(config map[string]string, database Database) ArticleStor
     attachments: config["attachments_dir"],
     thumbs: config["thumbs_dir"],
     convert_path: config["convert_bin"],
+    ffmpeg_path: config["ffmpegthumbnailer_bin"],
     database: database,
   }
   store.Init()
@@ -87,12 +89,20 @@ func (self articleStore) Init() {
   if ! CheckFile(self.convert_path) {
     log.Fatal("cannot find executable for convert:", self.convert_path, "not found")
   }
+  if ! CheckFile(self.ffmpeg_path) {
+    log.Fatal("connt find executable for ffmpegthumbnailer", self.ffmpeg_path, "not found")
+  }
 }
 
 func (self articleStore) GenerateThumbnail(fname string) error {
   outfname := self.ThumbnailFilepath(fname)
   infname := self.AttachmentFilepath(fname)
-  cmd := exec.Command(self.convert_path, "-thumbnail", "200", infname, outfname)
+  var cmd *exec.Cmd
+  if strings.HasPrefix(strings.ToLower(fname), ".gif") {
+    cmd = exec.Command(self.convert_path, "-thumbnail", "200", infname, outfname)
+  } else {
+    cmd = exec.Command(self.ffmpeg_path, "-i", infname, "-o", outfname, "-s", "200")
+  }
   exec_out, err := cmd.CombinedOutput()
   if err != nil {
     log.Println("error generating thumbnail", string(exec_out))
@@ -187,7 +197,8 @@ func (self articleStore) AttachmentFilepath(fname string) string {
 
 // get the filepath for a thumbanil
 func (self articleStore) ThumbnailFilepath(fname string) string {
-  return filepath.Join(self.thumbs, fname)
+  // all thumbnails are jpegs now
+  return filepath.Join(self.thumbs, fname + ".jpg")
 }
 
 // create a file for this article

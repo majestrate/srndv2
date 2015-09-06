@@ -64,6 +64,7 @@ type articleStore struct {
   database Database
   convert_path string
   ffmpeg_path string
+  sox_path string
 }
 
 func createArticleStore(config map[string]string, database Database) ArticleStore {
@@ -74,6 +75,7 @@ func createArticleStore(config map[string]string, database Database) ArticleStor
     thumbs: config["thumbs_dir"],
     convert_path: config["convert_bin"],
     ffmpeg_path: config["ffmpegthumbnailer_bin"],
+    sox_path: config["sox_bin"],
     database: database,
   }
   store.Init()
@@ -91,11 +93,23 @@ func (self articleStore) Init() {
   EnsureDir(self.attachments)
   EnsureDir(self.thumbs)
   if ! CheckFile(self.convert_path) {
-    log.Fatal("cannot find executable for convert:", self.convert_path, "not found")
+    log.Fatal("cannot find executable for convert: ", self.convert_path, " not found")
   }
   if ! CheckFile(self.ffmpeg_path) {
-    log.Fatal("connt find executable for ffmpegthumbnailer", self.ffmpeg_path, "not found")
+    log.Fatal("connt find executable for ffmpegthumbnailer: ", self.ffmpeg_path, " not found")
   }
+  if ! CheckFile(self.sox_path) {
+    log.Fatal("connt find executable for sox: ", self.sox_path, " not found")
+  }
+}
+
+func (self articleStore) isAudio(fname string) bool {
+  for _, ext := range []string{".mp3", ".ogg", ".oga", ".opus", ".flac"} {
+    if strings.HasPrefix(fname, ext) {
+      return true
+    }
+  }
+  return false
 }
 
 func (self articleStore) GenerateThumbnail(fname string) error {
@@ -104,6 +118,8 @@ func (self articleStore) GenerateThumbnail(fname string) error {
   var cmd *exec.Cmd
   if strings.HasPrefix(strings.ToLower(fname), ".gif") {
     cmd = exec.Command(self.convert_path, "-thumbnail", "200", infname, outfname)
+  } else if self.isAudio(fname) {
+    cmd = exec.Command(self.sox_path, infname, "-n", "spectrogram", "-a", "-d", "0:30", "-r", "-p", "6", "-x", "200", "-y", "150", "-o", outfname)
   } else {
     cmd = exec.Command(self.ffmpeg_path, "-i", infname, "-o", outfname, "-s", "200")
   }

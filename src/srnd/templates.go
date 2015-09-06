@@ -180,16 +180,18 @@ func (self templateEngine) genThread(messageID, prefix, frontend, outfile string
       }
     }
   }
-  // by here if we don't have the thread model we'll panic
-  // this is fine
-
-  wr, err := OpenFileWriter(outfile)
-  if err == nil {
-    th.RenderTo(wr)
-    wr.Close()
-    log.Println("wrote file", outfile)
+  if t == nil {
+    // wtf we don't have the thread?
+    log.Println("we didn't find thread for", messageID, "did not regenerate")
   } else {
-    log.Println("did not write", outfile, err)
+    wr, err := OpenFileWriter(outfile)
+    if err == nil {
+      th.RenderTo(wr)
+      wr.Close()
+      log.Println("wrote file", outfile)
+    } else {
+      log.Println("did not write", outfile, err)
+    }
   }
   // save it
   self.groups[newsgroup] = board

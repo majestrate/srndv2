@@ -153,9 +153,10 @@ func (self templateEngine) genThread(messageID, prefix, frontend, outfile string
     } else {
       board[page] = board[page].Update(db)
     }
-    for _, th = range board[page].Threads() {
-      if th.OP().MessageID() == messageID {
-        th = th.Update(db)
+    for _, t = range board[page].Threads() {
+      if t.OP().MessageID() == messageID {
+        th = t.Update(db)
+        break
       }
     }
   } else {
@@ -165,10 +166,10 @@ func (self templateEngine) genThread(messageID, prefix, frontend, outfile string
     for idx, board_page := range board {
       if board_page.HasThread(messageID) {
         // we have it, obtain the thread
-        for _, th = range board_page.Threads() {
+        for _, t = range board_page.Threads() {
           if th.OP().MessageID() == messageID {
             // update the thread
-            th = th.Update(db)
+            th = t.Update(db)
             // break out of inner loop
             break
           }

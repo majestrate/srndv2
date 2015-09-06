@@ -180,7 +180,7 @@ func (self templateEngine) genThread(messageID, prefix, frontend, outfile string
       }
     }
   }
-  if t == nil {
+  if th == nil {
     // wtf we don't have the thread?
     log.Println("we didn't find thread for", messageID, "did not regenerate")
   } else {

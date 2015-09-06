@@ -46,6 +46,8 @@ type ModUI interface {
   HandleDelPubkey(wr http.ResponseWriter, r *http.Request)
   // handle key generation
   HandleKeyGen(wr http.ResponseWriter, r *http.Request)
+  // handle admin command
+  HandleAdminCommand(wr http.ResponseWriter, r *http.Request)
 }
 
 type ModEvent interface {

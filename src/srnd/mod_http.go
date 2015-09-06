@@ -33,6 +33,13 @@ func createHttpModUI(frontend httpFrontend) httpModUI {
   return httpModUI{frontend.Regen, frontend.deleteThreadMarkup, make(chan NNTPMessage), frontend.daemon.database, frontend.daemon.store, frontend.store, frontend.prefix, frontend.prefix + "mod/"}
 }
 
+// handle an admin action
+func (self httpModUI) HandleAdminCommand(wr http.ResponseWriter, r *http.Request) {
+  self.asAuthed(func(url string) {
+    
+  }, wr, r)
+}
+
 // TODO: check for different levels of permissions
 func (self httpModUI) CheckKey(privkey string) (bool, error) {
   privkey_bytes, err := hex.DecodeString(privkey)

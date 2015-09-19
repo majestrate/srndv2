@@ -65,9 +65,12 @@ func (self httpModUI) HandleAdminCommand(wr http.ResponseWriter, r *http.Request
       wr.WriteHeader(404)
     } else {
       var msg string
+      var err error
       req := make(map[string]interface{})
-      dec := json.NewDecoder(r.Body)
-      err := dec.Decode(req)
+      if r.Method == "POST" {
+        dec := json.NewDecoder(r.Body)
+        err = dec.Decode(req)
+      }
       if err == nil {
         msg, err = f(req)
       }

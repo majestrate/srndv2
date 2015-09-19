@@ -74,11 +74,10 @@ func (self templateEngine) loadTemplate(name string) (t string) {
 
 // get a template, if it's not cached load from file and cache it
 func (self templateEngine) getTemplate(name string) (t string) {
-  if self.templateCached(name) {
-    t, _ = self.templates[name]
-  } else {
-    self.templates[name] = self.loadTemplate(name)
+  if ! self.templateCached(name) {
+    self.templates[name] = self.loadTemplate(name)    
   }
+  t, _ = self.templates[name]
   return
 }
 

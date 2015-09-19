@@ -48,7 +48,7 @@ func (self templateEngine) reloadAllTemplates() {
   }
   // for each template we have loaded, reload the contents from file
   for _, tname := range loadThese {
-    self.templates[tname] = self.loadTemplate(tname)
+    self.reloadTemplate(tname)
   }
 }
 
@@ -62,12 +62,13 @@ func (self templateEngine) templateFilepath(name string) string {
 
 // load a template from file, return as string
 func (self templateEngine) loadTemplate(name string) (t string) {
-  // ignores errors, this is probably bad
   b, err := ioutil.ReadFile(self.templateFilepath(name))
-  if err != nil {
+  if err == nil {
+    t = string(b)
+  } else {
     log.Println("error loading template", err)
+    t = err.Error()
   }
-  t = string(b)
   return
 }
 

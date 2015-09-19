@@ -38,14 +38,14 @@ func (self httpModUI) getAdminFunc(funcname string) AdminFunc {
   if funcname == "template.reload" {
     return func(param map[string]interface{}) (string, error) {
       tname, ok := param["template"]
-      t := ""
-      switch tname.(type) {
-      case string:
-        t = tname.(string)
-      default:
-        return "failed to reload templates", errors.New("invalid parameters")
-      }
       if ok {
+        t := ""
+        switch tname.(type) {
+        case string:
+          t = tname.(string)
+        default:
+          return "failed to reload templates", errors.New("invalid parameters")
+        }
         template.reloadTemplate(t)
         return "reloaded " + t, nil
       }

@@ -198,18 +198,14 @@ func (self templateEngine) genThread(root ArticleEntry, prefix, frontend, outfil
     log.Println("we didn't find thread for", msgid, "did not regenerate")
   } else {
     // update thread model and write it out
-    err := th.Update(db)
+    th = th.Update(db)
+    wr, err := OpenFileWriter(outfile)
     if err == nil {
-      wr, err := OpenFileWriter(outfile)
-      if err == nil {
-        th.RenderTo(wr)
-        wr.Close()
-        log.Println("wrote file", outfile)
-      } else {
-        log.Println("did not write", outfile, err)
-      }
+      th.RenderTo(wr)
+      wr.Close()
+      log.Println("wrote file", outfile)
     } else {
-      log.Println("failed to update thread", msgid, err)
+      log.Println("did not write", outfile, err)
     }
   }
   // save it

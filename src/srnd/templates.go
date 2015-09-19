@@ -63,7 +63,10 @@ func (self templateEngine) templateFilepath(name string) string {
 // load a template from file, return as string
 func (self templateEngine) loadTemplate(name string) (t string) {
   // ignores errors, this is probably bad
-  b, _ := ioutil.ReadFile(self.templateFilepath(name))
+  b, err := ioutil.ReadFile(self.templateFilepath(name))
+  if err != nil {
+    log.Println("error loading template", err)
+  }
   t = string(b)
   return
 }

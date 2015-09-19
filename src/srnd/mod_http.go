@@ -75,7 +75,11 @@ func (self httpModUI) HandleAdminCommand(wr http.ResponseWriter, r *http.Request
         msg, err = f(req)
       }
       resp := make(map[string]interface{})
-      resp["error"] = err.Error()
+      if err == nil {
+        resp["error"] = nil
+      } else {
+        resp["error"] = err.Error()
+      }
       resp["result"] = msg
       enc := json.NewEncoder(wr)
       enc.Encode(resp)

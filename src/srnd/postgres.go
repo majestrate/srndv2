@@ -514,13 +514,13 @@ func (self PostgresDatabase) ThreadHasReplies(rootpost string) bool {
   return count > 0
 }
 
-func (self PostgresDatabase) GetGroupThreads(group string, recv chan string) {
+func (self PostgresDatabase) GetGroupThreads(group string, recv chan ArticleEntry) {
   rows, err := self.conn.Query("SELECT message_id FROM ArticlePosts WHERE newsgroup = $1 AND ref_id = '' ", group)
   if err == nil {
     for rows.Next() {
       var msgid string
       rows.Scan(&msgid)
-      recv <- msgid
+      recv <- ArticleEntry{msgid, group}
     }
     rows.Close()
   } else {
@@ -726,7 +726,7 @@ func (self PostgresDatabase) RegisterSigned(message_id , pubkey string) (err err
 
 // get all articles in a newsgroup
 // send result down a channel
-func (self PostgresDatabase) GetAllArticlesInGroup(group string, recv chan string) {
+func (self PostgresDatabase) GetAllArticlesInGroup(group string, recv chan ArticleEntry) {
   rows, err := self.conn.Query("SELECT message_id FROM ArticlePosts WHERE newsgroup = $1")
   if err != nil {
     log.Printf("failed to get all articles in %s: %s", group, err)
@@ -735,7 +735,7 @@ func (self PostgresDatabase) GetAllArticlesInGroup(group string, recv chan strin
   for rows.Next() {
     var msgid string
     rows.Scan(&msgid)
-    recv <- msgid
+    recv <- ArticleEntry{msgid, group}
   }
   rows.Close()
 }

@@ -12,6 +12,7 @@ import (
   "log"
   "path/filepath"
   "sort"
+  "strings"
 )
 
 type templateEngine struct {
@@ -28,18 +29,56 @@ func (self templateEngine) templateCached(name string) (ok bool) {
   return 
 }
 
+// explicitly reload a template
+func (self templateEngine) reloadTemplate(name string) {
+  self.templates[name] = self.loadTemplate(name)
+}
+
+// check if we have this template
+func (self templateEngine) hasTemplate(name string) bool {
+  return CheckFile(self.templateFilepath(name))
+}
+
+// explicitly reload all loaded templates
+func (self templateEngine) reloadAllTemplates() {
+  loadThese := []string{}
+  // get all the names of the templates we have loaded
+  for tname, _ := range self.templates {
+    loadThese = append(loadThese, tname)
+  }
+  // for each template we have loaded, reload the contents from file
+  for _, tname := range loadThese {
+    self.templates[tname] = self.loadTemplate(tname)
+  }
+}
+
+// get the filepath to a template
+func (self templateEngine) templateFilepath(name string) string {
+  if strings.Count(name, "..") > 0 {
+    return ""
+  }
+  return filepath.Join(self.template_dir, name)
+}
+
+// load a template from file, return as string
+func (self templateEngine) loadTemplate(name string) (t string) {
+  // ignores errors, this is probably bad
+  b, _ := ioutil.ReadFile(self.templateFilepath(name))
+  t = string(b)
+  return
+}
+
+// get a template, if it's not cached load from file and cache it
 func (self templateEngine) getTemplate(name string) (t string) {
   if self.templateCached(name) {
     t, _ = self.templates[name]
   } else {
-    // ignores errors, this is probably bad
-    b, _ := ioutil.ReadFile(filepath.Join(self.template_dir, name))
-    t = string(b)
-    self.templates[name] = t
+    self.templates[name] = self.loadTemplate(name)
   }
   return
 }
 
+// render a template, self explanitory
 func (self templateEngine) renderTemplate(name string, obj interface{}) string {
   t := self.getTemplate(name)
   return mustache.Render(t, obj)
@@ -49,6 +88,7 @@ func (self templateEngine) renderTemplate(name string, obj interface{}) string {
 // load un updated board model if we don't have it
 func (self templateEngine) obtainBoard(prefix, frontend, group string, db Database) (model GroupModel) {
   model, ok := self.groups[group]
+  // if we don't already have the board loaded load it
   if ! ok  {
     p := db.GetGroupPageCount(group)
     pages := int(p)
@@ -65,14 +105,15 @@ func (self templateEngine) obtainBoard(prefix, frontend, group string, db Databa
 // generate a board page
 func (self templateEngine) genBoardPage(prefix, frontend, newsgroup string, page int, outfile string, db Database) {
 
-  // get it
+  // get the board model
   board := self.obtainBoard(prefix, frontend, newsgroup, db)
-  // update it
+  // update the board page
   board = board.Update(page, db)
   if page >= len(board) {
     log.Println("board page should not exist", newsgroup, "page", page)
     return
   }
+  // render it
   wr, err := OpenFileWriter(outfile)
   if err == nil {
     board[page].RenderTo(wr)
@@ -87,11 +128,11 @@ func (self templateEngine) genBoardPage(prefix, frontend, newsgroup string, page
 
 // generate every page for a board
 func (self templateEngine) genBoard(prefix, frontend, newsgroup, outdir string, db Database) {
-  // get it
+  // get the board model
   board := self.obtainBoard(prefix, frontend, newsgroup, db)
-  // update it
+  // update the entire board model
   board = board.UpdateAll(db)
-  // save it
+  // save the model
   self.groups[newsgroup] = board
 
   pages := len(board)
@@ -109,20 +150,21 @@ func (self templateEngine) genBoard(prefix, frontend, newsgroup, outdir string, 
 }
 
 func (self templateEngine) genUkko(prefix, frontend, outfile string, database Database) {
-  // get the last 15 bumped threads globally
   var threads []ThreadModel
+  // get the last 15 bumped threads globally, for each...
   for _, article := range database.GetLastBumpedThreads("", 15) {
+    // get the newsgroup and root post id
     newsgroup, msgid := article[1], article[0]
-    // obtain board
+    // obtain board model
     board := self.obtainBoard(prefix, frontend, newsgroup, database)
+    // update first page
     board = board.Update(0, database)
-    for _, th := range(board[0].Threads()) {
-      if th.OP().MessageID() == msgid {
+    // grab the root post in question
+    th := board[0].GetThread(msgid)
+    if th != nil {
         threads = append(threads, th.Update(database))
-        break
-      }
     }
-    // save state of board
+    // save board model
     self.groups[newsgroup] = board
   }
   wr, err := OpenFileWriter(outfile)
@@ -134,64 +176,37 @@ func (self templateEngine) genUkko(prefix, frontend, outfile string, database Da
   }
 }
 
-func (self templateEngine) genThread(messageID, prefix, frontend, outfile string, db Database) {
-
-  newsgroup, page, err := db.GetPageForRootMessage(messageID)
-  if err != nil {
-    log.Println("did not get root post info when regenerating thread", messageID, err)
-    return
-  }
+func (self templateEngine) genThread(root ArticleEntry, prefix, frontend, outfile string, db Database) {
+  newsgroup := root.Newsgroup()
+  msgid := root.MessageID()
   var th ThreadModel
-  // get it
+  // get the board model
   board := self.obtainBoard(prefix, frontend, newsgroup, db)
-  // update our thread
-  if int(page) < len(board) {
-    // if we lack this thread, reload the board page
-    // otherwise just reload the thread
-    if board[page].HasThread(messageID) {
-      board[page] = board[page].UpdateThread(messageID, db)
-    } else {
-      board[page] = board[page].Update(db)
-    }
-    for _, t := range board[page].Threads() {
-      if t.OP().MessageID() == messageID {
-        th = t.Update(db)
-        break
-      }
-    }
-  } else {
-    // something is wrong
-    // find it manually
-    board = board.UpdateAll(db)
-    for idx, board_page := range board {
-      if board_page.HasThread(messageID) {
-        // we have it, obtain the thread
-        for _, t := range board_page.Threads() {
-          if th.OP().MessageID() == messageID {
-            // update the thread
-            th = t.Update(db)
-            // break out of inner loop
-            break
-          }
-        }
-        // save the model
-        board[idx] = board_page
-        // break out of outer loop
-        break
-      }
+  // find the thread model in question
+  for _, pagemodel := range board {
+    t := pagemodel.GetThread(msgid)
+    if t != nil {
+      th = t
+      break
     }
   }
   if th == nil {
     // wtf we don't have the thread?
-    log.Println("we didn't find thread for", messageID, "did not regenerate")
+    log.Println("we didn't find thread for", msgid, "did not regenerate")
   } else {
-    wr, err := OpenFileWriter(outfile)
+    // update thread model and write it out
+    err := th.Update(db)
     if err == nil {
-      th.RenderTo(wr)
-      wr.Close()
-      log.Println("wrote file", outfile)
+      wr, err := OpenFileWriter(outfile)
+      if err == nil {
+        th.RenderTo(wr)
+        wr.Close()
+        log.Println("wrote file", outfile)
+      } else {
+        log.Println("did not write", outfile, err)
+      }
     } else {
-      log.Println("did not write", outfile, err)
+      log.Println("failed to update thread", msgid, err)
     }
   }
   // save it

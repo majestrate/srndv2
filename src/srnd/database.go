@@ -27,7 +27,7 @@ type Database interface {
   HasArticleLocal(message_id string) bool
   RegisterNewsgroup(group string)
   RegisterArticle(article NNTPMessage)
-  GetAllArticlesInGroup(group string, send chan string)
+  GetAllArticlesInGroup(group string, send chan ArticleEntry)
   GetAllArticles() []ArticleEntry
 
   // return true if this is root post has expired
@@ -74,8 +74,8 @@ type Database interface {
   GroupHasPosts(newsgroup string) bool
   
   // get all active threads on a board
-  // send each thread's root's message_id down a channel
-  GetGroupThreads(newsgroup string, send chan string)
+  // send each thread's ArticleEntry down a channel
+  GetGroupThreads(newsgroup string, send chan ArticleEntry)
 
   // get every message id for root posts that need to be expired in a newsgroup
   // threadcount is the upperbound limit to how many root posts we keep

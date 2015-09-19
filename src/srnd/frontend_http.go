@@ -53,7 +53,7 @@ type httpFrontend struct {
   attachments bool
   
   prefix string
-  regenThreadChan chan string
+  regenThreadChan chan ArticleEntry
   regenGroupChan chan groupRegenRequest
   regenBoard map[string]groupRegenRequest
   
@@ -143,8 +143,8 @@ func (self httpFrontend) pollRegen() {
     case req := <- self.regenGroupChan:
       self.regenBoard[fmt.Sprintf("%s|%s", req.group, req.page)] = req
       // listen for regen thread requests
-    case msgid := <- self.regenThreadChan:
-      self.regenerateThread(msgid)
+    case entry := <- self.regenThreadChan:
+      self.regenerateThread(entry)
       // regen ukko
     case _ = <- self.ukkoTicker.C:
       self.regenUkko()
@@ -177,17 +177,17 @@ func (self httpFrontend) poll() {
       self.postchan <- nntp
     case nntp := <- self.recvpostchan:
       // get root post and tell frontend to regen that thread
+      msgid := nntp.MessageID()
+      group := nntp.Newsgroup()
       if len(nntp.Reference()) > 0 {
-        self.regenerateThread(nntp.Reference())
-      } else {
-        self.regenerateThread(nntp.MessageID())
+        msgid = nntp.Reference()
       }
+      self.regenThreadChan <- ArticleEntry{msgid, group}
       // regen the newsgroup we're in
       // TODO: regen only what we need to
-      pages := self.daemon.database.GetGroupPageCount(nntp.Newsgroup())
+      pages := self.daemon.database.GetGroupPageCount(group)
       // regen all pages
       var page int64
-      group := nntp.Newsgroup()
       for ; page < pages ; page ++ {
         req := groupRegenRequest{
           group: group,
@@ -259,11 +259,12 @@ func (self httpFrontend) regenerateBoard(group string) {
 }
 
 // regenerate just a thread page
-func (self httpFrontend) regenerateThread(msgid string) {
+func (self httpFrontend) regenerateThread(root ArticleEntry) {
+  msgid := root.MessageID()
   if self.daemon.store.HasArticle(msgid) {
     log.Println("rengerate thread", msgid)
     fname := self.getFilenameForThread(msgid)
-    template.genThread(msgid, self.prefix, self.name, fname, self.daemon.database)
+    template.genThread(root, self.prefix, self.name, fname, self.daemon.database)
   } else {
     log.Println("don't have root post", msgid, "not regenerating thread")
   }
@@ -294,7 +295,7 @@ func (self httpFrontend) regenOnModEvent(newsgroup, msgid, root string, page int
     log.Println("remove file", fname)
     os.Remove(fname)
   } else {
-    self.regenThreadChan <- root
+    self.regenThreadChan <- ArticleEntry{root, newsgroup}
   }
   self.regenGroupChan <- groupRegenRequest{newsgroup, int(page)}
 }
@@ -617,7 +618,7 @@ func (self httpFrontend) Mainloop() {
   self.httpmux.Path("/mod/unban/{address}").HandlerFunc(self.modui.HandleUnbanAddress).Methods("GET")
   self.httpmux.Path("/mod/addkey/{pubkey}").HandlerFunc(self.modui.HandleAddPubkey).Methods("GET")
   self.httpmux.Path("/mod/delkey/{pubkey}").HandlerFunc(self.modui.HandleDelPubkey).Methods("GET")
-  self.httpmux.Path("/mod/admin").HandlerFunc(self.modui.HandleAdminCommand).Methods("POST")
+  self.httpmux.Path("/mod/admin/{action}").HandlerFunc(self.modui.HandleAdminCommand).Methods("GET")
   // webroot handler
   self.httpmux.Path("/").Handler(http.FileServer(http.Dir(self.webroot_dir)))
   self.httpmux.Path("/thm/{f}").Handler(http.FileServer(http.Dir(self.webroot_dir)))
@@ -631,7 +632,6 @@ func (self httpFrontend) Mainloop() {
   self.httpmux.Path("/captcha/{f}").Handler(captcha.Server(350, 175)).Methods("GET")
   self.httpmux.Path("/captcha/new.json").HandlerFunc(self.new_captcha_json).Methods("GET")
   // liveui handlers
-
   self.httpmux.Path("/live/").HandlerFunc(self.handle_liveui_index).Methods("GET")
   self.httpmux.Path("/live/options").HandlerFunc(self.handle_liveui_options).Methods("GET")
   self.httpmux.Path("/live/ws").HandlerFunc(self.handle_liveui).Methods("GET")
@@ -655,7 +655,7 @@ func (self httpFrontend) Mainloop() {
 }
 
 func (self httpFrontend) Regen(msg ArticleEntry) {
-  self.regenThreadChan <- msg.MessageID()
+  self.regenThreadChan <- msg
   self.regenerateBoard(msg.Newsgroup())
 }
 
@@ -684,7 +684,7 @@ func NewHTTPFrontend(daemon *NNTPDaemon, config map[string]string, url string) F
   }
   front.postchan = make(chan NNTPMessage, 16)
   front.recvpostchan = make(chan NNTPMessage, 16)
-  front.regenThreadChan = make(chan string, 16)
+  front.regenThreadChan = make(chan ArticleEntry, 16)
   front.regenGroupChan = make(chan groupRegenRequest, 8)
   return front
 }

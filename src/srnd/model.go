@@ -107,7 +107,11 @@ type BoardModel interface {
   // if we don't have it already loaded do nothing
   UpdateThread(message_id string, db Database) BoardModel
 
-  // check if we have this thread
+  // get a thread model with this id
+  // returns nil if we don't have it
+  GetThread(message_id string) ThreadModel
+
+  // deprecated, use GetThread 
   HasThread(message_id string) bool
   
   // update the board's contents
@@ -177,18 +181,23 @@ func (self boardModel) UpdateThread(messageID string, db Database) BoardModel {
     if th.OP().MessageID() == messageID {
       // found it
       self.threads[idx] = th.Update(db)
+      break
     }
   }
   return self
 }
 
-func (self boardModel) HasThread(messageID string) bool {
+func (self boardModel) GetThread(messageID string) ThreadModel {
   for _, th := range self.threads {
     if th.OP().MessageID() == messageID {
-      return true
+      return th
     }
   }
-  return false
+  return nil
+}
+
+func (self boardModel) HasThread(messageID string) bool {
+  return self.GetThread(messageID) != nil
 }
 
 func (self boardModel) Frontend() string {

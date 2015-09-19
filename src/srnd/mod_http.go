@@ -9,6 +9,7 @@ package srnd
 import (
   "github.com/majestrate/srndv2/src/nacl"
   "github.com/gorilla/sessions"
+  "errors"
   "encoding/hex"
   "encoding/json"
   "fmt"
@@ -31,11 +32,51 @@ type httpModUI struct {
 
 func createHttpModUI(frontend httpFrontend) httpModUI {
   return httpModUI{frontend.Regen, frontend.deleteThreadMarkup, make(chan NNTPMessage), frontend.daemon.database, frontend.daemon.store, frontend.store, frontend.prefix, frontend.prefix + "mod/"}
+
+}
+func (self httpModUI) getAdminFunc(funcname string) AdminFunc {
+  if funcname == "template.reload" {
+    return func(param map[string]interface{}) (string, error) {
+      tname, ok := param["template"]
+      t := ""
+      switch tname.(type) {
+      case string:
+        t = tname.(string)
+      default:
+        return "failed to reload templates", errors.New("invalid parameters")
+      }
+      if ok {
+        template.reloadTemplate(t)
+        return "reloaded " + t, nil
+      }
+      template.reloadAllTemplates()
+      return "reloaded all templates", nil
+    }
+  }
+  return nil
 }
 
 // handle an admin action
 func (self httpModUI) HandleAdminCommand(wr http.ResponseWriter, r *http.Request) {
   self.asAuthed(func(url string) {
+    action := strings.Split(url, "/admin/")[1]
+    f := self.getAdminFunc(action)
+    if f == nil {
+      wr.WriteHeader(404)
+    } else {
+      var msg string
+      req := make(map[string]interface{})
+      dec := json.NewDecoder(r.Body)
+      err := dec.Decode(req)
+      if err == nil {
+        msg, err = f(req)
+      }
+      enc := json.NewEncoder(wr)
+      resp := make(map[string]interface{})
+      resp["error"] = err
+      resp["result"] = msg
+      enc.Encode(resp)
+    }
     
   }, wr, r)
 }

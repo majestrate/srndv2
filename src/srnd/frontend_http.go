@@ -107,7 +107,11 @@ func (self httpFrontend) regenAll() {
     for _, group := range groups {
       // send every thread for this group down the regen thread channel
       go self.daemon.database.GetGroupThreads(group, self.regenThreadChan)
-      self.regenerateBoard(group)
+      pages := self.daemon.database.GetGroupPageCount(group)
+      var pg int64 
+      for pg = 0 ; pg < pages ; pg ++ {
+        self.regenGroupChan <- groupRegenRequest{group, int(pg)}
+      }
     }
   }
 }

@@ -20,6 +20,7 @@ import (
 )
 
 type httpModUI struct {
+  regenAll func()
   regen func (ArticleEntry)
   delete func (string)
   modMessageChan chan NNTPMessage
@@ -31,7 +32,7 @@ type httpModUI struct {
 }
 
 func createHttpModUI(frontend httpFrontend) httpModUI {
-  return httpModUI{frontend.Regen, frontend.deleteThreadMarkup, make(chan NNTPMessage), frontend.daemon.database, frontend.daemon.store, frontend.store, frontend.prefix, frontend.prefix + "mod/"}
+  return httpModUI{frontend.regenAll, frontend.Regen, frontend.deleteThreadMarkup, make(chan NNTPMessage), frontend.daemon.database, frontend.daemon.store, frontend.store, frontend.prefix, frontend.prefix + "mod/"}
 
 }
 func (self httpModUI) getAdminFunc(funcname string) AdminFunc {
@@ -51,6 +52,11 @@ func (self httpModUI) getAdminFunc(funcname string) AdminFunc {
       }
       template.reloadAllTemplates()
       return "reloaded all templates", nil
+    }
+  } else if funcname == "frontend.regen" {
+    return func(param map[string]interface{}) (string, error) {
+      self.regenAll()
+      return "started regeneration", nil
     }
   }
   return nil

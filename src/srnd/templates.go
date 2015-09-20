@@ -193,8 +193,17 @@ func (self templateEngine) genThread(root ArticleEntry, prefix, frontend, outfil
       break
     }
   }
+
   if th == nil {
-    // wtf we don't have the thread?
+    // a new thread?
+    board[0] = board[0].Update(db)
+    t := board[0].GetThread(msgid)
+    if t != nil {
+      th = t
+    }
+  }
+  
+  if th == nil {
     log.Println("we didn't find thread for", msgid, "did not regenerate")
   } else {
     // update thread model and write it out

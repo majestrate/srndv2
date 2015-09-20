@@ -204,8 +204,14 @@ func (self nntpArticle) Signed() NNTPMessage {
   return nil
 }
 
-func (self nntpArticle) MessageID() string {
-  return self.headers.Get("Message-ID", self.headers.Get("Messageid", self.headers.Get("MessageID", self.headers.Get("Message-Id", ""))))
+func (self nntpArticle) MessageID() (msgid string) {
+  for _, h := range []string{"Message-ID", "Messageid", "MessageID","Message-Id"} {
+    msgid = self.headers.Get(h, "")
+    if msgid != "" {
+      return
+    }
+  }
+  return
 }
 
 func (self nntpArticle) Pack() {

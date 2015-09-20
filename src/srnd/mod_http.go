@@ -55,7 +55,7 @@ func (self httpModUI) getAdminFunc(funcname string) AdminFunc {
     }
   } else if funcname == "frontend.regen" {
     return func(param map[string]interface{}) (string, error) {
-      self.regenAll()
+      go self.regenAll()
       return "started regeneration", nil
     }
   }

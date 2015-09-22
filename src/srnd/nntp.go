@@ -466,6 +466,7 @@ func (self nntpConnection) runConnection(daemon NNTPDaemon, inbound, stream, rea
             if success {
               go self.startStreaming(daemon, reader, conn)
             }
+          }
         } else if reader {
           success, err = self.modeSwitch("READER", conn)
           self.mode = "READER"

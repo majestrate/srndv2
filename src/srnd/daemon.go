@@ -137,7 +137,6 @@ func (self NNTPDaemon) persistFeed(conf FeedConfig, mode string) {
       c := textproto.NewConn(conn)
       stream, reader, err := nntp.outboundHandshake(c)
       if err == nil {
-        self.register_outfeed <- nntp
         if self.sync_on_start {
           go func() {
             log.Println(nntp.name, "will do full sync")
@@ -152,6 +151,7 @@ func (self NNTPDaemon) persistFeed(conf FeedConfig, mode string) {
         // don't use streaming if we have set mode reader
         ok, err := nntp.modeSwitch(mode, c)
         if ok {
+          self.register_outfeed <- nntp
           nntp.runConnection(self, false, stream, reader, c)
         } else {
           log.Println("failed to switch modes", err)

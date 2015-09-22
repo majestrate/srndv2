@@ -419,6 +419,7 @@ func (self nntpConnection) startReader(daemon NNTPDaemon, conn *textproto.Conn) 
   var line string
   for err == nil {
     msgid := <- self.article
+    log.Println("asking for", msgid)
     conn.PrintfLine("ARTICLE %s", msgid)
     code, line, err = conn.ReadCodeLine(-1)
     if code == 220 {

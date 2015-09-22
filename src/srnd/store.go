@@ -111,12 +111,23 @@ func (self articleStore) isAudio(fname string) bool {
   }
   return false
 }
+// is this an image format we need convert for?
+func (self articleStore) isFunkyImage(fname string) bool {
+  for _, ext := range []string{".gif", ".ico"} {
+    if strings.HasSuffix(strings.ToLower(fname), ext) {
+      return true
+    }
+  }
+  return false
+  
+}
+
 
 func (self articleStore) GenerateThumbnail(fname string) error {
   outfname := self.ThumbnailFilepath(fname)
   infname := self.AttachmentFilepath(fname)
   var cmd *exec.Cmd
-  if strings.HasSuffix(strings.ToLower(fname), ".gif") {
+  if self.isFunkyImage(fname)  {
     cmd = exec.Command(self.convert_path, "-thumbnail", "200", infname, outfname)
   } else if self.isAudio(fname) {
     cmd = exec.Command(self.sox_path, infname, "-n", "spectrogram", "-a", "-d", "0:30", "-r", "-p", "6", "-x", "200", "-y", "150", "-o", outfname)

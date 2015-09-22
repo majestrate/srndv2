@@ -307,10 +307,9 @@ func (self NNTPDaemon) polloutfeeds() {
       log.Println("outfeed", outfeed.name, "de-registered")
       delete(self.feeds, outfeed.name)
     case nntp := <- self.send_all_feeds:
-      feeds := self.feeds
       log.Println("federate", nntp.MessageID())
-      for _, feed := range feeds {
-        log.Println(feed.mode)
+      for _, feed := range self.feeds {
+        log.Println("mode", feed.mode)
         if feed.policy.AllowsNewsgroup(nntp.Newsgroup()) && feed.mode != "READER" {
           feed.check <- nntp.MessageID()
         }

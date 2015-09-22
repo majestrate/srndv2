@@ -150,7 +150,7 @@ func (self NNTPDaemon) persistFeed(conf FeedConfig, mode string) {
           }()
         }
         // don't use streaming if we have set mode reader
-        if mode == "reader" {
+        if mode == "reader" && stream {
           stream = false
         }
         nntp.runConnection(self, false, stream, reader, c)

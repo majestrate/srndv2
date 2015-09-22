@@ -357,7 +357,7 @@ func (self nntpConnection) handleLine(daemon NNTPDaemon, code int, line string, 
             // we have it yeh
             f, err := os.Open(daemon.store.GetFilename(msgid))
             if err == nil {
-              conn.PrintfLine("220 ", msgid)
+              conn.PrintfLine("220 %s", msgid)
               dw := conn.DotWriter()
               _, err = io.Copy(dw, f)
               f.Close()
@@ -367,7 +367,7 @@ func (self nntpConnection) handleLine(daemon NNTPDaemon, code int, line string, 
             }
           } else {
             // we dont got it
-            conn.PrintfLine("430 ", msgid)
+            conn.PrintfLine("430 %s", msgid)
           }
         } else {
           // invalid id

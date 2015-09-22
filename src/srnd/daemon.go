@@ -310,14 +310,10 @@ func (self NNTPDaemon) polloutfeeds() {
       feeds := self.feeds
       for _, feed := range feeds {
         if feed.policy.AllowsNewsgroup(nntp.Newsgroup()) {
-          if feed.mode == "STREAM" {
+          if feed.mode != "READER" {
             log.Println("send", nntp.MessageID(), "to", feed.name)
             feed.check <- nntp.MessageID()
-          } else {
-            log.Println("mode", feed.mode)
           }
-        } else {
-          log.Println(nntp.Newsgroup(), "not allowed to federate")
         }
       }
     case nntp := <- self.ask_for_article:

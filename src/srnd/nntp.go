@@ -199,8 +199,6 @@ func (self nntpConnection) handleLine(daemon NNTPDaemon, code int, line string, 
           self.mode = "READER"
           log.Println(self.name, "switched to reader mode")
           conn.PrintfLine("201 No posting Permitted")
-          // handle reader mode
-          self.startReader(daemon, conn)
         } else if parts[1] == "STREAM" {
           // wut? we're already in streaming mode
           log.Println(self.name, "already in streaming mode")
@@ -353,6 +351,28 @@ func (self nntpConnection) handleLine(daemon NNTPDaemon, code int, line string, 
           reason = "gotten"
         }
         conn.PrintfLine("%d %s %s", code, msgid, reason)
+      } else if cmd == "ARTICLE" {
+        if ValidMessageID(msgid) {
+          if daemon.store.HasArticle(msgid) {
+            // we have it yeh
+            f, err := os.Open(daemon.store.GetFilename(msgid))
+            if err == nil {
+              conn.PrintfLine("220 ", msgid)
+              dw := conn.DotWriter()
+              _, err = io.Copy(dw, f)
+              f.Close()
+            } else {
+              // wtf?!
+              conn.PrintfLine("503 idkwtf happened: %s", err.Error())
+            }
+          } else {
+            // we dont got it
+            conn.PrintfLine("430 ", msgid)
+          }
+        } else {
+          // invalid id
+          conn.PrintfLine("500 Syntax error")
+        }
       }
     }
   }

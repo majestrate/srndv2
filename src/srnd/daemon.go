@@ -310,7 +310,7 @@ func (self NNTPDaemon) polloutfeeds() {
       feeds := self.feeds
       for _, feed := range feeds {
         if feed.policy.AllowsNewsgroup(nntp.Newsgroup()) {
-          if feed.mode == "STREAM" {
+          if strings.HasPrefix(feed.name, "-stream") {
             log.Println("send", nntp.MessageID(), "to", feed.name)
             feed.check <- nntp.MessageID()
           }
@@ -320,7 +320,7 @@ func (self NNTPDaemon) polloutfeeds() {
       feeds := self.feeds
       for _, feed := range feeds {
         if feed.policy.AllowsNewsgroup(nntp.Newsgroup()) {
-          if feed.mode == "READER" {
+          if strings.HasPrefix(feed.name, "-reader") {
             log.Println("asking", feed.name, "for", nntp.MessageID(), "mode", feed.mode)
             feed.article <- nntp.MessageID()
           }

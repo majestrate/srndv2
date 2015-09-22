@@ -308,14 +308,16 @@ func (self NNTPDaemon) polloutfeeds() {
       delete(self.feeds, outfeed.name)
     case nntp := <- self.send_all_feeds:
       log.Println("federate", nntp.MessageID())
-      for _, feed := range self.feeds {
+      feeds := self.feeds
+      for _, feed := range feeds {
         if feed.policy.AllowsNewsgroup(nntp.Newsgroup()) && feed.mode == "STREAM" {
           log.Println("send", nntp.MessageID(), "to", feed.name)
           feed.check <- nntp.MessageID()
         }
       }
     case nntp := <- self.ask_for_article:
-      for _, feed := range self.feeds {
+      feeds := self.feeds
+      for _, feed := range feeds {
         if feed.policy.AllowsNewsgroup(nntp.Newsgroup()) && feed.mode == "READER" {
           log.Println("asking", feed.name, "for", nntp.MessageID())
           feed.article <- nntp.MessageID()

@@ -481,8 +481,8 @@ func (self nntpConnection) runConnection(daemon NNTPDaemon, inbound, stream, rea
           return
         }
       }
-    } else if self.mode == "STREAM" {
-      // we're in streaming mode
+    } else {
+      // we have our mode set
       line, err = conn.ReadLine()
       if err == nil {
         parts := strings.Split(line, " ")
@@ -494,7 +494,6 @@ func (self nntpConnection) runConnection(daemon NNTPDaemon, inbound, stream, rea
           err = self.handleLine(daemon, 0, line, conn)
         }
       }
-    } else if self.mode == "READER" {
     }
   }
   log.Println("run connection got error", err)

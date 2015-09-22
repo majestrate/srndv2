@@ -149,6 +149,10 @@ func (self NNTPDaemon) persistFeed(conf FeedConfig, mode string) {
             
           }()
         }
+        // don't use streaming if we have set mode reader
+        if mode == "reader" {
+          stream = false
+        }
         nntp.runConnection(self, false, stream, reader, c)
         self.deregister_outfeed <- nntp
       } else {
@@ -219,6 +223,7 @@ func (self NNTPDaemon) Run() {
   
   // persist outfeeds
   for idx := range self.conf.feeds {
+    go self.persistFeed(self.conf.feeds[idx], "reader")
     go self.persistFeed(self.conf.feeds[idx], "stream")
   }
 

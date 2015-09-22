@@ -58,6 +58,24 @@ func (self httpModUI) getAdminFunc(funcname string) AdminFunc {
       go self.regenAll()
       return "started regeneration", nil
     }
+  } else if funcname == "thumbnail.regen" {
+    return func(param map[string]interface{}) (string, error) {
+      threads, ok := param["threads"]
+      t := 4
+      if ok {
+        switch threads.(type) {
+        case int64:
+          t = int(threads.(int64))
+          if t <= 0 {
+            return "failed to regen thumbnails", errors.New("invalid number of threads")
+          }
+        default:
+          return "failed to regen thumbnails", errors.New("invalid parameters")
+        }
+      }
+      go reThumbnail(t, self.articles)
+      return fmt.Sprintf("started rethumbnailing with %d threads", t), nil
+    }
   }
   return nil
 }

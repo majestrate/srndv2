@@ -21,7 +21,7 @@ type templateEngine struct {
   // loaded templates
   templates map[string]string
   // root directory for templates
-  template_dir string
+  template_dir string  
 }
 
 func (self templateEngine) templateCached(name string) (ok bool) {

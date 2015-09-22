@@ -8,47 +8,52 @@ import (
   "os"
 )
 
-// run thumbnailer
-// todo: make multithreaded
+// worker for thumbnailer tool
+func rethumb(chnl chan string, store ArticleStore) {
+  for {
+    fname, has := <- chnl
+    if ! has {
+      return
+    }
+    thm := store.ThumbnailFilepath(fname)
+    if CheckFile(thm) {
+      log.Println("remove old thumbnail", thm)
+      os.Remove(thm)
+    }
+    log.Println("generate thumbnail for", fname)
+    _ = store.GenerateThumbnail(fname)
+  }
+}
+
+// run thumbnailer with 4 threads
 func ThumbnailTool() {
   conf := ReadConfig()
   if conf == nil {
-    log.Fatal("cannot load config, ReadConfig() returned nil")
-  }
-
+    log.Println("cannot load config, ReadConfig() returned nil")
+    return
+  }  
   store := createArticleStore(conf.store, nil)
+  reThumbnail(4, store)
+}
 
-  var generated, removed, errors int64 
-  var error_files []string
+// run thumbnailer tool with unspecified number of threads
+func reThumbnail(threads int, store ArticleStore) {
+
+  chnl := make(chan string)
+
+  for threads > 0 {
+    go rethumb(chnl, store)
+    threads --
+  }
+  
   files, err := store.GetAllAttachments()
   if err == nil {
     for _, fname := range files  {
-      thm := store.ThumbnailFilepath(fname)
-      if CheckFile(thm) {
-        log.Println("remove old thumbnail", thm)
-        os.Remove(thm)
-        removed ++
-      }
-      log.Println("generate thumbnail for", fname)
-      err = store.GenerateThumbnail(fname)
-      if err == nil {
-        generated ++
-      } else {
-        errors ++
-        error_files = append(error_files, fname)
-      }
+      chnl <- fname
     }
   } else {
-    log.Fatal("failed to read attachment directory", err)
+    log.Println("failed to read attachment directory", err)
   }
+  close(chnl)
   log.Println("Rethumbnailing done")
-  log.Printf("generated: %d", generated)
-  log.Printf("removed:   %d", removed)
-  log.Printf("errors:    %d", errors)
-  if errors > 0 {
-    log.Println("files failed to generate:")
-    for _, fname := range error_files {
-      log.Println(fname)
-    }
-  }
 }

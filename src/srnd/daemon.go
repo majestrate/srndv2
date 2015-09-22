@@ -36,8 +36,7 @@ type NNTPDaemon struct {
   // for registering and deregistering outbound feeds
   register_outfeed chan nntpConnection
   deregister_outfeed chan nntpConnection
-  // thumbnail generator for images
-  img_thm ThumbnailGenerator
+  // infeed for articles
   infeed chan NNTPMessage
   // channel to load messages to infeed given their message id
   infeed_load chan string

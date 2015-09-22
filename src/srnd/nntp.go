@@ -360,6 +360,7 @@ func (self nntpConnection) handleLine(daemon NNTPDaemon, code int, line string, 
               conn.PrintfLine("220 %s", msgid)
               dw := conn.DotWriter()
               _, err = io.Copy(dw, f)
+              dw.Close()
               f.Close()
             } else {
               // wtf?!

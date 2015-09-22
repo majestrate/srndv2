@@ -149,6 +149,10 @@ func (self NNTPDaemon) persistFeed(conf FeedConfig, mode string) {
           }()
         }
 
+        if mode == "reader" && ! reader {
+          log.Println(nntp.name, "we don't support reader on this feed, dropping")
+          return
+        }
         self.register_outfeed <- nntp
         nntp.runConnection(self, false, stream, reader, mode, c)
         self.deregister_outfeed <- nntp

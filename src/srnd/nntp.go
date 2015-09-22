@@ -138,48 +138,6 @@ func (self nntpConnection) handleStreaming(daemon NNTPDaemon, reader bool, conn 
   var code int
   var line string
   select {
-    // we've are going to ask for an article in READER mode
-  case msgid := <- self.article:
-    if reader && ValidMessageID(msgid) {
-      // switch to reader mode
-      self.access.Lock()
-      success, err = self.modeSwitch("READER", conn)
-      if success {
-        // send the request
-        conn.PrintfLine("ARTICLE %s", msgid)
-        code, line, err = conn.ReadCodeLine(-1)
-        if code == 220 {
-          // awwww yeh we got it
-          f := daemon.store.CreateTempFile(msgid)
-          if f == nil {
-            // already being loaded elsewhere
-          } else {
-            // read in the article
-            dr := conn.DotReader()
-            _, err = io.Copy(f, dr)
-            f.Close()
-            log.Println(msgid, "got from", self.name)
-            // tell daemon to load infeed
-            daemon.infeed_load <- msgid
-          }
-        } else if code == 430 {
-          // they don't know it D:
-          log.Println(msgid, "not known by", self.name)
-        } else {
-          // invalid response
-          log.Println(self.name, "invald response to ARTICLE:", code, line)
-        }
-        // now switch back to streaming mode
-        log.Println(self.name, "switch back to streaming mode")
-        success, err = self.modeSwitch("STREAM", conn)
-        if ! success {
-          log.Println(self.name, "failed to switch back to streaming mode? wtf!")
-        }
-      } else {
-        log.Println(self.name, "failed to set reader mode")
-      }
-      self.access.Unlock()
-    }
   case msgid := <- self.check:
     log.Println(self.name, "CHECK", msgid)
     err = conn.PrintfLine("CHECK %s", msgid)
@@ -419,7 +377,7 @@ func (self nntpConnection) startReader(daemon NNTPDaemon, conn *textproto.Conn) 
   var line string
   for err == nil {
     msgid := <- self.article
-    log.Println("asking for", msgid)
+    log.Println(self.name, "asking for", msgid)
     conn.PrintfLine("ARTICLE %s", msgid)
     code, line, err = conn.ReadCodeLine(-1)
     if code == 220 {

@@ -309,13 +309,13 @@ func (self NNTPDaemon) polloutfeeds() {
     case nntp := <- self.send_all_feeds:
       feeds := self.feeds
       for _, feed := range feeds {
-        if feed.policy.AllowsNewsgroup(nntp.Newsgroup()) && nntp.mode == "STREAM" {
+        if feed.policy.AllowsNewsgroup(nntp.Newsgroup()) && feed.mode == "STREAM" {
           feed.check <- nntp.MessageID()
         }
       }
     case nntp := <- self.ask_for_article:
       for _, feed := range self.feeds {
-        if feed.policy.AllowsNewsgroup(nntp.Newsgroup()) && nntp.mode == "READER" {
+        if feed.policy.AllowsNewsgroup(nntp.Newsgroup()) && feed.mode == "READER" {
           log.Println("asking", feed.name, "for", nntp.MessageID())
           feed.article <- nntp.MessageID()
         }

@@ -317,12 +317,11 @@ func (self NNTPDaemon) polloutfeeds() {
         }
       }
     case nntp := <- self.ask_for_article:
-      for _, feed := range self.feeds {
+      feeds := self.feeds
+      for _, feed := range feeds {
         if feed.policy.AllowsNewsgroup(nntp.Newsgroup()) {
-          if feed.mode == "READER" {
-            log.Println("asking", feed.name, "for", nntp.MessageID())
-            feed.article <- nntp.MessageID()
-          }
+          log.Println("asking", feed.name, "for", nntp.MessageID())
+          feed.article <- nntp.MessageID()
         }
       }
     }

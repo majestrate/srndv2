@@ -244,6 +244,8 @@ func (self nntpConnection) handleLine(daemon NNTPDaemon, code int, line string, 
           self.mode = "READER"
           log.Println(self.name, "switched to reader mode")
           conn.PrintfLine("201 No posting Permitted")
+          // handle reader mode
+          self.startReader()
         } else if parts[1] == "STREAM" {
           // wut? we're already in streaming mode
           log.Println(self.name, "already in streaming mode")
@@ -410,6 +412,39 @@ func (self nntpConnection) startStreaming(daemon NNTPDaemon, reader bool, conn *
   log.Println(self.name, "error while streaming:", err)
 }
 
+func (self nntpConnection) startReader(daemon NNTPDaemon, conn *textproto.Conn) {
+  var err error
+  var code int
+  var line string
+  for err == nil {
+    msgid := <- self.article
+    conn.PrintfLine("ARTICLE %s", msgid)
+    code, line, err = conn.ReadCodeLine(-1)
+    if code == 220 {
+      // awwww yeh we got it
+      f := daemon.store.CreateTempFile(msgid)
+      if f == nil {
+        // already being loaded elsewhere
+      } else {
+        // read in the article
+        dr := conn.DotReader()
+        _, err = io.Copy(f, dr)
+        f.Close()
+        log.Println(msgid, "got from", self.name)
+        // tell daemon to load infeed
+        daemon.infeed_load <- msgid
+      }
+    } else if code == 430 {
+          // they don't know it D:
+      log.Println(msgid, "not known by", self.name)
+    } else {
+      // invalid response
+      log.Println(self.name, "invald response to ARTICLE:", code, line)
+    } 
+  }
+  log.Println(self.name, "error while streaming:", err)
+}
+
 // run the mainloop for this connection
 // stream if true means they support streaming mode
 // reader if true means they support reader mode
@@ -446,6 +481,7 @@ func (self nntpConnection) runConnection(daemon NNTPDaemon, inbound, stream, rea
               self.mode = "READER"
               // posting is not permitted with reader mode
               conn.PrintfLine("201 Posting not permitted")
+              self.startReader(daemon, conn)
             } else if parts[1] == "STREAM" {
               // set streaming mode
               conn.PrintfLine("203 Stream it brah")

@@ -148,14 +148,9 @@ func (self NNTPDaemon) persistFeed(conf FeedConfig, mode string) {
             
           }()
         }
-        // don't use streaming if we have set mode reader
-        ok, err := nntp.modeSwitch(mode, c)
-        if ok {
-          self.register_outfeed <- nntp
-          nntp.runConnection(self, false, stream, reader, c)
-        } else {
-          log.Println("failed to switch modes", err)
-        }
+
+        self.register_outfeed <- nntp
+        nntp.runConnection(self, false, stream, reader, mode, c)
         self.deregister_outfeed <- nntp
           
       } else {

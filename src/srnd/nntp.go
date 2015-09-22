@@ -413,7 +413,7 @@ func (self nntpConnection) startStreaming(daemon NNTPDaemon, reader bool, conn *
 // run the mainloop for this connection
 // stream if true means they support streaming mode
 // reader if true means they support reader mode
-func (self nntpConnection) runConnection(daemon NNTPDaemon, inbound, stream, reader bool, conn *textproto.Conn) {
+func (self nntpConnection) runConnection(daemon NNTPDaemon, inbound, stream, reader bool, preferMode string, conn *textproto.Conn) {
 
   var err error
   var line string
@@ -459,13 +459,13 @@ func (self nntpConnection) runConnection(daemon NNTPDaemon, inbound, stream, rea
           conn.PrintfLine("500 Syntax Error")
         }
       } else {
-        // set out mode we are outbound
-        if stream {
-          success, err = self.modeSwitch("STREAM", conn)
-          self.mode = "STREAM"
-          if success {
-            go self.startStreaming(daemon, reader, conn)
-          }
+        if preferMode == "stream" {
+          if stream {
+            success, err = self.modeSwitch("STREAM", conn)
+            self.mode = "STREAM"
+            if success {
+              go self.startStreaming(daemon, reader, conn)
+            }
         } else if reader {
           success, err = self.modeSwitch("READER", conn)
           self.mode = "READER"

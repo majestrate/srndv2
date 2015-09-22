@@ -373,13 +373,11 @@ func (self nntpConnection) startStreaming(daemon NNTPDaemon, reader bool, conn *
 func (self nntpConnection) startReader(daemon NNTPDaemon, conn *textproto.Conn) {
   log.Println(self.name, "run reader mode")
   var err error
-  var code int
-  var line string
   for err == nil {
     msgid := <- self.article
     log.Println(self.name, "asking for", msgid)
     conn.PrintfLine("ARTICLE %s", msgid)
-    code, line, err = conn.ReadCodeLine(-1)
+    code, line, err := conn.ReadCodeLine(-1)
     if code == 220 {
       // awwww yeh we got it
       f := daemon.store.CreateTempFile(msgid)

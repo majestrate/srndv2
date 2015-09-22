@@ -398,7 +398,7 @@ func (self NNTPDaemon) acceptloop() {
     err = nntp.inboundHandshake(c)
     if err == nil {
       // run, we support stream and reader
-      go nntp.runConnection(self, true, true, true, c, "stream")
+      go nntp.runConnection(self, true, true, true, "stream", c)
     } else {
       log.Println("failed to send banners", err)
       c.Close()

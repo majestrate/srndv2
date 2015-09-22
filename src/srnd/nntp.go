@@ -245,7 +245,7 @@ func (self nntpConnection) handleLine(daemon NNTPDaemon, code int, line string, 
           log.Println(self.name, "switched to reader mode")
           conn.PrintfLine("201 No posting Permitted")
           // handle reader mode
-          self.startReader()
+          self.startReader(daemon, conn)
         } else if parts[1] == "STREAM" {
           // wut? we're already in streaming mode
           log.Println(self.name, "already in streaming mode")

@@ -320,7 +320,7 @@ func (self NNTPDaemon) polloutfeeds() {
       feeds := self.feeds
       for _, feed := range feeds {
         if feed.policy.AllowsNewsgroup(nntp.Newsgroup()) {
-          log.Println("asking", feed.name, "for", nntp.MessageID())
+          log.Println("asking", feed.name, "for", nntp.MessageID(), "mode", feed.mode)
           feed.article <- nntp.MessageID()
         }
       }

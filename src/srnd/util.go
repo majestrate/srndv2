@@ -213,7 +213,7 @@ func checkPerms(fname string) {
 // generate a new encryption key for it
 // return the encryption key and the encrypted address
 func newAddrEnc(addr string) (string, string) {
-  key_bytes := nacl.RandBytes(32)
+  key_bytes := nacl.RandBytes(64)
   key := base64.StdEncoding.EncodeToString(key_bytes)
   return key, encAddr(addr, key)
 }

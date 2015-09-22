@@ -310,7 +310,7 @@ func (self NNTPDaemon) polloutfeeds() {
       log.Println("federate", nntp.MessageID())
       for _, feed := range self.feeds {
         log.Println("mode", feed.mode)
-        if feed.policy.AllowsNewsgroup(nntp.Newsgroup()) && feed.mode != "READER" {
+        if feed.policy.AllowsNewsgroup(nntp.Newsgroup()) && feed.mode == "STREAM" {
           feed.check <- nntp.MessageID()
         }
       }

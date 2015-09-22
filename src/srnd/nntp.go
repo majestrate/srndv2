@@ -413,6 +413,7 @@ func (self nntpConnection) startStreaming(daemon NNTPDaemon, reader bool, conn *
 }
 
 func (self nntpConnection) startReader(daemon NNTPDaemon, conn *textproto.Conn) {
+  log.Println(self.name, "run reader mode")
   var err error
   var code int
   var line string

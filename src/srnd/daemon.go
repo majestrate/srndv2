@@ -347,9 +347,9 @@ func (self NNTPDaemon) pollmessages() {
     if ref != "" && ValidMessageID(ref) && ! self.database.HasArticleLocal(ref) {
       // we don't have the root post
       // generate it
-      log.Println("creating temp root post for", ref , "in", nntp.Newsgroup())
-      root := newPlaintextArticle("temporary placeholder", "lol@lol", "root post "+ref+" not found", "system", "temp", ref, nntp.Newsgroup())
-      self.store.StorePost(root)
+      //log.Println("creating temp root post for", ref , "in", nntp.Newsgroup())
+      //root := newPlaintextArticle("temporary placeholder", "lol@lol", "root post "+ref+" not found", "system", "temp", ref, nntp.Newsgroup())
+      //self.store.StorePost(root)
     }
     
     // prepare for content rollover

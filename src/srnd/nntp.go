@@ -358,7 +358,7 @@ func (self nntpConnection) handleLine(daemon NNTPDaemon, code int, line string, 
             // we don't have this the rootpost
             if reference != "" && ValidMessageID(reference) && ! daemon.store.HasArticle(reference) && ! daemon.database.IsExpired(reference) {
               log.Println(self.name, "got reply to", reference, "but we don't have it")
-              //daemon.ask_for_article <- ArticleEntry{reference, newsgroup}
+              daemon.ask_for_article <- ArticleEntry{reference, newsgroup}
             }
             f := daemon.store.CreateTempFile(msgid)
             if f == nil {

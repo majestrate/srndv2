@@ -214,6 +214,7 @@ func (self PostgresDatabase) NukeNewsgroup(group string, store ArticleStore) {
     }
   }
   close(chnl)
+  log.Println("nuke of", group, "done")
 }
 
 func (self PostgresDatabase) AddModPubkey(pubkey string) error {

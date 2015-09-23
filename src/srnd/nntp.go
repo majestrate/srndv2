@@ -81,7 +81,7 @@ func (self nntpConnection) outboundHandshake(conn *textproto.Conn) (stream, read
   var line string
   for err == nil {
     code, line, err = conn.ReadCodeLine(-1)
-    log.Println(line)
+    log.Println(self.name, line)
     if err == nil {
       if code == 200 {
         // send capabilities

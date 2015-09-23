@@ -439,7 +439,6 @@ func (self nntpConnection) runConnection(daemon NNTPDaemon, inbound, stream, rea
   for err == nil {
     if self.mode == "" {
       if inbound  {
-        self.name = "inbound-feed"
         // no mode set and inbound
         line, err = conn.ReadLine()
         log.Println(self.name, line)

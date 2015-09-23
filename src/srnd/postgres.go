@@ -779,7 +779,7 @@ func (self PostgresDatabase) RegisterSigned(message_id , pubkey string) (err err
 // get all articles in a newsgroup
 // send result down a channel
 func (self PostgresDatabase) GetAllArticlesInGroup(group string, recv chan ArticleEntry) {
-  rows, err := self.conn.Query("SELECT message_id FROM ArticlePosts WHERE newsgroup = $1")
+  rows, err := self.conn.Query("SELECT message_id FROM ArticlePosts WHERE newsgroup = $1", greoup)
   if err != nil {
     log.Printf("failed to get all articles in %s: %s", group, err)
     return

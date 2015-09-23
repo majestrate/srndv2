@@ -3,6 +3,7 @@
 //
 package srnd
 import (
+  "fmt"
   "log"
   "net"
   "net/textproto"
@@ -403,6 +404,8 @@ func (self NNTPDaemon) acceptloop() {
     }
     // make a new inbound nntp connection handler 
     nntp := createNNTPConnection()
+    addr := conn.RemoteAddr()
+    nntp.name = fmt.Sprintf("%s-inbound-feed", addr.String())
     c := textproto.NewConn(conn)
     // send banners and shit
     err = nntp.inboundHandshake(c)

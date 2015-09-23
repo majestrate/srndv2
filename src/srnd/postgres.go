@@ -192,12 +192,16 @@ func (self PostgresDatabase) NukeNewsgroup(group string, store ArticleStore) {
   _, _ = self.conn.Exec("DELETE FROM ArticleThreads WHERE newsgroup = $1", group)
   // get all articles in that newsgroup
   chnl := make(chan ArticleEntry, 24)
-  go self.GetAllArticlesInGroup(group, chnl)
+  go func () {
+    self.GetAllArticlesInGroup(group, chnl)
+    close(chnl)
+  }()
   // for each article delete it fully
   for {
     article, ok := <- chnl
     if ok {
       msgid := article.MessageID()
+      log.Println("delete", msgid)
       // remove article from store
       fname := store.GetFilename(msgid)
       os.Remove(fname)
@@ -210,12 +214,10 @@ func (self PostgresDatabase) NukeNewsgroup(group string, store ArticleStore) {
       }
       // delete from database
       self.DeleteArticle(msgid)
-    } else {
-      break
+    } else {   
+      log.Println("nuke of", group, "done")
     }
   }
-  close(chnl)
-  log.Println("nuke of", group, "done")
 }
 
 func (self PostgresDatabase) AddModPubkey(pubkey string) error {

@@ -178,7 +178,7 @@ func (self httpModUI) HandleAdminCommand(wr http.ResponseWriter, r *http.Request
       req := make(map[string]interface{})
       if r.Method == "POST" {
         dec := json.NewDecoder(r.Body)
-        err = dec.Decode(req)
+        err = dec.Decode(&req)
       }
       if err == nil {
         msg, err = f(req)

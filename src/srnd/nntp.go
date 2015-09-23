@@ -243,6 +243,9 @@ func (self nntpConnection) handleLine(daemon NNTPDaemon, code int, line string, 
             // invalid newsgroup format
             reason = "invalid newsgroup"
             code = 439
+          } else if banned, _ := daemon.database.NewsgroupBanned(newsgroup) ; banned {
+            reason = "newsgroup banned"
+            code = 439
           } else if ! ( ValidMessageID(msgid) || ( reference != "" && ! ValidMessageID(reference) ) ) {
             // invalid message id or reference
             reason = "invalid reference or message id is '" + msgid + "' reference is '"+reference + "'"

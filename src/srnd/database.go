@@ -30,6 +30,17 @@ type Database interface {
   GetAllArticlesInGroup(group string, send chan ArticleEntry)
   GetAllArticles() []ArticleEntry
 
+  // check if a newsgroup is banned
+  NewsgroupBanned(group string) (bool, error)
+
+  // ban / unban newsgroup
+  BanNewsgroup(group string) error
+  UnbanNewsgroup(group string) error
+
+  // delete an entire newsgroup
+  // delete from the article store too
+  NukeNewsgroup(group string, store ArticleStore) 
+  
   // return true if this is root post has expired
   IsExpired(root_message_id string) bool
   

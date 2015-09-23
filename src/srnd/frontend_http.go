@@ -84,6 +84,15 @@ func (self httpFrontend) getFilenameForThread(root_post_id string) string {
   return filepath.Join(self.webroot_dir, fname)
 }
 
+func (self httpFrontend) deleteBoardMarkup(group string) {
+  pages, _ := self.daemon.database.GetPagesPerBoard(group)
+  for page := 0 ; page < pages ; page ++ {
+    fname := self.getFilenameForBoardPage(group, page)
+    log.Println("delete file", fname)
+    os.Remove(fname)
+  }
+}
+
 func (self httpFrontend) getFilenameForBoardPage(boardname string, pageno int) string {
   fname := fmt.Sprintf("%s-%d.html", boardname, pageno)
   return filepath.Join(self.webroot_dir, fname)
@@ -622,7 +631,7 @@ func (self httpFrontend) Mainloop() {
   self.httpmux.Path("/mod/unban/{address}").HandlerFunc(self.modui.HandleUnbanAddress).Methods("GET")
   self.httpmux.Path("/mod/addkey/{pubkey}").HandlerFunc(self.modui.HandleAddPubkey).Methods("GET")
   self.httpmux.Path("/mod/delkey/{pubkey}").HandlerFunc(self.modui.HandleDelPubkey).Methods("GET")
-  self.httpmux.Path("/mod/admin/{action}").HandlerFunc(self.modui.HandleAdminCommand).Methods("GET")
+  self.httpmux.Path("/mod/admin/{action}").HandlerFunc(self.modui.HandleAdminCommand).Methods("GET", "POST")
   // webroot handler
   self.httpmux.Path("/").Handler(http.FileServer(http.Dir(self.webroot_dir)))
   self.httpmux.Path("/thm/{f}").Handler(http.FileServer(http.Dir(self.webroot_dir)))

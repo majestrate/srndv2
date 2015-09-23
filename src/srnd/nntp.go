@@ -81,6 +81,7 @@ func (self nntpConnection) outboundHandshake(conn *textproto.Conn) (stream, read
   var line string
   for err == nil {
     code, line, err = conn.ReadCodeLine(-1)
+    log.Println(self.name, line)
     if err == nil {
       if code == 200 {
         // send capabilities
@@ -99,7 +100,7 @@ func (self nntpConnection) outboundHandshake(conn *textproto.Conn) (stream, read
               break
             } else if err == nil {
               // we got a line
-              if line == "MODE-READER\n" {
+              if line == "MODE-READER\n" || line == "READER\n" {
                 log.Println(self.name, "supports READER")
                 reader = true
               } else if line == "STREAMING\n" {
@@ -438,7 +439,6 @@ func (self nntpConnection) runConnection(daemon NNTPDaemon, inbound, stream, rea
   for err == nil {
     if self.mode == "" {
       if inbound  {
-        self.name = "inbound-feed"
         // no mode set and inbound
         line, err = conn.ReadLine()
         log.Println(self.name, line)
@@ -446,9 +446,9 @@ func (self nntpConnection) runConnection(daemon NNTPDaemon, inbound, stream, rea
         cmd := parts[0]
         if cmd == "CAPABILITIES" {
           // write capabilities
-          conn.PrintfLine("101 Capabilities list:")
+          conn.PrintfLine("101 i support to the following:")
           dw := conn.DotWriter()
-          caps := []string{"VERSION 2", "MODE-READER", "STREAMING"}
+          caps := []string{"VERSION 2", "READER", "STREAMING", "IMPLEMENTATION srndv2"}
           for _, cap := range caps {
             io.WriteString(dw, cap)
             io.WriteString(dw, "\n")

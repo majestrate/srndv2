@@ -314,6 +314,8 @@ func (self NNTPDaemon) polloutfeeds() {
             log.Println("send", nntp.MessageID(), "to", feed.name)
             feed.check <- nntp.MessageID()
           }
+        } else {
+          log.Println("not allowed", feed.name)
         }
       }
     case nntp := <- self.ask_for_article:

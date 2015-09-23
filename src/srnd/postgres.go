@@ -204,7 +204,7 @@ func (self PostgresDatabase) NukeNewsgroup(group string, store ArticleStore) {
       // get all attachments
       for _, att := range(self.GetPostAttachments(msgid)) {
         // remove attachment
-        log.Println("delete attachment", att.Filename())
+        log.Println("delete attachment", att)
         os.Remove(store.ThumbnailFilepath(att))
         os.Remove(store.AttachmentFilepath(att))
       }

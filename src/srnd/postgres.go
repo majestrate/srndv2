@@ -191,7 +191,7 @@ func (self PostgresDatabase) NukeNewsgroup(group string, store ArticleStore) {
   // first delete all thread presences
   _, _ = self.conn.Exec("DELETE FROM ArticleThreads WHERE newsgroup = $1", group)
   // get all articles in that newsgroup
-  chnl := make(chan ArticleEntry)
+  chnl := make(chan ArticleEntry, 24)
   go self.GetAllArticlesInGroup(group, chnl)
   // for each article delete it fully
   for {
@@ -204,6 +204,7 @@ func (self PostgresDatabase) NukeNewsgroup(group string, store ArticleStore) {
       // get all attachments
       for _, att := range(self.GetPostAttachments(msgid)) {
         // remove attachment
+        log.Println("delete attachment", att.Filename())
         os.Remove(store.ThumbnailFilepath(att))
         os.Remove(store.AttachmentFilepath(att))
       }

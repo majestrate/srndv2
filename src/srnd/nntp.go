@@ -100,7 +100,7 @@ func (self nntpConnection) outboundHandshake(conn *textproto.Conn) (stream, read
               break
             } else if err == nil {
               // we got a line
-              if line == "MODE-READER\n" || "READER\n" {
+              if line == "MODE-READER\n" || line == "READER\n" {
                 log.Println(self.name, "supports READER")
                 reader = true
               } else if line == "STREAMING\n" {

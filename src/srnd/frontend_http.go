@@ -86,7 +86,7 @@ func (self httpFrontend) getFilenameForThread(root_post_id string) string {
 
 func (self httpFrontend) deleteBoardMarkup(group string) {
   pages, _ := self.daemon.database.GetPagesPerBoard(group)
-  for page := 0 ; page < pages ; pages ++ {
+  for page := 0 ; page < pages ; page ++ {
     fname := self.getFilenameForBoardPage(group, page)
     log.Println("delete file", fname)
     os.Remove(fname)

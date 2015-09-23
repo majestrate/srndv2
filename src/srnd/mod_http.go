@@ -22,7 +22,9 @@ import (
 type httpModUI struct {
   regenAll func()
   regen func (ArticleEntry)
+  regenGroup func(string)
   delete func (string)
+  deleteBoardPages func(string)
   modMessageChan chan NNTPMessage
   database Database
   articles ArticleStore
@@ -32,9 +34,18 @@ type httpModUI struct {
 }
 
 func createHttpModUI(frontend httpFrontend) httpModUI {
-  return httpModUI{frontend.regenAll, frontend.Regen, frontend.deleteThreadMarkup, make(chan NNTPMessage), frontend.daemon.database, frontend.daemon.store, frontend.store, frontend.prefix, frontend.prefix + "mod/"}
+  return httpModUI{frontend.regenAll, frontend.Regen, frontend.regenerateBoard, frontend.deleteThreadMarkup, frontend.deleteBoardMarkup, make(chan NNTPMessage), frontend.daemon.database, frontend.daemon.store, frontend.store, frontend.prefix, frontend.prefix + "mod/"}
 
 }
+
+func extractGroup(param map[string]interface{}) string {
+  group, ok := param["newsgroup"]
+  if ok {
+    return group.(string)
+  }
+  return ""
+}
+
 func (self httpModUI) getAdminFunc(funcname string) AdminFunc {
   if funcname == "template.reload" {
     return func(param map[string]interface{}) (string, error) {
@@ -55,13 +66,22 @@ func (self httpModUI) getAdminFunc(funcname string) AdminFunc {
     }
   } else if funcname == "frontend.regen" {
     return func(param map[string]interface{}) (string, error) {
-      go self.regenAll()
+      newsgroup := extractGroup(param)
+      if len(newsgroup) > 0 {
+        if self.database.HasNewsgroup(newsgroup) {
+          go self.regenGroup(newsgroup)
+        } else {
+          return "failed to regen group", errors.New("no such board")
+        }
+      } else {
+        go self.regenAll()
+      }
       return "started regeneration", nil
     }
   } else if funcname == "thumbnail.regen" {
     return func(param map[string]interface{}) (string, error) {
       threads, ok := param["threads"]
-      t := 4
+      t := 1
       if ok {
         switch threads.(type) {
         case int64:
@@ -73,8 +93,72 @@ func (self httpModUI) getAdminFunc(funcname string) AdminFunc {
           return "failed to regen thumbnails", errors.New("invalid parameters")
         }
       }
+      log.Println("regenerating all thumbnails with",t,"threads")
       go reThumbnail(t, self.articles)
       return fmt.Sprintf("started rethumbnailing with %d threads", t), nil
+    }
+  } else if funcname == "frontend.ban" {
+    return func(param map[string]interface{}) (string, error) {
+      newsgroup := extractGroup(param)
+      if len(newsgroup) > 0 {
+        log.Println("banning", newsgroup)
+        // check ban
+        banned , err := self.database.NewsgroupBanned(newsgroup)
+        if banned {
+          // already banned
+          return "cannot ban newsgroup", errors.New("already banned "+newsgroup)
+        } else if err == nil {
+          // do the ban here
+          err = self.database.BanNewsgroup(newsgroup)
+          // check for error
+          if err == nil {
+            // all gud
+            return "banned "+newsgroup, nil
+          } else {
+            // error while banning
+            return "error banning newsgroup", err
+          }
+        } else {
+          // error checking ban
+          return "cannot check ban", err
+        }
+      } else {
+        // bad parameters
+        return "cannot ban newsgroup", errors.New("invalid parameters")
+      }
+    }
+  } else if funcname == "frontend.unban" {
+    return func(param map[string]interface{}) (string, error) {
+      newsgroup := extractGroup(param) 
+      if len(newsgroup) > 0 {
+        log.Println("unbanning", newsgroup)
+        err := self.database.UnbanNewsgroup(newsgroup)
+        if err == nil {
+          return "unbanned " + newsgroup, nil
+        } else {
+          return "couldn't unban " + newsgroup, err
+        }
+      } else {
+        return "cannot unban", errors.New("invalid paramters")
+      }
+    }
+  } else if funcname == "frontend.nuke" {
+    return func(param map[string]interface{}) (string, error) {
+      newsgroup := extractGroup(param)
+      if len(newsgroup) > 0 {
+        log.Println("nuking", newsgroup)
+        // get every thread we have in this group
+        for _, entry := range self.database.GetLastBumpedThreads(newsgroup, 10000) {
+          // delete their thread page
+          self.delete(entry.MessageID())
+        }
+        // delete every board page
+        self.deleteBoardPages(newsgroup)
+        go self.database.NukeNewsgroup(newsgroup, self.articles)
+        return "nuke started", nil
+      } else {
+        return "cannot nuke", errors.New("invalid parameters")
+      }
     }
   }
   return nil

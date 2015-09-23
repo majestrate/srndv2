@@ -84,6 +84,15 @@ func (self httpFrontend) getFilenameForThread(root_post_id string) string {
   return filepath.Join(self.webroot_dir, fname)
 }
 
+func (self httpFrontend) deleteBoardMarkup(group string) {
+  pages, _ := self.daemon.database.GetPagesPerBoard(group)
+  for page := 0 ; page < pages ; pages ++ {
+    fname := self.getFilenameForBoardPage(group, page)
+    log.Println("delete file", fname)
+    os.Remove(fname)
+  }
+}
+
 func (self httpFrontend) getFilenameForBoardPage(boardname string, pageno int) string {
   fname := fmt.Sprintf("%s-%d.html", boardname, pageno)
   return filepath.Join(self.webroot_dir, fname)

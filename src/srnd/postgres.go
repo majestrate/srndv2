@@ -17,6 +17,7 @@ import (
   "errors"
   "fmt"
   "log"
+  "os"
   _ "github.com/lib/pq"
 )
 
@@ -76,6 +77,12 @@ func (self PostgresDatabase) CreateTables() {
                                 time_banned INTEGER NOT NULL,
                                 ban_reason TEXT NOT NULL
                               )`    
+
+  // table for banned newsgroups
+  tables["BannedGroups"] = `(
+                             newsgroup VARCHAR(255) PRIMARY KEY,
+                             time_banned INTENGER NOT NULL
+                           )`
   
   // table for storing nntp article meta data
   tables["Articles"] = `( 
@@ -162,6 +169,51 @@ func (self PostgresDatabase) CreateTables() {
   _, err = self.conn.Exec("CREATE INDEX IF NOT EXISTS ON ArticlePosts(message_id)")
   _, err = self.conn.Exec("CREATE INDEX IF NOT EXISTS ON Articles(message_id)")
   _, err = self.conn.Exec("CREATE INDEX IF NOT EXISTS ON Newsgroups(name)")
+}
+func (self PostgresDatabase) BanNewsgroup(group string) (err error) {
+  _, err = self.conn.Exec("INSERT INTO BannedGroups(newsgroup, time_banned) VALUES($1, $2)", group, timeNow())
+  return
+}
+
+func (self PostgresDatabase) UnbanNewsgroup(group string) (err error) {
+  _, err = self.conn.Exec("DELETE FROM BannedGroups WHERE newsgroup = $1", group)
+  return
+}
+
+func (self PostgresDatabase) NewsgroupBanned(group string) (banned bool, err error) {
+  var count int64
+  err = self.conn.QueryRow("SELECT COUNT(newsgroup) FROM BannedGroups WHERE newsgroup = $1", group).Scan(count)
+  banned = count > 0
+  return
+}
+
+func (self PostgresDatabase) NukeNewsgroup(group string, store ArticleStore) {  
+  // first delete all thread presences
+  _, _ = self.conn.Exec("DELETE FROM ArticleThreads WHERE newsgroup = $1", group)
+  // get all articles in that newsgroup
+  chnl := make(chan ArticleEntry)
+  go self.GetAllArticlesInGroup(group, chnl)
+  // for each article delete it fully
+  for {
+    article, ok := <- chnl
+    if ok {
+      msgid := article.MessageID()
+      // remove article from store
+      fname := store.GetFilename(msgid)
+      os.Remove(fname)
+      // get all attachments
+      for _, att := range(self.GetPostAttachments(msgid)) {
+        // remove attachment
+        os.Remove(store.ThumbnailFilepath(att))
+        os.Remove(store.AttachmentFilepath(att))
+      }
+      // delete from database
+      self.DeleteArticle(msgid)
+    } else {
+      break
+    }
+  }
+  close(chnl)
 }
 
 func (self PostgresDatabase) AddModPubkey(pubkey string) error {

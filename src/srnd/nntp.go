@@ -471,8 +471,14 @@ func (self nntpConnection) runConnection(daemon NNTPDaemon, inbound, stream, rea
             }
           }
         } else {
-          log.Println(self.name,"in mode", self.mode, "got invalid inbound line:", line)
-          conn.PrintfLine("500 Syntax Error")
+          parts := strings.Split(line, " ")
+          var code64 int64
+          code64, err = strconv.ParseInt(parts[0], 10, 32)
+          if err ==  nil {
+            err = self.handleLine(daemon, int(code64), line[4:], conn)
+          } else {
+            err = self.handleLine(daemon, 0, line, conn)
+          }
         }
       } else {
         if preferMode == "stream" {

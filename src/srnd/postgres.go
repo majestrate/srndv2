@@ -81,7 +81,7 @@ func (self PostgresDatabase) CreateTables() {
   // table for banned newsgroups
   tables["BannedGroups"] = `(
                              newsgroup VARCHAR(255) PRIMARY KEY,
-                             time_banned INTENGER NOT NULL
+                             time_banned INTEGER NOT NULL
                            )`
   
   // table for storing nntp article meta data

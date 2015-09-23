@@ -216,6 +216,7 @@ func (self PostgresDatabase) NukeNewsgroup(group string, store ArticleStore) {
       self.DeleteArticle(msgid)
     } else {   
       log.Println("nuke of", group, "done")
+      return
     }
   }
 }

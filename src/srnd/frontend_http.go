@@ -538,7 +538,7 @@ func (self httpFrontend) handle_postform(wr http.ResponseWriter, r *http.Request
   nntp.Pack()
 
   // sign if needed
-  if len(tripcode_privkey) == nacl.CryptoSignSecretLen() {
+  if len(tripcode_privkey) == nacl.CryptoSignSeedLen() {
     nntp, err = signArticle(nntp, tripcode_privkey)
     if err != nil {
       // wtf? error!?

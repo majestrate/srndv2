@@ -384,11 +384,11 @@ func cryptoSign(data, sk []byte) string {
 }
 
 // given a tripcode after the #
-// make a private key byteslice
+// make a seed byteslice
 func parseTripcodeSecret(str string) []byte {
   // try decoding hex
   raw := unhex(str)
-  keylen := nacl.CryptoSignSecretLen()
+  keylen := nacl.CryptoSignSeedLen()
   if raw == nil || len(raw) != keylen {
     // treat this as a "regular" chan tripcode
     // decode as bytes then pad the rest with 0s if it doesn't fit

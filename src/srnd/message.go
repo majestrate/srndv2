@@ -4,6 +4,7 @@
 package srnd
 
 import (
+  "github.com/majestrate/srndv2/src/nacl"
   "bufio"
   "bytes"
   "encoding/base64"
@@ -130,8 +131,8 @@ func newPlaintextArticle(message, email, subject, name, instance, message_id,  n
   return nntp
 }
 
-// sign an article with a secret key
-func signArticle(nntp NNTPMessage, privkey []byte) (signed nntpArticle, err error) {
+// sign an article with a seed
+func signArticle(nntp NNTPMessage, seed []byte) (signed nntpArticle, err error) {
   signed.headers = make(ArticleHeaders)
   h := nntp.Headers()
   // copy headers
@@ -148,11 +149,18 @@ func signArticle(nntp NNTPMessage, privkey []byte) (signed nntpArticle, err erro
   // write body to sign buffer
   err = nntp.WriteTo(signbuff, "\r\n")
   if err == nil {
-    // get public key
-    pk := getSignPubkey(privkey)
+    // build keypair
+    kp := nacl.LoadSignKey(seed)
+    if kp == nil {
+      log.Println("failed to load seed for signing article")
+      return
+    }
+    defer kp.Free()
+    sk := kp.Secret()
+    pk := getSignPubkey(sk)
     // sign it nigguh
     data := signbuff.Bytes()
-    sig := cryptoSign(data, privkey)
+    sig := cryptoSign(data, sk)
     // log that we signed it
     log.Printf("signed %s pubkey=%s sig=%s", nntp.MessageID(), pk, sig)
     signed.headers.Set("X-Signature-Ed25519-SHA512", sig)

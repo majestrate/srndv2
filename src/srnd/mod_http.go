@@ -201,9 +201,10 @@ func (self httpModUI) HandleAdminCommand(wr http.ResponseWriter, r *http.Request
 func (self httpModUI) CheckKey(privkey string) (bool, error) {
   privkey_bytes, err := hex.DecodeString(privkey)
   if err == nil {
-    pubkey_bytes := nacl.GetSignPubkey(privkey_bytes)
-    if pubkey_bytes != nil {
-      pubkey := hex.EncodeToString(pubkey_bytes)
+    kp := nacl.LoadSignKey(privkey_bytes)
+    if kp != nil {
+      defer kp.Free()
+      pubkey := hex.EncodeToString(kp.Public())
       if self.database.CheckModPubkeyGlobal(pubkey) {
         // this user is an admin
         return true, nil

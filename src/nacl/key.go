@@ -29,6 +29,11 @@ func (self *KeyPair) Public() []byte {
   return self.pk.Bytes()
 }
 
+func (self *KeyPair) Seed() []byte {
+  seed_len := C.crypto_sign_seedbytes()
+  return self.sk.Bytes()[:seed_len]
+}
+
 // generate a keypair
 func GenSignKeypair() *KeyPair {
   sk_len := C.crypto_sign_secretkeybytes()
@@ -70,20 +75,8 @@ func GetSignPubkey(sk []byte) []byte {
   return pkbuff.Bytes()
 }
 
-// load keypair from secret key
-func LoadSignKey(sk []byte) *KeyPair {
-  pk := GetSignPubkey(sk)
-  if pk == nil {
-    log.Println("nacl.LoadSignKey() failed to load keypair")
-    return nil
-  }
-  pkbuff := NewBuffer(pk)
-  skbuff := NewBuffer(sk)
-  return &KeyPair{pkbuff, skbuff}
-}
-
 // make keypair from seed
-func SeedSignKey(seed []byte) *KeyPair {
+func LoadSignKey(seed []byte) *KeyPair {
   seed_len := C.crypto_sign_seedbytes()
   if C.size_t(len(seed)) != seed_len {
     log.Println("nacl.SeedSignKey() invalid seed size", len(seed))
@@ -123,7 +116,7 @@ func GenBoxKeypair() *KeyPair {
 
 // get public key from secret key
 func GetBoxPubkey(sk []byte) []byte {
-  sk_len := C.crypto_box_secretkeybytes()
+  sk_len := C.crypto_box_seedbytes()
   if C.size_t(len(sk)) != sk_len {
     log.Printf("nacl.GetBoxPubkey() invalid secret key size %d != %d", len(sk), sk_len)
     return nil
@@ -190,3 +183,6 @@ func CryptoSignSecretLen() int {
   return int(C.crypto_sign_secretkeybytes())
 }
 
+func CryptoSignSeedLen() int {
+  return int(C.crypto_sign_seedbytes())
+}

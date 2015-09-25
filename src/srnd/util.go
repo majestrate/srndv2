@@ -302,7 +302,7 @@ func newSignKeypair() (string, string) {
   kp := nacl.GenSignKeypair()
   defer kp.Free()
   pk := kp.Public()
-  sk := kp.Secret()
+  sk := kp.Seed()
   return hex.EncodeToString(pk), hex.EncodeToString(sk)
 }
 

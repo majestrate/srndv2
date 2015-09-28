@@ -36,6 +36,18 @@ type nntpConnection struct {
   take chan string
 }
 
+// write out a mime header to a writer
+func writeMIMEHeader(wr io.Writer, hdr textproto.MIMEHeader) (err error) {
+  // write headers
+  for k, vals := range(hdr) {
+    for _, val := range(vals) {
+      _, err = io.WriteString(wr, fmt.Sprintf("%s: %s\n", k, val))
+    }
+  }
+  // end of headers
+  _, err = io.WriteString(wr, "\n")
+  return
+}
 
 func createNNTPConnection() nntpConnection {
   return nntpConnection{
@@ -161,6 +173,91 @@ func (self nntpConnection) handleStreaming(daemon NNTPDaemon, reader bool, conn 
   return
 }
 
+// check if we want the article given its mime header
+// returns empty string if it's okay otherwise an error message
+func (self nntpConnection) checkMIMEHeader(daemon NNTPDaemon, hdr textproto.MIMEHeader) (reason string, err error) {
+
+  newsgroup := hdr.Get("Newsgroups")
+  reference := hdr.Get("References")
+  msgid := hdr.Get("Message-ID")
+  encaddr := hdr.Get("X-Encrypted-IP")
+  torposter := hdr.Get("X-Tor-Poster")
+  i2paddr := hdr.Get("X-I2p-Desthash")
+  content_type := hdr.Get("Content-Type")
+  has_attachment := strings.HasPrefix(content_type, "multipart/mixed")
+  pubkey := hdr.Get("X-Pubkey-Ed25519")
+  // TODO: allow certain pubkeys?
+  is_signed := pubkey != ""
+  is_ctl := newsgroup == "ctl" && is_signed
+  anon_poster := torposter != "" || i2paddr != "" || encaddr == ""
+  
+  if ! newsgroupValidFormat(newsgroup) {
+    // invalid newsgroup format
+    reason = "invalid newsgroup"
+    return
+  } else if banned, _ := daemon.database.NewsgroupBanned(newsgroup) ; banned {
+    reason = "newsgroup banned"
+    return
+  } else if ! ( ValidMessageID(msgid) || ( reference != "" && ! ValidMessageID(reference) ) ) {
+    // invalid message id or reference
+    reason = "invalid reference or message id is '" + msgid + "' reference is '"+reference + "'"
+    return
+  } else if daemon.database.HasArticleLocal(msgid) {
+    // we already have this article locally
+    reason = "have this article locally"
+    return
+  } else if daemon.database.HasArticle(msgid) {
+    // we have already seen this article
+    reason = "already seen"
+    return
+  } else if is_ctl {
+    // we always allow control messages
+    return 
+  } else if anon_poster {
+    // this was posted anonymously
+    if daemon.allow_anon {
+      if has_attachment || is_signed {
+        // this is a signed message or has attachment
+        if daemon.allow_anon_attachments {
+          // we'll allow anon attachments
+          return
+        } else {
+          // we don't take signed messages or attachments posted anonymously
+          reason = "no anon signed posts or attachments"
+          return
+        }
+      } else {
+        // we allow anon posts that are plain
+        return
+      }
+    } else {
+      // we don't allow anon posts of any kind
+      reason = "no anon posts allowed"
+      return
+    }
+  } else {
+    // check for banned address
+    var banned bool
+    if encaddr != "" {
+      banned, err = daemon.database.CheckEncIPBanned(encaddr)
+      if err == nil {
+        if banned {
+          // this address is banned
+          reason = "address banned"
+          return
+        } else {
+          // not banned
+          return
+        }
+      }
+    } else {
+      // idk wtf
+      log.Println(self.name, "wtf? invalid article")
+    }
+  }
+  return
+}
+
 func (self nntpConnection) handleLine(daemon NNTPDaemon, code int, line string, conn *textproto.Conn) (err error) {
   parts := strings.Split(line, " ")
   var msgid string
@@ -197,6 +294,7 @@ func (self nntpConnection) handleLine(daemon NNTPDaemon, code int, line string, 
       cmd := parts[0]
       if cmd == "MODE" {
         if parts[1] == "READER" {
+          // reader mode
           self.mode = "READER"
           log.Println(self.name, "switched to reader mode")
           conn.PrintfLine("201 No posting Permitted")
@@ -205,9 +303,16 @@ func (self nntpConnection) handleLine(daemon NNTPDaemon, code int, line string, 
           log.Println(self.name, "already in streaming mode")
           conn.PrintfLine("203 Streaming enabled brah")
         } else {
+          // invalid
           log.Println(self.name, "got invalid mode request", parts[1])
           conn.PrintfLine("501 invalid mode variant:", parts[1])
         }
+      } else if cmd == "QUIT" {
+        // quit command
+        conn.PrintfLine("")
+        // close our connection and return
+        conn.Close()
+        return
       } else if cmd == "CHECK" {
         // handle check command
         msgid := parts[1]
@@ -220,101 +325,24 @@ func (self nntpConnection) handleLine(daemon NNTPDaemon, code int, line string, 
           conn.PrintfLine("238 %s", msgid)
         }
       } else if cmd == "TAKETHIS" {
-        // read the article headers
+        // handle takethis command
         var hdr textproto.MIMEHeader
         var reason string
+        // read the article header
         hdr, err = conn.ReadMIMEHeader()
         if err == nil {
-          // check the headers and see if we want this article
-          newsgroup := hdr.Get("Newsgroups")
-          reference := hdr.Get("References")
-          msgid := hdr.Get("Message-ID")
-          encaddr := hdr.Get("X-Encrypted-IP")
-          torposter := hdr.Get("X-Tor-Poster")
-          i2paddr := hdr.Get("X-I2p-Desthash")
-          content_type := hdr.Get("Content-Type")
-          has_attachment := strings.HasPrefix(content_type, "multipart/mixed")
-          pubkey := hdr.Get("X-Pubkey-Ed25519")
-          // TODO: allow certain pubkeys?
-          is_signed := pubkey != ""
-          is_ctl := newsgroup == "ctl" && is_signed
-          anon_poster := torposter != "" || i2paddr != "" || encaddr == ""
-
-          if ! newsgroupValidFormat(newsgroup) {
-            // invalid newsgroup format
-            reason = "invalid newsgroup"
-            code = 439
-          } else if banned, _ := daemon.database.NewsgroupBanned(newsgroup) ; banned {
-            reason = "newsgroup banned"
-            code = 439
-          } else if ! ( ValidMessageID(msgid) || ( reference != "" && ! ValidMessageID(reference) ) ) {
-            // invalid message id or reference
-            reason = "invalid reference or message id is '" + msgid + "' reference is '"+reference + "'"
-            code = 439
-          } else if daemon.database.HasArticleLocal(msgid) {
-            // we already have this article locally
-            reason = "have this article locally"
-            code = 439
-          } else if daemon.database.HasArticle(msgid) {
-            // we have already seen this article
-            reason = "already seen"
-            code = 439
-          } else if is_ctl {
-            // we always allow control messages
-            code = 239
-          } else if anon_poster {
-            // this was posted anonymously
-            if daemon.allow_anon {
-              if has_attachment || is_signed {
-                // this is a signed message or has attachment
-                if daemon.allow_anon_attachments {
-                  // we'll allow anon attachments
-                  code = 239
-                } else {
-                  // we don't take signed messages or attachments posted anonymously
-                  reason = "no anon signed posts or attachments"
-                  code = 439
-                }
-              } else {
-                // we allow anon posts that are plain
-                code = 239
-              }
-            } else {
-              // we don't allow anon posts of any kind
-              reason = "no anon posts allowed"
-              code = 439
-            }
-          } else {
-            // check for banned address
-            var banned bool
-            if encaddr != "" {
-              banned, err = daemon.database.CheckEncIPBanned(encaddr)
-              if err == nil {
-                if banned {
-                // this address is banned
-                  code = 439
-                  reason = "address banned"
-                } else {
-                  // not banned
-                  code = 239
-                }
-              } else {
-                // an error occured
-                log.Println(self.name, "failed to check ban for", encaddr, err)
-                // do a 400
-                conn.PrintfLine("400 Service temporarily unavailable")
-                conn.Close()
-                return
-              }
-            } else {
-              // idk wtf
-              log.Println(self.name, "wtf? invalid article")
-            }
-          }
+          // check the header
+          reason, err = self.checkMIMEHeader(daemon, hdr)
           dr := conn.DotReader()
-          // now read it
-          if code == 239 {
-            // we don't have this the rootpost
+          if len(reason) > 0 {
+            // discard, we do not want
+            code = 439
+            log.Println(self.name, "rejected", msgid, reason)
+            _, err = io.Copy(ioutil.Discard, dr)
+          } else {
+            // check if we don't have the rootpost
+            reference := hdr.Get("References")
+            newsgroup := hdr.Get("Newsgroups")
             if reference != "" && ValidMessageID(reference) && ! daemon.store.HasArticle(reference) && ! daemon.database.IsExpired(reference) {
               log.Println(self.name, "got reply to", reference, "but we don't have it")
               daemon.ask_for_article <- ArticleEntry{reference, newsgroup}
@@ -325,14 +353,8 @@ func (self nntpConnection) handleLine(daemon NNTPDaemon, code int, line string, 
               // discard
               io.Copy(ioutil.Discard, dr)
             } else {
-              // write headers
-              for k, vals := range(hdr) {
-                for _, val := range(vals) {
-                  _, err = io.WriteString(f, fmt.Sprintf("%s: %s\n", k, val))
-                }
-              }
-              // end of headers
-              _, err = io.WriteString(f, "\n")
+              // write header
+              err = writeMIMEHeader(f, hdr)
               // write body
               _, err = io.Copy(f, dr)
               if err == nil || err == io.EOF {
@@ -343,16 +365,13 @@ func (self nntpConnection) handleLine(daemon NNTPDaemon, code int, line string, 
                 log.Println(self.name, "error reading message", err)
               }
             }
-          } else {
-            // discard
-            log.Println(self.name, "rejected", msgid, reason)
-            _, err = io.Copy(ioutil.Discard, dr)
+            code = 239
+            reason = "gotten"
           }
         } else {
           log.Println(self.name, "error reading mime header:", err)
-        }
-        if reason == "" {
-          reason = "gotten"
+          code = 439
+          reason = "error reading mime header"
         }
         conn.PrintfLine("%d %s %s", code, msgid, reason)
       } else if cmd == "ARTICLE" {
@@ -398,33 +417,64 @@ func (self nntpConnection) startReader(daemon NNTPDaemon, conn *textproto.Conn) 
   var code int
   var line string
   for err == nil {
+    // next article to ask for
     msgid := <- self.article
     log.Println(self.name, "asking for", msgid)
+    // send command
     conn.PrintfLine("ARTICLE %s", msgid)
+    // read response
     code, line, err = conn.ReadCodeLine(-1)
     if code == 220 {
       // awwww yeh we got it
-      f := daemon.store.CreateTempFile(msgid)
-      if f == nil {
-        // already being loaded elsewhere
-      } else {
-        // read in the article
+      var hdr textproto.MIMEHeader
+      // read header
+      hdr, err = conn.ReadMIMEHeader()
+      if err == nil {
+        // prepare to read body
         dr := conn.DotReader()
-        _, err = io.Copy(f, dr)
-        f.Close()
-        log.Println(msgid, "got from", self.name)
-        // tell daemon to load infeed
-        daemon.infeed_load <- msgid
+        // check header and decide if we want this
+        reason, err := self.checkMIMEHeader(daemon, hdr)
+        if err == nil {
+          if len(reason) > 0 {
+            log.Println(self.name, "discarding", msgid, reason)
+            // we don't want it, discard
+            io.Copy(ioutil.Discard, dr)
+          } else {
+            // yeh we want it open up a file to store it in
+            f := daemon.store.CreateTempFile(msgid)
+            if f == nil {
+              // already being loaded elsewhere
+            } else {
+              // write header to file
+              writeMIMEHeader(f, hdr)
+              // write article body to file
+              _, _ = io.Copy(f, dr)
+              // close file
+              f.Close()
+              log.Println(msgid, "obtained via reader from", self.name)
+              // tell daemon to load article via infeed
+              daemon.infeed_load <- msgid
+            }
+          }
+        } else {
+          // error happened while processing
+          log.Println(self.name, "error happend while processing MIME header", err)
+        }
+      } else {
+        // error happened while reading header
+        log.Println(self.name, "error happened while reading MIME header", err)
       }
     } else if code == 430 {
-          // they don't know it D:
+      // they don't know it D:
       log.Println(msgid, "not known by", self.name)
     } else {
       // invalid response
       log.Println(self.name, "invald response to ARTICLE:", code, line)
-    } 
+    }
   }
-  log.Println(self.name, "error while streaming:", err)
+  // report error and close connection
+  log.Println(self.name, "error while in reader mode:", err)
+  conn.Close()
 }
 
 // run the mainloop for this connection
@@ -439,7 +489,7 @@ func (self nntpConnection) runConnection(daemon NNTPDaemon, inbound, stream, rea
   for err == nil {
     if self.mode == "" {
       if inbound  {
-        // no mode set and inbound
+        // no mode and inbound
         line, err = conn.ReadLine()
         log.Println(self.name, line)
         parts := strings.Split(line, " ")
@@ -471,6 +521,7 @@ func (self nntpConnection) runConnection(daemon NNTPDaemon, inbound, stream, rea
             }
           }
         } else {
+          // handle a it as a command, we don't have a mode set
           parts := strings.Split(line, " ")
           var code64 int64
           code64, err = strconv.ParseInt(parts[0], 10, 32)
@@ -480,16 +531,19 @@ func (self nntpConnection) runConnection(daemon NNTPDaemon, inbound, stream, rea
             err = self.handleLine(daemon, 0, line, conn)
           }
         }
-      } else {
+      } else { // no mode and outbound
         if preferMode == "stream" {
+          // try outbound streaming
           if stream {
             success, err = self.modeSwitch("STREAM", conn)
             self.mode = "STREAM"
             if success {
+              // start outbound streaming in background
               go self.startStreaming(daemon, reader, conn)
             }
           }
         } else if reader {
+          // try reader mode
           success, err = self.modeSwitch("READER", conn)
           if success {
             self.mode = "READER"
@@ -524,6 +578,7 @@ func (self nntpConnection) runConnection(daemon NNTPDaemon, inbound, stream, rea
   }
   log.Println("run connection got error", err)
   if ! inbound {
+    // send quit on outbound
     conn.PrintfLine("QUIT")
   }
   conn.Close()

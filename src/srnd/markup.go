@@ -18,7 +18,7 @@ var re_backlink = regexp.MustCompile(`>> ?[0-9a-f]{10}`)
 func formatline(line string) (markup string) {
   line = strings.Trim(line, "\t\r\n ")
   if len(line) > 0 {
-    if strings.HasPrefix(line, ">") {
+    if strings.HasPrefix(line, ">") && ! strings.HasPrefix(line, ">>") {
       // le ebin meme arrows
       markup += "<p><span class='memearrows'>"
       markup += html.EscapeString(line)

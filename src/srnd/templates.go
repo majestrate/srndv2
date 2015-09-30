@@ -65,20 +65,28 @@ func updateLinkCache() {
     // for each page in group
     for _, page := range group {
       // for each thread in page
-      for _, thread := range page.Threads() {
-        // put op entry
-        h := thread.OP().ShortHash()
-        u := thread.OP().PostURL()
-        template.links[h] = u
-        // for each reply
-        for _, p := range thread.Replies() {
-          // put reply entry
-          h = p.ShortHash()
-          u = p.PostURL()
-          template.links[h] = u
-        }
-      }
+      updateLinkCacheForBoard(page)
     }
+  }
+}
+
+func updateLinkCacheForBoard(page BoardModel) {
+  // for each thread in page
+  for _, thread := range page.Threads() {
+    updateLinkCacheForThread(thread)
+  }
+}
+
+func updateLinkCacheForThread(thread ThreadModel) {
+  h := thread.OP().ShortHash()
+  u := thread.OP().PostURL()
+  template.links[h] = u
+  // for each reply
+  for _, p := range thread.Replies() {
+    // put reply entry
+    h = p.ShortHash()
+          u = p.PostURL()
+    template.links[h] = u
   }
 }
 
@@ -154,6 +162,7 @@ func (self templateEngine) genBoardPage(prefix, frontend, newsgroup string, page
   // render it
   wr, err := OpenFileWriter(outfile)
   if err == nil {
+    updateLinkCacheForBoard(board[page])
     board[page].RenderTo(wr)
     wr.Close()
     log.Println("wrote file", outfile)
@@ -247,7 +256,7 @@ func (self templateEngine) genThread(root ArticleEntry, prefix, frontend, outfil
     th = th.Update(db)
     wr, err := OpenFileWriter(outfile)
     if err == nil {
-      updateLinkCache()
+      updateLinkCacheForThread(th)
       th.RenderTo(wr)
       wr.Close()
       log.Println("wrote file", outfile)

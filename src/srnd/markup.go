@@ -36,13 +36,12 @@ func formatline(line string) (markup string) {
         // check for backlink
         if re_backlink.MatchString(word) {
           url := template.findLink(word[2:])
-          if len(url) > 0 {
-            // backlink exists
-            markup += `<a href="`+url+`">` + word + "</a>"
-          } else {
-            // backlinks not exists
-            markup += html.EscapeString(word)
+          if len(url) == 0 {
+            url = "#"
           }
+          // backlink exists
+          markup += `<a href="`+url+`">` + word + "</a>"
+          
         } else {
           // linkify it as needed
           line = html.EscapeString(word)

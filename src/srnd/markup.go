@@ -36,6 +36,7 @@ func formatline(line string) (markup string) {
         // check for backlink
         link := re_backlink.FindString(word)
         if len(link) > 0 {
+          link = strings.Trim(link[2:], " ")
           url := template.findLink(link)
           if len(url) == 0 {
             url = "#"

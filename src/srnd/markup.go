@@ -15,10 +15,25 @@ import (
 var re_external_link = regexp.MustCompile(`((https?|ftp):\/\/[\w\d\.\-_]*\/[\w\d\.\/\-_\?]*)`);
 var re_backlink = regexp.MustCompile(`>> ?([0-9a-f]{10})`)
 
+// parse backlink
+func backlink(word string) (markup string) {
+  link := re_backlink.FindString(word)
+  if len(link) > 0 {
+    link = strings.Trim(link[2:], " ")
+    url := template.findLink(link)
+    if len(url) == 0 {
+      return "&gt;&gt;" + link[2:]
+    }
+    // backlink exists
+    return`<a href="`+url+`">&gt;&gt;` + link + "</a>"
+  }
+  return word
+}
+  
 func formatline(line string) (markup string) {
   line = strings.Trim(line, "\t\r\n ")
   if len(line) > 0 {
-    if strings.HasPrefix(line, ">") && ! strings.HasPrefix(line, ">>") {
+    if strings.HasPrefix(line, ">") || ( strings.HasPrefix(line, ">>") && ! re_backlink.MatchString(strings.Split(line, " ")[0])) {
       // le ebin meme arrows
       markup += "<p><span class='memearrows'>"
       markup += html.EscapeString(line)
@@ -34,16 +49,8 @@ func formatline(line string) (markup string) {
       // for each word
       for _, word := range strings.Split(line, " ") {
         // check for backlink
-        link := re_backlink.FindString(word)
-        if len(link) > 0 {
-          link = strings.Trim(link[2:], " ")
-          url := template.findLink(link)
-          if len(url) == 0 {
-            url = "#"
-          }
-          // backlink exists
-          markup += `<a href="`+url+`">&gt;&gt;` + link + "</a>"
-          
+        if re_backlink.MatchString(word) {
+          markup += backlink(word)
         } else {
           // linkify it as needed
           line = html.EscapeString(word)

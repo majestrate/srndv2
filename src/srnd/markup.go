@@ -41,7 +41,7 @@ func formatline(line string) (markup string) {
             url = "#"
           }
           // backlink exists
-          markup += `<a href="`+url+`">` + word + "</a>"
+          markup += `<a href="`+url+`">&gt;&gt;` + link + "</a>"
           
         } else {
           // linkify it as needed

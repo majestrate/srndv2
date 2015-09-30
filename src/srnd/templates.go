@@ -85,6 +85,7 @@ func (self templateEngine) updateLinkCache() (links map[string]string) {
 
 // get the url for a backlink
 func (self templateEngine) findLink(shorthash string) (url string) {
+  log.Println(self.links)
   url, _ = self.links[shorthash]
   return
 }

@@ -56,12 +56,12 @@ func (self templateEngine) reloadAllTemplates() {
 
 // update the link -> url cache given our current model
 // return new link table
-func (self templateEngine) updateLinkCache() (links map[string]string) {
+func updateLinkCache() {
   // clear existing cache
-  links = make(map[string]string)
+  template.links = make(map[string]string)
 
   // for each group
-  for _, group := range self.groups {
+  for _, group := range template.groups {
     // for each page in group
     for _, page := range group {
       // for each thread in page
@@ -69,23 +69,21 @@ func (self templateEngine) updateLinkCache() (links map[string]string) {
         // put op entry
         h := thread.OP().ShortHash()
         u := thread.OP().PostURL()
-        links[h] = u
+        template.links[h] = u
         // for each reply
         for _, p := range thread.Replies() {
           // put reply entry
           h = p.ShortHash()
           u = p.PostURL()
-          links[h] = u
+          template.links[h] = u
         }
       }
     }
   }
-  return links
 }
 
 // get the url for a backlink
 func (self templateEngine) findLink(shorthash string) (url string) {
-  log.Println(self.links)
   url, _ = self.links[shorthash]
   return
 }
@@ -174,7 +172,7 @@ func (self templateEngine) genBoard(prefix, frontend, newsgroup, outdir string, 
   board = board.UpdateAll(db)
   // save the model
   self.groups[newsgroup] = board
-  self.links = self.updateLinkCache()
+  updateLinkCache()
   
   pages := len(board)
   for page := 0 ; page < pages ; page ++ {
@@ -210,7 +208,7 @@ func (self templateEngine) genUkko(prefix, frontend, outfile string, database Da
   }
   wr, err := OpenFileWriter(outfile)
   if err == nil {
-    self.links = self.updateLinkCache()
+    updateLinkCache()
     io.WriteString(wr, template.renderTemplate("ukko.mustache", map[string]interface{} { "prefix" : prefix, "threads" : threads }))
     wr.Close()
   } else {
@@ -249,7 +247,7 @@ func (self templateEngine) genThread(root ArticleEntry, prefix, frontend, outfil
     th = th.Update(db)
     wr, err := OpenFileWriter(outfile)
     if err == nil {
-      self.links = self.updateLinkCache()
+      updateLinkCache()
       th.RenderTo(wr)
       wr.Close()
       log.Println("wrote file", outfile)

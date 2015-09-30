@@ -16,6 +16,8 @@ import (
 )
 
 type templateEngine struct {
+  // shorthash -> url
+  links map[string]string
   // every newsgroup
   groups map[string]GroupModel
   // loaded templates
@@ -50,6 +52,41 @@ func (self templateEngine) reloadAllTemplates() {
   for _, tname := range loadThese {
     self.reloadTemplate(tname)
   }
+}
+
+// update the link -> url cache given our current model
+// return new link table
+func (self templateEngine) updateLinkCache() (links map[string]string) {
+  // clear existing cache
+  links = make(map[string]string)
+
+  // for each group
+  for _, group := range self.groups {
+    // for each page in group
+    for _, page := range group {
+      // for each thread in page
+      for _, thread := range page.Threads() {
+        // put op entry
+        h := thread.OP().ShortHash()
+        u := thread.OP().PostURL()
+        links[h] = u
+        // for each reply
+        for _, p := range thread.Replies() {
+          // put reply entry
+          h = p.ShortHash()
+          u = p.PostURL()
+          links[h] = u
+        }
+      }
+    }
+  }
+  return links
+}
+
+// get the url for a backlink
+func (self templateEngine) findLink(shorthash string) (url string) {
+  url, _ = self.links[shorthash]
+  return
 }
 
 // get the filepath to a template
@@ -107,7 +144,6 @@ func (self templateEngine) obtainBoard(prefix, frontend, group string, db Databa
 }
 // generate a board page
 func (self templateEngine) genBoardPage(prefix, frontend, newsgroup string, page int, outfile string, db Database) {
-
   // get the board model
   board := self.obtainBoard(prefix, frontend, newsgroup, db)
   // update the board page
@@ -137,7 +173,8 @@ func (self templateEngine) genBoard(prefix, frontend, newsgroup, outdir string, 
   board = board.UpdateAll(db)
   // save the model
   self.groups[newsgroup] = board
-
+  self.links = self.updateLinkCache()
+  
   pages := len(board)
   for page := 0 ; page < pages ; page ++ {
     outfile := filepath.Join(outdir, fmt.Sprintf("%s-%d.html", newsgroup, page))
@@ -172,6 +209,7 @@ func (self templateEngine) genUkko(prefix, frontend, outfile string, database Da
   }
   wr, err := OpenFileWriter(outfile)
   if err == nil {
+    self.links = self.updateLinkCache()
     io.WriteString(wr, template.renderTemplate("ukko.mustache", map[string]interface{} { "prefix" : prefix, "threads" : threads }))
     wr.Close()
   } else {
@@ -210,6 +248,7 @@ func (self templateEngine) genThread(root ArticleEntry, prefix, frontend, outfil
     th = th.Update(db)
     wr, err := OpenFileWriter(outfile)
     if err == nil {
+      self.links = self.updateLinkCache()
       th.RenderTo(wr)
       wr.Close()
       log.Println("wrote file", outfile)
@@ -249,10 +288,7 @@ func (self templateEngine) genFrontPage(top_count int, frontend_name, outfile st
 
   // for each group
   groups := db.GetAllNewsgroups()
-  for idx, group := range groups {
-    if idx >= top_count {
-      break
-    }
+  for _, group := range groups {
     // posts per hour
     hour := db.CountPostsInGroup(group, 3600)
     // posts per day

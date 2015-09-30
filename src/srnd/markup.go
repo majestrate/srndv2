@@ -10,10 +10,10 @@ import (
   "strings"
 )
 
-
 // copypasted from https://stackoverflow.com/questions/161738/what-is-the-best-regular-expression-to-check-if-a-string-is-a-valid-url
 // var re_external_link = regexp.MustCompile(`((?:(?:https?|ftp):\/\/)(?:\S+(?::\S*)?@)?(?:(?!(?:10|127)(?:\.\d{1,3}){3})(?!(?:169\.254|192\.168)(?:\.\d{1,3}){2})(?!172\.(?:1[6-9]|2\d|3[0-1])(?:\.\d{1,3}){2})(?:[1-9]\d?|1\d\d|2[01]\d|22[0-3])(?:\.(?:1?\d{1,2}|2[0-4]\d|25[0-5])){2}(?:\.(?:[1-9]\d?|1\d\d|2[0-4]\d|25[0-4]))|(?:(?:[a-z\u00a1-\uffff0-9]-*)*[a-z\u00a1-\uffff0-9]+)(?:\.(?:[a-z\u00a1-\uffff0-9]-*)*[a-z\u00a1-\uffff0-9]+)*(?:\.(?:[a-z\u00a1-\uffff]{2,}))\.?)(?::\d{2,5})?(?:[/?#]\S*)?)`);
 var re_external_link = regexp.MustCompile(`((https?|ftp):\/\/[\w\d\.\-_]*\/[\w\d\.\/\-_\?]*)`);
+var re_backlink = regexp.MustCompile(`>+ ?[0-9a-f]{10}`)
 
 func formatline(line string) (markup string) {
   line = strings.Trim(line, "\t\r\n ")
@@ -31,9 +31,25 @@ func formatline(line string) (markup string) {
     } else {
       // regular line
       markup += "<p>"
-      // linkify it
-      line = html.EscapeString(line)
-      markup += re_external_link.ReplaceAllString(line, `<a href="$1">$1</a>`)
+      // for each word
+      for _, word := range strings.Split(line, " ") {
+        // check for backlink
+        if re_backlink.MatchString(word) {
+          url := template.findLink(word[2:])
+          if len(url) > 0 {
+            // backlink exists
+            markup += `<a href="`+url+`">` + word + "</a>"
+          } else {
+            // backlinks not exists
+            markup += html.EscapeString(word)
+          }
+        } else {
+          // linkify it as needed
+          line = html.EscapeString(word)
+          markup += re_external_link.ReplaceAllString(line, `<a href="$1">$1</a>`)
+        }
+        markup += " "
+      }
       markup += "</p>"
     }
   }

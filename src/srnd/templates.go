@@ -273,6 +273,7 @@ func newTemplateEngine(dir string) *templateEngine {
     groups: make(map[string]GroupModel),
     templates: make(map[string]string),
     template_dir: dir,
+    links: make(map[string]string),
   }
 }
 

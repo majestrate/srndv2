@@ -105,7 +105,7 @@ func HashMessageID(msgid string) string {
 // short message id hash
 // >>hash
 func ShortHashMessageID(msgid string) string {
-  return HashMessageID(msgid)[:10]
+  return strings.ToLower(HashMessageID(msgid)[:10])
 }
 
 type lineWriter struct {

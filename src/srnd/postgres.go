@@ -96,11 +96,14 @@ func (self PostgresDatabase) upgrade0to1() {
     "ALTER TABLE ArticlePosts ADD PRIMARY KEY(message_id)",
     "CREATE INDEX ON ArticlePosts(ref_id)",
     // article keys table
+    "DELETE FROM ArticleKeys WHERE message_id NOT IN ( SELECT message_id FROM ArticlePosts )",
     "ALTER TABLE ArticleKeys ADD FOREIGN KEY(message_id) REFERENCES ArticlePosts(message_id) ON DELETE CASCADE",
     // article threads table
+    "DELETE FROM ArticleThreads WHERE root_message_id NOT IN ( SELECT message_id FROM ArticlePosts )",
     "ALTER TABLE ArticleThreads ADD FOREIGN KEY(root_message_id) REFERENCES ArticlePosts(message_id) ON DELETE CASCADE",
     "ALTER TABLE ArticleThreads ADD FOREIGN KEY(newsgroup) REFERENCES Newsgroups(name) ON DELETE CASCADE",
     // article attachments table
+    "DELETE FROM ArticleAttachments WHERE message_id NOT IN ( SELECT message_id FROM ArticlePosts )",
     "ALTER TABLE ArticleAttachments ADD FOREIGN KEY(message_id) REFERENCES ArticlePosts(message_id) ON DELETE CASCADE",
   }
 

@@ -93,6 +93,7 @@ func (self PostgresDatabase) upgrade0to1() {
     "ALTER TABLE ArticlePosts DROP COLUMN IF EXISTS addr",
     "ALTER TABLE ArticlePosts ADD COLUMN addr VARCHAR(255)",
     "ALTER TABLE ArticlePosts ADD FOREIGN KEY(newsgroup) REFERENCES Newsgroups(name) ON DELETE CASCADE",
+    "ALTER TABLE ArticlePosts DROP CONSTRAINT IF EXISTS PRIMARY KEY(message_id)"
     "ALTER TABLE ArticlePosts ADD PRIMARY KEY(message_id)",
     "CREATE INDEX ON ArticlePosts(ref_id)",
     // article keys table

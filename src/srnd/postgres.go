@@ -92,20 +92,25 @@ func (self PostgresDatabase) upgrade0to1() {
     // article posts table
     "ALTER TABLE ArticlePosts DROP COLUMN IF EXISTS addr",
     "ALTER TABLE ArticlePosts ADD COLUMN addr VARCHAR(255)",
-    "ALTER TABLE ArticlePosts ADD FOREIGN KEY(newsgroup) REFERENCES Newsgroups(name) ON DELETE CASCADE",
-    "ALTER TABLE ArticlePosts DROP CONSTRAINT IF EXISTS PRIMARY KEY(message_id)",
-    "ALTER TABLE ArticlePosts ADD PRIMARY KEY(message_id)",
+    "ALTER TABLE ArticlePosts DROP CONSTRAINT IF EXISTS group_depend",
+    "ALTER TABLE ArticlePosts ADD CONSTRAINT group_depend FOREIGN KEY(newsgroup) REFERENCES Newsgroups(name) ON DELETE CASCADE",
+    "ALTER TABLE ArticlePosts DROP CONSTRAINT IF EXISTS msgid_pk",
+    "ALTER TABLE ArticlePosts ADD CONSTRAINT msgid_pk PRIMARY KEY(message_id)",
     "CREATE INDEX ON ArticlePosts(ref_id)",
     // article keys table
     "DELETE FROM ArticleKeys WHERE message_id NOT IN ( SELECT message_id FROM ArticlePosts )",
-    "ALTER TABLE ArticleKeys ADD FOREIGN KEY(message_id) REFERENCES ArticlePosts(message_id) ON DELETE CASCADE",
+    "ALTER TABLE ArticleKeys DROP CONSTRAINT IF EXISTS msgid_depend",
+    "ALTER TABLE ArticleKeys ADD CONSTRAINT msgid_depend FOREIGN KEY(message_id) REFERENCES ArticlePosts(message_id) ON DELETE CASCADE",
     // article threads table
+    "ALTER TABLE ArticleThreads DROP CONSTRAINT IF EXISTS msgid_depend",
+    "ALTER TABLE ArticleThreads DROP CONSTRAINT IF EXISTS group_depend",
     "DELETE FROM ArticleThreads WHERE root_message_id NOT IN ( SELECT message_id FROM ArticlePosts )",
-    "ALTER TABLE ArticleThreads ADD FOREIGN KEY(root_message_id) REFERENCES ArticlePosts(message_id) ON DELETE CASCADE",
-    "ALTER TABLE ArticleThreads ADD FOREIGN KEY(newsgroup) REFERENCES Newsgroups(name) ON DELETE CASCADE",
+    "ALTER TABLE ArticleThreads ADD CONSTRAINT msgid_depend FOREIGN KEY(root_message_id) REFERENCES ArticlePosts(message_id) ON DELETE CASCADE",
+    "ALTER TABLE ArticleThreads ADD CONSTRAINT group_depend FOREIGN KEY(newsgroup) REFERENCES Newsgroups(name) ON DELETE CASCADE",
     // article attachments table
+    "ALTER TABLE ArticleAttachments DROP CONSTRAINT IF EXISTS msgid_depend",    
     "DELETE FROM ArticleAttachments WHERE message_id NOT IN ( SELECT message_id FROM ArticlePosts )",
-    "ALTER TABLE ArticleAttachments ADD FOREIGN KEY(message_id) REFERENCES ArticlePosts(message_id) ON DELETE CASCADE",
+    "ALTER TABLE ArticleAttachments ADD CONSTRAINT msgid_depend FOREIGN KEY(message_id) REFERENCES ArticlePosts(message_id) ON DELETE CASCADE",
   }
 
   for _, cmd := range cmds {

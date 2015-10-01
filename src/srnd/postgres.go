@@ -18,6 +18,8 @@ import (
   "fmt"
   "log"
   "os"
+  "strconv"
+  "time"
   _ "github.com/lib/pq"
 )
 
@@ -49,10 +51,70 @@ func (self PostgresDatabase) Close() {
   }
 }
 
-
-// create all tables
-// will panic on fail
 func (self PostgresDatabase) CreateTables() {
+  version := self.getDBVersion()
+  if version == -1 {
+    // no tables
+    self.createTablesV0()
+    self.upgrade0to1()
+  } else if version == 0 {
+    // upgrade to version 1
+    self.upgrade0to1()
+  } else if version == 1 {
+    // we are up to date
+    log.Println("we are up to date at version", version)
+  }
+}
+
+
+func (self PostgresDatabase) upgrade0to1() {
+  // show warning
+  log.Println("!!!!!!!!!!!!!!!")
+  log.Println("!!! WARNING !!!")
+  log.Println("!!!!!!!!!!!!!!!")
+  log.Println("READ --> we will migrate database from version 0 to version 1")
+  log.Println("READ --> you must not interrupt this process or your database will be corrupted")
+  log.Println("READ --> interrupt this rocess NOW or wait for the process to begin")
+  log.Println("READ --> before you migrate please run `pg_dump -U youruser yourdb -f backup.sql`")
+  log.Println("waiting for 1 minute for admin interrupt")
+  time.Sleep(time.Second)
+  //time.Sleep(time.Minute)
+
+  // begin >:D
+  log.Println("migrating... 0 -> 1")
+  // create new tables
+
+  var err error
+
+  cmds := []string{
+    // newsgroups table
+    "CREATE INDEX ON Newsgroups(name)",
+    // article posts table
+    "ALTER TABLE ArticlePosts DROP COLUMN IF EXISTS addr",
+    "ALTER TABLE ArticlePosts ADD COLUMN addr VARCHAR(255)",
+    "ALTER TABLE ArticlePosts ADD FOREIGN KEY(newsgroup) REFERENCES Newsgroups(name) ON DELETE CASCADE",
+    "ALTER TABLE ArticlePosts ADD PRIMARY KEY(message_id)",
+    "CREATE INDEX ON ArticlePosts(ref_id)",
+    // article keys table
+    "ALTER TABLE ArticleKeys ADD FOREIGN KEY(message_id) REFERENCES ArticlePosts(message_id) ON DELETE CASCADE",
+    // article threads table
+    "ALTER TABLE ArticleThreads ADD FOREIGN KEY(root_message_id) REFERENCES ArticlePosts(message_id) ON DELETE CASCADE",
+    "ALTER TABLE ArticleThreads ADD FOREIGN KEY(newsgroup) REFERENCES Newsgroups(name) ON DELETE CASCADE",
+    // article attachments table
+    "ALTER TABLE ArticleAttachments ADD FOREIGN KEY(message_id) REFERENCES ArticlePosts(message_id) ON DELETE CASCADE",
+  }
+
+  for _, cmd := range cmds {
+    log.Println(cmd)
+    _, err = self.conn.Exec(cmd)
+    checkError(err)
+  }
+  self.setDBVersion(1)
+}
+
+
+// create all tables for database version 0
+func (self PostgresDatabase) createTablesV0() {
   tables := make(map[string]string)
 
 
@@ -155,6 +217,11 @@ func (self PostgresDatabase) CreateTables() {
                            made INTEGER NOT NULL,
                            expires INTEGER NOT NULL
                          )`
+
+  tables["Settings"] = `(
+                           name VARCHAR(255) NOT NULL,
+                           value VARCHAR(255) NOT NULL
+                        )`
   var err error
   for k, v := range(tables) {
     // create table
@@ -169,7 +236,36 @@ func (self PostgresDatabase) CreateTables() {
   _, err = self.conn.Exec("CREATE INDEX IF NOT EXISTS ON ArticlePosts(message_id)")
   _, err = self.conn.Exec("CREATE INDEX IF NOT EXISTS ON Articles(message_id)")
   _, err = self.conn.Exec("CREATE INDEX IF NOT EXISTS ON Newsgroups(name)")
+  
+  self.setDBVersion(0)
 }
+
+// set what the current database version is
+func (self PostgresDatabase) setDBVersion(version int) (err error) {
+  log.Println("set db version to", version)
+  _, err = self.conn.Exec("DELETE FROM Settings WHERE name = $1", "version")
+  _, err = self.conn.Exec("INSERT INTO Settings(name, value) VALUES($1, $2)", "version", fmt.Sprintf("%d", version))
+  return
+}
+
+// get the current database version
+func (self PostgresDatabase) getDBVersion() (version int) {
+  var val string
+  var vers int64
+  err := self.conn.QueryRow("SELECT value FROM Settings WHERE name = $1", "version").Scan(&val)
+  if err == nil {
+    vers, err = strconv.ParseInt(val, 10, 32)
+    if err == nil {
+      version = int(vers)
+    } else {
+      log.Fatal("cannot figure out db version", err)
+    }
+  } else {
+    version = -1
+  }
+  return
+}
+
 func (self PostgresDatabase) BanNewsgroup(group string) (err error) {
   _, err = self.conn.Exec("INSERT INTO BannedGroups(newsgroup, time_banned) VALUES($1, $2)", group, timeNow())
   return

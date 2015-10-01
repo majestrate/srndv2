@@ -395,6 +395,18 @@ func (self post) Prefix() string {
   return self.prefix 
 }
 
+func (self post) IsClearnet() bool {
+  return len(self.addr) == encAddrLen()
+}
+
+func (self post) IsI2P() bool {
+  return len(self.addr) == i2pDestHashLen()
+}
+
+func (self post) IsTor() bool {
+  return len(self.addr) == 0
+}
+
 func (self post) RenderTo(wr io.Writer) error {
   _, err := io.WriteString(wr, self.RenderPost())
   return err

@@ -209,11 +209,26 @@ func checkPerms(fname string) {
   }
 }
 
+// number of bytes to use in otp
+func encAddrBytes() int {
+  return 64
+}
+
+// length of an encrypted clearnet address
+func encAddrLen() int {
+  return 88
+}
+
+// length of an i2p dest hash
+func i2pDestHashLen() int {
+  return 44
+}
+
 // given an address
 // generate a new encryption key for it
 // return the encryption key and the encrypted address
 func newAddrEnc(addr string) (string, string) {
-  key_bytes := nacl.RandBytes(64)
+  key_bytes := nacl.RandBytes(encAddrBytes())
   key := base64.StdEncoding.EncodeToString(key_bytes)
   return key, encAddr(addr, key)
 }
@@ -245,6 +260,12 @@ func encAddr(addr, key string) string {
   }
   
   return base64.StdEncoding.EncodeToString(res_bytes)
+}
+
+func checkError(err error) {
+  if err != nil {
+    log.Fatal(err)
+  }
 }
 
 // decrypt an address

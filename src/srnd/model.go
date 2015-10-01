@@ -61,6 +61,10 @@ type PostModel interface {
   RenderBody() string
   RenderPost() string
 
+  IsI2P() bool
+  IsTor() bool
+  IsClearnet() bool
+  
   // truncate body to a certain size
   // return copy
   Truncate() PostModel
@@ -253,6 +257,7 @@ type post struct {
   message_rendered string
   message_id string
   path string
+  addr string
   op bool
   posted int64
   parent string
@@ -301,6 +306,7 @@ func PostModelFromMessage(parent, prefix string, nntp NNTPMessage) PostModel {
   p.op = nntp.OP()
   p.prefix = prefix
   p.parent = parent
+  p.addr = nntp.Addr()
   p.sage = nntp.Sage()
   p.pubkey = nntp.Pubkey()
   for _, att := range nntp.Attachments() {
@@ -416,6 +422,7 @@ func (self post) Truncate() PostModel {
       pubkey: self.pubkey,
       reference: self.reference,
       attachments: self.attachments,
+      addr: self.addr,
     }
   }
   return self

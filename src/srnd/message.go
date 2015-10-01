@@ -85,7 +85,8 @@ type NNTPMessage interface {
   Signed() NNTPMessage
   // get the pubkey for this message if it was signed, otherwise empty string
   Pubkey() string
-  
+  // get the origin encrypted address, i2p destination or empty string for onion posters
+  Addr() string
 }
 
 type MessageReader interface {
@@ -254,15 +255,25 @@ func (self nntpArticle) Name() string {
   return "[Invalid From header]"
 }
 
+func (self nntpArticle) Addr() (addr string) {
+  addr = self.headers.Get("X-Encrypted-Ip", "")
+  if addr == "" {
+    addr = self.headers.Get("X-Encrypted-IP", "")
+  }
+  if addr == "" {
+    addr = self.headers.Get("X-I2P-DestHash", "")
+  }
+  if addr == "" {
+    addr = self.headers.Get("X-I2p-Desthash", "")
+  }
+  return
+}
+
 func (self nntpArticle) Email() string {
   from := self.headers.Get("From", "anonymous <a@no.n>")
-  idx := strings.Index(from, " ")
+  idx := strings.Index(from, "<")
   if idx > 1 {
-    idx_1 := strings.Index(from[:idx], "<")
-    idx_2 := strings.Index(from[:idx], ">")
-    if idx_2 > 0 && idx_1 > 0 && idx_2 > idx_1 {
-      return from[1+idx+idx_1:idx+idx_2]
-    }
+    return from[:idx-1]
   }
   return "[Invalid From header]"
   

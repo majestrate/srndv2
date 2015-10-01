@@ -563,11 +563,11 @@ func (self PostgresDatabase) GetGroupForPage(prefix, frontend, newsgroup string,
 
 func (self PostgresDatabase) GetPostsInGroup(newsgroup string) (models []PostModel, err error) {
 
-  rows, err := self.conn.Query("SELECT newsgroup, message_id, ref_id, name, subject, path, time_posted, message FROM ArticlePosts WHERE newsgroup = $1 ORDER BY time_posted", newsgroup)
+  rows, err := self.conn.Query("SELECT newsgroup, message_id, ref_id, name, subject, path, time_posted, message, addr FROM ArticlePosts WHERE newsgroup = $1 ORDER BY time_posted", newsgroup)
   if err == nil {
     for rows.Next() {
       model := post{}
-      rows.Scan(&model.board, &model.message_id, &model.parent, &model.name, &model.subject, &model.path, &model.posted, &model.message)
+      rows.Scan(&model.board, &model.message_id, &model.parent, &model.name, &model.subject, &model.path, &model.posted, &model.message, &model.addr)
       models = append(models, model)
     }
     rows.Close()
@@ -577,7 +577,7 @@ func (self PostgresDatabase) GetPostsInGroup(newsgroup string) (models []PostMod
 
 func (self PostgresDatabase) GetPostModel(prefix, messageID string) PostModel {
   model := post{}
-  err := self.conn.QueryRow("SELECT newsgroup, message_id, ref_id, name, subject, path, time_posted, message FROM ArticlePosts WHERE message_id = $1 LIMIT 1", messageID).Scan(&model.board, &model.message_id, &model.parent, &model.name, &model.subject, &model.path, &model.posted, &model.message)
+  err := self.conn.QueryRow("SELECT newsgroup, message_id, ref_id, name, subject, path, time_posted, message, addr FROM ArticlePosts WHERE message_id = $1 LIMIT 1", messageID).Scan(&model.board, &model.message_id, &model.parent, &model.name, &model.subject, &model.path, &model.posted, &model.message, &model.addr)
   if err == nil {
     model.op = len(model.parent) == 0
     if len(model.parent) == 0 {
@@ -613,16 +613,16 @@ func (self PostgresDatabase) GetThreadReplyPostModels(prefix, rootpost string, l
   var rows *sql.Rows
   var err error
   if limit > 0 {
-    rows, err = self.conn.Query("SELECT newsgroup, message_id, ref_id, name, subject, path, time_posted, message FROM ArticlePosts WHERE message_id IN ( SELECT message_id FROM ArticlePosts WHERE ref_id = $1 ORDER BY time_posted DESC LIMIT $2 ) ORDER BY time_posted ASC", rootpost, limit)
+    rows, err = self.conn.Query("SELECT newsgroup, message_id, ref_id, name, subject, path, time_posted, message, addr FROM ArticlePosts WHERE message_id IN ( SELECT message_id FROM ArticlePosts WHERE ref_id = $1 ORDER BY time_posted DESC LIMIT $2 ) ORDER BY time_posted ASC", rootpost, limit)
   } else {
-    rows, err = self.conn.Query("SELECT newsgroup, message_id, ref_id, name, subject, path, time_posted, message FROM ArticlePosts WHERE message_id IN ( SELECT message_id FROM ArticlePosts WHERE ref_id = $1 ) ORDER BY time_posted ASC", rootpost)
+    rows, err = self.conn.Query("SELECT newsgroup, message_id, ref_id, name, subject, path, time_posted, message, addr FROM ArticlePosts WHERE message_id IN ( SELECT message_id FROM ArticlePosts WHERE ref_id = $1 ) ORDER BY time_posted ASC", rootpost)
   }
   
   if err == nil {
     for rows.Next() {
       model := post{}
       model.prefix = prefix
-      rows.Scan(&model.board, &model.message_id, &model.parent, &model.name, &model.subject, &model.path, &model.posted, &model.message)
+      rows.Scan(&model.board, &model.message_id, &model.parent, &model.name, &model.subject, &model.path, &model.posted, &model.message, &model.addr)
       model.op = len(model.parent) == 0
       if len(model.parent) == 0 {
         model.parent = model.message_id
@@ -832,7 +832,7 @@ func (self PostgresDatabase) RegisterArticle(message NNTPMessage) {
     return
   }
   // insert article post
-  _, err = self.conn.Exec("INSERT INTO ArticlePosts(newsgroup, message_id, ref_id, name, subject, path, time_posted, message) VALUES($1, $2, $3, $4, $5, $6, $7, $8)", group, msgid, message.Reference(), message.Name(), message.Subject(), message.Path(), message.Posted(), message.Message())
+  _, err = self.conn.Exec("INSERT INTO ArticlePosts(newsgroup, message_id, ref_id, name, subject, path, time_posted, message, addr) VALUES($1, $2, $3, $4, $5, $6, $7, $8, $9)", group, msgid, message.Reference(), message.Name(), message.Subject(), message.Path(), message.Posted(), message.Message(), message.Addr())
   if err != nil {
     log.Println("cannot insert article post", err)
     return

@@ -257,15 +257,23 @@ func (self nntpArticle) Name() string {
 
 func (self nntpArticle) Addr() (addr string) {
   addr = self.headers.Get("X-Encrypted-Ip", "")
-  if addr == "" {
-    addr = self.headers.Get("X-Encrypted-IP", "")
+  if addr != "" {
+    return
   }
-  if addr == "" {
-    addr = self.headers.Get("X-I2P-DestHash", "")
+
+  addr = self.headers.Get("X-Encrypted-IP", "")
+  if addr != "" {
+    return
   }
-  if addr == "" {
-    addr = self.headers.Get("X-I2p-Desthash", "")
+
+  addr = self.headers.Get("X-I2P-DestHash", "")
+  if addr != "" {
+    return
   }
+  if addr != "" {
+    return
+  }  
+  addr = self.headers.Get("X-I2p-Desthash", "")
   return
 }
 

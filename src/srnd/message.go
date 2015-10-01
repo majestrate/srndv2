@@ -270,9 +270,7 @@ func (self nntpArticle) Addr() (addr string) {
   if addr != "" && addr != "None" {
     return
   }
-  if addr != "" {
-    return
-  }  
+  
   addr = self.headers.Get("X-I2p-Desthash", "")
   return
 }

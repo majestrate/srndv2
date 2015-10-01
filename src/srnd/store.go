@@ -172,11 +172,11 @@ func (self articleStore) StorePost(nntp NNTPMessage) (err error) {
       go self.saveAttachment(att)
     }
   } else {
-    // record a tripcode
-    self.database.RegisterSigned(nntp.MessageID(), nntp.Pubkey())
     // we have inner data
     // store the signed data
     self.database.RegisterArticle(nntp_inner)
+    // record a tripcode
+    self.database.RegisterSigned(nntp.MessageID(), nntp.Pubkey())
     for _, att := range nntp_inner.Attachments() {
       go self.saveAttachment(att)
     }

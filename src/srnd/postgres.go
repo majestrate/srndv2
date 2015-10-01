@@ -77,8 +77,8 @@ func (self PostgresDatabase) upgrade0to1() {
   log.Println("READ --> interrupt this rocess NOW or wait for the process to begin")
   log.Println("READ --> before you migrate please run `pg_dump -U youruser yourdb -f backup.sql`")
   log.Println("waiting for 1 minute for admin interrupt")
-  time.Sleep(time.Second)
-  //time.Sleep(time.Minute)
+  // time.Sleep(time.Second)
+  time.Sleep(time.Minute)
 
   // begin >:D
   log.Println("migrating... 0 -> 1")

@@ -4,7 +4,6 @@
 	* rewrite nntp link code to not suck as bad
 	* remove rabbitmq dependancy
 	* add indexes to postgres tables
-	* for replies to threads with no root post insert a placeholder
 	* all thumbnails are jpegs
 	* add video thumbnailing
 	* use ffmpegthumbnailer for thumbnails except for gif which uses mogrify

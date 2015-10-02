@@ -55,7 +55,6 @@ func (self templateEngine) reloadAllTemplates() {
 }
 
 // update the link -> url cache given our current model
-// return new link table
 func updateLinkCache() {
   // clear existing cache
   template.links = make(map[string]string)
@@ -70,6 +69,7 @@ func updateLinkCache() {
   }
 }
 
+// update the link -> url cache given a board page
 func updateLinkCacheForBoard(page BoardModel) {
   // for each thread in page
   for _, thread := range page.Threads() {
@@ -77,6 +77,7 @@ func updateLinkCacheForBoard(page BoardModel) {
   }
 }
 
+// update link -> url cache given a thread
 func updateLinkCacheForThread(thread ThreadModel) {
   h := thread.OP().ShortHash()
   u := thread.OP().PostURL()
@@ -319,7 +320,7 @@ func (self templateEngine) genFrontPage(top_count int, frontend_name, outfile st
 
   param := make(map[string]interface{})
   sort.Sort(frontpage_graph)
-  param["graph"] = frontpage_graph
+  param["graph"] = frontpage_graph[:top_count]
   param["frontend"] = frontend_name
   param["totalposts"] = db.ArticleCount()
   _, err = io.WriteString(wr, self.renderTemplate("frontpage.mustache", param))

@@ -313,6 +313,12 @@ func (self httpFrontend) regenOnModEvent(newsgroup, msgid, root string, page int
   self.regenGroupChan <- groupRegenRequest{newsgroup, int(page)}
 }
 
+// handle newboard page
+func (self httpFrontend) handle_newboard(wr http.ResponseWriter, r *http.Request) {
+  param := make(map[string]string)
+  param["prefix"] = self.prefix
+  io.WriteString(wr, template.renderTemplate("newboard.mustache", param))
+}
 
 // handle new post via http request for a board
 func (self httpFrontend) handle_postform(wr http.ResponseWriter, r *http.Request, board string) {
@@ -644,6 +650,8 @@ func (self httpFrontend) Mainloop() {
   self.httpmux.Path("/captcha/img").HandlerFunc(self.new_captcha).Methods("GET")
   self.httpmux.Path("/captcha/{f}").Handler(captcha.Server(350, 175)).Methods("GET")
   self.httpmux.Path("/captcha/new.json").HandlerFunc(self.new_captcha_json).Methods("GET")
+  // helper handlers
+  self.httpmux.Path("/new/").HandlerFunc(self.handle_newboard).Methods("GET")
   // liveui handlers
   self.httpmux.Path("/live/").HandlerFunc(self.handle_liveui_index).Methods("GET")
   self.httpmux.Path("/live/options").HandlerFunc(self.handle_liveui_options).Methods("GET")

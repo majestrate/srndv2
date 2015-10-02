@@ -39,9 +39,13 @@ func createHttpModUI(frontend httpFrontend) httpModUI {
 }
 
 func extractGroup(param map[string]interface{}) string {
-  group, ok := param["newsgroup"]
+  return extractParam(param, "newsgroup")
+}
+
+func extractParam(param map[string]interface{}, k string) string {
+  v, ok := param[k]
   if ok {
-    return group.(string)
+    return v.(string)
   }
   return ""
 }
@@ -158,6 +162,36 @@ func (self httpModUI) getAdminFunc(funcname string) AdminFunc {
         return "nuke started", nil
       } else {
         return "cannot nuke", errors.New("invalid parameters")
+      }
+    }
+  } else if funcname == "pubkey.add" {
+    return func(param map[string]interface{}) (string, error) {
+      pubkey := extractParam(param, "pubkey")
+      log.Println("pubkey.add", pubkey)
+      if self.database.CheckModPubkeyGlobal(pubkey) {
+        return "already added", nil
+      } else {
+        err := self.database.MarkModPubkeyGlobal(pubkey)
+        if err == nil {
+          return "added", nil
+        } else {
+          return "error", err
+        }
+      }
+    }
+  } else if funcname == "pubkey.del" {
+    return func(param map[string]interface{}) (string, error) {
+      pubkey := extractParam(param, "pubkey")
+      log.Println("pubkey.del", pubkey)
+      if self.database.CheckModPubkeyGlobal(pubkey) {
+        err := self.database.UnMarkModPubkeyGlobal(pubkey)
+        if err == nil {
+          return "removed", nil
+        } else {
+          return "error", err
+        }
+      } else {
+        return "key not trusted", nil
       }
     }
   }

@@ -570,7 +570,7 @@ func (self httpFrontend) handle_postform(wr http.ResponseWriter, r *http.Request
   msg_id := nntp.headers.Get("References", nntp.MessageID())
   // render response as success
   url = fmt.Sprintf("%sthread-%s.html", self.prefix, ShortHashMessageID(msg_id))
-  io.WriteString(wr, template.renderTemplate("post_success.mustache", map[string]string {"message_id" : nntp.MessageID(), "redirect_url" : url}))
+  io.WriteString(wr, template.renderTemplate("post_success.mustache", map[string]string {"prefix" : self.prefix,  "message_id" : nntp.MessageID(), "redirect_url" : url}))
 }
 
 

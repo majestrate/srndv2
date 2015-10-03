@@ -517,6 +517,7 @@ func (self httpFrontend) handle_postform(wr http.ResponseWriter, r *http.Request
 
   // make error template param
   resp_map := make(map[string]string)
+  resp_map["prefix"] = self.prefix
   resp_map["redirect_url"] = self.prefix + url
 
   if len(nntp.attachments) == 0 && len(msg) == 0 {

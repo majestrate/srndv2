@@ -1,8 +1,8 @@
 package nacl
 
-
-// #include <sodium.h>
+// #cgo freebsd CFLAGS: -I/usr/local/include
 // #cgo LDFLAGS: -lsodium
+// #include <sodium.h>
 import "C"
 
 func randbytes(size C.size_t) *Buffer {

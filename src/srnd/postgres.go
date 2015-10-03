@@ -287,7 +287,7 @@ func (self PostgresDatabase) UnbanNewsgroup(group string) (err error) {
 
 func (self PostgresDatabase) NewsgroupBanned(group string) (banned bool, err error) {
   var count int64
-  err = self.conn.QueryRow("SELECT COUNT(newsgroup) FROM BannedGroups WHERE newsgroup = $1", group).Scan(count)
+  err = self.conn.QueryRow("SELECT COUNT(newsgroup) FROM BannedGroups WHERE newsgroup = $1", group).Scan(&count)
   banned = count > 0
   return
 }

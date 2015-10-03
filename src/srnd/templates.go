@@ -320,7 +320,11 @@ func (self templateEngine) genFrontPage(top_count int, frontend_name, outfile st
 
   param := make(map[string]interface{})
   sort.Sort(frontpage_graph)
-  param["graph"] = frontpage_graph[:top_count]
+  if len(frontpage_graph) < top_count {
+    param["graph"] = frontpage_graph
+  } else {
+    param["graph"] = frontpage_graph[:top_count]
+  }
   param["frontend"] = frontend_name
   param["totalposts"] = db.ArticleCount()
   _, err = io.WriteString(wr, self.renderTemplate("frontpage.mustache", param))

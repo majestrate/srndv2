@@ -1,6 +1,7 @@
 package nacl
 
 // #cgo freebsd CFLAGS: -I/usr/local/include
+// #cgo freebsd LDFLAGS: -L/usr/local/lib
 // #cgo LDFLAGS: -lsodium
 // #include <sodium.h>
 import "C"

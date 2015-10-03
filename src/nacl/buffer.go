@@ -1,10 +1,10 @@
 package nacl
 
+
 // #include <sodium.h>
-// #cgo pkg-config: libsodium
+// #cgo LDFLAGS: -lsodium
 //
 // unsigned char * deref_uchar(void * ptr) { return (unsigned char*) ptr; }
-//
 //
 import "C"
 

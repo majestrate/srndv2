@@ -1,7 +1,8 @@
 package nacl
 
+
 // #include <sodium.h>
-// #cgo pkg-config: libsodium
+// #cgo LDFLAGS: -lsodium
 import "C"
 
 import (

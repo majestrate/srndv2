@@ -38,10 +38,10 @@ func main() {
           // TODO: implement pruning old threads
           // srnd.ClearThreadsTool()
         } else {
-          fmt.Fprintf(os.Stdout, "Usage: %s tool [rethumb|prune-threads]\n")
+          fmt.Fprintf(os.Stdout, "Usage: %s tool [rethumb|prune-threads]\n", os.Args[0])
         }
       } else {
-        fmt.Fprintf(os.Stdout, "Usage: %s tool [rethumb|prune-threads]\n")
+        fmt.Fprintf(os.Stdout, "Usage: %s tool [rethumb|prune-threads]\n", os.Args[0])
       }
     } else {
       log.Println("Invalid action:",action)

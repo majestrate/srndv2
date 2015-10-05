@@ -585,7 +585,7 @@ func (self nntpConnection) runConnection(daemon NNTPDaemon, inbound, stream, rea
       }
     }
   }
-  log.Println("run connection got error", err)
+  log.Println(self.name, "got error", err)
   if ! inbound {
     // send quit on outbound
     conn.PrintfLine("QUIT")

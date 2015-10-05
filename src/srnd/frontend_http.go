@@ -414,6 +414,9 @@ func (self httpFrontend) handle_postform(wr http.ResponseWriter, r *http.Request
     io.WriteString(wr, errmsg)
     return
   }
+
+  var subject string
+  
   for {
     part, err := mp_reader.NextPart()
     if err == nil {
@@ -432,14 +435,7 @@ func (self httpFrontend) handle_postform(wr http.ResponseWriter, r *http.Request
       
       // check for values we want
       if partname == "subject" {
-        subject := part_buff.String()
-        if len(subject) == 0 {
-          subject = "None"
-        }
-        nntp.headers.Set("Subject", subject)
-        if isSage(subject) {
-          nntp.headers.Set("X-Sage", "1")
-        }
+        subject = part_buff.String()
       } else if partname == "name" {
         name := part_buff.String()
         if len(name) == 0 {
@@ -534,6 +530,15 @@ func (self httpFrontend) handle_postform(wr http.ResponseWriter, r *http.Request
     io.WriteString(wr, template.renderTemplate("post_fail.mustache", resp_map))
     return
   }
+  
+  // set subject
+  if len(subject) == 0 {
+    subject = "None"
+  }
+  nntp.headers.Set("Subject", subject)
+  if isSage(subject) {
+    nntp.headers.Set("X-Sage", "1")
+  }  
   // set message
   nntp.message = createPlaintextAttachment(msg)
   // set date

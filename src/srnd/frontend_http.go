@@ -415,7 +415,7 @@ func (self httpFrontend) handle_postform(wr http.ResponseWriter, r *http.Request
     return
   }
 
-  var subject string
+  var subject, name string
   
   for {
     part, err := mp_reader.NextPart()
@@ -437,22 +437,7 @@ func (self httpFrontend) handle_postform(wr http.ResponseWriter, r *http.Request
       if partname == "subject" {
         subject = part_buff.String()
       } else if partname == "name" {
-        name := part_buff.String()
-        if len(name) == 0 {
-          name = "Anonymous"
-        } else {
-          idx := strings.Index(name, "#")
-          // tripcode
-          if idx >= 0 {
-            tripcode_privkey = parseTripcodeSecret(name[idx+1:])
-            name = strings.Trim(name[:idx], "\t ")
-            if name == "" {
-              name = "Anonymous"
-            }
-          }
-        }
-        nntp.headers.Set("From", nntpSanitize(fmt.Sprintf("%s <%s@%s>", name, name, self.name)))
-        nntp.headers.Set("Message-ID", genMessageID(self.name))
+        name = part_buff.String()
       } else if partname == "message" {
         msg = part_buff.String()
       } else if partname == "reference" {
@@ -538,7 +523,25 @@ func (self httpFrontend) handle_postform(wr http.ResponseWriter, r *http.Request
   nntp.headers.Set("Subject", subject)
   if isSage(subject) {
     nntp.headers.Set("X-Sage", "1")
-  }  
+  }
+
+  // set name
+  if len(name) == 0 {
+    name = "Anonymous"
+  } else {
+    idx := strings.Index(name, "#")
+    // tripcode
+    if idx >= 0 {
+      tripcode_privkey = parseTripcodeSecret(name[idx+1:])
+      name = strings.Trim(name[:idx], "\t ")
+      if name == "" {
+        name = "Anonymous"
+      }
+    }
+  }
+  nntp.headers.Set("From", nntpSanitize(fmt.Sprintf("%s <anon@%s>", name, self.name)))
+  nntp.headers.Set("Message-ID", genMessageID(self.name))
+  
   // set message
   nntp.message = createPlaintextAttachment(msg)
   // set date

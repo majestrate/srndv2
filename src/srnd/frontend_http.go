@@ -403,7 +403,7 @@ func (self httpFrontend) handle_postform(wr http.ResponseWriter, r *http.Request
   nntp.headers.Set("Newsgroups", board)
   
   // redirect url
-  url := self.prefix
+  url := ""
   // mime part handler
   var part_buff bytes.Buffer
   mp_reader, err := r.MultipartReader()
@@ -499,14 +499,22 @@ func (self httpFrontend) handle_postform(wr http.ResponseWriter, r *http.Request
   // make error template param
   resp_map := make(map[string]string)
   resp_map["prefix"] = self.prefix
-  resp_map["redirect_url"] = self.prefix + url
+  // set redirect url
+  if len(url) > 0 {
+    // if we explicitly know the url use that
+    resp_map["redirect_url"] = self.prefix + url
+  } else {
+    // if our referer is saying we are from /new/ page use that
+    // otherwise use prefix
+    if strings.HasSuffix(r.Referer(), self.prefix+"new/") {
+      resp_map["redirect_url"] = self.prefix + "new/"
+    } else {
+      resp_map["redirect_url"] = self.prefix
+    }
+  }
 
   if len(nntp.attachments) == 0 && len(msg) == 0 {
     post_fail += "no message. "
-  }
-
-  if ! captcha_solved {
-    post_fail += "no captcha."
   }
   
   if len(post_fail) > 0 {

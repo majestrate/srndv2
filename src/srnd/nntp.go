@@ -202,6 +202,10 @@ func (self nntpConnection) checkMIMEHeader(daemon NNTPDaemon, hdr textproto.MIME
     // invalid message id or reference
     reason = "invalid reference or message id is '" + msgid + "' reference is '"+reference + "'"
     return
+  } else if daemon.database.ArticleBanned(msgid) {
+    reason = "article banned"
+  } else if reference != "" && daemon.database.ArticleBanned(reference) {
+    reason = "thread banned"
   } else if daemon.database.HasArticleLocal(msgid) {
     // we already have this article locally
     reason = "have this article locally"
@@ -339,6 +343,7 @@ func (self nntpConnection) handleLine(daemon NNTPDaemon, code int, line string, 
             code = 439
             log.Println(self.name, "rejected", msgid, reason)
             _, err = io.Copy(ioutil.Discard, dr)
+            err = daemon.database.BanArticle(msgid, reason)
           } else {
             // check if we don't have the rootpost
             reference := hdr.Get("References")
@@ -439,6 +444,7 @@ func (self nntpConnection) startReader(daemon NNTPDaemon, conn *textproto.Conn) 
             log.Println(self.name, "discarding", msgid, reason)
             // we don't want it, discard
             io.Copy(ioutil.Discard, dr)
+            daemon.database.BanArticle(msgid, reason)
           } else {
             // yeh we want it open up a file to store it in
             f := daemon.store.CreateTempFile(msgid)

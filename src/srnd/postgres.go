@@ -393,16 +393,24 @@ func (self PostgresDatabase) CheckModPubkey(pubkey string) bool {
 }
 
 func (self PostgresDatabase) BanArticle(messageID, reason string) error {
+  if self.ArticleBanned(messageID) {
+    log.Println(messageID, "already banned")
+    return nil
+  }
   _, err := self.conn.Exec("INSERT INTO BannedArticles(message_id, time_banned, ban_reason) VALUES($1, $2, $3)", messageID, timeNow(), reason)
   return err
 }
 
-func (self PostgresDatabase) CheckArticleBanned(messageID string) (result bool, err error) {
+func (self PostgresDatabase) ArticleBanned(messageID string) (result bool) {
 
   var count int64
-  err = self.conn.QueryRow("SELECT COUNT(message_id) FROM BannedArticles WHERE message_id = $1", messageID).Scan(&count)
-  result = count > 0
-  return 
+  err := self.conn.QueryRow("SELECT COUNT(message_id) FROM BannedArticles WHERE message_id = $1", messageID).Scan(&count)
+  if err == nil {
+    result = count > 0
+  } else {
+    log.Println("error checking if article is banned", err)
+  }
+  return
 }
 
 func (self PostgresDatabase) GetEncAddress(addr string) (encaddr string, err error) {

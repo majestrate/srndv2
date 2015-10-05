@@ -223,8 +223,10 @@ func (self modEngine) DeletePost(msgid string, regen RegenFunc) (err error) {
           delfiles = append(delfiles, img, thm)
         }
       }
-      // delete article from database
+      // delete article from post database
       self.database.DeleteArticle(delmsg)
+      // ban article
+      self.database.BanArticle(delmsg, "deleted by moderator")
     }
     // delete all files
     for _, f := range delfiles {

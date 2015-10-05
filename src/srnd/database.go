@@ -138,7 +138,7 @@ type Database interface {
   BanArticle(messageID, reason string) error
 
   // check if an article is banned or not
-  CheckArticleBanned(messageID string) (bool, error)
+  ArticleBanned(messageID string) bool
 
   // Get ip address given the encrypted version
   // return emtpy string if we don't have it

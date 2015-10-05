@@ -328,7 +328,6 @@ func (self httpFrontend) handle_postform(wr http.ResponseWriter, r *http.Request
   
   // post fail message
   post_fail := ""
-  captcha_solved := false
 
   // post message
   msg := ""
@@ -469,12 +468,12 @@ func (self httpFrontend) handle_postform(wr http.ResponseWriter, r *http.Request
         if err == nil && ok {
           if captcha.VerifyString(captcha_id.(string), captcha_solution) {
             // captcha is valid
-            captcha_solved = true
           } else {
             // captcha is not valid
             post_fail += "failed captcha. "
           }
         } else {
+          // captcha has no cookies
           post_fail += "enable cookies. "
         }
       }

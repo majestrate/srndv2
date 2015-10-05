@@ -324,6 +324,9 @@ func (self nntpConnection) handleLine(daemon NNTPDaemon, code int, line string, 
         if daemon.database.HasArticle(msgid) {
           // yeh don't want it
           conn.PrintfLine("438 %s", msgid)
+        } else if daemon.database.ArticleBanned(msgid) {
+          // it's banned we don't want it
+          conn.PrintfLine("438 %s", msgid)
         } else {
           // yes we do want it and we don't have it
           conn.PrintfLine("238 %s", msgid)

@@ -46,7 +46,6 @@ type httpFrontend struct {
   webroot_dir string
   template_dir string
   static_dir string
-  liveui_static_dir string
   
   regen_threads int
   regen_on_start bool
@@ -222,48 +221,6 @@ func (self httpFrontend) new_captcha_json(wr http.ResponseWriter, r *http.Reques
   resp["url"] = fmt.Sprintf("%s%s.png", self.prefix, captcha_id)
   enc := json.NewEncoder(wr)
   enc.Encode(resp)
-}
-
-// handle a request to the websocket ui
-func (self httpFrontend) handle_liveui(wr http.ResponseWriter, r *http.Request) {
-  ws, err := self.upgrader.Upgrade(wr, r, nil)
-  if err == nil {
-    // we upgraded fine
-    // make a connection
-    //conn := createConnection(ws)
-
-    // reader loop
-    go func() {
-      for {
-
-          ws.Close()
-          return
-      }
-    }()
-    
-    for {
-      select {
-      //case json_data := <- conn.to_daemon_chan:
-      //case msg := <- conn.from_daemon_chan:
-      //  err := ws.WriteJSON(msg)
-        
-      }
-    }
-  }
-}
-
-
-// write out a json object of the liveui's options
-// this includes site prefix so the js ui knows where it is
-func (self httpFrontend) handle_liveui_options(wr http.ResponseWriter, r *http.Request) {
-  resp := make(map[string]string)
-  resp["prefix"] = self.prefix
-  enc := json.NewEncoder(wr)
-  enc.Encode(resp)
-}
-
-func (self httpFrontend) handle_liveui_index(wr http.ResponseWriter, r *http.Request) {
-  io.WriteString(wr, template.renderTemplate("live.mustache", map[string]string{ "prefix" : self.prefix }))
 }
 
 // regen every page of the board
@@ -668,11 +625,6 @@ func (self httpFrontend) Mainloop() {
   self.httpmux.Path("/captcha/new.json").HandlerFunc(self.new_captcha_json).Methods("GET")
   // helper handlers
   self.httpmux.Path("/new/").HandlerFunc(self.handle_newboard).Methods("GET")
-  // liveui handlers
-  self.httpmux.Path("/live/").HandlerFunc(self.handle_liveui_index).Methods("GET")
-  self.httpmux.Path("/live/options").HandlerFunc(self.handle_liveui_options).Methods("GET")
-  self.httpmux.Path("/live/ws").HandlerFunc(self.handle_liveui).Methods("GET")
-
   
   var err error
 

@@ -6,4 +6,7 @@ overchan nntp daemon
 
 status: working
 
-for build instructions see [this repo](https://github.com/majestrate/nntpchan)
+to use, start [here](https://github.com/majestrate/nntpchan/blob/master/README.md)
+
+full documentation located [here](https://github.com/majestrate/nntpchan/tree/master/doc)
+

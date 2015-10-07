@@ -233,7 +233,9 @@ func (self modEngine) DeletePost(msgid string, regen RegenFunc) (err error) {
       log.Printf("delete file: %s", f)
       os.Remove(f)
     }
-    regen(group, msgid, ref, int(page))
+    if regen != nil {
+      regen(group, msgid, ref, int(page))
+    }
   }
   return nil
 }

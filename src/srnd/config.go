@@ -25,12 +25,22 @@ type APIConfig struct {
   srndAddr string
   frontendAddr string
 }
+
+// config for live frontend
+type liveConfig struct {
+  bindAddr string
+  prefix string
+  docroot_dir string
+  wsRead, wsWrite int
+}
+
 type SRNdConfig struct { 
   daemon map[string]string
   store map[string]string
   database map[string]string
   feeds []FeedConfig
   frontend map[string]string
+  live *liveConfig
   system map[string]string
   worker map[string]string
 }
@@ -104,6 +114,15 @@ func GenSRNdConfig() error {
   sect.Add("port", "5432")
   sect.Add("user", "root")
   sect.Add("password", "root")
+  
+  // livechan style frontend
+  sect = conf.NewSection("live-frontend")
+  sect.Add("enable", "1")
+  sect.Add("bind", "[::]:18080")
+  sect.Add("prefix", "/")
+  sect.Add("docroot", "contrib/live")
+  sect.Add("wsRead", "160000")
+  sect.Add("wsWrite", "160000")
   
   // baked in static html frontend
   sect = conf.NewSection("frontend")
@@ -190,6 +209,25 @@ func ReadConfig() *SRNdConfig {
     }
   }
   
+  // load live frontend config
+
+  s, err = conf.Section("live-frontend")
+  if err == nil {
+    // we have it
+    opts := s.Options()
+    val, ok := opts["enable"]
+    if ok && val == "1" {
+      // we have the live frontend enabled
+      sconf.live = new(liveConfig)
+      sconf.live.bindAddr = opts["bind"]
+      sconf.live.prefix  = opts["prefix"]
+      sconf.live.docroot_dir = opts["docroot"]
+      sconf.live.wsRead = mapGetInt(opts, "wsRead", 1024 * 8 * 1024)
+      sconf.live.wsWrite = mapGetInt(opts, "wsWrite", 1024 * 8 * 1024)
+      log.Println("liveui enabled")
+    }
+  }
+
   // begin load feeds.ini
 
   fname = "feeds.ini"

@@ -9,7 +9,6 @@ import (
   "github.com/dchest/captcha"
   "github.com/gorilla/mux"
   "github.com/gorilla/sessions"
-  "github.com/gorilla/websocket"
   "github.com/majestrate/srndv2/src/nacl"
   "bytes"
   "encoding/json"
@@ -60,8 +59,6 @@ type httpFrontend struct {
   ukkoTicker *time.Ticker
   
   store *sessions.CookieStore
-
-  upgrader websocket.Upgrader
 }
 
 // do we allow this newsgroup?

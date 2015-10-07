@@ -125,8 +125,80 @@ func createPlaintextAttachment(msg string) nntpAttachment {
 }
 
 
+// take in a json object from the liveui and make it into an nntp attachment
+func createAttachmentFromJSON(j interface{}) NNTPAttachment {
 
+  var att map[string]interface{}
+  switch j.(type) {
+  default:
+    log.Println("invalid json for attachment")
+    return nil
+  case map[string]interface{}:
+    att = j.(map[string]interface{})
+  }
 
+  var fname_str, content_type_str string
+
+  fname, _ := att["filename"]
+  switch fname.(type) {
+  default:
+    log.Println("invalid filename type for attachment")
+    return nil
+  case string:
+    fname_str = fname.(string)
+    break
+  }
+  
+  idx := strings.LastIndex(fname_str, ".")
+  ext := ".txt"
+  if idx > 0 {
+    ext = fname_str[idx:]
+  }
+
+  content_type, _ := att["content_type"]
+  switch content_type.(type) {
+  default:
+    log.Println("invalid content-type for attachment")
+    return nil
+  case string:
+    content_type_str = content_type.(string)
+    break
+  }
+  
+ 
+  media_type, _ , err := mime.ParseMediaType(content_type_str)
+  var data []byte
+  if err == nil {
+    buff := new(bytes.Buffer)
+    body, _ := att["data"]
+    switch body.(type) {
+    default:
+      log.Println("invalid attachment type")
+      return nil
+    case string:
+      data, err = base64.StdEncoding.DecodeString(body.(string))
+    }
+    if err == nil {
+      buff.Write(data)
+      sha := sha512.Sum512(data)
+      hashstr := base32.StdEncoding.EncodeToString(sha[:])
+      fpath_str := hashstr+ext
+      return nntpAttachment{
+        body: *buff,
+        mime: media_type,
+        filename: fname_str,
+        filepath: fpath_str,
+        ext: ext,
+        hash: sha[:],
+      }
+    } else {
+      log.Println("failed to decode attachment data", err)
+    }
+  } else {
+    log.Println("invalid content type", content_type_str)
+  }
+  return nil
+}
 
 func readAttachmentFromMimePart(part *multipart.Part) NNTPAttachment {
   hdr := part.Header

@@ -196,13 +196,25 @@ func (self NNTPDaemon) Run() {
   if self.debug {
     log.Println("debug mode activated")
   }
+
+  var live_frontend Frontend
+  if self.conf.live != nil {
+    live_frontend = NewLiveFrontend(&self, self.conf.live)
+  }
   
   // do we enable the frontend?
   if self.conf.frontend["enable"] == "1" {
     log.Printf("frontend %s enabled", self.conf.frontend["name"]) 
     http_frontend := NewHTTPFrontend(&self, self.conf.frontend, self.conf.worker["url"])
     nntp_frontend := NewNNTPFrontend(&self, self.conf.frontend["nntp"])
-    self.frontend = MuxFrontends(http_frontend, nntp_frontend)
+    if live_frontend ==  nil {
+      self.frontend = MuxFrontends(http_frontend, nntp_frontend)
+    } else {
+      self.frontend = MuxFrontends(http_frontend, nntp_frontend, live_frontend)
+    }
+    go self.frontend.Mainloop()
+  } else if live_frontend != nil {
+    self.frontend = live_frontend
     go self.frontend.Mainloop()
   }
 

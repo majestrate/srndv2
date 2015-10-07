@@ -248,7 +248,7 @@ func (self nntpArticle) Newsgroup() string {
 
 func (self nntpArticle) Name() string {
   from := self.headers.Get("From", "anonymous <a@no.n>")
-  idx := strings.Index(from, " ")
+  idx := strings.Index(from, "<")
   if idx > 1 {
     return from[:idx]
   }

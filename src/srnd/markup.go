@@ -5,6 +5,7 @@
 package srnd
 
 import (
+  "github.com/mvdan/xurls"
   "html"
   "regexp"
   "strings"
@@ -12,7 +13,6 @@ import (
 
 // copypasted from https://stackoverflow.com/questions/161738/what-is-the-best-regular-expression-to-check-if-a-string-is-a-valid-url
 // var re_external_link = regexp.MustCompile(`((?:(?:https?|ftp):\/\/)(?:\S+(?::\S*)?@)?(?:(?!(?:10|127)(?:\.\d{1,3}){3})(?!(?:169\.254|192\.168)(?:\.\d{1,3}){2})(?!172\.(?:1[6-9]|2\d|3[0-1])(?:\.\d{1,3}){2})(?:[1-9]\d?|1\d\d|2[01]\d|22[0-3])(?:\.(?:1?\d{1,2}|2[0-4]\d|25[0-5])){2}(?:\.(?:[1-9]\d?|1\d\d|2[0-4]\d|25[0-4]))|(?:(?:[a-z\u00a1-\uffff0-9]-*)*[a-z\u00a1-\uffff0-9]+)(?:\.(?:[a-z\u00a1-\uffff0-9]-*)*[a-z\u00a1-\uffff0-9]+)*(?:\.(?:[a-z\u00a1-\uffff]{2,}))\.?)(?::\d{2,5})?(?:[/?#]\S*)?)`);
-var re_external_link = regexp.MustCompile(`((https?|ftp):\/\/[\w\d\.\-_]*\/[\w\d\.\/\-_\?]*)`);
 var re_backlink = regexp.MustCompile(`>> ?([0-9a-f]{10})`)
 
 // parse backlink
@@ -22,7 +22,7 @@ func backlink(word string) (markup string) {
     link = strings.Trim(link[2:], " ")
     url := template.findLink(link)
     if len(url) == 0 {
-      return "&gt;&gt;" + link[2:]
+      return "<span class='memearrows'>&gt;&gt;" + link[2:] + "</span>"
     }
     // backlink exists
     return`<a href="`+url+`">&gt;&gt;` + link + "</a>"
@@ -52,9 +52,9 @@ func formatline(line string) (markup string) {
         if re_backlink.MatchString(word) {
           markup += backlink(word)
         } else {
-          // linkify it as needed
-          line = html.EscapeString(word)
-          markup += re_external_link.ReplaceAllString(line, `<a href="$1">$1</a>`)
+          // linkify as needed
+          word = html.EscapeString(word)
+          markup += xurls.Strict.ReplaceAllString(`<a href="$1">$1</a>`, word)
         }
         markup += " "
       }
@@ -66,9 +66,8 @@ func formatline(line string) (markup string) {
 
 // format lines inside a code tag
 func formatcodeline(line string) (markup string) {
-  markup += "<p>"
   markup += html.EscapeString(line)
-  markup += "</p>"
+  markup += "\n"
   return
 }
 

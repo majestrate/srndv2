@@ -54,7 +54,7 @@ func formatline(line string) (markup string) {
         } else {
           // linkify as needed
           word = html.EscapeString(word)
-          markup += xurls.Strict.ReplaceAllString(`<a href="$1">$1</a>`, word)
+          markup += xurls.Strict.ReplaceAllString(word, `<a href="$1">$1</a>`)
         }
         markup += " "
       }

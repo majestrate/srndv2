@@ -19,7 +19,6 @@ import (
   "log"
   "os"
   "strconv"
-  "time"
   _ "github.com/lib/pq"
 )
 
@@ -68,17 +67,6 @@ func (self PostgresDatabase) CreateTables() {
 
 
 func (self PostgresDatabase) upgrade0to1() {
-  // show warning
-  log.Println("!!!!!!!!!!!!!!!")
-  log.Println("!!! WARNING !!!")
-  log.Println("!!!!!!!!!!!!!!!")
-  log.Println("READ --> we will migrate database from version 0 to version 1")
-  log.Println("READ --> you must not interrupt this process or your database will be corrupted")
-  log.Println("READ --> interrupt this rocess NOW or wait for the process to begin")
-  log.Println("READ --> before you migrate please run `pg_dump -U youruser yourdb -f backup.sql`")
-  log.Println("waiting for 1 minute for admin interrupt")
-  // time.Sleep(time.Second)
-  time.Sleep(time.Minute)
 
   // begin >:D
   log.Println("migrating... 0 -> 1")

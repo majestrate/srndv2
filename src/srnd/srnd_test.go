@@ -1,25 +1,15 @@
-//
-// tests.go -- unit tests
-//
-
 package srnd
 
+import "testing"
 
-import (
-  "testing"
-)
+func TestGenFeedsConfig(t *testing.T) {
 
+	err := GenFeedsConfig()
+	// Generate default feeds.ini
+	if err != nil {
 
-func TestSignVerify(t *testing.T) {
-  // create article store
-  store := articleStore{
-    directory: "test_articles",
-    temp: "test_articles_tmp",
-    attachments: "test_attachments",
-    thumbs: "test_thumbnails",
-  }
-  store.Init()
-  
-  t.Logf("create message")
-  
+		t.Error("Cannot generate feeds.ini", err)
+
+	}
+
 }

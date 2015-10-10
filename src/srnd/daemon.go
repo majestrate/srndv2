@@ -180,8 +180,8 @@ func (self NNTPDaemon) Run() {
 
   self.register_outfeed = make(chan nntpConnection)
   self.deregister_outfeed = make(chan nntpConnection)
-  self.infeed = make(chan NNTPMessage, 8)
-  self.infeed_load = make(chan string)
+  self.infeed = make(chan NNTPMessage, 64)
+  self.infeed_load = make(chan string, 8)
   self.send_all_feeds = make(chan ArticleEntry, 64)
   self.feeds = make(map[string]nntpConnection)
   self.ask_for_article = make(chan ArticleEntry, 64)

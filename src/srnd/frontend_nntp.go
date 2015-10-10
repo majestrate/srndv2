@@ -78,7 +78,7 @@ func (self nntpFrontend) handle_connection(sock net.Conn) {
   // wrap the socket
   r := textproto.NewReader(bufio.NewReader(sock))
   w := textproto.NewWriter(bufio.NewWriter(sock))
-  var line, mode, newsgroup string
+  var line, newsgroup string
   // write out greeting
   err := w.PrintfLine("201 ayyy srndv2 nntp frontend here, posting disallowed")
   for {
@@ -90,106 +90,116 @@ func (self nntpFrontend) handle_connection(sock net.Conn) {
     line, err = r.ReadLine()
     lline := strings.ToLower(line)
     
-    if mode == "reader" {
-      // we are in reader mode
-      if lline == "quit" {
-        break
-      } else if lline == "list" {
-        w.PrintfLine("215 list of newsgroups follows")
-        // handle list command
-        groups := self.db.GetAllNewsgroups()
-        dw := w.DotWriter()
-        for _, group := range groups {
-          last, first, err := self.db.GetLastAndFirstForGroup(group)
-          if err == nil {
-            io.WriteString(dw, fmt.Sprintf("%s %d %d y\r\n", group, last, first))
-          } else {
-            log.Println("cannot get last/first ids for group", group, err)
-          }
-        }
-        dw.Close()
-      } else if strings.HasPrefix(lline, "group ") {
-        // handle group command
-        newsgroup = lline[6:]
-        if self.db.HasNewsgroup(newsgroup) {
-          article_count := self.db.CountPostsInGroup(newsgroup, 0)
-          last, first, err := self.db.GetLastAndFirstForGroup(newsgroup)
-          if err == nil {
-            w.PrintfLine("211 %d %d %d %s", article_count, first, last, newsgroup)
-          } else {
-            w.PrintfLine("500 internal error, %s", err.Error())
-          }
+    // we are in reader mode
+    if lline == "quit" {
+      break
+    } else if strings.HasPrefix(lline, "newsgroups ") {
+      // handle newsgroups command
+      // TODO: don't ignore dates
+      w.PrintfLine("231 list of newsgroups follows")
+      groups := self.db.GetAllNewsgroups()
+      dw := w.DotWriter()
+      for _, group := range groups {
+        last, first, err := self.db.GetLastAndFirstForGroup(group)
+        if err == nil {
+          io.WriteString(dw, fmt.Sprintf("%s %d %d y\r\n", group, last, first))
         } else {
-          w.PrintfLine("411 no such news group")
-          newsgroup = ""
+          log.Println("cannot get last/first ids for group", group, err)
         }
-      } else if lline == "list overview.fmt" {
-        // handle overview listing
-        if newsgroup == "" {
-          // no newsgroup
-          w.PrintfLine("412 No newsgorup selected")
+      }
+      dw.Close()
+    } else if lline == "list" {
+      w.PrintfLine("215 list of newsgroups follows")
+      // handle list command
+      groups := self.db.GetAllNewsgroups()
+      dw := w.DotWriter()
+      for _, group := range groups {
+        last, first, err := self.db.GetLastAndFirstForGroup(group)
+        if err == nil {
+          io.WriteString(dw, fmt.Sprintf("%s %d %d y\r\n", group, last, first))
         } else {
-          // assume we got the newsgroup set
-          dw := w.DotWriter()
-          // write out format
-          // TODO: hard coded
-          io.WriteString(dw, "215 Order of fields in overview database.\r\n")
-          io.WriteString(dw, "Subject:\r\nFrom:\r\nDate:\r\nMessage-ID:\r\nRefernces:\r\n")
-          dw.Close()
+          log.Println("cannot get last/first ids for group", group, err)
         }
-      } else if strings.HasPrefix(lline, "xover ") {
-        if newsgroup == "" {
-          w.PrintfLine("412 No newsgroup selected")
+      }
+      dw.Close()
+    } else if strings.HasPrefix(lline, "group ") {
+      // handle group command
+      newsgroup = lline[6:]
+      if self.db.HasNewsgroup(newsgroup) {
+        article_count := self.db.CountPostsInGroup(newsgroup, 0)
+        last, first, err := self.db.GetLastAndFirstForGroup(newsgroup)
+        if err == nil {
+          w.PrintfLine("211 %d %d %d %s", article_count, first, last, newsgroup)
         } else {
-          // handle xover command
-          // every article
-          models, err := self.db.GetPostsInGroup(newsgroup)
-          if err == nil {
-            w.PrintfLine("224 Overview information follows")
-            
-            dw := w.DotWriter()
-            for idx, model := range models {
-              io.WriteString(dw, fmt.Sprintf("%.6d\t%s\t\"%s\" <%s@%s>\t%s\t%s\t%s\r\n", idx+1, model.Subject(), model.Name(), model.Name(), model.Frontend(), model.Date(), model.MessageID(), model.Reference()))
-              }
-            dw.Close()
-          } else {
-            w.PrintfLine("500 error, %s", err.Error())
-          }
-        }
-      } else if strings.HasPrefix(lline, "article ") {
-        if newsgroup == "" {
-          w.PrintfLine("412 No Newsgroup Selected")
-        } else {
-          article := line[8:]
-          var msgid string
-          var article_no int64
-          if ValidMessageID(article) {
-            article_no = 0 // eh
-          } else {
-            article_no, err = strconv.ParseInt(article, 10, 32)
-            if err == nil {
-              msgid, err = self.db.GetMessageIDForNNTPID(newsgroup, article_no)
-            }
-          }
-          if err == nil {
-            w.PrintfLine("220 %d %s", article_no, msgid)
-            fname := self.store.GetFilename(msgid)
-            f, err := os.Open(fname)
-            if err == nil {
-              dw := w.DotWriter()
-              _, err = io.Copy(dw, f)
-                dw.Close()
-              f.Close()
-            }
-          } else {
-            w.PrintfLine("500 error, %s", err.Error())
-          }
+          w.PrintfLine("500 internal error, %s", err.Error())
         }
       } else {
-        w.PrintfLine("500 WTF? %s", line)
+        w.PrintfLine("411 no such news group")
+        newsgroup = ""
+      }
+    } else if lline == "list overview.fmt" {
+      // handle overview listing
+      if newsgroup == "" {
+        // no newsgroup
+        w.PrintfLine("412 No newsgorup selected")
+      } else {
+        // assume we got the newsgroup set
+        dw := w.DotWriter()
+        // write out format
+        // TODO: hard coded
+        io.WriteString(dw, "215 Order of fields in overview database.\r\n")
+        io.WriteString(dw, "Subject:\r\nFrom:\r\nDate:\r\nMessage-ID:\r\nRefernces:\r\n")
+        dw.Close()
+      }
+    } else if strings.HasPrefix(lline, "xover ") {
+      if newsgroup == "" {
+        w.PrintfLine("412 No newsgroup selected")
+      } else {
+        // handle xover command
+        // every article
+        models, err := self.db.GetPostsInGroup(newsgroup)
+        if err == nil {
+          w.PrintfLine("224 Overview information follows")
+          
+          dw := w.DotWriter()
+          for idx, model := range models {
+            io.WriteString(dw, fmt.Sprintf("%.6d\t%s\t\"%s\" <%s@%s>\t%s\t%s\t%s\r\n", idx+1, model.Subject(), model.Name(), model.Name(), model.Frontend(), model.Date(), model.MessageID(), model.Reference()))
+          }
+          dw.Close()
+        } else {
+          w.PrintfLine("500 error, %s", err.Error())
+        }
+      }
+    } else if strings.HasPrefix(lline, "article ") {
+      if newsgroup == "" {
+        w.PrintfLine("412 No Newsgroup Selected")
+      } else {
+        article := line[8:]
+        var msgid string
+        var article_no int64
+        if ValidMessageID(article) {
+          article_no = 0 // eh
+        } else {
+          article_no, err = strconv.ParseInt(article, 10, 32)
+          if err == nil {
+            msgid, err = self.db.GetMessageIDForNNTPID(newsgroup, article_no)
+          }
+        }
+        if err == nil {
+          w.PrintfLine("220 %d %s", article_no, msgid)
+          fname := self.store.GetFilename(msgid)
+          f, err := os.Open(fname)
+          if err == nil {
+            dw := w.DotWriter()
+            _, err = io.Copy(dw, f)
+            dw.Close()
+            f.Close()
+          }
+        } else {
+          w.PrintfLine("500 error, %s", err.Error())
+        }
       }
     } else if lline == "mode reader" {
-      mode = "reader"
       w.PrintfLine("201 posting disallowed")
     } else if strings.HasPrefix(lline, "mode ") {
       // handle other mode

@@ -94,6 +94,21 @@ func (self nntpFrontend) handle_connection(sock net.Conn) {
       // we are in reader mode
       if lline == "quit" {
         break
+      } else if strings.HasPrefix(lline, "newsgroups ") {
+        // handle newsgroups command
+        // TODO: don't ignore dates
+        w.PrintfLine("231 list of newsgroups follows")
+        groups := self.db.GetAllNewsgroups()
+        dw := w.DotWriter()
+        for _, group := range groups {
+          last, first, err := self.db.GetLastAndFirstForGroup(group)
+          if err == nil {
+            io.WriteString(dw, fmt.Sprintf("%s %d %d y\r\n", group, last, first))
+          } else {
+            log.Println("cannot get last/first ids for group", group, err)
+          }
+        }
+        dw.Close()
       } else if lline == "list" {
         w.PrintfLine("215 list of newsgroups follows")
         // handle list command

@@ -138,17 +138,6 @@ func (self NNTPDaemon) persistFeed(conf FeedConfig, mode string) {
       c := textproto.NewConn(conn)
       stream, reader, err := nntp.outboundHandshake(c)
       if err == nil {
-        if self.sync_on_start {
-          go func() {
-            log.Println(nntp.name, "will do full sync")
-            for _, article := range self.database.GetAllArticles() {
-              if nntp.policy.AllowsNewsgroup(article.Newsgroup()) {
-                nntp.stream <- nntpCHECK(article.MessageID())
-              }
-            }
-            
-          }()
-        }
 
         if mode == "reader" && ! reader {
           log.Println(nntp.name, "we don't support reader on this feed, dropping")
@@ -264,6 +253,14 @@ func (self NNTPDaemon) Run() {
     }
     
   }()
+
+  if self.sync_on_start {
+    go func() {
+      for _, article := range self.database.GetAllArticles() {
+        self.send_all_feeds <- article
+      }
+    }()
+  }
   
   // if we have no frontend this does nothing
   if self.frontend != nil {

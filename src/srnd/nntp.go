@@ -51,9 +51,9 @@ func writeMIMEHeader(wr io.Writer, hdr textproto.MIMEHeader) (err error) {
 
 func createNNTPConnection() nntpConnection {
   return nntpConnection{
-    check: make(chan string, 32),
+    check: make(chan string, 64),
     article: make(chan string, 32),
-    take: make(chan string, 32),
+    take: make(chan string, 16),
   }
 }
 

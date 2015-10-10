@@ -143,7 +143,7 @@ func (self NNTPDaemon) persistFeed(conf FeedConfig, mode string) {
             log.Println(nntp.name, "will do full sync")
             for _, article := range self.database.GetAllArticles() {
               if nntp.policy.AllowsNewsgroup(article.Newsgroup()) {
-                nntp.check <- article.MessageID()
+                nntp.stream <- nntpCHECK(article.MessageID())
               }
             }
             
@@ -313,7 +313,7 @@ func (self NNTPDaemon) polloutfeeds() {
         if feed.policy.AllowsNewsgroup(nntp.Newsgroup()) {
           if strings.HasSuffix(feed.name, "-stream") {
             log.Println("send", nntp.MessageID(), "to", feed.name)
-            feed.check <- nntp.MessageID()
+            feed.stream <- nntpCHECK(nntp.MessageID())
           }
         } else {
           log.Println("not allowed", feed.name)

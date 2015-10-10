@@ -17,6 +17,25 @@ import (
   "time"
 )
 
+
+type nntpStreamEvent string
+
+func (ev nntpStreamEvent) MessageID() string {
+  return strings.Split(string(ev), " ")[1]
+}
+
+func (ev nntpStreamEvent) Command() string {
+  return strings.Split(string(ev), " ")[0]
+}
+
+func nntpTAKETHIS(msgid string) nntpStreamEvent {
+  return nntpStreamEvent(fmt.Sprintf("TAKETHIS %s", msgid))
+}
+
+func nntpCHECK(msgid string) nntpStreamEvent {
+  return nntpStreamEvent(fmt.Sprintf("CHECK %s", msgid))
+}
+
 // nntp connection state
 type nntpConnection struct {
   // the name of this feed
@@ -28,12 +47,10 @@ type nntpConnection struct {
   // lock help when expecting non pipelined activity
   access sync.Mutex
   
-  // CHECK <message-id>
-  check chan string
   // ARTICLE <message-id>
   article chan string
-  // TAKETHIS <message-id>
-  take chan string
+  // TAKETHIS/CHECK <message-id>
+  stream chan nntpStreamEvent
 }
 
 // write out a mime header to a writer
@@ -51,9 +68,8 @@ func writeMIMEHeader(wr io.Writer, hdr textproto.MIMEHeader) (err error) {
 
 func createNNTPConnection() nntpConnection {
   return nntpConnection{
-    check: make(chan string, 8),
     article: make(chan string, 32),
-    take: make(chan string, 128),
+    stream: make(chan nntpStreamEvent, 128),
   }
 }
 
@@ -147,26 +163,29 @@ func (self nntpConnection) outboundHandshake(conn *textproto.Conn) (stream, read
 // handle streaming event
 // this function should send only
 func (self nntpConnection) handleStreaming(daemon NNTPDaemon, reader bool, conn *textproto.Conn) (err error) {
-  select {
-  case msgid := <- self.check:
-    log.Println(self.name, "CHECK", msgid)
-    err = conn.PrintfLine("CHECK %s", msgid)
-  case msgid := <- self.take:
-    // send a file via TAKETHIS
-    if ValidMessageID(msgid) {
-      fname := daemon.store.GetFilename(msgid)
-      if CheckFile(fname) {
-        f, err := os.Open(fname)
-        if err == nil {
-          // time to send
-          err = conn.PrintfLine("TAKETHIS %s", msgid)
-          dw := conn.DotWriter()
-          _ , err = io.Copy(dw, f)
-          err = dw.Close()
-          f.Close()
+  for err == nil {
+    ev := <- self.stream
+    if ValidMessageID(ev.MessageID()) {
+      cmd , msgid := ev.Command(), ev.MessageID()
+      if cmd == "TAKETHIS" {
+        fname := daemon.store.GetFilename(msgid)
+        if CheckFile(fname) {
+          f, err := os.Open(fname)
+          if err == nil {
+            err = conn.PrintfLine("%s", ev)
+            // time to send
+            dw := conn.DotWriter()
+            _ , err = io.Copy(dw, f)
+            err = dw.Close()
+            f.Close()
+          }
+        } else {
+          log.Println(self.name, "didn't send", msgid, "we don't have it locally")
         }
+      } else if cmd == "CHECK" {
+        conn.PrintfLine("%s", ev)
       } else {
-        log.Println(self.name, "didn't send", msgid, "we don't have it locally")
+        log.Println("invalid stream command", ev)
       }
     }
   }
@@ -274,7 +293,7 @@ func (self nntpConnection) handleLine(daemon NNTPDaemon, code int, line string, 
     if ValidMessageID(msgid) {
       log.Println("sending", msgid, "to", self.name)
       // send the article to us
-      self.take <- msgid
+      self.stream <- nntpTAKETHIS(msgid)
     }
     return
   } else if code == 239 {
@@ -597,5 +616,5 @@ func (self nntpConnection) runConnection(daemon NNTPDaemon, inbound, stream, rea
 
 func (self nntpConnection) articleDefer(msgid string) {
   time.Sleep(time.Second * 90)
-  self.check <- msgid
+  self.stream <- nntpCHECK(msgid)
 }

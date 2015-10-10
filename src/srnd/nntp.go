@@ -69,7 +69,7 @@ func writeMIMEHeader(wr io.Writer, hdr textproto.MIMEHeader) (err error) {
 func createNNTPConnection() nntpConnection {
   return nntpConnection{
     article: make(chan string, 32),
-    stream: make(chan nntpStreamEvent, 128),
+    stream: make(chan nntpStreamEvent, 32),
   }
 }
 
@@ -292,7 +292,6 @@ func (self nntpConnection) handleLine(daemon NNTPDaemon, code int, line string, 
   }
   if code == 238 {
     if ValidMessageID(msgid) {
-      // send the article to us
       self.stream <- nntpTAKETHIS(msgid)
     }
     return

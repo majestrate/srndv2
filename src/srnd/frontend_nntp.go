@@ -78,7 +78,7 @@ func (self nntpFrontend) handle_connection(sock net.Conn) {
   // wrap the socket
   r := textproto.NewReader(bufio.NewReader(sock))
   w := textproto.NewWriter(bufio.NewWriter(sock))
-  var line, mode, newsgroup string
+  var line, newsgroup string
   // write out greeting
   err := w.PrintfLine("201 ayyy srndv2 nntp frontend here, posting disallowed")
   for {
@@ -200,7 +200,6 @@ func (self nntpFrontend) handle_connection(sock net.Conn) {
         }
       }
     } else if lline == "mode reader" {
-      mode = "reader"
       w.PrintfLine("201 posting disallowed")
     } else if strings.HasPrefix(lline, "mode ") {
       // handle other mode

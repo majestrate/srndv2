@@ -180,11 +180,11 @@ func (self NNTPDaemon) Run() {
 
   self.register_outfeed = make(chan nntpConnection)
   self.deregister_outfeed = make(chan nntpConnection)
-  self.infeed = make(chan NNTPMessage, 64)
-  self.infeed_load = make(chan string, 8)
-  self.send_all_feeds = make(chan ArticleEntry, 64)
+  self.infeed = make(chan NNTPMessage, 8)
+  self.infeed_load = make(chan string, 4)
+  self.send_all_feeds = make(chan ArticleEntry, 16)
   self.feeds = make(map[string]nntpConnection)
-  self.ask_for_article = make(chan ArticleEntry, 64)
+  self.ask_for_article = make(chan ArticleEntry, 16)
 
   self.expire = createExpirationCore(self.database, self.store)
   self.sync_on_start = self.conf.daemon["sync_on_start"] == "1"

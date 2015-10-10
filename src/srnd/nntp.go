@@ -165,6 +165,7 @@ func (self nntpConnection) outboundHandshake(conn *textproto.Conn) (stream, read
 func (self nntpConnection) handleStreaming(daemon NNTPDaemon, reader bool, conn *textproto.Conn) (err error) {
   for err == nil {
     ev := <- self.stream
+    log.Println(self.name, ev)
     if ValidMessageID(ev.MessageID()) {
       cmd , msgid := ev.Command(), ev.MessageID()
       if cmd == "TAKETHIS" {
@@ -291,7 +292,6 @@ func (self nntpConnection) handleLine(daemon NNTPDaemon, code int, line string, 
   }
   if code == 238 {
     if ValidMessageID(msgid) {
-      log.Println("sending", msgid, "to", self.name)
       // send the article to us
       self.stream <- nntpTAKETHIS(msgid)
     }

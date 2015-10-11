@@ -399,7 +399,7 @@ func (self httpFrontend) handle_postform(wr http.ResponseWriter, r *http.Request
       } else if partname == "reference" {
         ref := part_buff.String()
         if len(ref) == 0 {
-          url = fmt.Sprintf("%s.html", board)
+          url = fmt.Sprintf("%s-0.html", board)
         } else if ValidMessageID(ref) {
           if self.daemon.database.HasArticleLocal(ref) {
             nntp.headers.Set("References", ref)

@@ -26,23 +26,23 @@ type templateEngine struct {
   template_dir string  
 }
 
-func (self templateEngine) templateCached(name string) (ok bool) {
+func (self *templateEngine) templateCached(name string) (ok bool) {
   _, ok = self.templates[name]
   return 
 }
 
 // explicitly reload a template
-func (self templateEngine) reloadTemplate(name string) {
+func (self *templateEngine) reloadTemplate(name string) {
   self.templates[name] = self.loadTemplate(name)
 }
 
 // check if we have this template
-func (self templateEngine) hasTemplate(name string) bool {
+func (self *templateEngine) hasTemplate(name string) bool {
   return CheckFile(self.templateFilepath(name))
 }
 
 // explicitly reload all loaded templates
-func (self templateEngine) reloadAllTemplates() {
+func (self *templateEngine) reloadAllTemplates() {
   loadThese := []string{}
   // get all the names of the templates we have loaded
   for tname, _ := range self.templates {
@@ -92,13 +92,13 @@ func updateLinkCacheForThread(thread ThreadModel) {
 }
 
 // get the url for a backlink
-func (self templateEngine) findLink(shorthash string) (url string) {
+func (self *templateEngine) findLink(shorthash string) (url string) {
   url, _ = self.links[shorthash]
   return
 }
 
 // get the filepath to a template
-func (self templateEngine) templateFilepath(name string) string {
+func (self *templateEngine) templateFilepath(name string) string {
   if strings.Count(name, "..") > 0 {
     return ""
   }
@@ -106,7 +106,7 @@ func (self templateEngine) templateFilepath(name string) string {
 }
 
 // load a template from file, return as string
-func (self templateEngine) loadTemplate(name string) (t string) {
+func (self *templateEngine) loadTemplate(name string) (t string) {
   b, err := ioutil.ReadFile(self.templateFilepath(name))
   if err == nil {
     t = string(b)
@@ -118,7 +118,7 @@ func (self templateEngine) loadTemplate(name string) (t string) {
 }
 
 // get a template, if it's not cached load from file and cache it
-func (self templateEngine) getTemplate(name string) (t string) {
+func (self *templateEngine) getTemplate(name string) (t string) {
   if ! self.templateCached(name) {
     self.templates[name] = self.loadTemplate(name)    
   }
@@ -127,14 +127,14 @@ func (self templateEngine) getTemplate(name string) (t string) {
 }
 
 // render a template, self explanitory
-func (self templateEngine) renderTemplate(name string, obj interface{}) string {
+func (self *templateEngine) renderTemplate(name string, obj interface{}) string {
   t := self.getTemplate(name)
   return mustache.Render(t, obj)
 }
 
 // get a board model given a newsgroup
 // load un updated board model if we don't have it
-func (self templateEngine) obtainBoard(prefix, frontend, group string, db Database) (model GroupModel) {
+func (self *templateEngine) obtainBoard(prefix, frontend, group string, db Database) (model GroupModel) {
   model, ok := self.groups[group]
   // if we don't already have the board loaded load it
   if ! ok  {
@@ -151,7 +151,7 @@ func (self templateEngine) obtainBoard(prefix, frontend, group string, db Databa
 
 }
 // generate a board page
-func (self templateEngine) genBoardPage(prefix, frontend, newsgroup string, page int, outfile string, db Database) {
+func (self *templateEngine) genBoardPage(prefix, frontend, newsgroup string, page int, outfile string, db Database) {
   // get the board model
   board := self.obtainBoard(prefix, frontend, newsgroup, db)
   // update the board page
@@ -175,7 +175,7 @@ func (self templateEngine) genBoardPage(prefix, frontend, newsgroup string, page
 }
 
 // generate every page for a board
-func (self templateEngine) genBoard(prefix, frontend, newsgroup, outdir string, db Database) {
+func (self *templateEngine) genBoard(prefix, frontend, newsgroup, outdir string, db Database) {
   // get the board model
   board := self.obtainBoard(prefix, frontend, newsgroup, db)
   // update the entire board model
@@ -198,7 +198,7 @@ func (self templateEngine) genBoard(prefix, frontend, newsgroup, outdir string, 
   }
 }
 
-func (self templateEngine) genUkko(prefix, frontend, outfile string, database Database) {
+func (self *templateEngine) genUkko(prefix, frontend, outfile string, database Database) {
   var threads []ThreadModel
   // get the last 15 bumped threads globally, for each...
   for _, article := range database.GetLastBumpedThreads("", 15) {
@@ -226,7 +226,7 @@ func (self templateEngine) genUkko(prefix, frontend, outfile string, database Da
   }
 }
 
-func (self templateEngine) genThread(root ArticleEntry, prefix, frontend, outfile string, db Database) {
+func (self *templateEngine) genThread(root ArticleEntry, prefix, frontend, outfile string, db Database) {
   newsgroup := root.Newsgroup()
   msgid := root.MessageID()
   var th ThreadModel
@@ -292,7 +292,7 @@ func renderPostForm(prefix, board, op_msg_id string) string {
 
 
 
-func (self templateEngine) genFrontPage(top_count int, frontend_name, outfile string, db Database) {
+func (self *templateEngine) genFrontPage(top_count int, frontend_name, outfile string, db Database) {
   // the graph for the front page
   var frontpage_graph boardPageRows
 

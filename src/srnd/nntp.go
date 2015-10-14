@@ -641,8 +641,8 @@ func (self nntpConnection) runConnection(daemon NNTPDaemon, inbound, stream, rea
             if parts[1] == "READER" {
               // set reader mode
               self.mode = "READER"
-              // posting is not permitted with reader mode
-              conn.PrintfLine("201 Posting not permitted")
+              // we'll allow posting for reader
+              conn.PrintfLine("200 Posting Permitted Yo")
             } else if parts[1] == "STREAM" {
               // set streaming mode
               conn.PrintfLine("203 Stream it brah")

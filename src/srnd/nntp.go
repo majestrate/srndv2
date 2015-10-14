@@ -425,6 +425,108 @@ func (self nntpConnection) handleLine(daemon NNTPDaemon, code int, line string, 
           // invalid id
           conn.PrintfLine("500 Syntax error")
         }
+      } else if cmd == "POST" {
+        // handle POST command
+        conn.PrintfLine("340 Post it nigguh; end with <CR-LF>.<CR-LF>")
+        hdr, err := conn.ReadMIMEHeader()
+        var success bool
+        if err == nil {
+          hdr["Message-ID"] = []string{genMessageID(daemon.instance_name)}
+          reason, err := self.checkMIMEHeader(daemon, hdr)
+          success = reason == "" && err == nil
+          if success {
+            dr := conn.DotReader()
+            reference := hdr.Get("References")
+            newsgroup := hdr.Get("Newsgroups")
+            if reference != "" && ValidMessageID(reference) && ! daemon.store.HasArticle(reference) && ! daemon.database.IsExpired(reference) {
+              log.Println(self.name, "got reply to", reference, "but we don't have it")
+              daemon.ask_for_article <- ArticleEntry{reference, newsgroup}
+            }
+            f := daemon.store.CreateTempFile(msgid)
+            if f == nil {
+              log.Println(self.name, "discarding", msgid, "we are already loading it")
+              // discard
+              io.Copy(ioutil.Discard, dr)
+            } else {
+              // write header
+              err = writeMIMEHeader(f, hdr)
+              // write body
+              _, err = io.Copy(f, dr)
+              if err == nil || err == io.EOF {
+                f.Close()
+                // we gud, tell daemon
+                daemon.infeed_load <- msgid
+              } else {
+                log.Println(self.name, "error reading message", err)
+              }
+            }
+          }
+        }
+        if success && err == nil {
+          // all gud
+          conn.PrintfLine("240 We got it, thnkxbai")
+        } else {
+          // failed posting
+          if err != nil {
+            log.Println(self.name, "failed nntp POST", err)
+          }
+          conn.PrintfLine("441 Posting Failed")
+        }        
+      } else if cmd == "IHAVE" {
+        // handle IHAVE command
+        msgid := parts[1]
+        if daemon.database.HasArticleLocal(msgid) || daemon.database.HasArticle(msgid) || daemon.database.ArticleBanned(msgid) {
+          // we don't want it
+          conn.PrintfLine("435 Article Not Wanted")
+        } else {
+          // gib we want
+          conn.PrintfLine("335 Send it plz")
+          hdr, err := conn.ReadMIMEHeader()
+          if err == nil {
+            // check the header
+            var reason string
+            reason, err = self.checkMIMEHeader(daemon, hdr)
+            dr := conn.DotReader()
+            if len(reason) > 0 {
+              // discard, we do not want
+              log.Println(self.name, "rejected", msgid, reason)
+              _, err = io.Copy(ioutil.Discard, dr)
+              // ignore this
+              _ = daemon.database.BanArticle(msgid, reason)
+              conn.PrintfLine("437 Rejected do not send again bro")
+            } else {
+              // check if we don't have the rootpost
+              reference := hdr.Get("References")
+              newsgroup := hdr.Get("Newsgroups")
+              if reference != "" && ValidMessageID(reference) && ! daemon.store.HasArticle(reference) && ! daemon.database.IsExpired(reference) {
+                log.Println(self.name, "got reply to", reference, "but we don't have it")
+                daemon.ask_for_article <- ArticleEntry{reference, newsgroup}
+              }
+              f := daemon.store.CreateTempFile(msgid)
+              if f == nil {
+                log.Println(self.name, "discarding", msgid, "we are already loading it")
+                // discard
+                io.Copy(ioutil.Discard, dr)
+              } else {
+                // write header
+                err = writeMIMEHeader(f, hdr)
+                // write body
+                _, err = io.Copy(f, dr)
+                if err == nil || err == io.EOF {
+                  f.Close()
+                  // we gud, tell daemon
+                  daemon.infeed_load <- msgid
+                } else {
+                  log.Println(self.name, "error reading message", err)
+                }
+              }
+              conn.PrintfLine("235 We got it")
+            }
+          } else {
+            // error here
+            conn.PrintfLine("436 Transfer failed: "+err.Error())
+          }
+        }
       }
     }
   }

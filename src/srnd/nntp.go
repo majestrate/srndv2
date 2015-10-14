@@ -625,6 +625,10 @@ func (self nntpConnection) runConnection(daemon NNTPDaemon, inbound, stream, rea
         if len(line) == 0 {
           conn.Close()
           return
+        } else if line == "QUIT" {
+          conn.PrintfLine("205 bai")
+          conn.Close()
+          return
         }
         log.Println(self.name, line)
         parts := strings.Split(line, " ")

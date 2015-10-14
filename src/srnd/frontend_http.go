@@ -471,6 +471,8 @@ func (self httpFrontend) handle_postform(wr http.ResponseWriter, r *http.Request
 
   if len(nntp.attachments) == 0 && len(msg) == 0 {
     post_fail += "no message. "
+  } else if len(msg) > 1024 * 1024 * 10 {
+    post_fail += "your message is too big"
   }
   
   if len(post_fail) > 0 {

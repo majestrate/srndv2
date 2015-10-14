@@ -622,6 +622,10 @@ func (self nntpConnection) runConnection(daemon NNTPDaemon, inbound, stream, rea
       if inbound  {
         // no mode and inbound
         line, err = conn.ReadLine()
+        if len(line) == 0 {
+          conn.Close()
+          return
+        }
         log.Println(self.name, line)
         parts := strings.Split(line, " ")
         cmd := parts[0]

@@ -302,7 +302,7 @@ func (self httpFrontend) handle_postform(wr http.ResponseWriter, r *http.Request
   // encrypt IP Addresses
   // when a post is recv'd from a frontend, the remote address is given its own symetric key that the local srnd uses to encrypt the address with, for privacy
   // when a mod event is fired, it includes the encrypted IP address and the symetric key that frontend used to encrypt it, thus allowing others to determine the IP address
-  // each stnf will optinally comply with the mod event, banning the address from being able to post from that frontend
+  // each stnf will optionally comply with the mod event, banning the address from being able to post from that frontend
   // this will be done eventually but for now that requires too much infrastrucutre, let's go with regular IP Addresses for now.
   
   // get the "real" ip address from the request
@@ -469,12 +469,14 @@ func (self httpFrontend) handle_postform(wr http.ResponseWriter, r *http.Request
     }
   }
 
+  // check message size
   if len(nntp.attachments) == 0 && len(msg) == 0 {
     post_fail += "no message. "
   } else if len(msg) > 1024 * 1024 * 10 {
     post_fail += "your message is too big"
   }
-  
+
+  // send fail message if it's there
   if len(post_fail) > 0 {
     wr.WriteHeader(200)
     resp_map["reason"] = post_fail
@@ -516,6 +518,7 @@ func (self httpFrontend) handle_postform(wr http.ResponseWriter, r *http.Request
   nntp.AppendPath(self.name)
   // send message off to daemon
   log.Printf("uploaded %d attachments", len(nntp.Attachments()))
+  // pack it before sending so that the article is well formed
   nntp.Pack()
 
   // sign if needed
@@ -632,13 +635,21 @@ func (self httpFrontend) Mainloop() {
 
   // poll channels
   go self.poll()
-  go self.pollRegen()
-   
+
+  // use N threads for regeneration
+  // XXX: will this make it crash when accessing the templates?
+  for threads > 0 {
+    go self.pollRegen()
+    threads --
+  }
+    
+  // run daemon's mod engine with our frontend
   go RunModEngine(self.daemon.mod, self.regenOnModEvent)
   
   // start webserver here
   log.Printf("frontend %s binding to %s", self.name, self.bindaddr)
-  
+
+  // serve it!
   err = http.ListenAndServe(self.bindaddr, self.httpmux)
   if err != nil {
     log.Fatalf("failed to bind frontend %s %s", self.name, err)

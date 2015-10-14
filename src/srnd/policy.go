@@ -13,7 +13,7 @@ type FeedPolicy struct {
 }
 
 // do we allow this newsgroup?
-func (self *FeedPolicy) AllowsNewsgroup(newsgroup string) bool {
+func (self *FeedPolicy) AllowsNewsgroup(newsgroup string) (result bool) {
   var k, v string
   for k, v = range self.rules {
     match, err := regexp.MatchString(k, newsgroup)
@@ -21,9 +21,13 @@ func (self *FeedPolicy) AllowsNewsgroup(newsgroup string) bool {
       log.Fatal(err)
     }
     if match {
-      return v == "1"
+      if v == "0" {
+        return false
+      } else if v == "1" {
+        result = true
+      }
     }
   }
-  return false
+  return result
 }
 

@@ -13,3 +13,23 @@ func TestGenFeedsConfig(t *testing.T) {
 	}
 
 }
+
+
+// func (self lineWriter) Write(data []byte) (n int, err error) {
+
+
+
+//func OpenFileWriter(fname string) (io.WriteCloser, error) {
+
+
+func TestOpenFileWriter(t *testing.T) {
+
+	_ ,err := OpenFileWriter("file.txt")
+	// Generate default feeds.ini
+	if err != nil {
+
+		t.Error("Cant open file writer.", err)
+
+	}
+
+}

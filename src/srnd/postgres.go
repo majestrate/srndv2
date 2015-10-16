@@ -70,7 +70,6 @@ func (self PostgresDatabase) upgrade0to1() {
 
   // begin >:D
   log.Println("migrating... 0 -> 1")
-  // create new tables
 
   var err error
 
@@ -220,11 +219,14 @@ func (self PostgresDatabase) createTablesV0() {
                            value VARCHAR(255) NOT NULL
                         )`
   var err error
-  for k, v := range(tables) {
+
+  table_order := []string{"Newsgroups", "BannedGroups", "BannedArticles", "IPBans", "EncIPBans", "Settings", "Articles", "ArticlePosts", "ArticleKeys", "ArticleThreads", "ArticleAttachments", "ModPrivs", "ModLogs", "EncryptedAddrs" }
+  for _, table := range table_order {
+    q := tables[table]
     // create table
-    _, err = self.conn.Exec(fmt.Sprintf("CREATE TABLE IF NOT EXISTS %s%s", k, v))
+    _, err = self.conn.Exec(fmt.Sprintf("CREATE TABLE IF NOT EXISTS %s%s", table, q))
     if err != nil {
-      log.Fatalf("cannot create table %s, %s, login was '%s'", k, err,self.db_str)
+      log.Fatalf("cannot create table %s, %s, login was '%s'", table, err,self.db_str)
     }
   }
   // create indexes

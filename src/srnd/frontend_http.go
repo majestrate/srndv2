@@ -638,10 +638,12 @@ func (self httpFrontend) Mainloop() {
 
   // use N threads for regeneration
   // XXX: will this make it crash when accessing the templates?
-  for threads > 0 {
-    go self.pollRegen()
-    threads --
-  }
+  // yes it does
+  // for threads > 0 {
+  //  go self.pollRegen()
+  //  threads --
+  // }
+  go self.pollRegen()
     
   // run daemon's mod engine with our frontend
   go RunModEngine(self.daemon.mod, self.regenOnModEvent)

@@ -57,3 +57,10 @@ func reThumbnail(threads int, store ArticleStore) {
   close(chnl)
   log.Println("Rethumbnailing done")
 }
+
+// generate a keypair from the command line
+func KeygenTool() {
+  pub, sec := newSignKeypair()
+  log.Println("public key:", pub)
+  log.Println("secret key:", sec)
+}

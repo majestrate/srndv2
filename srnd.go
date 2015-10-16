@@ -34,14 +34,13 @@ func main() {
         tool := os.Args[2]
         if tool == "rethumb" {
           srnd.ThumbnailTool()
-        } else if tool == "prune-threads" {
-          // TODO: implement pruning old threads
-          // srnd.ClearThreadsTool()
+        } else if tool == "keygen" {
+          srnd.KeygenTool()
         } else {
-          fmt.Fprintf(os.Stdout, "Usage: %s tool [rethumb|prune-threads]\n", os.Args[0])
+          fmt.Fprintf(os.Stdout, "Usage: %s tool [rethumb|keygen]\n", os.Args[0])
         }
       } else {
-        fmt.Fprintf(os.Stdout, "Usage: %s tool [rethumb|prune-threads]\n", os.Args[0])
+        fmt.Fprintf(os.Stdout, "Usage: %s tool [rethumb|keygen]\n", os.Args[0])
       }
     } else {
       log.Println("Invalid action:",action)

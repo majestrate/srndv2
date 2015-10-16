@@ -101,7 +101,7 @@ func GenSRNdConfig() error {
   // change this to infinity to use with infinity-next
   sect.Add("schema", "srnd")
   sect.Add("host", "/var/run/postgresql")
-  sect.Add("port", " ")
+  sect.Add("port", "5432")
   sect.Add("user", "srnd")
   sect.Add("password", "srnd")
   

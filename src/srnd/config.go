@@ -102,8 +102,8 @@ func GenSRNdConfig() error {
   sect.Add("schema", "srnd")
   sect.Add("host", "/var/run/postgresql")
   sect.Add("port", "")
-  sect.Add("user", " ")
-  sect.Add("password", " ")
+  sect.Add("user", "srnd")
+  sect.Add("password", "srnd")
   
   // baked in static html frontend
   sect = conf.NewSection("frontend")

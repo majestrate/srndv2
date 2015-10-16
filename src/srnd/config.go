@@ -100,10 +100,10 @@ func GenSRNdConfig() error {
   sect.Add("type", "postgres")
   // change this to infinity to use with infinity-next
   sect.Add("schema", "srnd")
-  sect.Add("host", "127.0.0.1")
-  sect.Add("port", "5432")
-  sect.Add("user", "root")
-  sect.Add("password", "root")
+  sect.Add("host", "/var/run/postgresql")
+  sect.Add("port", "")
+  sect.Add("user", " ")
+  sect.Add("password", " ")
   
   // baked in static html frontend
   sect = conf.NewSection("frontend")

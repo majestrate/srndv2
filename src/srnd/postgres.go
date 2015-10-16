@@ -30,7 +30,19 @@ type PostgresDatabase struct {
 func NewPostgresDatabase(host, port, user, password string) Database {
   var db PostgresDatabase
   var err error
-  db.db_str = fmt.Sprintf("user=%s password=%s host=%s port=%s client_encoding='UTF8'", user, password, host, port)
+  if len(user) > 0 {
+    if len(password) > 0 {
+      db.db_str = fmt.Sprintf("user=%s password=%s host=%s port=%s client_encoding='UTF8'", user, password, host, port)
+    } else {
+      db.db_str = fmt.Sprintf("user=%s host=%s port=%s client_encoding='UTF8'", user, host, port)
+    }
+  } else {
+    if len(port) > 0 {
+      db.db_str = fmt.Sprintf("host=%s port=%s client_encoding='UTF8'", host, port)
+    } else {
+      db.db_str = fmt.Sprintf("host=%s client_encoding='UTF8'", host)
+    }
+  }
   
   log.Println("Connecting to postgres...")
   db.conn, err = sql.Open("postgres", db.db_str)
@@ -101,7 +113,6 @@ func (self PostgresDatabase) upgrade0to1() {
   }
 
   for _, cmd := range cmds {
-    log.Println(cmd)
     _, err = self.conn.Exec(cmd)
     checkError(err)
   }

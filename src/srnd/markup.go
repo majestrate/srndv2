@@ -27,6 +27,8 @@ func backlink(word string) (markup string) {
       }
       // backlink exists
       return`<a href="`+url+`">&gt;&gt;` + link + "</a>"
+    } else {
+      return html.EscapeString(word)
     }
   }
   return word

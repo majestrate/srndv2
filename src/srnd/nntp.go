@@ -97,6 +97,12 @@ func (self *nntpConnection) modeSwitch(mode string, conn *textproto.Conn) (succe
   return
 }
 
+func (self *nntpConnection) Quit(conn *textproto.Conn) (err error) {
+  conn.PrintfLine("QUIT")
+  _, _, err = conn.ReadCodeLine(0)
+  return
+}
+
 // send a banner for inbound connections
 func (self *nntpConnection) inboundHandshake(conn *textproto.Conn) (err error) {
   err = conn.PrintfLine("200 Posting Allowed")
@@ -705,11 +711,11 @@ func (self *nntpConnection) scrapeGroup(daemon NNTPDaemon, conn *textproto.Conn,
 }
 
 // grab every post from the remote server, assumes outbound connection
-func (self *nntpConnection) scrapeServer(daemon NNTPDaemon, conn *textproto.Conn) {
+func (self *nntpConnection) scrapeServer(daemon NNTPDaemon, conn *textproto.Conn) (err error) {
   log.Println(self.name, "scrape remote server")
-
+  var success bool
   // switch to reader mode explicitly
-  success, err := self.modeSwitch("READER", conn)
+  success, err = self.modeSwitch("READER", conn)
   if success {
     // send newsgroups command
     err = conn.PrintfLine("NEWSGROUPS %d 000000 GMT", timeNow())
@@ -776,6 +782,7 @@ func (self *nntpConnection) scrapeServer(daemon NNTPDaemon, conn *textproto.Conn
     // failt to switch mode because of error
     log.Println(self.name, "failed to switch to reader mode when scraping", err)
   }
+  return
 }
 
 // ask for an article from the remote server

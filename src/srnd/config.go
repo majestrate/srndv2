@@ -16,6 +16,7 @@ type FeedConfig struct {
   policy FeedPolicy
   quarks map[string]string
   addr string
+  sync bool
   proxy_type string
   proxy_addr string
   linkauth_keyfile string
@@ -222,6 +223,12 @@ func ReadConfig() *SRNdConfig {
         proxy_host := sect.ValueOf("proxy-host")
         proxy_port := sect.ValueOf("proxy-port")
         fconf.proxy_addr = strings.Trim(proxy_host, " ") + ":" + strings.Trim(proxy_port, " ")
+      }
+
+      // check to see if we want to sync with them first
+      val = sect.ValueOf("sync")
+      if val == "1" {
+        fconf.sync = true
       }
       
       // load feed polcies

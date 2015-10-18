@@ -18,14 +18,16 @@ var re_backlink = regexp.MustCompile(`>> ?([0-9a-f]+)`)
 // parse backlink
 func backlink(word string) (markup string) {
   link := re_backlink.FindString(word)
-  if len(link) > 0 {
+  if len(link) > 2 {
     link = strings.Trim(link[2:], " ")
-    url := template.findLink(link)
-    if len(url) == 0 {
-      return "<span class='memearrows'>&gt;&gt;" + link[2:] + "</span>"
+    if len(link) > 2 {
+      url := template.findLink(link)
+      if len(url) == 0 {
+        return "<span class='memearrows'>&gt;&gt;" + link[2:] + "</span>"
+      }
+      // backlink exists
+      return`<a href="`+url+`">&gt;&gt;` + link + "</a>"
     }
-    // backlink exists
-    return`<a href="`+url+`">&gt;&gt;` + link + "</a>"
   }
   return word
 }

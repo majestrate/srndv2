@@ -79,7 +79,7 @@ func (self NNTPDaemon) dialOut(proxy_type, proxy_addr, remote_addr string) (conn
     }
     var port uint64
     addr := remote_addr[:idx]
-    port, err = strconv.ParseUint(addr[idx+1:], 10, 16)
+    port, err = strconv.ParseUint(remote_addr[idx+1:], 10, 16)
     if port >= 25536 {
       err = errors.New("bad proxy port")
       return

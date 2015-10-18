@@ -633,8 +633,8 @@ func (self *nntpConnection) scrapeGroup(daemon NNTPDaemon, conn *textproto.Conn,
       err = conn.PrintfLine("XOVER 0")
       if err == nil {
         // no error sending command, read first line
-        code, _, err = conn.ReadCodeLine(244)
-        if code == 244 {
+        code, _, err = conn.ReadCodeLine(224)
+        if code == 224 {
           // maps message-id -> references
           articles := make(map[string]string)
           // successful response, read multiline

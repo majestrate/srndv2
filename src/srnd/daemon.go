@@ -174,7 +174,7 @@ func (self NNTPDaemon) syncPull(proxy_type, proxy_addr, remote_addr string) {
     conn := textproto.NewConn(c)
     // we connected
     nntp := createNNTPConnection()
-    nntp.name = remote_addr+"proxy-"+proxy_type+"-"+proxy_addr+"-sync"
+    nntp.name = remote_addr+"-sync"
     // do handshake
     _, reader, err := nntp.outboundHandshake(conn)
     if reader {

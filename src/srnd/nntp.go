@@ -322,7 +322,7 @@ func (self *nntpConnection) handleLine(daemon NNTPDaemon, code int, line string,
   } else {
     // handle command
     parts := strings.Split(line, " ")
-    if len(parts) == 2 {
+    if len(parts) > 1 {
       cmd := parts[0]
       if cmd == "MODE" {
         if parts[1] == "READER" {
@@ -877,7 +877,6 @@ func (self *nntpConnection) runConnection(daemon NNTPDaemon, inbound, stream, re
           conn.Close()
           return
         }
-        log.Println(self.name, line)
         parts := strings.Split(line, " ")
         cmd := parts[0]
         if cmd == "CAPABILITIES" {

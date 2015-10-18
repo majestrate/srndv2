@@ -42,6 +42,8 @@ type nntpConnection struct {
   name string
   // the mode we are in now
   mode string
+  // what newsgroup is currently selected or empty string if none is selected
+  group string
   // the policy for federation
   policy FeedPolicy
   // lock help when expecting non pipelined activity
@@ -96,14 +98,14 @@ func (self *nntpConnection) modeSwitch(mode string, conn *textproto.Conn) (succe
 }
 
 // send a banner for inbound connections
-func (self nntpConnection) inboundHandshake(conn *textproto.Conn) (err error) {
+func (self *nntpConnection) inboundHandshake(conn *textproto.Conn) (err error) {
   err = conn.PrintfLine("200 Posting Allowed")
   return err
 }
 
 // outbound setup, check capabilities and set mode
 // returns (supports stream, supports reader) + error
-func (self nntpConnection) outboundHandshake(conn *textproto.Conn) (stream, reader bool, err error) {
+func (self *nntpConnection) outboundHandshake(conn *textproto.Conn) (stream, reader bool, err error) {
   log.Println(self.name, "outbound handshake")
   var code int
   var line string
@@ -162,7 +164,7 @@ func (self nntpConnection) outboundHandshake(conn *textproto.Conn) (stream, read
 
 // handle streaming event
 // this function should send only
-func (self nntpConnection) handleStreaming(daemon NNTPDaemon, reader bool, conn *textproto.Conn) (err error) {
+func (self *nntpConnection) handleStreaming(daemon NNTPDaemon, reader bool, conn *textproto.Conn) (err error) {
   for err == nil {
     ev := <- self.stream
     log.Println(self.name, ev)
@@ -195,7 +197,7 @@ func (self nntpConnection) handleStreaming(daemon NNTPDaemon, reader bool, conn 
 
 // check if we want the article given its mime header
 // returns empty string if it's okay otherwise an error message
-func (self nntpConnection) checkMIMEHeader(daemon NNTPDaemon, hdr textproto.MIMEHeader) (reason string, err error) {
+func (self *nntpConnection) checkMIMEHeader(daemon NNTPDaemon, hdr textproto.MIMEHeader) (reason string, err error) {
 
   newsgroup := hdr.Get("Newsgroups")
   reference := hdr.Get("References")
@@ -282,7 +284,7 @@ func (self nntpConnection) checkMIMEHeader(daemon NNTPDaemon, hdr textproto.MIME
   return
 }
 
-func (self nntpConnection) handleLine(daemon NNTPDaemon, code int, line string, conn *textproto.Conn) (err error) {
+func (self *nntpConnection) handleLine(daemon NNTPDaemon, code int, line string, conn *textproto.Conn) (err error) {
   parts := strings.Split(line, " ")
   var msgid string
   if code == 0 && len(parts) > 1 {
@@ -527,13 +529,80 @@ func (self nntpConnection) handleLine(daemon NNTPDaemon, code int, line string, 
             conn.PrintfLine("436 Transfer failed: "+err.Error())
           }
         }
+      } else if cmd == "NEWSGROUPS" {
+        // handle NEWSGROUPS
+        conn.PrintfLine("231 List of newsgroups follow")
+        dw := conn.DotWriter()
+        // get a list of every newsgroup
+        groups := daemon.database.GetAllNewsgroups()
+        // for each group
+        for _, group := range groups {
+          // get low/high water mark
+          lo, hi, err := daemon.database.GetLastAndFirstForGroup(group)
+          if err == nil {
+            // XXX: we ignore errors here :\
+            _, _ = io.WriteString(dw, fmt.Sprintf("%s %d %d y\n", group, lo, hi))
+          } else {
+            log.Println(self.name, "could not get low/high water mark for", group, err)
+          }
+        }
+        // flush dotwriter
+        dw.Close()
+        
+      } else if cmd == "XOVER" {
+        // handle XOVER
+        if self.group == "" {
+          conn.PrintfLine("412 No newsgroup selected")
+        } else {
+          // handle xover command
+          // right now it's every article in group
+          models, err := daemon.database.GetPostsInGroup(self.group)
+          if err == nil {
+            conn.PrintfLine("224 Overview information follows")
+            dw := conn.DotWriter()
+            for idx, model := range models {
+              io.WriteString(dw, fmt.Sprintf("%.6d\t%s\t\"%s\" <%s@%s>\t%s\t%s\t%s\r\n", idx+1, model.Subject(), model.Name(), model.Name(), model.Frontend(), model.Date(), model.MessageID(), model.Reference()))
+            }
+            dw.Close()
+          } else {
+            log.Println(self.name, "error when getting posts in", self.group, err)
+            conn.PrintfLine("500 error, %s", err.Error())
+          }
+        }
+      } else if cmd == "GROUP" {
+        // handle GROUP command
+        group := parts[1]
+        // check for newsgroup
+        if daemon.database.HasNewsgroup(group) {
+          // we have the group
+          self.group = group
+          // count posts
+          number := daemon.database.CountPostsInGroup(group, 0)
+          // get hi/low water marks
+          low, hi, err := daemon.database.GetLastAndFirstForGroup(group)
+          if err == nil {
+            // we gud
+            conn.PrintfLine("211 %d %d %d %s", number, low, hi, group)
+          } else {
+            // wtf error
+            log.Println(self.name, "error in GROUP command", err)
+            // still have to reply, send it bogus low/hi
+            conn.PrintfLine("211 %d 0 1 %s", number, group)
+          }
+        } else {
+          // no such group
+          conn.PrintfLine("411 No Such Newsgroup")
+        }
+      } else {
+        log.Println(self.name, "invalid command recv'd", cmd)
+        conn.PrintfLine("500 Invalid command: %s", cmd)
       }
     }
   }
   return
 }
 
-func (self nntpConnection) startStreaming(daemon NNTPDaemon, reader bool, conn *textproto.Conn) {
+func (self *nntpConnection) startStreaming(daemon NNTPDaemon, reader bool, conn *textproto.Conn) {
   var err error
   for err == nil {
     err = self.handleStreaming(daemon, reader, conn)
@@ -541,67 +610,240 @@ func (self nntpConnection) startStreaming(daemon NNTPDaemon, reader bool, conn *
   log.Println(self.name, "error while streaming:", err)
 }
 
-func (self nntpConnection) startReader(daemon NNTPDaemon, conn *textproto.Conn) {
-  log.Println(self.name, "run reader mode")
-  var err error
-  var code int
-  var line string
-  for err == nil {
-    // next article to ask for
-    msgid := <- self.article
-    log.Println(self.name, "asking for", msgid)
-    // send command
-    conn.PrintfLine("ARTICLE %s", msgid)
-    // read response
-    code, line, err = conn.ReadCodeLine(-1)
-    if code == 220 {
-      // awwww yeh we got it
-      var hdr textproto.MIMEHeader
-      // read header
-      hdr, err = conn.ReadMIMEHeader()
+// scrape all posts in a newsgroup
+// download ones we do not have
+func (self *nntpConnection) scrapeGroup(daemon NNTPDaemon, conn *textproto.Conn, group string) (err error) {
+  log.Println(self.name, "scrape newsgroup", group)
+  // send GROUP command
+  err = conn.PrintfLine("GROUP %s", group)
+  if err == nil {
+    // read reply to GROUP command
+    code := 0
+    code, _, err = conn.ReadCodeLine(211)
+    // check code
+    if code == 211 {
+      // success
+      // send XOVER command, dummy parameter for now
+      err = conn.PrintfLine("XOVER 0")
       if err == nil {
-        // prepare to read body
-        dr := conn.DotReader()
-        // check header and decide if we want this
-        reason, err := self.checkMIMEHeader(daemon, hdr)
-        if err == nil {
-          if len(reason) > 0 {
-            log.Println(self.name, "discarding", msgid, reason)
-            // we don't want it, discard
-            io.Copy(ioutil.Discard, dr)
-            daemon.database.BanArticle(msgid, reason)
-          } else {
-            // yeh we want it open up a file to store it in
-            f := daemon.store.CreateTempFile(msgid)
-            if f == nil {
-              // already being loaded elsewhere
+        // no error sending command, read first line
+        code, _, err = conn.ReadCodeLine(244)
+        if code == 244 {
+          // maps message-id -> references
+          articles := make(map[string]string)
+          // successful response, read multiline
+          dr := conn.DotReader()
+          sc := bufio.NewScanner(dr)
+          for sc.Scan() {
+            line := sc.Text()
+            parts := strings.Split(line, "\t")
+            if len(parts) > 5 {
+              // probably valid line
+              msgid := parts[4]
+              // msgid -> reference
+              articles[msgid] = parts[5]
             } else {
-              // write header to file
-              writeMIMEHeader(f, hdr)
-              // write article body to file
-              _, _ = io.Copy(f, dr)
-              // close file
-              f.Close()
-              log.Println(msgid, "obtained via reader from", self.name)
-              // tell daemon to load article via infeed
-              daemon.infeed_load <- msgid
+              // probably not valid line
+              // ignore
+            }
+          }
+          err = sc.Err()
+          if err == nil {
+            // everything went okay when reading multiline
+            // for each article
+            for msgid, refid := range articles {
+              // check the reference
+              if len(refid) > 0 && ValidMessageID(refid) {
+                // do we have it?
+                if daemon.database.HasArticle(refid) {
+                  // we have it don't do anything
+                } else if daemon.database.ArticleBanned(refid) {
+                  // thread banned
+                } else {
+                  // we don't got root post and it's not banned, try getting it
+                  err = self.requestArticle(daemon, conn, refid)
+                  if err != nil {
+                    // something bad happened
+                    log.Println(self.name, "failed to obtain root post", refid, err)
+                    return
+                  }
+                }
+              }
+              // check the actual message-id
+              if len(msgid) > 0 && ValidMessageID(msgid) {
+                // do we have it?
+                if daemon.database.HasArticle(msgid) {
+                  // we have it, don't do shit 
+                } else if daemon.database.ArticleBanned(msgid) {
+                  // this article is banned, don't do shit yo
+                } else {
+                  // we don't have it but we want it
+                  err = self.requestArticle(daemon, conn, msgid)
+                  if err != nil {
+                    // something bad happened
+                    log.Println(self.name, "failed to obtain article", msgid, err)
+                    return
+                  }
+                }
+              }
+            }
+          } else {
+            // something bad went down when reading multiline
+            log.Println(self.name, "failed to read multiline for", group, "XOVER command")
+          }
+        }
+      }
+    } else if err == nil {
+      // invalid response code no error
+      log.Println(self.name, "says they don't have", group, "but they should")
+    } else {
+      // error recving response
+      log.Println(self.name, "error recving response from GROUP command", err)
+    }
+  }
+  return
+}
+
+// grab every post from the remote server, assumes outbound connection
+func (self *nntpConnection) scrapeServer(daemon NNTPDaemon, conn *textproto.Conn) {
+  log.Println(self.name, "scrape remote server")
+
+  // switch to reader mode explicitly
+  success, err := self.modeSwitch("READER", conn)
+  if success {
+    // send newsgroups command
+    err = conn.PrintfLine("NEWSGROUPS %d 000000 GMT", timeNow())
+    if err == nil {
+      // read response line
+      code, _, err := conn.ReadCodeLine(231)
+      if code == 231 {
+        var groups []string
+        // valid response, we expect a multiline
+        dr := conn.DotReader()
+        // read lines
+        sc := bufio.NewScanner(dr)
+        for sc.Scan() {
+          line := sc.Text()
+          idx := strings.Index(line, " ")
+          if idx > 0 {
+            groups = append(groups, line[:idx])
+          } else {
+            // invalid line? wtf.
+            log.Println(self.name, "invalid line in newsgroups multiline response:", line)
+          }
+        }
+        err = sc.Err()
+        if err == nil {
+          log.Println(self.name, "got list of newsgroups")
+          // for each group
+          for _, group := range groups {
+            var banned bool
+            // check if the newsgroup is banned
+            banned, err = daemon.database.NewsgroupBanned(group)
+            if banned {
+              // we don't want it
+            } else if err == nil {
+              // scrape the group
+              err = self.scrapeGroup(daemon, conn, group)
+              if err != nil {
+                log.Println(self.name, "did not scrape", group, err)
+                break
+              }
+            } else {
+              // error while checking for ban
+              log.Println(self.name, "checking for newsgroup ban failed", err)
+              break
             }
           }
         } else {
-          // error happened while processing
-          log.Println(self.name, "error happend while processing MIME header", err)
+          // we got a bad multiline block?
+          log.Println(self.name, "bad multiline response from newsgroups command", err)
+        }
+      } else if err == nil {
+        // invalid response no error
+        log.Println(self.name, "gave us invalid response to newsgroups command", code)
+      } else {
+        // invalid response with error
+        log.Println(self.name, "error while reading response from newsgroups command", err)
+      }
+    } else {
+      log.Println(self.name, "failed to send newsgroups command", err)
+    }
+  } else if err == nil {
+    // failed to switch mode to reader
+    log.Println(self.name, "does not do reader mode, bailing scrape")
+  } else {
+    // failt to switch mode because of error
+    log.Println(self.name, "failed to switch to reader mode when scraping", err)
+  }
+}
+
+// ask for an article from the remote server
+// feed it to the daemon if we get it
+func (self *nntpConnection) requestArticle(daemon NNTPDaemon, conn *textproto.Conn, msgid string) (err error) {
+  log.Println(self.name, "asking for", msgid)
+  // send command
+  err = conn.PrintfLine("ARTICLE %s", msgid)
+  // read response
+  code, line, err := conn.ReadCodeLine(-1)
+  if code == 220 {
+    // awwww yeh we got it
+    var hdr textproto.MIMEHeader
+    // read header
+    hdr, err = conn.ReadMIMEHeader()
+    if err == nil {
+      // prepare to read body
+      dr := conn.DotReader()
+      // check header and decide if we want this
+      reason, err := self.checkMIMEHeader(daemon, hdr)
+      if err == nil {
+        if len(reason) > 0 {
+          log.Println(self.name, "discarding", msgid, reason)
+          // we don't want it, discard
+          io.Copy(ioutil.Discard, dr)
+          daemon.database.BanArticle(msgid, reason)
+        } else {
+          // yeh we want it open up a file to store it in
+          f := daemon.store.CreateTempFile(msgid)
+          if f == nil {
+            // already being loaded elsewhere
+          } else {
+            // write header to file
+            writeMIMEHeader(f, hdr)
+            // write article body to file
+            _, _ = io.Copy(f, dr)
+            // close file
+            f.Close()
+            log.Println(msgid, "obtained via reader from", self.name)
+            // tell daemon to load article via infeed
+            daemon.infeed_load <- msgid
+          }
         }
       } else {
-        // error happened while reading header
-        log.Println(self.name, "error happened while reading MIME header", err)
+        // error happened while processing
+        log.Println(self.name, "error happend while processing MIME header", err)
       }
-    } else if code == 430 {
-      // they don't know it D:
-      log.Println(msgid, "not known by", self.name)
     } else {
-      // invalid response
-      log.Println(self.name, "invald response to ARTICLE:", code, line)
+      // error happened while reading header
+      log.Println(self.name, "error happened while reading MIME header", err)
     }
+  } else if code == 430 {
+    // they don't know it D:
+    log.Println(msgid, "not known by", self.name)
+  } else {
+    // invalid response
+    log.Println(self.name, "invald response to ARTICLE:", code, line)
+  }
+  return
+}
+
+func (self *nntpConnection) startReader(daemon NNTPDaemon, conn *textproto.Conn) {
+  log.Println(self.name, "run reader mode")
+  var err error
+  for err == nil {
+    // next article to ask for
+    msgid := <- self.article
+    err = self.requestArticle(daemon, conn, msgid)
   }
   // report error and close connection
   log.Println(self.name, "error while in reader mode:", err)
@@ -611,7 +853,7 @@ func (self nntpConnection) startReader(daemon NNTPDaemon, conn *textproto.Conn) 
 // run the mainloop for this connection
 // stream if true means they support streaming mode
 // reader if true means they support reader mode
-func (self nntpConnection) runConnection(daemon NNTPDaemon, inbound, stream, reader bool, preferMode string, conn *textproto.Conn) {
+func (self *nntpConnection) runConnection(daemon NNTPDaemon, inbound, stream, reader bool, preferMode string, conn *textproto.Conn) {
 
   var err error
   var line string
@@ -723,7 +965,7 @@ func (self nntpConnection) runConnection(daemon NNTPDaemon, inbound, stream, rea
   conn.Close()
 }
 
-func (self nntpConnection) articleDefer(msgid string) {
+func (self *nntpConnection) articleDefer(msgid string) {
   time.Sleep(time.Second * 90)
   self.stream <- nntpCHECK(msgid)
 }

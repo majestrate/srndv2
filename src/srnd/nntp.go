@@ -713,9 +713,7 @@ func (self *nntpConnection) scrapeGroup(daemon NNTPDaemon, conn *textproto.Conn,
 // grab every post from the remote server, assumes outbound connection
 func (self *nntpConnection) scrapeServer(daemon NNTPDaemon, conn *textproto.Conn) (err error) {
   log.Println(self.name, "scrape remote server")
-  var success bool
-  // switch to reader mode explicitly
-  success, err = self.modeSwitch("READER", conn)
+  success := true
   if success {
     // send newsgroups command
     err = conn.PrintfLine("NEWSGROUPS %d 000000 GMT", timeNow())

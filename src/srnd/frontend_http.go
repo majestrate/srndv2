@@ -248,8 +248,7 @@ func (self httpFrontend) regenerateBoardPage(board string, page int) {
 
 // regenerate the front page
 func (self httpFrontend) regenFrontPage() {
-  fname := filepath.Join(self.webroot_dir, "index.html")
-  template.genFrontPage(10, self.name, fname, self.daemon.database)
+  template.genFrontPage(10, self.name, self.webroot_dir, self.daemon.database)
 }
 
 // regenerate the overboard

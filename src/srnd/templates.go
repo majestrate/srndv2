@@ -304,8 +304,8 @@ func renderPostForm(prefix, board, op_msg_id string) string {
 }
 
 
-
-func (self *templateEngine) genFrontPage(top_count int, frontend_name, outfile string, db Database) {
+// generate front page and board list
+func (self *templateEngine) genFrontPage(top_count int, frontend_name, outdir string, db Database) {
   // the graph for the front page
   var frontpage_graph boardPageRows
 
@@ -325,7 +325,7 @@ func (self *templateEngine) genFrontPage(top_count int, frontend_name, outfile s
       Board: group,
     })
   }
-  wr, err := OpenFileWriter(outfile)
+  wr, err := OpenFileWriter(filepath.Join(outdir, "index.html"))
   if err != nil {
     log.Println("cannot render front page", err)
     return
@@ -343,6 +343,19 @@ func (self *templateEngine) genFrontPage(top_count int, frontend_name, outfile s
   _, err = io.WriteString(wr, self.renderTemplate("frontpage.mustache", param))
   if err != nil {
     log.Println("error writing front page", err)
+  }
+  wr.Close()
+  
+  wr, err = OpenFileWriter(filepath.Join(outdir, "boards.html"))
+  if err != nil {
+    log.Println("cannot render board list page", err)
+    return
+  }
+
+  param["graph"] = frontpage_graph
+  _, err = io.WriteString(wr, self.renderTemplate("boardlist.mustache", param))
+  if err != nil {
+    log.Println("error writing board list page", err)
   }
   wr.Close()
 }

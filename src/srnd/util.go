@@ -109,7 +109,7 @@ func ShortHashMessageID(msgid string) string {
 
 // shorter message id hash
 func ShorterHashMessageID(msgid string) string {
-  return strings.ToLower(HashMessageID(msgid)[:8])
+  return strings.ToLower(HashMessageID(msgid)[:10])
 }
 
 

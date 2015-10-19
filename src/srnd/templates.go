@@ -85,7 +85,7 @@ func updateLinkCacheForThread(thread ThreadModel) {
   u := thread.OP().PostURL()
   s := ShorterHashMessageID(m)
   h := ShortHashMessageID(m)
-  template.links_short[s] = h
+  template.links_short[s] = u
   template.links[h] = u
   // for each reply
   for _, p := range thread.Replies() {
@@ -94,8 +94,7 @@ func updateLinkCacheForThread(thread ThreadModel) {
     u = p.PostURL()
     s = ShorterHashMessageID(m)
     h = ShortHashMessageID(m)
-    template.links_short[s] = h
-    template.links[h] = u
+    template.links_short[s] = u
     template.links[h] = u
   }
 }
@@ -104,9 +103,10 @@ func updateLinkCacheForThread(thread ThreadModel) {
 func (self *templateEngine) findLink(hash string) (url string) {
   if len(hash) == 8 {
     // short version of hash
-    hash, _ = self.links_short[hash]
+    url, _ = self.links_short[hash]
+  } else {
+    url, _ = self.links[hash]
   }
-  url, _ = self.links[hash]
   return
 }
 

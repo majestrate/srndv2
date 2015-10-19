@@ -103,10 +103,15 @@ func HashMessageID(msgid string) string {
   return fmt.Sprintf("%x", sha1.Sum([]byte(msgid)))
 }
 // short message id hash
-// >>hash
 func ShortHashMessageID(msgid string) string {
   return strings.ToLower(HashMessageID(msgid)[:18])
 }
+
+// shorter message id hash
+func ShorterHashMessageID(msgid string) string {
+  return strings.ToLower(HashMessageID(msgid)[:10])
+}
+
 
 type lineWriter struct {
   io.Writer

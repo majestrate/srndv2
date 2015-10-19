@@ -16,8 +16,10 @@ import (
 )
 
 type templateEngine struct {
-  // shorthash -> url
+  // posthash -> url
   links map[string]string
+  // shorthash -> posthash
+  links_short map[string]string
   // every newsgroup
   groups map[string]GroupModel
   // loaded templates
@@ -79,21 +81,32 @@ func updateLinkCacheForBoard(page BoardModel) {
 
 // update link -> url cache given a thread
 func updateLinkCacheForThread(thread ThreadModel) {
-  h := thread.OP().ShortHash()
+  m := thread.OP().MessageID()
   u := thread.OP().PostURL()
+  s := ShorterHashMessageID(m)
+  h := ShortHashMessageID(m)
+  template.links_short[s] = h
   template.links[h] = u
   // for each reply
   for _, p := range thread.Replies() {
     // put reply entry
-    h = p.ShortHash()
-          u = p.PostURL()
+    m = p.MessageID()
+    u = p.PostURL()
+    s = ShorterHashMessageID(m)
+    h = ShortHashMessageID(m)
+    template.links_short[s] = h
+    template.links[h] = u
     template.links[h] = u
   }
 }
 
 // get the url for a backlink
-func (self *templateEngine) findLink(shorthash string) (url string) {
-  url, _ = self.links[shorthash]
+func (self *templateEngine) findLink(hash string) (url string) {
+  if len(hash) == 8 {
+    // short version of hash
+    hash, _ = self.links_short[hash]
+  }
+  url, _ = self.links[hash]
   return
 }
 

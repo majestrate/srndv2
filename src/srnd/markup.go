@@ -31,7 +31,7 @@ func backlink(word string) (markup string) {
       return html.EscapeString(word)
     }
   }
-  return word
+  return html.EscapeString(word)
 }
   
 func formatline(line string) (markup string) {

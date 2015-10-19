@@ -101,7 +101,7 @@ func updateLinkCacheForThread(thread ThreadModel) {
 
 // get the url for a backlink
 func (self *templateEngine) findLink(hash string) (url string) {
-  if len(hash) == 8 {
+  if len(hash) == 10 {
     // short version of hash
     url, _ = self.links_short[hash]
   } else {

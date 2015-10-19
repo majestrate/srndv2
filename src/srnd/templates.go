@@ -288,6 +288,7 @@ func newTemplateEngine(dir string) *templateEngine {
     templates: make(map[string]string),
     template_dir: dir,
     links: make(map[string]string),
+    links_short: make(map[string]string),
   }
 }
 

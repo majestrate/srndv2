@@ -20,7 +20,7 @@ func backlink(word string) (markup string) {
   re := regexp.MustCompile(`>> ?([0-9a-f]+)`)
   link := re.FindString(word)
   if len(link) > 2 {
-    link = re.SubexpNames()[1]
+    link = strings.Trim(link[2:], " ")
     if len(link) > 2 {
       url := template.findLink(link)
       if len(url) == 0 {

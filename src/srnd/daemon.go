@@ -304,14 +304,13 @@ func (self NNTPDaemon) Run() {
     
   }()
 
-  //if self.sync_on_start {
-  //  go func() {
-  //    // b
-  //    for _, article := range self.database.GetAllArticles() {
-  //      self.send_all_feeds <- article
-  //    }
-  //  }()
-  //}
+  if self.sync_on_start {
+    go func() {
+      for _, article := range self.database.GetAllArticles() {
+        self.send_all_feeds <- article
+      }
+    }()
+  }
   
   // if we have no frontend this does nothing
   if self.frontend != nil {

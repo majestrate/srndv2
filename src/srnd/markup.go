@@ -17,9 +17,10 @@ var re_backlink = regexp.MustCompile(`>> ?([0-9a-f]+)`)
 
 // parse backlink
 func backlink(word string) (markup string) {
-  link := re_backlink.FindString(word)
+  re := regexp.MustCompile(`>> ?([0-9a-f]+)`)
+  link := re.FindString(word)
   if len(link) > 2 {
-    link = strings.Trim(link, " ")
+    link = re.SubexpNames()[1]
     if len(link) > 2 {
       url := template.findLink(link)
       if len(url) == 0 {

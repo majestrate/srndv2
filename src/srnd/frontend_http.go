@@ -505,7 +505,7 @@ func (self httpFrontend) handle_postform(wr http.ResponseWriter, r *http.Request
     s, _ := self.store.Get(r, self.name)
     s.Values["captcha_id"] = c
     s.Save(r, wr)
-
+    resp_map["fail_message"] = post_fail
     resp_map["prefix"] = self.prefix
     io.WriteString(wr, template.renderTemplate("post_retry.mustache", resp_map))
     return

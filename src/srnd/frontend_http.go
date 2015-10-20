@@ -489,23 +489,24 @@ func (self httpFrontend) handle_postform(wr http.ResponseWriter, r *http.Request
     }
   }
 
-  // check message size
-  if len(nntp.attachments) == 0 && len(msg) == 0 {
-    post_fail += "no message. "
-  } else if len(msg) > 1024 * 1024 * 10 {
-    post_fail += "your message is too big"
-  }
-
+  
   if att_buff.Len() > 0 && len(att_filename) > 0 && len(att_mime) > 0 {
     att := createAttachment(att_mime, att_filename, &att_buff)
     if att == nil {
       // failed to parse
       log.Println("failed to parse attachment")
     } else {
+      log.Println("attaching reupload")
       nntp = nntp.Attach(att).(nntpArticle)
     }
   }
-
+  
+  // check message size
+  if len(nntp.attachments) == 0 && len(msg) == 0 {
+    post_fail += "no message. "
+  } else if len(msg) > 1024 * 1024 * 10 {
+    post_fail += "your message is too big"
+  }
   
   if captcha_retry {
     // retry the post with a new captcha

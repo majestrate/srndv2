@@ -427,12 +427,14 @@ func (self httpFrontend) handle_postform(wr http.ResponseWriter, r *http.Request
         captcha_solution = part_buff.String()
       } else if partname == "attachment_data" {
         // repost of data
-        // check for an attachment already attached
-        if nntp.Attachments() == nil {
-          // no attachments
+        atts := nntp.Attachments()
+        if len(atts) == 0 {
           dec := base64.NewDecoder(base64.StdEncoding, part)
           att_buff.Reset()
           _, err = io.Copy(&att_buff, dec)
+        } else {
+          // we have already attached something?
+          log.Println("not attachming another attachment, already added one")
         }
       } else if partname == "attachment_filename" {
         att_filename = part_buff.String()
@@ -490,7 +492,7 @@ func (self httpFrontend) handle_postform(wr http.ResponseWriter, r *http.Request
   }
 
   
-  if att_buff.Len() > 0 && len(att_filename) > 0 && len(att_mime) > 0 {
+  if att_buff.Len() > 0 && len(att_filename) > 0 && len(att_mime) > 0  && self.attachments {
     att := createAttachment(att_mime, att_filename, &att_buff)
     if att == nil {
       // failed to parse
@@ -519,7 +521,7 @@ func (self httpFrontend) handle_postform(wr http.ResponseWriter, r *http.Request
     atts := nntp.Attachments()
     if atts == nil {
       // no attachments
-    } else if len(atts) == 1 {
+    } else {
       att := atts[0]
       // 1 attachment
       var buff bytes.Buffer

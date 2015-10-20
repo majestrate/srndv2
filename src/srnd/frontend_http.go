@@ -371,8 +371,10 @@ func (self httpFrontend) handle_postform(wr http.ResponseWriter, r *http.Request
     return
   }
 
-  var subject, name, reference, captcha_solution, captcha_id string
   var captcha_retry bool
+  var subject, name, reference, captcha_solution, captcha_id string
+  var att_filename, att_mime string
+  var att_buff bytes.Buffer
   for {
     part, err := mp_reader.NextPart()
     if err == nil {
@@ -383,7 +385,9 @@ func (self httpFrontend) handle_postform(wr http.ResponseWriter, r *http.Request
       if partname == "attachment" && self.attachments {
         log.Println("attaching file...")
         att := readAttachmentFromMimePart(part)
-        nntp = nntp.Attach(att).(nntpArticle)
+        if att != nil {
+          nntp = nntp.Attach(att).(nntpArticle)
+        }
         continue
       }
 
@@ -421,6 +425,19 @@ func (self httpFrontend) handle_postform(wr http.ResponseWriter, r *http.Request
         captcha_id = part_buff.String()
       } else if partname == "captcha" {
         captcha_solution = part_buff.String()
+      } else if partname == "attachment_data" {
+        // repost of data
+        // check for an attachment already attached
+        if nntp.Attachments() == nil {
+          // no attachments
+          dec := base64.NewDecoder(base64.StdEncoding, part)
+          att_buff.Reset()
+          _, err = io.Copy(&att_buff, dec)
+        }
+      } else if partname == "attachment_filename" {
+        att_filename = part_buff.String()
+      } else if partname == "attachment_type" {
+        att_mime = part_buff.String()
       }
     
       // we done
@@ -519,7 +536,14 @@ func (self httpFrontend) handle_postform(wr http.ResponseWriter, r *http.Request
     io.WriteString(wr, template.renderTemplate("post_fail.mustache", resp_map))
     return
   }
-  
+
+  if att_buff.Len() > 0 && len(att_filename) > 0 && len(att_mime) > 0 {
+    att := createAttachment(att_mime, att_filename, &att_buff)
+    if att != nil {
+      nntp = nntp.Attach(att).(nntpArticle)
+    }
+  }
+ 
   // set subject
   if len(subject) == 0 {
     subject = "None"

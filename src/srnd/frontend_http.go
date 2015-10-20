@@ -499,6 +499,7 @@ func (self httpFrontend) handle_postform(wr http.ResponseWriter, r *http.Request
       enc.Close()
       resp_map["attachment"] = buff.String()
       resp_map["attachment_filename"] = att.Filename()
+      resp_map["attachment_type"] = att.Mime()
     }
     c := captcha.New()
     resp_map["captcha_id"] = c

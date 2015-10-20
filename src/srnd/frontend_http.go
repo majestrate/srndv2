@@ -429,7 +429,7 @@ func (self httpFrontend) handle_postform(wr http.ResponseWriter, r *http.Request
         // repost of data
         atts := nntp.Attachments()
         if len(atts) == 0 {
-          dec := base64.NewDecoder(base64.StdEncoding, part)
+          dec := base64.NewDecoder(base64.StdEncoding, &part_buff)
           _, err = io.Copy(&att_buff, dec)
         } else {
           // we have already attached something?

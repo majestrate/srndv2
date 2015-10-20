@@ -371,7 +371,7 @@ func (self httpFrontend) handle_postform(wr http.ResponseWriter, r *http.Request
     return
   }
 
-  var subject, name, reference string
+  var subject, name, reference, captcha_solution, captcha_id string
   var captcha_retry bool
   for {
     part, err := mp_reader.NextPart()
@@ -417,24 +417,12 @@ func (self httpFrontend) handle_postform(wr http.ResponseWriter, r *http.Request
           post_fail += ref
           post_fail += ", not posting. "
         }
-          
-
+      } else if partname == "captcha_id" {
+        captcha_id = part_buff.String()
       } else if partname == "captcha" {
-        captcha_solution := part_buff.String()
-        s, err := self.store.Get(r, self.name)
-        captcha_id , ok := s.Values["captcha_id"]
-        if err == nil && ok {
-          if captcha.VerifyString(captcha_id.(string), captcha_solution) {
-            // captcha is valid
-          } else {
-            // captcha is not valid
-            captcha_retry = true
-          }
-        } else {
-          // captcha has no cookies
-          captcha_retry = true
-        }
+        captcha_solution = part_buff.String()
       }
+    
       // we done
       // reset buffer for reading parts
       part_buff.Reset()
@@ -452,6 +440,18 @@ func (self httpFrontend) handle_postform(wr http.ResponseWriter, r *http.Request
     }
   }
 
+  if len(captcha_id) == 0 {
+    s, _ := self.store.Get(r, self.name)
+    cid, ok := s.Values["captcha_id"]
+    if ok {
+      captcha_id = cid.(string)
+    }
+  }
+ 
+  if ! captcha.VerifyString(captcha_id, captcha_solution) {
+    // captcha is not valid
+    captcha_retry = true
+  }
 
   // make error template param
   resp_map := make(map[string]string)

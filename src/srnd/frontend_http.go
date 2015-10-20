@@ -500,6 +500,7 @@ func (self httpFrontend) handle_postform(wr http.ResponseWriter, r *http.Request
     att := createAttachment(att_mime, att_filename, &att_buff)
     if att == nil {
       // failed to parse
+      log.Println("failed to parse attachment")
     } else {
       nntp = nntp.Attach(att).(nntpArticle)
     }

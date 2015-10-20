@@ -446,6 +446,8 @@ func (self httpFrontend) handle_postform(wr http.ResponseWriter, r *http.Request
     if ok {
       captcha_id = cid.(string)
     }
+    s.Values["captcha_id"] = ""
+    s.Save(r, wr)
   }
  
   if ! captcha.VerifyString(captcha_id, captcha_solution) {
@@ -498,7 +500,12 @@ func (self httpFrontend) handle_postform(wr http.ResponseWriter, r *http.Request
       resp_map["attactment"] = buff.String()
       resp_map["attactment_filename"] = att.Filename()
     }
-    resp_map["captcha_id"] = captcha.New()
+    c := captcha.New()
+    resp_map["captcha_id"] = c
+    s, _ := self.store.Get(r, self.name)
+    s.Values["captcha_id"] = c
+    s.Save(r, wr)
+
     resp_map["prefix"] = self.prefix
     io.WriteString(wr, template.renderTemplate("post_retry.mustache", resp_map))
     return

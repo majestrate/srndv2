@@ -144,7 +144,7 @@ func createAttachment(content_type, fname string, body io.Reader) NNTPAttachment
       if idx > 0 {
         a.ext = fname[idx:]
       }
-      a.header.Set("Filename", fname)
+      a.header.Set("Content-Disposition", `form-data; filename="`+fname+`"; name="attachment"`)
       a.header.Set("Content-Type", a.mime)
       a.header.Set("Content-Transfer-Encoding", "base64")
       h := sha512.Sum512(a.body.Bytes())

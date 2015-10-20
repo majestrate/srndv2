@@ -497,8 +497,8 @@ func (self httpFrontend) handle_postform(wr http.ResponseWriter, r *http.Request
       enc := base64.NewEncoder(base64.StdEncoding, &buff)
       _, err = io.Copy(enc, att)
       enc.Close()
-      resp_map["attactment"] = buff.String()
-      resp_map["attactment_filename"] = att.Filename()
+      resp_map["attachment"] = buff.String()
+      resp_map["attachment_filename"] = att.Filename()
     }
     c := captcha.New()
     resp_map["captcha_id"] = c

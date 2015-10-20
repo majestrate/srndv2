@@ -491,6 +491,7 @@ func (self httpFrontend) handle_postform(wr http.ResponseWriter, r *http.Request
     }
   }
 
+  log.Println(att_buff.Len(), att_filename, att_mime)
   
   if att_buff.Len() > 0 && len(att_filename) > 0 && len(att_mime) > 0  && self.attachments {
     att := createAttachment(att_mime, att_filename, &att_buff)

@@ -18,6 +18,10 @@ import (
 )
 
 type NNTPAttachment interface {
+
+  io.Reader
+  io.WriterTo
+  
   // the name of the file
   Filename() string
   // the filepath to the saved file
@@ -26,8 +30,6 @@ type NNTPAttachment interface {
   Mime() string
   // the file extension of the attachment
   Extension() string
-  // write this attachment out to a writer
-  WriteTo(wr io.Writer) error
   // get the sha512 hash of the attachment
   Hash() []byte
   // do we need to generate a thumbnail?
@@ -72,9 +74,8 @@ func (self nntpAttachment) Extension() string {
   return self.ext
 }
 
-func (self nntpAttachment) WriteTo(wr io.Writer) error {  
-  _, err := self.body.WriteTo(wr)
-  return err
+func (self nntpAttachment) WriteTo(wr io.Writer) (int64, error) {  
+  return self.body.WriteTo(wr)
 }
 
 
@@ -99,6 +100,10 @@ func (self nntpAttachment) NeedsThumbnail() bool {
 
 func (self nntpAttachment) Header() textproto.MIMEHeader {
   return self.header
+}
+
+func (self nntpAttachment) Read(d []byte) (n int, err error) {
+  return self.body.Read(d)
 }
 
 

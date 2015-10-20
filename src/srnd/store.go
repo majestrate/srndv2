@@ -206,7 +206,7 @@ func (self articleStore) saveAttachment(att NNTPAttachment) {
   log.Println("save attachment", att.Filename(), "to", upload)
   f, err = os.Create(upload)
   if err == nil {
-    err = att.WriteTo(f)
+    _, err = io.Copy(f, att)
     f.Close()
   }
   if err != nil {

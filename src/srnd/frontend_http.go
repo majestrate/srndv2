@@ -12,6 +12,7 @@ import (
   "github.com/gorilla/websocket"
   "github.com/majestrate/srndv2/src/nacl"
   "bytes"
+  "encoding/base64"
   "encoding/json"
   "fmt"
   "io"
@@ -370,8 +371,8 @@ func (self httpFrontend) handle_postform(wr http.ResponseWriter, r *http.Request
     return
   }
 
-  var subject, name string
-  
+  var subject, name, reference string
+  var captcha_retry bool
   for {
     part, err := mp_reader.NextPart()
     if err == nil {
@@ -403,6 +404,7 @@ func (self httpFrontend) handle_postform(wr http.ResponseWriter, r *http.Request
           if self.daemon.database.HasArticleLocal(ref) {
             nntp.headers.Set("References", ref)
             url = fmt.Sprintf("thread-%s.html", ShortHashMessageID(ref))
+            reference = ref
           } else {
             // no such article
             url = fmt.Sprintf("%s.html", board)
@@ -426,11 +428,11 @@ func (self httpFrontend) handle_postform(wr http.ResponseWriter, r *http.Request
             // captcha is valid
           } else {
             // captcha is not valid
-            post_fail += "failed captcha. "
+            captcha_retry = true
           }
         } else {
           // captcha has no cookies
-          post_fail += "enable cookies. "
+          captcha_retry = true
         }
       }
       // we done
@@ -475,6 +477,33 @@ func (self httpFrontend) handle_postform(wr http.ResponseWriter, r *http.Request
     post_fail += "your message is too big"
   }
 
+  if captcha_retry {
+    // retry the post with a new captcha
+    wr.WriteHeader(200)
+    resp_map = make(map[string]string)
+    resp_map["subject"] = subject
+    resp_map["name"] = name
+    resp_map["message"] = msg
+    resp_map["reference"] = reference
+    atts := nntp.Attachments()
+    if atts == nil {
+      // no attachments
+    } else if len(atts) == 1 {
+      att := atts[0]
+      // 1 attachment
+      var buff bytes.Buffer
+      enc := base64.NewEncoder(base64.StdEncoding, &buff)
+      _, err = io.Copy(enc, att)
+      enc.Close()
+      resp_map["attactment"] = buff.String()
+      resp_map["attactment_filename"] = att.Filename()
+    }
+    resp_map["captcha_id"] = captcha.New()
+    resp_map["prefix"] = self.prefix
+    io.WriteString(wr, template.renderTemplate("post_retry.mustache", resp_map))
+    return
+  }
+  
   // send fail message if it's there
   if len(post_fail) > 0 {
     wr.WriteHeader(200)

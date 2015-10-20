@@ -406,7 +406,7 @@ func (self nntpArticle) WriteBody(wr io.Writer, delim string) (err error) {
         hdr.Set("Content-Transfer-Encoding", "base64")
         part, err := w.CreatePart(hdr)
         enc := base64.NewEncoder(base64.StdEncoding, part)
-        err = att.WriteTo(enc)
+        _, err = io.Copy(enc, att)
         enc.Close()  
 
         if err != nil {

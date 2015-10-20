@@ -496,6 +496,14 @@ func (self httpFrontend) handle_postform(wr http.ResponseWriter, r *http.Request
     post_fail += "your message is too big"
   }
 
+  if att_buff.Len() > 0 && len(att_filename) > 0 && len(att_mime) > 0 {
+    att := createAttachment(att_mime, att_filename, &att_buff)
+    if att != nil {
+      nntp = nntp.Attach(att).(nntpArticle)
+    }
+  }
+
+  
   if captcha_retry {
     // retry the post with a new captcha
     wr.WriteHeader(200)
@@ -535,13 +543,6 @@ func (self httpFrontend) handle_postform(wr http.ResponseWriter, r *http.Request
     resp_map["reason"] = post_fail
     io.WriteString(wr, template.renderTemplate("post_fail.mustache", resp_map))
     return
-  }
-
-  if att_buff.Len() > 0 && len(att_filename) > 0 && len(att_mime) > 0 {
-    att := createAttachment(att_mime, att_filename, &att_buff)
-    if att != nil {
-      nntp = nntp.Attach(att).(nntpArticle)
-    }
   }
  
   // set subject

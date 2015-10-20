@@ -436,7 +436,7 @@ func (self httpFrontend) handle_postform(wr http.ResponseWriter, r *http.Request
         }
       } else if partname == "attachment_filename" {
         att_filename = part_buff.String()
-      } else if partname == "attachment_type" {
+      } else if partname == "attachment_mime" {
         att_mime = part_buff.String()
       }
     
@@ -498,7 +498,9 @@ func (self httpFrontend) handle_postform(wr http.ResponseWriter, r *http.Request
 
   if att_buff.Len() > 0 && len(att_filename) > 0 && len(att_mime) > 0 {
     att := createAttachment(att_mime, att_filename, &att_buff)
-    if att != nil {
+    if att == nil {
+      // failed to parse
+    } else {
       nntp = nntp.Attach(att).(nntpArticle)
     }
   }

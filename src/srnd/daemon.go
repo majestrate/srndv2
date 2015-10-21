@@ -147,7 +147,7 @@ func (self NNTPDaemon) persistFeed(conf FeedConfig, mode string) {
       }
       nntp := createNNTPConnection()
       nntp.policy = conf.policy
-      nntp.name = conf.addr + "-" + mode
+      nntp.name = conf.name + "-" + mode
       c := textproto.NewConn(conn)
       stream, reader, err := nntp.outboundHandshake(c)
       if err == nil {

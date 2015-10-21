@@ -20,6 +20,7 @@ type FeedConfig struct {
   proxy_type string
   proxy_addr string
   linkauth_keyfile string
+  name string
 }
 
 type APIConfig struct {
@@ -238,7 +239,7 @@ func ReadConfig() *SRNdConfig {
       
       // load feed polcies
       sect_name :=  sect.Name()[5:]
-
+      fconf.name = sect_name
       if len(host) > 0 && len(port) > 0 {
         // host port specified
         fconf.addr = host + ":" + port

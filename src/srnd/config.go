@@ -58,12 +58,14 @@ func CheckConfig() {
 // generate default feeds.ini
 func GenFeedsConfig() error {
   conf := configparser.NewConfiguration()
-  sect := conf.NewSection("feed-10.0.0.1:119")
+  sect := conf.NewSection("feed-dummy")
   sect.Add("proxy-type", "socks4a")
   sect.Add("proxy-host", "127.0.0.1")
   sect.Add("proxy-port", "9050")
+  sect.Add("host", "dummy")
+  sect.Add("port", "119")
 
-  sect = conf.NewSection("10.0.0.1:119")
+  sect = conf.NewSection("dummy")
   sect.Add("overchan.*", "1")
   sect.Add("ano.paste", "0")
   sect.Add("ctl", "1")
@@ -225,6 +227,9 @@ func ReadConfig() *SRNdConfig {
         fconf.proxy_addr = strings.Trim(proxy_host, " ") + ":" + strings.Trim(proxy_port, " ")
       }
 
+      host := sect.ValueOf("host")
+      port := sect.ValueOf("port")
+      
       // check to see if we want to sync with them first
       val = sect.ValueOf("sync")
       if val == "1" {
@@ -233,7 +238,14 @@ func ReadConfig() *SRNdConfig {
       
       // load feed polcies
       sect_name :=  sect.Name()[5:]
-      fconf.addr = strings.Trim(sect_name, " ")
+
+      if len(host) > 0 && len(port) > 0 {
+        // host port specified
+        fconf.addr = host + ":" + port
+      } else {
+        // no host / port specified
+        fconf.addr = strings.Trim(sect_name, " ")
+      }
       feed_sect, err := conf.Section(sect_name)
       if err != nil {
         log.Fatal("no section", sect_name, "in feeds.ini")

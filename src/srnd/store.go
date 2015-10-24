@@ -104,7 +104,7 @@ func (self articleStore) Init() {
 }
 
 func (self articleStore) isAudio(fname string) bool {
-  for _, ext := range []string{".mp3", ".ogg", ".oga", ".opus", ".flac"} {
+  for _, ext := range []string{".mp3", ".ogg", ".oga", ".opus", ".flac", ".m4a"} {
     if strings.HasSuffix(strings.ToLower(fname), ext) {
       return true
     }

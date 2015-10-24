@@ -94,7 +94,7 @@ func GenSRNdConfig() error {
   sect.Add("attachments_dir", "webroot/img")
   sect.Add("thumbs_dir", "webroot/thm")
   sect.Add("convert_bin", "/usr/bin/convert")
-  sect.Add("ffmpegthumbnailer_bin", "/usr/bin/ffmpegthumbnailer")
+  sect.Add("ffmpegthumbnailer_bin", "/usr/bin/ffmpeg")
   sect.Add("sox_bin", "/usr/bin/sox")
   
   // database backend config

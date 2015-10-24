@@ -112,8 +112,8 @@ func (self articleStore) isAudio(fname string) bool {
   return false
 }
 // is this an image format we need convert for?
-func (self articleStore) isFunkyImage(fname string) bool {
-  for _, ext := range []string{".gif", ".ico"} {
+func (self articleStore) isImage(fname string) bool {
+  for _, ext := range []string{".gif", ".ico", ".png", ".jpeg", ".jpg", ".png", ".webp"} {
     if strings.HasSuffix(strings.ToLower(fname), ext) {
       return true
     }
@@ -127,12 +127,23 @@ func (self articleStore) GenerateThumbnail(fname string) error {
   outfname := self.ThumbnailFilepath(fname)
   infname := self.AttachmentFilepath(fname)
   var cmd *exec.Cmd
-  if self.isFunkyImage(fname)  {
+  if self.isImage(fname)  {
     cmd = exec.Command(self.convert_path, "-thumbnail", "200", infname, outfname)
   } else if self.isAudio(fname) {
-    cmd = exec.Command(self.sox_path, infname, "-n", "spectrogram", "-a", "-d", "0:30", "-r", "-p", "6", "-x", "200", "-y", "150", "-o", outfname)
+    tmpfname := infname +".wav"
+    cmd = exec.Command(self.ffmpeg_path, "-i", infname, tmpfname)
+    exec_out, err := cmd.CombinedOutput()
+    defer DelFile(tmpfname)
+    if err == nil {
+      cmd = exec.Command(self.sox_path, tmpfname, "-n", "spectrogram", "-a", "-d", "0:30", "-r", "-p", "6", "-x", "200", "-y", "150", "-o", outfname)
+      exec_out, err = cmd.CombinedOutput()
+    }
+    if err != nil {
+      log.Println("error generating audio thumbnail", err, string(exec_out))
+    }
+    return err
   } else {
-    cmd = exec.Command(self.ffmpeg_path, "-i", infname, "-o", outfname, "-s", "200")
+    cmd = exec.Command(self.ffmpeg_path, "-i", infname, "-vf", "scale=300:200" , "-vframes", "1", outfname)
   }
   exec_out, err := cmd.CombinedOutput()
   if err != nil {

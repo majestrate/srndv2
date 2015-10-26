@@ -181,9 +181,12 @@ func (self NNTPDaemon) syncPull(proxy_type, proxy_addr, remote_addr string) {
       // we can do it
       err = nntp.scrapeServer(self, conn)
       if err == nil {
+        // we succeeded
         log.Println(nntp.name, "Scrape successful")
         nntp.Quit(conn)
+        conn.Close()
       } else {
+        // we failed
         log.Println(nntp.name, "scrape failed", err)
         conn.Close()
       }

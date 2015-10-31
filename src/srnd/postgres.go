@@ -1008,7 +1008,7 @@ func (self PostgresDatabase) GetLastDaysPosts(n int64) (posts []int64) {
   
   day := time.Hour * 24
   now := time.Now()
-  now = time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, time.UTC)
+  now = time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, time.Local)
   now = now.Add(-day)
   for n > 0 {
     var num int64

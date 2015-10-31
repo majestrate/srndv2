@@ -1002,3 +1002,21 @@ func (self PostgresDatabase) UnMarkModPubkeyCanModGroup(pubkey, group string) (e
 func (self PostgresDatabase) IsExpired(root_message_id string) bool {
   return self.HasArticle(root_message_id) && ! self.HasArticleLocal(root_message_id)
 }
+
+func (self PostgresDatabase) GetLastDaysPosts(n int64) (posts []int64) {
+  
+  day := int64(24 * 60 * 60)
+  now := timeNow()
+  for n > 0 {
+    var num int64
+    err := self.conn.QueryRow("SELECT COUNT(*) FROM ArticlePosts WHERE time_posted < $1 AND time_posted > $2", now, now - day).Scan(&num)
+    if err == nil {
+      posts = append(posts, num)
+      now -= day
+    } else {
+      log.Println("error counting last n days posts", err)
+      return nil
+    }
+  }
+  return 
+}

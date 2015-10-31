@@ -191,6 +191,9 @@ type Database interface {
 
   // get a message id give a newsgroup and the nntp id
   GetMessageIDForNNTPID(group string, id int64) (string, error)
+
+  // get the last N days post count in decending order
+  GetLastDaysPosts(n int64) ([]int64)
 }
 
 func NewDatabase(db_type, schema, host, port, user, password string) Database  {

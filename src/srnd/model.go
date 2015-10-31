@@ -544,3 +544,82 @@ func (self linkModel) LinkURL() string {
 func (self linkModel) Text() string {
   return self.text
 }
+
+
+type boardPageRow struct {
+  Board string
+  Hour int64 
+  Day int64 
+  All int64 
+}
+
+type boardPageRows []boardPageRow
+
+func (self boardPageRows) Len() int {
+  return len(self)
+}
+
+func (self boardPageRows) Less(i, j int) bool {
+  i_val := self[i]
+  j_val := self[j]
+  return (i_val.Day + i_val.Hour * 24 ) > ( j_val.Day + j_val.Hour * 24)
+}
+
+func (self boardPageRows) Swap(i, j int) {
+  self[i] , self[j] = self[j], self[i]
+}
+
+type postsGraphRow struct {
+  Day time.Time
+  Num int64
+}
+
+func (p *postsGraphRow) GraphRune(r string) (s string) {
+  num := p.Num
+  for num > 0 {
+    s += r
+    num --
+  }
+  return
+}
+
+func (p *postsGraphRow) RegularGraph() (s string) {
+  return p.GraphRune("=")
+}
+
+// :0========3 overcock :3 graph of data
+func (p *postsGraphRow) OvercockGraph() (s string) {
+  num := p.Num
+  if num > 0 {
+    s = ":0"
+    num -= 1
+    for num > 0 {
+      s += "="
+      num--
+    }
+    s += "3"
+  } else {
+    s = ":3"
+  }
+  return
+}
+
+type postsGraph []postsGraphRow
+
+func (graph postsGraph) Render() string {
+  return template.renderTemplate("posts_graph.mustache", map[string]interface{} { "graph": graph})
+}
+
+func (self postsGraph) Len() int {
+  return len(self)
+}
+
+func (self postsGraph) Less(i, j int) bool {
+  i_val := self[i]
+  j_val := self[j]
+  return i_val.Day.Day() > j_val.Day.Day()
+}
+
+func (self postsGraph) Swap(i, j int) {
+  self[i] , self[j] = self[j], self[i]
+}

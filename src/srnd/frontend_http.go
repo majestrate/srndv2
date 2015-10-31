@@ -125,30 +125,6 @@ func (self httpFrontend) regenAll() {
   }
 }
 
-
-type boardPageRow struct {
-  Board string
-  Hour int64 
-  Day int64 
-  All int64 
-}
-
-type boardPageRows []boardPageRow
-
-func (self boardPageRows) Len() int {
-  return len(self)
-}
-
-func (self boardPageRows) Less(i, j int) bool {
-  i_val := self[i]
-  j_val := self[j]
-  return (i_val.Day + i_val.Hour * 24 ) > ( j_val.Day + j_val.Hour * 24)
-}
-
-func (self boardPageRows) Swap(i, j int) {
-  self[i] , self[j] = self[j], self[i]
-}
-
 func (self httpFrontend) pollRegen() {
   for {
     select {

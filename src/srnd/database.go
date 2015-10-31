@@ -194,6 +194,10 @@ type Database interface {
 
   // get the last N days post count in decending order
   GetLastDaysPosts(n int64) ([]int64)
+
+  // get the last N posts that were made globally
+  GetLastPostedPostModels(prefix string, n int64) ([]PostModel)
+  
 }
 
 func NewDatabase(db_type, schema, host, port, user, password string) Database  {

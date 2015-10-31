@@ -655,3 +655,10 @@ func (self postsGraph) Scale() (graph postsGraph) {
   }
   return
 }
+
+type overviewModel []PostModel
+
+
+func (o overviewModel) Render() {
+  template.renderTemplate("overview.mustache", map[string]interface{} { "overview" : o })
+}

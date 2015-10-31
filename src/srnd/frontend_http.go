@@ -225,7 +225,7 @@ func (self httpFrontend) regenerateBoardPage(board string, page int) {
 
 // regenerate the front page
 func (self httpFrontend) regenFrontPage() {
-  template.genFrontPage(10, self.name, self.webroot_dir, self.daemon.database)
+  template.genFrontPage(10, self.prefix, self.name, self.webroot_dir, self.daemon.database)
 }
 
 // regenerate the overboard

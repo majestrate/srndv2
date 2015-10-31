@@ -307,7 +307,7 @@ func renderPostForm(prefix, board, op_msg_id string) string {
 
 
 // generate front page and board list
-func (self *templateEngine) genFrontPage(top_count int, frontend_name, outdir string, db Database) {
+func (self *templateEngine) genFrontPage(top_count int, prefix, frontend_name, outdir string, db Database) {
   // the graph for the front page
   var frontpage_graph boardPageRows
 
@@ -343,6 +343,8 @@ func (self *templateEngine) genFrontPage(top_count int, frontend_name, outdir st
       })
     }
   }
+
+  models := db.GetLastPostedPostModels(prefix, 30)
   
   wr, err := OpenFileWriter(filepath.Join(outdir, "index.html"))
   if err != nil {
@@ -351,6 +353,9 @@ func (self *templateEngine) genFrontPage(top_count int, frontend_name, outdir st
   }
 
   param := make(map[string]interface{})
+  
+  param["overview"] = overviewModel(models)
+  
   sort.Sort(posts_graph)
   param["postsgraph"] = posts_graph
   sort.Sort(frontpage_graph)

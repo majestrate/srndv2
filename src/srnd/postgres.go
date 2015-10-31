@@ -1023,3 +1023,31 @@ func (self PostgresDatabase) GetLastDaysPosts(n int64) (posts []int64) {
   }
   return 
 }
+
+func (self PostgresDatabase) GetLastPostedPostModels(prefix string, n int64) (posts []PostModel) {
+  
+  rows, err := self.conn.Query("SELECT newsgroup, message_id, ref_id, name, subject, path, time_posted, message, addr FROM ArticlePosts ORDER BY time_posted DESC LIMIT $1", n)
+  if err == nil {
+    for rows.Next() {
+      var model post
+      rows.Scan(&model.board, &model.message_id, &model.parent, &model.name, &model.subject, &model.path, &model.posted, &model.message, &model.addr)
+      model.op = len(model.parent) == 0
+      if len(model.parent) == 0 {
+        model.parent = model.message_id
+      }
+      model.sage = isSage(model.subject)
+      atts := self.GetPostAttachmentModels(prefix, model.message_id)
+      if atts != nil {
+        model.attachments = append(model.attachments, atts...)
+      }
+      // quiet fail
+      self.conn.QueryRow("SELECT pubkey FROM ArticleKeys WHERE message_id = $1", model.message_id).Scan(&model.pubkey)
+      posts = append(posts, model)
+    }
+    rows.Close()
+    return 
+  } else {
+    log.Println("failed to prepare query for geting last post models", err)
+    return nil
+  }
+}

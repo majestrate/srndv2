@@ -579,7 +579,7 @@ func (p *postsGraphRow) GraphRune(r string) (s string) {
   var num int64
   if p.mag > 0 {
     num = p.Num / p.mag
-  } else if p.Num >= 0 {
+  } else {
     num = p.Num
   }
   for num > 0 {
@@ -603,7 +603,7 @@ func (p postsGraphRow) OvercockGraph() (s string) {
   var num int64
   if p.mag > 0 {
     num = p.Num / p.mag
-  } else if p.Num >= 0 {
+  } else {
     num = p.Num
   }
   if num > 0 {

@@ -344,7 +344,7 @@ func (self *templateEngine) genFrontPage(top_count int, prefix, frontend_name, o
     }
   }
 
-  models := db.GetLastPostedPostModels(prefix, 30)
+  models := db.GetLastPostedPostModels(prefix, 20)
   
   wr, err := OpenFileWriter(filepath.Join(outdir, "index.html"))
   if err != nil {

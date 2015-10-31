@@ -572,10 +572,16 @@ func (self boardPageRows) Swap(i, j int) {
 type postsGraphRow struct {
   day time.Time
   Num int64
+  mag int64
 }
 
 func (p *postsGraphRow) GraphRune(r string) (s string) {
-  num := p.Num
+  var num int64
+  if p.mag > 0 {
+    num = p.Num / p.mag
+  } else if p.Num >= 0 {
+    num = p.Num
+  }
   for num > 0 {
     s += r
     num --
@@ -594,7 +600,12 @@ func (p postsGraphRow) RegularGraph() (s string) {
 
 // :0========3 overcock :3 graph of data
 func (p postsGraphRow) OvercockGraph() (s string) {
-  num := p.Num / 50
+  var num int64
+  if p.mag > 0 {
+    num = p.Num / p.mag
+  } else if p.Num >= 0 {
+    num = p.Num
+  }
   if num > 0 {
     s = ":0"
     num -= 1
@@ -627,4 +638,20 @@ func (self postsGraph) Less(i, j int) bool {
 
 func (self postsGraph) Swap(i, j int) {
   self[i] , self[j] = self[j], self[i]
+}
+
+func (self postsGraph) Scale() (graph postsGraph) {
+  // find max
+  max := int64(0)
+  for _, p := range self {
+    if p.Num > max {
+      max = p.Num
+    }
+  }
+  mag := max * 25
+  for _, p := range self {
+    p.mag = mag
+    graph = append(graph, p)
+  }
+  return
 }

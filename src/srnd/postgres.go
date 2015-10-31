@@ -1026,7 +1026,7 @@ func (self PostgresDatabase) GetLastDaysPosts(n int64) (posts []int64) {
 
 func (self PostgresDatabase) GetLastPostedPostModels(prefix string, n int64) (posts []PostModel) {
   
-  rows, err := self.conn.Query("SELECT newsgroup, message_id, ref_id, name, subject, path, time_posted, message, addr FROM ArticlePosts ORDER BY time_posted DESC LIMIT $1", n)
+  rows, err := self.conn.Query("SELECT newsgroup, message_id, ref_id, name, subject, path, time_posted, message, addr FROM ArticlePosts WHERE newsgroup != 'ctl' ORDER BY time_posted DESC LIMIT $1", n)
   if err == nil {
     for rows.Next() {
       var model post

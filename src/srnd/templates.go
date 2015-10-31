@@ -332,7 +332,7 @@ func (self *templateEngine) genFrontPage(top_count int, prefix, frontend_name, o
 
   now := time.Now()
   
-  posts := db.GetLastDaysPosts(30)
+  posts := db.GetLastDaysPosts(10)
   if posts == nil {
     // wtf?
   } else {

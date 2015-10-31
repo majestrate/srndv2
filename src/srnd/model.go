@@ -594,7 +594,7 @@ func (p postsGraphRow) RegularGraph() (s string) {
 
 // :0========3 overcock :3 graph of data
 func (p postsGraphRow) OvercockGraph() (s string) {
-  num := p.Num
+  num := p.Num / 50
   if num > 0 {
     s = ":0"
     num -= 1

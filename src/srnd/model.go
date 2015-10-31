@@ -419,12 +419,16 @@ func (self post) RenderPost() string {
 func (self post) Truncate() PostModel {
   if len(self.message) > 500 {
     message := self.message[:500] + "\n...\n[Post Truncated]\n"
+    subject := self.subject
+    if len(subject) > 30 {
+      subject = subject[:30]
+    }
     return post{
       message: message,
       prefix: self.prefix,
       board: self.board,
       name: self.name,
-      subject: self.subject,
+      subject: subject,
       message_id: self.message_id,
       path: self.path,
       op: self.op,

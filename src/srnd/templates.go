@@ -13,6 +13,7 @@ import (
   "path/filepath"
   "sort"
   "strings"
+  "time"
 )
 
 type templateEngine struct {
@@ -326,6 +327,23 @@ func (self *templateEngine) genFrontPage(top_count int, frontend_name, outdir st
       Board: group,
     })
   }
+
+  var posts_graph postsGraph
+
+  now := time.Now()
+  
+  posts := db.GetLastDaysPosts(30)
+  if posts == nil {
+    // wtf?
+  } else {
+    for idx, count := range posts {
+      posts_graph = append(posts_graph, postsGraphRow{
+        day: now.Add(time.Hour * time.Duration(-idx * 24)),
+        Num: count,
+      })
+    }
+  }
+  
   wr, err := OpenFileWriter(filepath.Join(outdir, "index.html"))
   if err != nil {
     log.Println("cannot render front page", err)
@@ -333,11 +351,13 @@ func (self *templateEngine) genFrontPage(top_count int, frontend_name, outdir st
   }
 
   param := make(map[string]interface{})
+  sort.Sort(posts_graph)
+  param["postsgraph"] = posts_graph
   sort.Sort(frontpage_graph)
   if len(frontpage_graph) < top_count {
-    param["graph"] = frontpage_graph
+    param["boardgraph"] = frontpage_graph
   } else {
-    param["graph"] = frontpage_graph[:top_count]
+    param["boardgraph"] = frontpage_graph[:top_count]
   }
   param["frontend"] = frontend_name
   param["totalposts"] = db.ArticleCount()

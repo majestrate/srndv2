@@ -544,3 +544,114 @@ func (self linkModel) LinkURL() string {
 func (self linkModel) Text() string {
   return self.text
 }
+
+
+type boardPageRow struct {
+  Board string
+  Hour int64 
+  Day int64 
+  All int64 
+}
+
+type boardPageRows []boardPageRow
+
+func (self boardPageRows) Len() int {
+  return len(self)
+}
+
+func (self boardPageRows) Less(i, j int) bool {
+  i_val := self[i]
+  j_val := self[j]
+  return (i_val.Day + i_val.Hour * 24 ) > ( j_val.Day + j_val.Hour * 24)
+}
+
+func (self boardPageRows) Swap(i, j int) {
+  self[i] , self[j] = self[j], self[i]
+}
+
+type postsGraphRow struct {
+  day time.Time
+  Num int64
+  mag int64
+}
+
+func (p *postsGraphRow) GraphRune(r string) (s string) {
+  var num int64
+  if p.mag > 0 {
+    num = p.Num / p.mag
+  } else {
+    num = p.Num
+  }
+  for num > 0 {
+    s += r
+    num --
+  }
+  return
+}
+
+
+func (p postsGraphRow) Day() (s string) {
+  return p.day.String()[5:11]
+}
+
+func (p postsGraphRow) RegularGraph() (s string) {
+  return p.GraphRune("=")
+}
+
+// :0========3 overcock :3 graph of data
+func (p postsGraphRow) OvercockGraph() (s string) {
+  var num int64
+  if p.mag > 0 {
+    num = p.Num / p.mag
+  } else {
+    num = p.Num
+  }
+  if num > 0 {
+    s = ":0"
+    num -= 1
+    for num > 0 {
+      s += "="
+      num--
+    }
+    s += "3"
+  } else {
+    s = ":3"
+  }
+  return
+}
+
+type postsGraph []postsGraphRow
+
+func (graph postsGraph) Render() string {
+  return template.renderTemplate("posts_graph.mustache", map[string]interface{} { "graph": graph})
+}
+
+func (self postsGraph) Len() int {
+  return len(self)
+}
+
+func (self postsGraph) Less(i, j int) bool {
+  i_val := self[i]
+  j_val := self[j]
+  return i_val.day.Day() > j_val.day.Day()
+}
+
+func (self postsGraph) Swap(i, j int) {
+  self[i] , self[j] = self[j], self[i]
+}
+
+func (self postsGraph) Scale() (graph postsGraph) {
+  // find max
+  max := int64(0)
+  for _, p := range self {
+    if p.Num > max {
+      max = p.Num
+    }
+  }
+  mag := max / 25
+  for _, p := range self {
+    p.mag = mag
+    graph = append(graph, p)
+  }
+  return
+}

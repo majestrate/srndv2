@@ -648,7 +648,7 @@ func (self postsGraph) Scale() (graph postsGraph) {
       max = p.Num
     }
   }
-  mag := max * 25
+  mag := max / 25
   for _, p := range self {
     p.mag = mag
     graph = append(graph, p)

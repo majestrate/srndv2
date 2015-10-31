@@ -1009,7 +1009,7 @@ func (self PostgresDatabase) GetLastDaysPosts(n int64) (posts []int64) {
   now := timeNow()
   for n > 0 {
     var num int64
-    err := self.conn.QueryRow("SELECT COUNT(*) FROM ArticlePosts WHERE time_posted < $1 AND time_posted > $2", now, now - day).Scan(&num)
+    err := self.conn.QueryRow("SELECT COUNT(*) FROM ArticlePosts WHERE time_posted < $1 AND time_posted > $2", now + day, now).Scan(&num)
     if err == nil {
       posts = append(posts, num)
       now -= day

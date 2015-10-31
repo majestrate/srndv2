@@ -338,7 +338,7 @@ func (self *templateEngine) genFrontPage(top_count int, frontend_name, outdir st
   } else {
     for idx, count := range posts {
       posts_graph = append(posts_graph, postsGraphRow{
-        Day: now.Add(time.Hour * time.Duration(-idx * 24)),
+        day: now.Add(time.Hour * time.Duration(-idx * 24)),
         Num: count,
       })
     }

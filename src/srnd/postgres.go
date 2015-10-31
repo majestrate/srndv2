@@ -1017,6 +1017,7 @@ func (self PostgresDatabase) GetLastDaysPosts(n int64) (posts []int64) {
       log.Println("error counting last n days posts", err)
       return nil
     }
+    n--
   }
   return 
 }

@@ -420,8 +420,8 @@ func (self post) Truncate() PostModel {
   if len(self.message) > 500 {
     message := self.message[:500] + "\n...\n[Post Truncated]\n"
     subject := self.subject
-    if len(subject) > 30 {
-      subject = subject[:30]
+    if len(subject) > 100 {
+      subject = subject[:100] + "..."
     }
     return post{
       message: message,

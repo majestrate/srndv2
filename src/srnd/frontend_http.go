@@ -70,7 +70,7 @@ type httpFrontend struct {
 func (self httpFrontend) AllowNewsgroup(group string) bool {
   // XXX: hardcoded nntp prefix
   // TODO: make configurable nntp prefix
-  return strings.HasPrefix(group, "overchan.") && newsgroupValidFormat(group) || group == "ctl"
+  return strings.HasPrefix(group, "overchan.") && newsgroupValidFormat(group) || group == "ctl" && group != "overchan."
 }
 
 // try to delete root post's page

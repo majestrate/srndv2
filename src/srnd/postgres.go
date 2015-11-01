@@ -1007,7 +1007,7 @@ func (self PostgresDatabase) IsExpired(root_message_id string) bool {
 func (self PostgresDatabase) GetLastDaysPosts(n int64) (posts []int64) {
   
   day := time.Hour * 24
-  now := time.Now()
+  now := time.Now().UTC()
   now = time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, time.UTC)
   for n > 0 {
     var num int64

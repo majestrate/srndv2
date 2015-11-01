@@ -593,6 +593,9 @@ func (p *postsGraphRow) GraphRune(r string) (s string) {
   return
 }
 
+func (p postsGraphRow) Date() (s string) {
+  return p.day.String()[:9]
+}
 
 func (p postsGraphRow) Day() (s string) {
   return p.day.String()[5:11]

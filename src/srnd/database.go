@@ -208,6 +208,12 @@ type Database interface {
   // get the last N days post count in decending order
   GetLastDaysPosts(n int64) ([]PostEntry)
 
+  // get the last N days post count in decending order
+  GetLastDaysPostsForGroup(newsgroup string, n int64) ([]PostEntry)
+
+  // get post history per month since beginning of time
+  GetMonthlyPostHistory() ([]PostEntry)
+  
   // get the last N posts that were made globally
   GetLastPostedPostModels(prefix string, n int64) ([]PostModel)
   

@@ -305,6 +305,47 @@ func renderPostForm(prefix, board, op_msg_id string) string {
 }
 
 
+// generate misc graphs
+func (self *templateEngine) genGraphs(prefix, outdir string, db Database) {
+
+  //
+  // begin gen history.html
+  //
+  
+  var all_posts postsGraph
+  // this may take a bit
+  posts := db.GetMonthlyPostHistory()
+  
+  if posts == nil {
+    // wtf?
+  } else {
+    for _, entry := range posts {
+      all_posts = append(all_posts, postsGraphRow{
+        day: entry.Time(),
+        Num: entry.Count(),
+      })
+    }
+  }
+  sort.Sort(all_posts)
+
+  wr, err := OpenFileWriter(filepath.Join(outdir, "history.html"))
+  if err != nil {
+    log.Println("cannot render history graph", err)
+    return
+  }
+
+  _, err = io.WriteString(wr, self.renderTemplate("graph_history.mustache", map[string]interface{} {"history" : all_posts}))
+  if err != nil {
+    log.Println("error writing history graph", err)
+  }
+  wr.Close()
+
+  //
+  // end gen history.html
+  //
+  
+}
+
 // generate front page and board list
 func (self *templateEngine) genFrontPage(top_count int, prefix, frontend_name, outdir string, db Database) {
   // the graph for the front page
@@ -340,7 +381,7 @@ func (self *templateEngine) genFrontPage(top_count int, prefix, frontend_name, o
       })
     }
   }
-
+  
   models := db.GetLastPostedPostModels(prefix, 20)
   
   wr, err := OpenFileWriter(filepath.Join(outdir, "index.html"))

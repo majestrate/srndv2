@@ -1004,6 +1004,26 @@ func (self PostgresDatabase) IsExpired(root_message_id string) bool {
   return self.HasArticle(root_message_id) && ! self.HasArticleLocal(root_message_id)
 }
 
+func (self PostgresDatabase) GetLastDaysPostsForGroup(newsgroup string, n int64) (posts []PostEntry) {
+  
+  day := time.Hour * 24
+  now := time.Now().UTC()
+  now = time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, time.UTC)
+  for n > 0 {
+    var num int64
+    err := self.conn.QueryRow("SELECT COUNT(*) FROM ArticlePosts WHERE time_posted < $1 AND time_posted > $2 AND newsgroup = $3", now.Add(day).Unix(), now.Unix(), newsgroup).Scan(&num)
+    if err == nil {
+      posts = append(posts, PostEntry{now.Unix(), num})
+      now = now.Add(-day)
+    } else {
+      log.Println("error counting last n days posts", err)
+      return nil
+    }
+    n--
+  }
+  return 
+}
+
 func (self PostgresDatabase) GetLastDaysPosts(n int64) (posts []PostEntry) {
   
   day := time.Hour * 24
@@ -1050,4 +1070,40 @@ func (self PostgresDatabase) GetLastPostedPostModels(prefix string, n int64) (po
     log.Println("failed to prepare query for geting last post models", err)
     return nil
   }
+}
+
+func (self PostgresDatabase) GetMonthlyPostHistory() (posts []PostEntry) {
+  var oldest int64
+  now := time.Now()
+  now = time.Date(now.Year(), now.Month(), 1, 0, 0, 0, 0, time.UTC)
+  err := self.conn.QueryRow("SELECT time_posted FROM ArticlePosts WHERE time_posted > 0 ORDER BY time_posted ASC LIMIT 1").Scan(&oldest)
+  if err == nil {
+    // we got the oldest
+    // convert it to the oldest year/date
+    old := time.Unix(oldest, 0)
+    old = time.Date(old.Year(), old.Month(), 1, 0, 0, 0, 0, time.UTC)
+    // count up from oldest to newest
+    for now.Unix() >= old.Unix() {
+      var count int64
+      var next_month time.Time
+      if now.Month() < 12 {
+        next_month = time.Date(old.Year(), old.Month()+1, 1, 0, 0, 0, 0, time.UTC)
+      } else {
+        next_month = time.Date(old.Year()+1, 1, 1, 0, 0, 0, 0, time.UTC)
+      }
+      // get the post count in that montth
+      err = self.conn.QueryRow("SELECT COUNT(*) FROM ArticlePosts WHERE time_posted > $1 AND time_posted < $2", old.Unix(), next_month.Unix()).Scan(&count)
+      if err == nil {
+        posts = append(posts, PostEntry{old.Unix(), count})
+        old = next_month
+      } else {
+        posts = nil
+        break
+      }
+    }
+  }
+  if err != nil {
+    log.Println("failed getting monthly post history", err)
+  }
+  return
 }

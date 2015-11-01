@@ -59,6 +59,7 @@ type httpFrontend struct {
   
   regenBoardTicker *time.Ticker
   ukkoTicker *time.Ticker
+  longTermTicker *time.Ticker
   
   store *sessions.CookieStore
 
@@ -122,6 +123,18 @@ func (self httpFrontend) regenAll() {
         self.regenGroupChan <- groupRegenRequest{group, int(pg)}
       }
     }
+  }
+}
+
+func (self httpFrontend) regenLongTerm() {
+  template.genGraphs(self.prefix, self.webroot_dir, self.daemon.database)
+}
+
+func (self httpFrontend) pollLongTerm() {
+  for {
+    <- self.longTermTicker.C
+    // regenerate long term stuff
+    self.regenLongTerm()
   }
 }
 
@@ -688,6 +701,9 @@ func (self httpFrontend) Mainloop() {
     
   // run daemon's mod engine with our frontend
   go RunModEngine(self.daemon.mod, self.regenOnModEvent)
+
+  // run long term regen jobs
+  go self.regenLongTerm()
   
   // start webserver here
   log.Printf("frontend %s binding to %s", self.name, self.bindaddr)
@@ -710,6 +726,7 @@ func NewHTTPFrontend(daemon *NNTPDaemon, config map[string]string, url string) F
   var front httpFrontend
   front.daemon = daemon
   front.regenBoardTicker = time.NewTicker(time.Second * 10)
+  front.longTermTicker = time.NewTicker(time.Hour)
   front.ukkoTicker = time.NewTicker(time.Second * 30)
   front.regenBoard = make(map[string]groupRegenRequest)
   front.attachments = mapGetInt(config, "allow_files", 1) == 1

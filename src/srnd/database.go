@@ -5,6 +5,7 @@ package srnd
 
 import (
   "log"
+  "time"
 )
 
 
@@ -17,6 +18,18 @@ func (self ArticleEntry) Newsgroup() string {
 
 func (self ArticleEntry) MessageID() string {
   return self[0]
+}
+
+
+// a ( time point, post count ) tuple
+type PostEntry [2]int64
+
+func (self PostEntry) Time() time.Time {
+  return time.Unix(self[0], 0)
+}
+
+func (self PostEntry) Count() int64 {
+  return self[1]
 }
 
 type Database interface {
@@ -193,7 +206,7 @@ type Database interface {
   GetMessageIDForNNTPID(group string, id int64) (string, error)
 
   // get the last N days post count in decending order
-  GetLastDaysPosts(n int64) ([]int64)
+  GetLastDaysPosts(n int64) ([]PostEntry)
 
   // get the last N posts that were made globally
   GetLastPostedPostModels(prefix string, n int64) ([]PostModel)

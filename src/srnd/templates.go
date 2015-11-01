@@ -13,7 +13,6 @@ import (
   "path/filepath"
   "sort"
   "strings"
-  "time"
 )
 
 type templateEngine struct {
@@ -330,16 +329,14 @@ func (self *templateEngine) genFrontPage(top_count int, prefix, frontend_name, o
 
   var posts_graph postsGraph
 
-  now := time.Now().UTC()
-  
   posts := db.GetLastDaysPosts(10)
   if posts == nil {
     // wtf?
   } else {
-    for idx, count := range posts {
+    for _, entry := range posts {
       posts_graph = append(posts_graph, postsGraphRow{
-        day: now.Add(time.Hour * time.Duration(-idx * 24)),
-        Num: count,
+        day: entry.Time(),
+        Num: entry.Count(),
       })
     }
   }

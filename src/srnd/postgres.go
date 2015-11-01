@@ -1004,7 +1004,7 @@ func (self PostgresDatabase) IsExpired(root_message_id string) bool {
   return self.HasArticle(root_message_id) && ! self.HasArticleLocal(root_message_id)
 }
 
-func (self PostgresDatabase) GetLastDaysPosts(n int64) (posts []int64) {
+func (self PostgresDatabase) GetLastDaysPosts(n int64) (posts []PostEntry) {
   
   day := time.Hour * 24
   now := time.Now().UTC()
@@ -1013,7 +1013,7 @@ func (self PostgresDatabase) GetLastDaysPosts(n int64) (posts []int64) {
     var num int64
     err := self.conn.QueryRow("SELECT COUNT(*) FROM ArticlePosts WHERE time_posted < $1 AND time_posted > $2", now.Add(day).Unix(), now.Unix()).Scan(&num)
     if err == nil {
-      posts = append(posts, num)
+      posts = append(posts, PostEntry{now.Unix(), num})
       now = now.Add(-day)
     } else {
       log.Println("error counting last n days posts", err)

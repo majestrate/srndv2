@@ -637,7 +637,7 @@ func (self postsGraph) Len() int {
 func (self postsGraph) Less(i, j int) bool {
   i_val := self[i]
   j_val := self[j]
-  return i_val.day.Day() > j_val.day.Day()
+  return i_val.day.Unix() > j_val.day.Unix()
 }
 
 func (self postsGraph) Swap(i, j int) {

@@ -1008,7 +1008,7 @@ func (self PostgresDatabase) GetLastDaysPosts(n int64) (posts []int64) {
   
   day := time.Hour * 24
   now := time.Now()
-  now = time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, time.Local)
+  now = time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, time.UTC)
   for n > 0 {
     var num int64
     err := self.conn.QueryRow("SELECT COUNT(*) FROM ArticlePosts WHERE time_posted < $1 AND time_posted > $2", now.Add(day).Unix(), now.Unix()).Scan(&num)

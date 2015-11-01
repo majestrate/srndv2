@@ -330,7 +330,7 @@ func (self *templateEngine) genFrontPage(top_count int, prefix, frontend_name, o
 
   var posts_graph postsGraph
 
-  now := time.Now()
+  now := time.Now().UTC()
   
   posts := db.GetLastDaysPosts(10)
   if posts == nil {

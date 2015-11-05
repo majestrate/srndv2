@@ -271,10 +271,14 @@ func (self httpFrontend) handle_postform(wr http.ResponseWriter, r *http.Request
 
   // always lower case newsgroups
   board = strings.ToLower(board)
-  
+
   // post fail message
   post_fail := ""
-
+  banned, _ := self.daemon.database.NewsgroupBanned(board)
+  if banned {
+    post_fail += "newsgroup banned"
+  }
+  
   // post message
   msg := ""
   

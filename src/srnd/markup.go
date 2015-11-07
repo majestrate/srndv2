@@ -50,7 +50,6 @@ func formatline(line string) (markup string) {
       markup += "</span>"
     } else {
       // regular line
-      markup += "<p>"
       // for each word
       for _, word := range strings.Split(line, " ") {
         // check for backlink

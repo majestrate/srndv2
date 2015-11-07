@@ -39,15 +39,15 @@ func formatline(line string) (markup string) {
   line = strings.Trim(line, "\t\r\n ")
   if len(line) > 0 {
     if strings.HasPrefix(line, ">") && ! ( strings.HasPrefix(line, ">>") && re_backlink.MatchString(strings.Split(line, " ")[0])) {
-      // le ebin meme arrows
-      markup += "<p><span class='memearrows'>"
+            // le ebin meme arrows
+      markup += "<span class='memearrows'>"
       markup += html.EscapeString(line)
-      markup += "</span></p>"
+      markup += "</span>"
     } else if strings.HasPrefix(line, "==") && strings.HasSuffix(line, "==") {
       // redtext
-      markup += "<p><span class='redtext'>"
+      markup += "<span class='redtext'>"
       markup += html.EscapeString(line[2:len(line)-2])
-      markup += "</span></p>"
+      markup += "</span>"
     } else {
       // regular line
       markup += "<p>"
@@ -63,9 +63,9 @@ func formatline(line string) (markup string) {
         }
         markup += " "
       }
-      markup += "</p>"
     }
   }
+  markup += "<br />"
   return
 }
 

@@ -281,8 +281,8 @@ func (self nntpArticle) Addr() (addr string) {
 func (self nntpArticle) Email() string {
   from := self.headers.Get("From", "anonymous <a@no.n>")
   idx := strings.Index(from, "<")
-  if idx > 1 {
-    return from[:idx-1]
+  if idx > 2 {
+    return from[:idx-2]
   }
   return "[Invalid From header]"
   

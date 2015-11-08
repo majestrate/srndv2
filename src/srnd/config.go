@@ -85,7 +85,9 @@ func GenSRNdConfig() error {
   sect.Add("sync_on_start", "1")
   sect.Add("allow_anon", "0")
   sect.Add("allow_anon_attachments", "0")
-
+  sect.Add("allow_attachments", "1")
+  
+    
   // article store section
   sect = conf.NewSection("articles")
 

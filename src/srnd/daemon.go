@@ -28,6 +28,9 @@ type NNTPDaemon struct {
   // anon settings
   allow_anon bool
   allow_anon_attachments bool
+
+  // do we allow attachments from remote?
+  allow_attachments bool
   
   running bool
   // http frontend
@@ -227,6 +230,7 @@ func (self NNTPDaemon) Run() {
   self.instance_name = self.conf.daemon["instance_name"]
   self.allow_anon = self.conf.daemon["allow_anon"] == "1"
   self.allow_anon_attachments = self.conf.daemon["allow_anon_attachments"] == "1"
+  self.allow_attachments = self.conf.daemon["allow_attachments"] == "1"
   
   if self.debug {
     log.Println("debug mode activated")

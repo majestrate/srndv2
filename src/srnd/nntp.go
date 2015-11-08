@@ -251,8 +251,14 @@ func (self *nntpConnection) checkMIMEHeader(daemon NNTPDaemon, hdr textproto.MIM
       if has_attachment || is_signed {
         // this is a signed message or has attachment
         if daemon.allow_anon_attachments {
-          // we'll allow anon attachments
-          return
+          if daemon.allow_attachments {
+            // we'll allow anon attachments
+            return
+          } else {
+            // no attachments permitted
+            reason = "no attachments allowed"
+            return
+          }
         } else {
           // we don't take signed messages or attachments posted anonymously
           reason = "no anon signed posts or attachments"
@@ -285,6 +291,19 @@ func (self *nntpConnection) checkMIMEHeader(daemon NNTPDaemon, hdr textproto.MIM
     } else {
       // idk wtf
       log.Println(self.name, "wtf? invalid article")
+    }
+  }
+  if ! daemon.allow_attachments  {
+    // we don't want attachments
+    if is_ctl {
+      // ctl is fine
+      return
+    } else if is_signed {
+      // may have an attachment, reject
+      reason = "disallow signed posts because no attachments allowed"
+    } else if has_attachment {
+      // we have an attachment, reject
+      reason = "attachments of any kind not allowed"
     }
   }
   return

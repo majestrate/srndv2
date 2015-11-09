@@ -110,19 +110,19 @@ func ShortHashMessageID(msgid string) string {
 // will this message id produce quads?
 func MessageIDWillDoQuads(msgid string) bool {
   h := HashMessageID(msgid)
-  return h[9] == h[8] && h[8] == h[7] && h[7] == h[6]
+  return h[0] == h[1] && h[1] == h[2] && h[2] == h[3]
 }
 
 // will this message id produce trips?
 func MessageIDWillDoTrips(msgid string) bool {
   h := HashMessageID(msgid)
-  return h[9] == h[8] && h[8] == h[7]
+  return h[0] == h[1] && h[1] == h[2]
 }
 
 // will this message id produce dubs?
 func MessageIDWillDoDubs(msgid string) bool {
   h := HashMessageID(msgid)
-  return h[9] == h[8]
+  return h[0] == h[1]
 }
 
 // shorter message id hash

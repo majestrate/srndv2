@@ -107,6 +107,24 @@ func ShortHashMessageID(msgid string) string {
   return strings.ToLower(HashMessageID(msgid)[:18])
 }
 
+// will this message id produce quads?
+func MessageIDWillDoQuads(msgid string) bool {
+  h := HashMessageID(msgid)
+  return h[9] == h[8] && h[8] == h[7] && h[7] == h[6]
+}
+
+// will this message id produce trips?
+func MessageIDWillDoTrips(msgid string) bool {
+  h := HashMessageID(msgid)
+  return h[9] == h[8] && h[8] == h[7]
+}
+
+// will this message id produce dubs?
+func MessageIDWillDoDubs(msgid string) bool {
+  h := HashMessageID(msgid)
+  return h[9] == h[8]
+}
+
 // shorter message id hash
 func ShorterHashMessageID(msgid string) string {
   return strings.ToLower(HashMessageID(msgid)[:10])

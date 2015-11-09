@@ -290,6 +290,7 @@ func (self httpFrontend) handle_postform(wr http.ResponseWriter, r *http.Request
   // tripcode private key
   var tripcode_privkey []byte
 
+  var dubs bool
 
 
   // encrypt IP Addresses
@@ -432,6 +433,8 @@ func (self httpFrontend) handle_postform(wr http.ResponseWriter, r *http.Request
         att_filename = part_buff.String()
       } else if partname == "attachment_mime" {
         att_mime = part_buff.String()
+      } else if partname == "dubs" {
+        dubs = part_buff.String() == "on"
       }
     
       // we done
@@ -565,8 +568,14 @@ func (self httpFrontend) handle_postform(wr http.ResponseWriter, r *http.Request
       }
     }
   }
+  msgid := genMessageID(self.name)
+  // roll until dubs if desired
+  for dubs && ! MessageIDWillDoDubs(msgid) {
+    msgid = genMessageID(self.name)
+  }
+  
   nntp.headers.Set("From", nntpSanitize(fmt.Sprintf("%s <anon@%s>", name, self.name)))
-  nntp.headers.Set("Message-ID", genMessageID(self.name))
+  nntp.headers.Set("Message-ID", msgid)
   
   // set message
   nntp.message = createPlaintextAttachment(msg)

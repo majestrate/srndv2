@@ -101,6 +101,22 @@ func (self httpModUI) getAdminFunc(funcname string) AdminFunc {
       go reThumbnail(t, self.articles)
       return fmt.Sprintf("started rethumbnailing with %d threads", t), nil
     }
+  } else if funcname == "frontend.add" {
+    return func(param map[string]interface{}) (string, error) {
+      newsgroup := extractGroup(param)
+      if len(newsgroup) > 0 && newsgroupValidFormat(newsgroup) && strings.HasPrefix(newsgroup, "overchan.") && newsgroup != "overchan." {
+        if self.database.HasNewsgroup(newsgroup) {
+          // we already have this newsgroup
+          return "already have that newsgroup", nil
+        } else {
+          // we dont got this newsgroup
+          log.Println("adding newsgroup", newsgroup)
+          self.database.RegisterNewsgroup(newsgroup)
+          return "added "+newsgroup, nil
+        }
+      }
+      return "bad newsgroup", errors.New("invalid newsgroup name: "+newsgroup)
+    }
   } else if funcname == "frontend.ban" {
     return func(param map[string]interface{}) (string, error) {
       newsgroup := extractGroup(param)

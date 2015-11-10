@@ -276,9 +276,13 @@ func (self httpFrontend) handle_postform(wr http.ResponseWriter, r *http.Request
   post_fail := ""
   banned, _ := self.daemon.database.NewsgroupBanned(board)
   if banned {
-    post_fail += "newsgroup banned"
+    post_fail += "newsgroup banned "
   }
-  
+
+  if ! self.daemon.database.HasNewsgroup(board) {
+    post_fail += "we don't have this newsgroup "
+  }
+    
   // post message
   msg := ""
   

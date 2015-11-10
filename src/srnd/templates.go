@@ -354,9 +354,9 @@ func (self *templateEngine) genFrontPage(top_count int, prefix, frontend_name, o
   // for each group
   groups := db.GetAllNewsgroups()
   for _, group := range groups {
-    // posts per hour
+    // posts this hour
     hour := db.CountPostsInGroup(group, 3600)
-    // posts per day
+    // posts today
     day := db.CountPostsInGroup(group, 86400)
     // posts total
     all := db.CountPostsInGroup(group, 0)

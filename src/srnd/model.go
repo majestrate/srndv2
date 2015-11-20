@@ -301,7 +301,7 @@ func PostModelFromMessage(parent, prefix string, nntp NNTPMessage) PostModel {
   p.message = nntp.Message()
   p.path = nntp.Path()
   p.message_id = nntp.MessageID()
-  p.board = nntp.Newsgroup()
+  p.board = nntp.Board()
   p.posted = nntp.Posted()
   p.op = nntp.OP()
   p.prefix = prefix

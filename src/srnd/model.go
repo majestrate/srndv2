@@ -216,6 +216,10 @@ func (self boardModel) Name() string {
   return self.board
 }
 
+func (self boardModel) Board() string {
+  return self.board
+}
+
 func (self boardModel) Threads() []ThreadModel {
   return self.threads
 }

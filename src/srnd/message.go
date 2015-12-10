@@ -4,7 +4,7 @@
 package srnd
 
 import (
-  "github.com/majestrate/srndv2/src/nacl"
+  "github.com/majestrate/nacl"
   "bufio"
   "bytes"
   "encoding/base64"

@@ -7,7 +7,7 @@
 package srnd
 
 import (
-  "github.com/majestrate/srndv2/src/nacl"
+  "github.com/majestrate/nacl"
   "github.com/gorilla/sessions"
   "errors"
   "encoding/hex"

@@ -5,7 +5,7 @@
 package srnd
 
 import (
-  "github.com/majestrate/srndv2/src/nacl"
+  "github.com/majestrate/nacl"
   "crypto/sha1"
   "crypto/sha512"
   "encoding/base64"
@@ -413,7 +413,8 @@ func hexify(data []byte) string {
 // extract pubkey from secret key
 // return as base32
 func getSignPubkey(sk []byte) string {
-  return hexify(nacl.GetSignPubkey(sk))
+  k, _ := nacl.GetSignPubkey(sk)
+  return hexify(k)
 }
 
 // sign data with secret key the fucky srnd way

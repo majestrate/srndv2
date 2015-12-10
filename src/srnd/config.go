@@ -7,7 +7,7 @@ package srnd
 import (
   "encoding/base32"
   "github.com/majestrate/configparser"
-  "github.com/majestrate/srndv2/src/nacl"
+  "github.com/majestrate/nacl"
   "log"
   "strings"
 )

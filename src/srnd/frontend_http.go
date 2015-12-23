@@ -664,6 +664,8 @@ func (self httpFrontend) Mainloop() {
     log.Fatalf("no such template folder %s", self.template_dir)
   }
 
+  template.changeTemplateDir(self.template_dir)
+  
   threads := self.regen_threads 
 
   // check for invalid number of threads

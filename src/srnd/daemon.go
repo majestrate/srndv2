@@ -487,7 +487,6 @@ func (self NNTPDaemon) Setup() NNTPDaemon {
   log.Println("validating configs...")
   self.conf.Validate()
   log.Println("configs are valid")
-
   
   db_host := self.conf.database["host"]
   db_port := self.conf.database["port"]

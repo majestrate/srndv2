@@ -282,6 +282,13 @@ func (self *templateEngine) genThread(root ArticleEntry, prefix, frontend, outfi
   self.groups[newsgroup] = board
 }
 
+// change the directory we are using for templates
+func (self *templateEngine) changeTemplateDir(dirname string) {
+  log.Println("change template directory to", dirname)
+  self.template_dir = dirname
+  self.reloadAllTemplates()
+}
+
 func newTemplateEngine(dir string) *templateEngine {
   return &templateEngine{
     groups: make(map[string]GroupModel),

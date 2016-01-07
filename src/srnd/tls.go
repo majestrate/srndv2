@@ -1,6 +1,7 @@
 package srnd
 
 import (
+  "bufio"
   "crypto/rand"
   "crypto/rsa"
   "crypto/tls"
@@ -16,14 +17,15 @@ import (
   "net/textproto"
   "os"
   "path/filepath"
+  "strings"
   "time"
 )
 
 var TlsNotSupported = errors.New("TLS not supported")
 var TlsFailedToLoadCA = errors.New("could not load CA files")
 
-// do STARTTLS on connection
-func StartTLS(conn net.Conn, config *tls.Config) (econn *textproto.Conn, state tls.ConnectionState, err error) {
+// handle STARTTLS on connection
+func HandleStartTLS(conn net.Conn, config *tls.Config) (econn *textproto.Conn, state tls.ConnectionState, err error) {
   if config == nil {
     _, err = io.WriteString(conn, "580 can not intitiate TLS negotiation\r\n")
     if err == nil {
@@ -38,8 +40,36 @@ func StartTLS(conn net.Conn, config *tls.Config) (econn *textproto.Conn, state t
       if err == nil {
         state = tconn.ConnectionState()
         econn = textproto.NewConn(tconn)
+      } else {
+        tconn.Close()
       }
     }
+  }
+  return
+}
+
+func SendStartTLS(conn net.Conn, config *tls.Config) (econn *textproto.Conn, state tls.ConnectionState, err error) {
+  _, err = io.WriteString(conn, "STARTTLS\r\n")
+  if err == nil {
+    r := bufio.NewReader(conn)
+    var line string
+    line, err = r.ReadString(10)
+    if strings.HasPrefix(line, "382 ") {
+      // we gud
+      tconn := tls.Client(conn, config)
+      err = tconn.Handshake()
+      if err == nil {
+        // tls okay
+        state = tconn.ConnectionState()
+        econn = textproto.NewConn(tconn)
+      } else {
+        tconn.Close()
+      }
+    } else {
+      // it won't do tls
+      err = TlsNotSupported
+    }
+    r = nil
   }
   return
 }
@@ -51,6 +81,7 @@ func newTLSCert() x509.Certificate {
       Organization: []string{"overchan"},
     },
     NotBefore: time.Now(),
+    NotAfter: time.Date(9005,1, 1, 1, 1, 1, 1, time.UTC),
     ExtKeyUsage: []x509.ExtKeyUsage{x509.ExtKeyUsageServerAuth, x509.ExtKeyUsageClientAuth},
     BasicConstraintsValid: true,
     IsCA: true,
@@ -59,6 +90,7 @@ func newTLSCert() x509.Certificate {
 
 // generate tls config, private key and certificate
 func GenTLS(cfg *CryptoConfig) (tcfg *tls.Config, err error) {
+  EnsureDir(cfg.cert_dir)
   // check for private key
   if ! CheckFile(cfg.privkey_file) {
     // no private key, let's generate it

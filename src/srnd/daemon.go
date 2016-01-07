@@ -151,17 +151,17 @@ func (self NNTPDaemon) persistFeed(conf FeedConfig, mode string) {
         time.Sleep(time.Second * 5)
         continue
       }
-      nntp := createNNTPConnection()
+      nntp := createNNTPConnection(conf.addr)
       nntp.policy = conf.policy
       nntp.name = conf.name + "-" + mode
-      stream, reader, err := nntp.outboundHandshake(textproto.NewConn(conn))
+      stream, reader, use_tls, err := nntp.outboundHandshake(textproto.NewConn(conn))
       if err == nil {
         if mode == "reader" && ! reader {
           log.Println(nntp.name, "we don't support reader on this feed, dropping")
           return
         }
         self.register_outfeed <- nntp
-        nntp.runConnection(self, false, stream, reader, mode, conn)
+        nntp.runConnection(self, false, stream, reader, use_tls, mode, conn)
         self.deregister_outfeed <- nntp
           
       } else {
@@ -178,10 +178,14 @@ func (self NNTPDaemon) syncPull(proxy_type, proxy_addr, remote_addr string) {
   if err == nil {
     conn := textproto.NewConn(c)
     // we connected
-    nntp := createNNTPConnection()
+    nntp := createNNTPConnection(remote_addr)
     nntp.name = remote_addr+"-sync"
     // do handshake
-    _, reader, err := nntp.outboundHandshake(conn)
+    _, reader, _ , err := nntp.outboundHandshake(conn)
+
+    if err != nil {
+      log.Println("failed to scrape server", err)
+    }
     if reader {
       // we can do it
       err = nntp.scrapeServer(self, conn)
@@ -457,8 +461,12 @@ func (self NNTPDaemon) acceptloop() {
     if err != nil {
       log.Fatal(err)
     }
-    // make a new inbound nntp connection handler 
-    nntp := createNNTPConnection()
+    // make a new inbound nntp connection handler
+    hostname := ""
+    if self.conf.crypto != nil {
+      hostname = self.conf.crypto.hostname
+    }
+    nntp := createNNTPConnection(hostname)
     addr := conn.RemoteAddr()
     nntp.name = fmt.Sprintf("%s-inbound-feed", addr.String())
     c := textproto.NewConn(conn)
@@ -466,7 +474,7 @@ func (self NNTPDaemon) acceptloop() {
     err = nntp.inboundHandshake(c)
     if err == nil {
       // run, we support stream and reader
-      go nntp.runConnection(self, true, true, true, "stream", conn)
+      go nntp.runConnection(self, true, true, true, false, "stream", conn)
     } else {
       log.Println("failed to send banners", err)
       c.Close()
@@ -479,18 +487,33 @@ func (self *NNTPDaemon) Federate() (federate bool) {
   return
 }
 
-func (self *NNTPDaemon) GetTLSConfig() *tls.Config {
-  return self.tls_config
+func (self *NNTPDaemon) GetOurTLSConfig() *tls.Config {
+  return self.GetTLSConfig(self.conf.crypto.hostname)
+}
+
+func (self *NNTPDaemon) GetTLSConfig(hostname string) *tls.Config {
+  cfg := self.tls_config
+  return &tls.Config{
+    ServerName: hostname,
+    CipherSuites: cfg.CipherSuites,
+    RootCAs: cfg.RootCAs,
+    ClientCAs: cfg.ClientCAs,
+    Certificates: cfg.Certificates,
+    ClientAuth: cfg.ClientAuth,
+  }
+}
+
+func (self *NNTPDaemon) RequireTLS() (require bool) {
+  v, ok := self.conf.daemon["require_tls"]
+  if ok {
+    require = v == "1"
+  }
+  return
 }
 
 // return true if we can do tls
 func (self *NNTPDaemon) CanTLS() (can bool) {
-  if self.conf.crypto != nil {
-    fname := self.conf.crypto.privkey_file
-    if len(fname) > 0 {
-      can = CheckFile(fname)
-    }
-  }
+  can = self.tls_config != nil
   return
 }
 

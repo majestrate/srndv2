@@ -9,6 +9,7 @@ import (
   "github.com/majestrate/configparser"
   "github.com/majestrate/nacl"
   "log"
+  "path/filepath"
   "strings"
 )
 
@@ -27,8 +28,17 @@ type APIConfig struct {
   srndAddr string
   frontendAddr string
 }
+
+type CryptoConfig struct {
+  privkey_file string
+  cert_file string
+  hostname string
+  cert_dir string
+}
+
 type SRNdConfig struct { 
   daemon map[string]string
+  crypto *CryptoConfig
   store map[string]string
   database map[string]string
   feeds []FeedConfig
@@ -77,6 +87,7 @@ func GenFeedsConfig() error {
 // generate default srnd.ini
 func GenSRNdConfig() error {
   conf := configparser.NewConfiguration()
+
   
   // nntp related section
   sect := conf.NewSection("nntp")
@@ -86,8 +97,14 @@ func GenSRNdConfig() error {
   sect.Add("allow_anon", "0")
   sect.Add("allow_anon_attachments", "0")
   sect.Add("allow_attachments", "1")
+  sect.Add("require_tls", "1")
   
-    
+  // crypto related section
+  sect = conf.NewSection("crypto")
+  sect.Add("tls-keyname", "overchan")
+  sect.Add("tls-hostname", "!!put-hostname-or-ip-of-server-here")
+  sect.Add("tls-trust-dir", "certs")
+  
   // article store section
   sect = conf.NewSection("articles")
 
@@ -144,8 +161,26 @@ func ReadConfig() *SRNdConfig {
     log.Fatal("cannot read config file", fname)
     return nil
   }
-  var sconf SRNdConfig;
+  var sconf SRNdConfig
 
+  s, err = conf.Section("crypto")
+  if err == nil {
+    opts := s.Options()
+    sconf.crypto = new(CryptoConfig)
+    k := opts["tls-keyname"]
+    h := opts["tls-hostname"]
+    if strings.HasPrefix(h, "!") || len(h) == 0 {
+      log.Fatal("please set tls-hostname to be the hostname or ip address of your server")
+    } else {
+      sconf.crypto.hostname = h
+      sconf.crypto.privkey_file = k + "-" + h + ".key"
+      sconf.crypto.cert_dir = opts["tls-trust-dir"]
+      sconf.crypto.cert_file = filepath.Join(sconf.crypto.cert_dir, k + "-" + h + ".crt")
+    }
+  } else {
+    // we have no crypto section
+    log.Println("!!! we will not use encryption for nntp as no crypto section is specified in srnd.ini")
+  }
   s, err = conf.Section("nntp")
   if err != nil {
     log.Println("no section 'nntp' in srnd.ini")

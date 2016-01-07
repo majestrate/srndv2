@@ -5,10 +5,12 @@ package srnd
 
 import (
   "bufio"
+  "crypto/tls"
   "fmt"
   "io"
   "io/ioutil"
   "log"
+  "net"
   "net/textproto"
   "os"
   "strconv"
@@ -53,6 +55,8 @@ type nntpConnection struct {
   article chan string
   // TAKETHIS/CHECK <message-id>
   stream chan nntpStreamEvent
+
+  tls_state tls.ConnectionState
 }
 
 // write out a mime header to a writer
@@ -165,6 +169,7 @@ func (self *nntpConnection) outboundHandshake(conn *textproto.Conn) (stream, rea
       }
     }
   }
+  conn = nil
   return
 }
 
@@ -877,12 +882,12 @@ func (self *nntpConnection) startReader(daemon NNTPDaemon, conn *textproto.Conn)
 // run the mainloop for this connection
 // stream if true means they support streaming mode
 // reader if true means they support reader mode
-func (self *nntpConnection) runConnection(daemon NNTPDaemon, inbound, stream, reader bool, preferMode string, conn *textproto.Conn) {
+func (self *nntpConnection) runConnection(daemon NNTPDaemon, inbound, stream, reader bool, preferMode string, nconn net.Conn) {
 
   var err error
   var line string
   var success bool
-
+  conn := textproto.NewConn(nconn)
   for err == nil {
     if self.mode == "" {
       if inbound  {
@@ -898,11 +903,23 @@ func (self *nntpConnection) runConnection(daemon NNTPDaemon, inbound, stream, re
         }
         parts := strings.Split(line, " ")
         cmd := parts[0]
-        if cmd == "CAPABILITIES" {
+        if cmd == "STARTTLS" {
+          _conn, state, err := StartTLS(nconn, daemon.GetTLSConfig())
+          if err == nil {
+            // we are now tls
+            conn = _conn
+            self.tls_state = state
+          } else {
+            log.Println("STARTTLS failed:", err)
+          }
+        } else if cmd == "CAPABILITIES" {
           // write capabilities
           conn.PrintfLine("101 i support to the following:")
           dw := conn.DotWriter()
           caps := []string{"VERSION 2", "READER", "STREAMING", "IMPLEMENTATION srndv2"}
+          if daemon.CanTLS() {
+            caps = append(caps, "STARTTLS")
+          }
           for _, cap := range caps {
             io.WriteString(dw, cap)
             io.WriteString(dw, "\n")
@@ -927,6 +944,17 @@ func (self *nntpConnection) runConnection(daemon NNTPDaemon, inbound, stream, re
         } else {
           // handle a it as a command, we don't have a mode set
           parts := strings.Split(line, " ")
+          cmd := parts[0]
+          if cmd == "STARTTLS" {
+            _conn, state, err := StartTLS(nconn, daemon.GetTLSConfig())
+            if err == nil {
+              // we are now tls
+              conn = _conn
+              self.tls_state = state
+            } else {
+              log.Println("STARTTLS failed:", err)
+            }
+          }
           var code64 int64
           code64, err = strconv.ParseInt(parts[0], 10, 32)
           if err ==  nil {

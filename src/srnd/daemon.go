@@ -3,6 +3,7 @@
 //
 package srnd
 import (
+  "crypto/tls"
   "errors"
   "fmt"
   "log"
@@ -31,7 +32,7 @@ type NNTPDaemon struct {
 
   // do we allow attachments from remote?
   allow_attachments bool
-  
+
   running bool
   // http frontend
   frontend Frontend
@@ -49,6 +50,8 @@ type NNTPDaemon struct {
   send_all_feeds chan ArticleEntry
   // channel for broadcasting an ARTICLE command to all feeds in reader mode
   ask_for_article chan ArticleEntry
+
+  tls_config *tls.Config
 }
 
 func (self NNTPDaemon) End() {
@@ -151,15 +154,14 @@ func (self NNTPDaemon) persistFeed(conf FeedConfig, mode string) {
       nntp := createNNTPConnection()
       nntp.policy = conf.policy
       nntp.name = conf.name + "-" + mode
-      c := textproto.NewConn(conn)
-      stream, reader, err := nntp.outboundHandshake(c)
+      stream, reader, err := nntp.outboundHandshake(textproto.NewConn(conn))
       if err == nil {
         if mode == "reader" && ! reader {
           log.Println(nntp.name, "we don't support reader on this feed, dropping")
           return
         }
         self.register_outfeed <- nntp
-        nntp.runConnection(self, false, stream, reader, mode, c)
+        nntp.runConnection(self, false, stream, reader, mode, conn)
         self.deregister_outfeed <- nntp
           
       } else {
@@ -262,11 +264,9 @@ func (self NNTPDaemon) Run() {
   go self.expire.Mainloop()
   // we are now running
   self.running = true
-  
   // persist outfeeds
   for idx := range self.conf.feeds {
     f := self.conf.feeds[idx]
-
     go self.persistFeed(f, "reader")
     go self.persistFeed(f, "stream")
     if f.sync {
@@ -275,7 +275,6 @@ func (self NNTPDaemon) Run() {
       go self.syncPull(f.proxy_type, f.proxy_addr, f.addr)
     }
   }
-
   // start accepting incoming connections
   go self.acceptloop()
 
@@ -361,16 +360,18 @@ func (self NNTPDaemon) polloutfeeds() {
       log.Println("outfeed", outfeed.name, "de-registered")
       delete(self.feeds, outfeed.name)
     case nntp := <- self.send_all_feeds:
-      log.Println("federate", nntp.MessageID())
-      feeds := self.feeds
-      for _, feed := range feeds {
-        if feed.policy.AllowsNewsgroup(nntp.Newsgroup()) {
-          if strings.HasSuffix(feed.name, "-stream") {
-            log.Println("send", nntp.MessageID(), "to", feed.name)
-            feed.stream <- nntpCHECK(nntp.MessageID())
+      if self.Federate() {
+        log.Println("federate", nntp.MessageID())
+        feeds := self.feeds
+        for _, feed := range feeds {
+          if feed.policy.AllowsNewsgroup(nntp.Newsgroup()) {
+            if strings.HasSuffix(feed.name, "-stream") {
+              log.Println("send", nntp.MessageID(), "to", feed.name)
+              feed.stream <- nntpCHECK(nntp.MessageID())
+            }
+          } else {
+            log.Println("not allowed", feed.name)
           }
-        } else {
-          log.Println("not allowed", feed.name)
         }
       }
     case nntp := <- self.ask_for_article:
@@ -465,12 +466,32 @@ func (self NNTPDaemon) acceptloop() {
     err = nntp.inboundHandshake(c)
     if err == nil {
       // run, we support stream and reader
-      go nntp.runConnection(self, true, true, true, "stream", c)
+      go nntp.runConnection(self, true, true, true, "stream", conn)
     } else {
       log.Println("failed to send banners", err)
       c.Close()
     }
   }
+}
+
+func (self *NNTPDaemon) Federate() (federate bool) {
+  federate = len(self.conf.feeds) > 0
+  return
+}
+
+func (self *NNTPDaemon) GetTLSConfig() *tls.Config {
+  return self.tls_config
+}
+
+// return true if we can do tls
+func (self *NNTPDaemon) CanTLS() (can bool) {
+  if self.conf.crypto != nil {
+    fname := self.conf.crypto.privkey_file
+    if len(fname) > 0 {
+      can = CheckFile(fname)
+    }
+  }
+  return
 }
 
 func (self NNTPDaemon) Setup() NNTPDaemon {
@@ -487,6 +508,9 @@ func (self NNTPDaemon) Setup() NNTPDaemon {
   log.Println("validating configs...")
   self.conf.Validate()
   log.Println("configs are valid")
+
+  var err error
+
   
   db_host := self.conf.database["host"]
   db_port := self.conf.database["port"]
@@ -499,6 +523,15 @@ func (self NNTPDaemon) Setup() NNTPDaemon {
   log.Println("ensure that the database is created...")
   self.database.CreateTables()
 
+  // ensure tls stuff
+  if self.conf.crypto != nil {
+    self.tls_config, err = GenTLS(self.conf.crypto)
+    if err != nil {
+      log.Fatal("failed to initialize tls: ", err)
+    }
+  }
+  
+  
   // set up store
   log.Println("set up article store...")
   self.store = createArticleStore(self.conf.store, self.database)

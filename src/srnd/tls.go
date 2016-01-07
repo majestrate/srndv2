@@ -1,4 +1,129 @@
-//
-// tls.go -- tls related functions
-//
 package srnd
+
+import (
+  "crypto/rand"
+  "crypto/rsa"
+  "crypto/tls"
+  "crypto/x509"
+  "crypto/x509/pkix"
+  "encoding/pem"
+  "errors"
+  "io"
+  "io/ioutil"
+  "log"
+  "math/big"
+  "net"
+  "net/textproto"
+  "os"
+  "path/filepath"
+  "time"
+)
+
+var TlsNotSupported = errors.New("TLS not supported")
+var TlsFailedToLoadCA = errors.New("could not load CA files")
+
+// do STARTTLS on connection
+func StartTLS(conn net.Conn, config *tls.Config) (econn *textproto.Conn, state tls.ConnectionState, err error) {
+  if config == nil {
+    _, err = io.WriteString(conn, "580 can not intitiate TLS negotiation\r\n")
+    if err == nil {
+      err = TlsNotSupported
+    }
+  } else {
+    _, err = io.WriteString(conn, "382 Continue with TLS negotiation\r\n")
+    if err == nil {
+      // begin tls crap here
+      tconn := tls.Server(conn, config)
+      err = tconn.Handshake()
+      if err == nil {
+        state = tconn.ConnectionState()
+        econn = textproto.NewConn(tconn)
+      }
+    }
+  }
+  return
+}
+
+// create base tls certificate
+func newTLSCert() x509.Certificate {
+  return x509.Certificate{
+    Subject: pkix.Name{
+      Organization: []string{"overchan"},
+    },
+    NotBefore: time.Now(),
+    ExtKeyUsage: []x509.ExtKeyUsage{x509.ExtKeyUsageServerAuth, x509.ExtKeyUsageClientAuth},
+    BasicConstraintsValid: true,
+    IsCA: true,
+  }
+}
+
+// generate tls config, private key and certificate
+func GenTLS(cfg *CryptoConfig) (tcfg *tls.Config, err error) {
+  // check for private key
+  if ! CheckFile(cfg.privkey_file) {
+    // no private key, let's generate it
+    log.Println("generating 4096 RSA private key...")
+    k := newTLSCert()
+    var priv *rsa.PrivateKey
+    priv, err = rsa.GenerateKey(rand.Reader, 4096)
+    if err == nil {
+      serialNumberLimit := new(big.Int).Lsh(big.NewInt(1), 256)
+      k.SerialNumber, err = rand.Int(rand.Reader, serialNumberLimit)
+      k.DNSNames = append(k.DNSNames, cfg.hostname)
+      k.Subject.CommonName = cfg.hostname
+      if err == nil {
+        var derBytes []byte
+        derBytes, err = x509.CreateCertificate(rand.Reader, &k, &k, &priv.PublicKey, priv)
+        var f io.WriteCloser
+        f, err = os.Create(cfg.cert_file)
+        if err == nil {
+          err = pem.Encode(f, &pem.Block{Type: "CERTIFICATE", Bytes: derBytes})
+          f.Close()
+          if err == nil {
+            f, err = os.Create(cfg.privkey_file)
+            if err == nil {
+              err = pem.Encode(f, &pem.Block{Type: "RSA PRIVATE KEY", Bytes: x509.MarshalPKCS1PrivateKey(priv)})
+              f.Close()
+            }
+          }
+        }
+      }
+    }
+  }
+  if err == nil {
+
+    caPool := x509.NewCertPool()
+    var m []string
+    log.Println("checking", cfg.cert_dir, "for certificates")
+    m, err = filepath.Glob(filepath.Join(cfg.cert_dir, "*.crt"))
+    log.Println("loading", len(m), "trusted certificates")
+    var data []byte
+    for _, f := range m {
+      var d []byte
+      d, err = ioutil.ReadFile(f)
+      if err == nil {
+        data = append(data, d...)
+      } else {
+        return
+      }
+    }
+    ok := caPool.AppendCertsFromPEM(data)
+    if ! ok {
+      err = TlsFailedToLoadCA
+      return
+    }
+    // we should have the key generated and stored by now
+    var cert tls.Certificate
+    cert, err = tls.LoadX509KeyPair(cfg.cert_file, cfg.privkey_file)
+    if err == nil {
+      tcfg = &tls.Config{
+        CipherSuites: []uint16{tls.TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384},
+        RootCAs: caPool,
+        ClientCAs: caPool,
+        Certificates: []tls.Certificate{cert},
+        ClientAuth: tls.RequireAndVerifyClientCert,
+      }
+    }
+  }
+  return
+}

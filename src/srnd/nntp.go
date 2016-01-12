@@ -697,15 +697,17 @@ func (self *nntpConnection) handleLine(daemon NNTPDaemon, code int, line string,
           var reason string
           if err == nil {
             msgid = genMessageID(daemon.instance_name)
-            hdr.Add("Message-ID", msgid)
-            hdr.Add("Date", timeNowStr())
+            
+            hdr.Set("Message-ID", msgid)
+            hdr.Set("Date", timeNowStr())
             reason, err = self.checkMIMEHeader(daemon, hdr)
             success = reason == "" && err == nil
             if success {
               dr := conn.DotReader()
               reference := hdr.Get("References")
               newsgroup := hdr.Get("Newsgroups")
-              if reference != "" && ValidMessageID(reference) && ! daemon.store.HasArticle(reference) && ! daemon.database.IsExpired(reference) {
+              
+              if reference != "" && ValidMessageID(reference) && ( ! daemon.store.HasArticle(reference) && ! daemon.database.IsExpired(reference) ) {
                 log.Println(self.name, "got reply to", reference, "but we don't have it")
                 daemon.ask_for_article <- ArticleEntry{reference, newsgroup}
               }

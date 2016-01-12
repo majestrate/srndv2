@@ -690,9 +690,10 @@ func (self *nntpConnection) handleLine(daemon NNTPDaemon, code int, line string,
           conn.PrintfLine("340 Post it nigguh; end with <CR-LF>.<CR-LF>")
           hdr, err := conn.ReadMIMEHeader()
           var success bool
+          var reason string
           if err == nil {
             hdr["Message-ID"] = []string{genMessageID(daemon.instance_name)}
-            reason, err := self.checkMIMEHeader(daemon, hdr)
+            reason, err = self.checkMIMEHeader(daemon, hdr)
             success = reason == "" && err == nil
             if success {
               dr := conn.DotReader()
@@ -730,7 +731,7 @@ func (self *nntpConnection) handleLine(daemon NNTPDaemon, code int, line string,
             if err != nil {
               log.Println(self.name, "failed nntp POST", err)
             }
-            conn.PrintfLine("441 Posting Failed")
+            conn.PrintfLine("441 Posting Failed %s", reason)
           }
         }
       }

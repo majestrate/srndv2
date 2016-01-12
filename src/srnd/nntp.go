@@ -1013,7 +1013,7 @@ func (self *nntpConnection) startReader(daemon NNTPDaemon, conn *textproto.Conn)
 // run the mainloop for this connection
 // stream if true means they support streaming mode
 // reader if true means they support reader mode
-func (self *nntpConnection) runConnection(daemon NNTPDaemon, inbound, stream, reader, use_tls bool, preferMode string, nconn net.Conn) {
+func (self *nntpConnection) runConnection(daemon NNTPDaemon, inbound, stream, reader, use_tls bool, preferMode string, nconn net.Conn, conf *FeedConfig) {
 
   var err error
   var line string
@@ -1035,6 +1035,30 @@ func (self *nntpConnection) runConnection(daemon NNTPDaemon, inbound, stream, re
     self.authenticated = ! daemon.RequireTLS()
     conn = textproto.NewConn(nconn)
   }
+  if conf != nil && ! inbound {
+    // we have a feed config
+    // check for authentication
+    if len(conf.username) > 0 && len(conf.passwd) > 0 {
+      log.Println(self.name, "authenticating...")
+      err = conn.PrintfLine("AUTHINFO USER %s", conf.username)
+      if err == nil {
+        var code int
+        code, line, err = conn.ReadCodeLine(381)
+        if code == 381 {
+          err = conn.PrintfLine("AUTHINFO PASS %s", conf.passwd)
+          if err == nil {
+            code, line, err = conn.ReadCodeLine(281)
+            if code == 281 {
+              log.Println(self.name, "Auth Successful")
+            } else {
+              log.Println(self.name, "Auth incorrect")
+            }
+          }
+        }
+      }
+    }
+  }
+  
   for err == nil {
     line, err = conn.ReadLine()
     if self.mode == "" {

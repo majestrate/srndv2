@@ -20,6 +20,8 @@ type FeedConfig struct {
   sync bool
   proxy_type string
   proxy_addr string
+  username string
+  passwd string
   linkauth_keyfile string
   name string
 }
@@ -273,6 +275,10 @@ func ReadConfig() *SRNdConfig {
       if val == "1" {
         fconf.sync = true
       }
+
+      // username / password auth
+      fconf.username = sect.ValueOf("username")
+      fconf.passwd = sect.ValueOf("password")
       
       // load feed polcies
       sect_name :=  sect.Name()[5:]

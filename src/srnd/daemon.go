@@ -161,7 +161,7 @@ func (self NNTPDaemon) persistFeed(conf FeedConfig, mode string) {
           return
         }
         self.register_outfeed <- nntp
-        nntp.runConnection(self, false, stream, reader, use_tls, mode, conn)
+        nntp.runConnection(self, false, stream, reader, use_tls, mode, conn, &conf)
         self.deregister_outfeed <- nntp
           
       } else {
@@ -474,7 +474,7 @@ func (self NNTPDaemon) acceptloop() {
     err = nntp.inboundHandshake(c)
     if err == nil {
       // run, we support stream and reader
-      go nntp.runConnection(self, true, true, true, false, "stream", conn)
+      go nntp.runConnection(self, true, true, true, false, "stream", conn, nil)
     } else {
       log.Println("failed to send banners", err)
       c.Close()

@@ -751,6 +751,8 @@ func (self *nntpConnection) handleLine(daemon NNTPDaemon, code int, line string,
         } else {
           conn.PrintfLine("440 Posting Not Allowed")
         }
+      } else {
+        conn.PrintfLine("500 wut?")
       }
     }
   }

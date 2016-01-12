@@ -121,7 +121,7 @@ func (self *nntpConnection) Quit(conn *textproto.Conn) (err error) {
 
 // send a banner for inbound connections
 func (self *nntpConnection) inboundHandshake(conn *textproto.Conn) (err error) {
-  err = conn.PrintfLine("201 Posting NOT Allowed")
+  err = conn.PrintfLine("200 Posting Allowed")
   return err
 }
 

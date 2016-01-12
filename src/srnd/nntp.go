@@ -370,7 +370,8 @@ func (self *nntpConnection) handleLine(daemon NNTPDaemon, code int, line string,
     if len(parts) > 1 {
       cmd := strings.ToUpper(parts[0])
       if cmd == "MODE" {
-        if parts[1] == "READER" {
+        mode := strings.ToUpper(parts[1])
+        if mode == "READER" {
           // reader mode
           self.mode = "READER"
           log.Println(self.name, "switched to reader mode")
@@ -379,7 +380,7 @@ func (self *nntpConnection) handleLine(daemon NNTPDaemon, code int, line string,
           } else {
             conn.PrintfLine("201 No posting Permitted")
           }
-        } else if parts[1] == "STREAM" {
+        } else if mode == "STREAM" {
           // wut? we're already in streaming mode
           log.Println(self.name, "already in streaming mode")
           conn.PrintfLine("203 Streaming enabled brah")
@@ -1067,12 +1068,13 @@ func (self *nntpConnection) runConnection(daemon NNTPDaemon, inbound, stream, re
           log.Println(self.name, "sent Capabilities")
         } else if cmd == "MODE" {
           if len(parts) == 2 {
-            if parts[1] == "READER" {
+            mode := strings.ToUpper(parts[1])
+            if mode == "READER" {
               // set reader mode
               self.mode = "READER"
               // we'll allow posting for reader
               conn.PrintfLine("200 Posting is Permitted awee yeh")
-            } else if parts[1] == "STREAM" {
+            } else if mode == "STREAM" {
               if daemon.RequireTLS() && ! self.tls_state.HandshakeComplete {
                 conn.PrintfLine("483 Streaming requires TLS")
               } else {

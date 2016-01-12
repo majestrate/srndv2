@@ -636,7 +636,7 @@ func (self *nntpConnection) handleLine(daemon NNTPDaemon, code int, line string,
           // count posts
           number := daemon.database.CountPostsInGroup(group, 0)
           // get hi/low water marks
-          low, hi, err := daemon.database.GetLastAndFirstForGroup(group)
+          hi, low, err := daemon.database.GetLastAndFirstForGroup(group)
           if err == nil {
             // we gud
             conn.PrintfLine("211 %d %d %d %s", number, low, hi, group)
@@ -663,7 +663,7 @@ func (self *nntpConnection) handleLine(daemon NNTPDaemon, code int, line string,
         for _, group := range groups {
           last, first, err := daemon.database.GetLastAndFirstForGroup(group)
           if err == nil {
-            io.WriteString(dw, fmt.Sprintf("%s %d %d y\r\n", group, last, first))
+            io.WriteString(dw, fmt.Sprintf("%s %d %d y\r\n", group, first, last))
           } else {
             log.Println("cannot get last/first ids for group", group, err)
           }

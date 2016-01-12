@@ -1000,8 +1000,14 @@ func (self *nntpConnection) runConnection(daemon NNTPDaemon, inbound, stream, re
   var success bool
   var conn *textproto.Conn
   
-  if use_tls && daemon.CanTLS() {
-    conn, _, err = SendStartTLS(nconn, daemon.GetTLSConfig(self.hostname))
+  if use_tls && daemon.CanTLS() && ! inbound {
+    _conn, _, err := SendStartTLS(nconn, daemon.GetTLSConfig(self.hostname))
+    if err == nil {
+      // we upgraded
+      conn = _conn
+    } else {
+      conn = textproto.NewConn(nconn)
+    }
   } else {
     conn = textproto.NewConn(nconn)
   }

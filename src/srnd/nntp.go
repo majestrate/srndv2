@@ -707,27 +707,33 @@ func (self *nntpConnection) handleLine(daemon NNTPDaemon, code int, line string,
               dr := conn.DotReader()
               reference := hdr.Get("References")
               newsgroup := hdr.Get("Newsgroups")
-              
-              if reference != "" && ValidMessageID(reference) && ( ! daemon.store.HasArticle(reference) && ! daemon.database.IsExpired(reference) ) {
-                log.Println(self.name, "got reply to", reference, "but we don't have it")
-                daemon.ask_for_article <- ArticleEntry{reference, newsgroup}
-              }
-              f := daemon.store.CreateTempFile(msgid)
-              if f == nil {
-                log.Println(self.name, "discarding", msgid, "we are already loading it")
-                // discard
-                io.Copy(ioutil.Discard, dr)
+              if reference != "" && ValidMessageID(reference) {
+                if ! daemon.store.HasArticle(reference) && ! daemon.database.IsExpired(reference)  {
+                  log.Println(self.name, "got reply to", reference, "but we don't have it")
+                  daemon.ask_for_article <- ArticleEntry{reference, newsgroup}
+                }
+              } else if reference != ""  {
+                // bad message id
+                reason = "cannot reply with invalid reference, maybe you are replying to a reply?"
+                success = false
               } else {
-                // write header
-                err = writeMIMEHeader(f, hdr)
-                // write body
-                _, err = io.Copy(f, dr)
-                if err == nil || err == io.EOF {
-                  f.Close()
-                  // we gud, tell daemon
-                  daemon.infeed_load <- msgid
+                f := daemon.store.CreateTempFile(msgid)
+                if f == nil {
+                  log.Println(self.name, "discarding", msgid, "we are already loading it")
+                  // discard
+                  io.Copy(ioutil.Discard, dr)
                 } else {
-                  log.Println(self.name, "error reading message", err)
+                  // write header
+                  err = writeMIMEHeader(f, hdr)
+                  // write body
+                  _, err = io.Copy(f, dr)
+                  if err == nil || err == io.EOF {
+                    f.Close()
+                    // we gud, tell daemon
+                    daemon.infeed_load <- msgid
+                  } else {
+                    log.Println(self.name, "error reading message", err)
+                  }
                 }
               }
             }

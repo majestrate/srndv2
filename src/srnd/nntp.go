@@ -718,7 +718,7 @@ func (self *nntpConnection) handleLine(daemon NNTPDaemon, code int, line string,
                 reason = "cannot reply with invalid reference, maybe you are replying to a reply?"
                 success = false
               }
-              if daemon.database.HasNewsgroup(newsgroup) {
+              if success && daemon.database.HasNewsgroup(newsgroup) {
                 f := daemon.store.CreateTempFile(msgid)
                 if f == nil {
                   log.Println(self.name, "discarding", msgid, "we are already loading it")

@@ -216,6 +216,17 @@ type Database interface {
   
   // get the last N posts that were made globally
   GetLastPostedPostModels(prefix string, n int64) ([]PostModel)
+
+  // check if an nntp login cred is correct
+  CheckNNTPLogin(username, passwd string) (bool, error)
+
+  // add an nntp login credential
+  AddNNTPLogin(username, passwd string) error
+
+  // remove an nntp login credential
+  RemoveNNTPLogin(username string) error
+
+  CheckNNTPUserExists(username string) (bool, error)
   
 }
 

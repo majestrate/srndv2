@@ -59,6 +59,11 @@ type nntpConnection struct {
   stream chan nntpStreamEvent
 
   tls_state tls.ConnectionState
+
+  // have we authenticated with a login?
+  authenticated bool
+  // the username that is authenticated
+  username string
 }
 
 // write out a mime header to a writer
@@ -382,6 +387,40 @@ func (self *nntpConnection) handleLine(daemon NNTPDaemon, code int, line string,
         // close our connection and return
         conn.Close()
         return
+
+      } else if cmd == "AUTHINFO" {
+        if len(parts) > 2 {
+          auth_cmd := parts[2]
+          if auth_cmd == "USER" {
+            // first part
+            self.username = parts[3]
+            // next phase is PASS
+            conn.PrintfLine("381 Password required")
+          } else if auth_cmd == "PASS" {
+            if len(self.username) == 0 {
+              conn.PrintfLine("482 Authentication commands issued out of sequence")
+            } else {
+              // try login
+              var valid bool
+              valid, err = daemon.database.CheckNNTPLogin(self.username, line[14:])
+              if valid {
+                // valid login
+                self.authenticated = true
+                conn.PrintfLine("281 Authentication accepted")
+              } else if err == nil {
+                // invalid login
+                conn.PrintfLine("481 Authentication rejected")
+              } else {
+                // there was an error
+                // logit
+                log.Println(self.name, "error while logging in as", self.username, err)
+              }
+            }
+          }
+        } else {
+          // wut ?
+          // wrong legnth of parametrs
+        }
       } else if cmd == "CHECK" {
         // handle check command
         msgid := parts[1]
@@ -621,8 +660,9 @@ func (self *nntpConnection) handleLine(daemon NNTPDaemon, code int, line string,
         }
         dw.Close()
       } else if line == "POST" {
-        if daemon.RequireTLS() && ! self.tls_state.HandshakeComplete {
-          // needs tls to work
+        // XXX: what happens when TLS is not required?
+        if ( ! self.authenticated ) && daemon.RequireTLS() && ! self.tls_state.HandshakeComplete {
+          // needs tls to work if not logged in
           conn.PrintfLine("483 You cannot submit articles without tls")
         } else {
           // handle POST command

@@ -64,20 +64,55 @@ func (self PostgresDatabase) Close() {
 }
 
 func (self PostgresDatabase) CreateTables() {
-  version := self.getDBVersion()
-  if version == -1 {
-    // no tables
-    self.createTablesV0()
-    self.upgrade0to1()
-  } else if version == 0 {
-    // upgrade to version 1
-    self.upgrade0to1()
-  } else if version == 1 {
-    // we are up to date
-    log.Println("we are up to date at version", version)
+  for {
+    version := self.getDBVersion()
+    if version == -1 {
+      // no tables
+      self.createTablesV0()
+      self.upgrade0to1()
+    } else if version == 0 {
+      // upgrade to version 1
+      self.upgrade0to1()
+    } else if version == 1 {
+      // upgrade to version 2
+      self.upgrade1to2()
+    } else if version == 2 {
+      // we are up to date
+      log.Println("we are up to date at version", version)
+      return
+    }
   }
 }
 
+func (self PostgresDatabase) upgrade1to2() {
+  log.Println("migrating... 1 -> 2")
+
+  var err error
+
+  tables := make(map[string]string)
+
+  tables["NNTPUsers"] = `(
+                           username VARCHAR(255) PRIMARY KEY,
+                           login_hash VARCHAR(255) NOT NULL,
+                           login_salt VARCHAR(255) NOT NULL
+                         )`
+
+  table_order := []string{"NNTPUsers"}
+
+  for _, table := range table_order {
+    q := tables[table]
+    // create table
+    _, err = self.conn.Exec(fmt.Sprintf("CREATE TABLE IF NOT EXISTS %s%s", table, q))
+    if err != nil {
+      log.Fatalf("cannot create table %s, %s, login was '%s'", table, err,self.db_str)
+    }
+  }
+  _, err = self.conn.Exec("CREATE INDEX IF NOT EXISTS ON NNTPUsers(username)")
+  if err != nil {
+    log.Fatalf("cannot create index on NNTPUsers: %s", err.Error())
+  }
+  self.setDBVersion(2)
+}
 
 func (self PostgresDatabase) upgrade0to1() {
 
@@ -1105,5 +1140,37 @@ func (self PostgresDatabase) GetMonthlyPostHistory() (posts []PostEntry) {
   if err != nil {
     log.Println("failed getting monthly post history", err)
   }
+  return
+}
+
+
+func (self PostgresDatabase) CheckNNTPLogin(username, passwd string) (valid bool, err error) {
+  var login_hash, login_salt string
+  err = self.conn.QueryRow("SELECT login_hash, login_salt FROM NNTPUsers WHERE username = $1", username).Scan(&login_hash, &login_salt)
+  if err == nil {
+    // no errors
+    if len(login_hash) > 0 && len(login_salt) > 0 {
+      valid = nntpLoginCredHash(passwd, login_salt) == login_hash
+    }
+  }
+  return
+}
+
+func (self PostgresDatabase) AddNNTPLogin(username, passwd string) (err error) {
+  login_salt := genLoginCredSalt()
+  login_hash := nntpLoginCredHash(passwd, login_salt)
+  _, err = self.conn.Exec("INSERT INTO NNTPUsers(username, login_hash, login_salt) VALUES($1, $2, $3)", username, login_hash, login_salt)
+  return
+}
+
+func (self PostgresDatabase) RemoveNNTPLogin(username string) (err error) {
+  _, err = self.conn.Exec("DELETE FROM NNTPUsers WHERE username = $1", username)
+  return
+}
+
+func (self PostgresDatabase) CheckNNTPUserExists(username string) (exists bool, err error) {
+  var count int64
+  err = self.conn.QueryRow("SELECT COUNT(username) FROM NNTPUsers WHERE username = $1", username).Scan(&count)
+  exists = count > 0
   return
 }

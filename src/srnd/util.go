@@ -447,3 +447,19 @@ func parseTripcodeSecret(str string) []byte {
   } 
   return raw
 }
+
+// generate a login salt for nntp users
+func genLoginCredSalt() (salt string) {
+  salt = randStr(128)
+  return
+}
+
+// do nntp login credential hash given password and salt
+func nntpLoginCredHash(passwd, salt string) (str string) {
+  var b []byte
+  b = append(b, []byte(passwd)...)
+  b = append(b, []byte(salt)...)
+  h := sha512.Sum512(b            )
+  str = base64.StdEncoding.EncodeToString(h[:])
+  return
+}

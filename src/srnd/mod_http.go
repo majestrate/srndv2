@@ -210,6 +210,56 @@ func (self httpModUI) getAdminFunc(funcname string) AdminFunc {
         return "key not trusted", nil
       }
     }
+
+  } else if funcname == "nntp.login.del" {
+    return func(param map[string]interface{}) (string, error) {
+      username := extractParam(param, "username")
+      if len(username) > 0 {
+        exists, err := self.database.CheckNNTPUserExists(username)
+        if exists {
+          err = self.database.RemoveNNTPLogin(username)
+          if err == nil {
+            return "removed user", nil
+          }
+          return "", nil
+        } else if err == nil {
+          return "no such user",nil
+        } else {
+          return "", err
+        }
+      } else {
+        return "no such user", nil
+      }
+    }
+  } else if funcname == "nntp.login.add" {
+    return func(param map[string]interface{}) (string, error) {
+      username := extractParam(param, "username")
+      passwd := extractParam(param, "passwd")
+      if len(username) > 0 && len(passwd) > 0 {
+        log.Println("nntp.login.add", username)
+        // check if users is there
+        exists, err := self.database.CheckNNTPUserExists(username)
+        if exists {
+          // user is already there
+          return "user already exists", nil
+        } else if err == nil {
+          // now add the user
+          err = self.database.AddNNTPLogin(username, passwd)
+          // success adding?
+          if err == nil {
+            // yeh
+            return "added user", nil
+          }
+          // nah
+          return "", err
+        } else {
+          // error happened
+          return "", err
+        }
+      } else {
+        return "invalid username or password format", nil
+      }
+    }
   }
   return nil
 }

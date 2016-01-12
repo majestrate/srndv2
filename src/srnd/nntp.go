@@ -453,27 +453,30 @@ func (self *nntpConnection) handleLine(daemon NNTPDaemon, code int, line string,
         }
         conn.PrintfLine("%d %s %s", code, msgid, reason)
       } else if cmd == "ARTICLE" {
-        if ValidMessageID(msgid) {
-          if daemon.store.HasArticle(msgid) {
-            // we have it yeh
-            f, err := os.Open(daemon.store.GetFilename(msgid))
+        if ! ValidMessageID(msgid) {
+          if len(self.group) > 0 {
+            n, err := strconv.Atoi(msgid)
             if err == nil {
-              conn.PrintfLine("220 %s", msgid)
-              dw := conn.DotWriter()
-              _, err = io.Copy(dw, f)
-              dw.Close()
-              f.Close()
-            } else {
-              // wtf?!
-              conn.PrintfLine("503 idkwtf happened: %s", err.Error())
-            }
+              msgid, err = daemon.database.GetMessageIDForNNTPID(self.group, int64(n))
+            } 
+          }
+        }
+        if ValidMessageID(msgid) && daemon.store.HasArticle(msgid) {
+          // we have it yeh
+          f, err := os.Open(daemon.store.GetFilename(msgid))
+          if err == nil {
+            conn.PrintfLine("220 %s", msgid)
+            dw := conn.DotWriter()
+            _, err = io.Copy(dw, f)
+            dw.Close()
+            f.Close()
           } else {
-            // we dont got it
-            conn.PrintfLine("430 %s", msgid)
+            // wtf?!
+            conn.PrintfLine("503 idkwtf happened: %s", err.Error())
           }
         } else {
-          // invalid id
-          conn.PrintfLine("500 Syntax error")
+          // we dont got it
+          conn.PrintfLine("430 %s", msgid)
         }
       } else if cmd == "POST" {
         if daemon.RequireTLS() && ! self.tls_state.HandshakeComplete {

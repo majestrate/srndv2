@@ -368,7 +368,7 @@ func (self *nntpConnection) handleLine(daemon NNTPDaemon, code int, line string,
     // handle command
     parts := strings.Split(line, " ")
     if len(parts) > 1 {
-      cmd := parts[0]
+      cmd := strings.ToUpper(parts[0])
       if cmd == "MODE" {
         if parts[1] == "READER" {
           // reader mode

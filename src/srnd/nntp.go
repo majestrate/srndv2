@@ -99,7 +99,7 @@ func (self *nntpConnection) modeSwitch(mode string, conn *textproto.Conn) (succe
   log.Println("MODE", mode)
   var code int
   code, _, err = conn.ReadCodeLine(-1)
-  if code > 200 && code < 300 {
+  if code >= 200 && code < 300 {
     // accepted mode change
     if len(self.mode) > 0 {
       log.Printf("mode switch %s -> %s", self.mode, mode)

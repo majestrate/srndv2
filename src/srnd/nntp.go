@@ -223,7 +223,7 @@ func (self *nntpConnection) handleStreaming(daemon NNTPDaemon, reader bool, conn
 // returns empty string if it's okay otherwise an error message
 func (self *nntpConnection) checkMIMEHeader(daemon NNTPDaemon, hdr textproto.MIMEHeader) (reason string, err error) {
 
-  if daemon.RequireTLS() && ! self.tls_state.HandshakeComplete {
+  if daemon.RequireTLS() && ! self.tls_state.HandshakeComplete && ! self.authenticated {
     reason = "not authenticated with tls"
     return
   }

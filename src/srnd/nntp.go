@@ -1187,10 +1187,12 @@ func (self *nntpConnection) runConnection(daemon NNTPDaemon, inbound, stream, re
       }
     }
   }
-  log.Println(self.name, "got error", err)
-  if ! inbound && conn != nil {
-    // send quit on outbound
-    conn.PrintfLine("QUIT")
+  if err != io.EOF {
+    log.Println(self.name, "got error", err)
+    if ! inbound && conn != nil {
+      // send quit on outbound
+      conn.PrintfLine("QUIT")
+    }
   }
   nconn.Close()
 }

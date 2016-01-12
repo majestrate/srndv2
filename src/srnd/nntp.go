@@ -402,7 +402,10 @@ func (self *nntpConnection) handleLine(daemon NNTPDaemon, code int, line string,
             } else {
               // try login
               var valid bool
-              valid, err = daemon.database.CheckNNTPLogin(self.username, line[14:])
+              valid, err = daemon.database.CheckNNTPUserExists(self.username)
+              if valid {
+                valid, err = daemon.database.CheckNNTPLogin(self.username, line[14:])
+              }
               if valid {
                 // valid login
                 self.authenticated = true

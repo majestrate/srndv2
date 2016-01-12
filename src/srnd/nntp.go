@@ -685,7 +685,7 @@ func (self *nntpConnection) handleLine(daemon NNTPDaemon, code int, line string,
         if ( ! self.authenticated ) && daemon.RequireTLS() && ! self.tls_state.HandshakeComplete {
           // needs tls to work if not logged in
           conn.PrintfLine("440 You cannot submit articles without tls")
-        } else {
+        } else if self.authenticated {
           // handle POST command
           conn.PrintfLine("340 Post it nigguh; end with <CR-LF>.<CR-LF>")
           hdr, err := conn.ReadMIMEHeader()
@@ -733,6 +733,8 @@ func (self *nntpConnection) handleLine(daemon NNTPDaemon, code int, line string,
             }
             conn.PrintfLine("441 Posting Failed %s", reason)
           }
+        } else {
+          conn.PrintfLine("440 Posting Not Allowed")
         }
       }
     }

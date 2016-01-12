@@ -58,6 +58,9 @@ func (self NNTPDaemon) End() {
   self.listener.Close()
 }
 
+func (self NNTPDaemon) GetDB() Database {
+  return self.database
+}
 
 func (self NNTPDaemon) dialOut(proxy_type, proxy_addr, remote_addr string) (conn net.Conn, err error) {
   

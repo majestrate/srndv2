@@ -36,11 +36,50 @@ func main() {
           srnd.ThumbnailTool()
         } else if tool == "keygen" {
           srnd.KeygenTool()
+        } else if tool == "nntp" {
+          if len(os.Args) >= 5 {
+            var daemon srnd.NNTPDaemon
+            daemon.Setup()
+            db := daemon.GetDB()
+            action := os.Args[3]
+            if action == "del-login" {
+              username := os.Args[4]
+              exists, err := db.CheckNNTPUserExists(username)
+              if exists {
+                err = db.RemoveNNTPLogin(username)
+              } else if err == nil {
+                fmt.Fprintf(os.Stdout, "no such user: %s", username)
+              } else {
+                fmt.Fprintf(os.Stdout, "error while deleting user: %s", err.Error())
+              }
+            } else if action == "add-login" {
+              if len(os.Args) == 6 {
+                username := os.Args[4]
+                passwd := os.Args[5]
+                exists, err := db.CheckNNTPUserExists(username)
+                if err == nil {
+                  if exists {
+                    fmt.Fprintf(os.Stdout, "user %s already exists", username)
+                  } else {
+                    db.AddNNTPLogin(username, passwd)
+                  }
+                } else {
+                  fmt.Fprintf(os.Stdout, "error checking for user: %s", err.Error())
+                }
+              } else {
+                fmt.Fprintf(os.Stdout, "Usage: %s tool nntp add-login username password\n", os.Args[0])
+              }
+            } else {
+              fmt.Fprintf(os.Stdout, "Usage: %s tool nntp [add-login|del-login]\n", os.Args[0])
+            }
+          } else {
+            fmt.Fprintf(os.Stdout, "Usage: %s tool nntp [add-login|del-login]\n", os.Args[0])
+          }
         } else {
-          fmt.Fprintf(os.Stdout, "Usage: %s tool [rethumb|keygen]\n", os.Args[0])
+          fmt.Fprintf(os.Stdout, "Usage: %s tool [rethumb|keygen|nntp]\n", os.Args[0])
         }
       } else {
-        fmt.Fprintf(os.Stdout, "Usage: %s tool [rethumb|keygen]\n", os.Args[0])
+        fmt.Fprintf(os.Stdout, "Usage: %s tool [rethumb|keygen|nntp]\n", os.Args[0])
       }
     } else {
       log.Println("Invalid action:",action)

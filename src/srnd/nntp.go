@@ -231,6 +231,9 @@ func (self *nntpConnection) checkMIMEHeader(daemon NNTPDaemon, hdr textproto.MIM
   newsgroup := hdr.Get("Newsgroups")
   reference := hdr.Get("References")
   msgid := hdr.Get("Message-Id")
+  if msgid == "" {
+    msgid = hdr.Get("Message-ID")
+  }
   encaddr := hdr.Get("X-Encrypted-Ip")
   torposter := hdr.Get("X-Tor-Poster")
   i2paddr := hdr.Get("X-I2p-Desthash")

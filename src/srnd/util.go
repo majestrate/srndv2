@@ -91,6 +91,9 @@ func ValidMessageID(id string) bool {
       if c == '.' {
         continue
       }
+      if c == '$' {
+        continue
+      }
     }
     log.Printf("bad message ID: len=%d %s , invalid char at %d: %c", id_len, id, idx, c)
     return false

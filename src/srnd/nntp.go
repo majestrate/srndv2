@@ -694,7 +694,7 @@ func (self *nntpConnection) handleLine(daemon NNTPDaemon, code int, line string,
           conn.PrintfLine("340 Post it nigguh; end with <CR-LF>.<CR-LF>")
           var hdr textproto.MIMEHeader
           hdr, err = conn.ReadMIMEHeader()
-          var success bool
+          var success, gotten bool
           var reason string
           if err == nil {
             if hdr.Get("Message-ID") == "" {
@@ -717,7 +717,8 @@ func (self *nntpConnection) handleLine(daemon NNTPDaemon, code int, line string,
                 // bad message id
                 reason = "cannot reply with invalid reference, maybe you are replying to a reply?"
                 success = false
-              } else {
+              }
+              if daemon.database.HasNewsgroup(newsgroup) {
                 f := daemon.store.CreateTempFile(msgid)
                 if f == nil {
                   log.Println(self.name, "discarding", msgid, "we are already loading it")
@@ -732,6 +733,7 @@ func (self *nntpConnection) handleLine(daemon NNTPDaemon, code int, line string,
                     f.Close()
                     // we gud, tell daemon
                     daemon.infeed_load <- msgid
+                    gotten = true
                   } else {
                     log.Println(self.name, "error reading message", err)
                   }
@@ -739,7 +741,7 @@ func (self *nntpConnection) handleLine(daemon NNTPDaemon, code int, line string,
               }
             }
           }
-          if success && err == nil {
+          if success && gotten && err == nil {
             // all gud
             conn.PrintfLine("240 We got it, thnkxbai")
           } else {

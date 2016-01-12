@@ -107,10 +107,6 @@ func (self PostgresDatabase) upgrade1to2() {
       log.Fatalf("cannot create table %s, %s, login was '%s'", table, err,self.db_str)
     }
   }
-  _, err = self.conn.Exec("CREATE INDEX IF NOT EXISTS ON NNTPUsers(username)")
-  if err != nil {
-    log.Fatalf("cannot create index on NNTPUsers: %s", err.Error())
-  }
   self.setDBVersion(2)
 }
 

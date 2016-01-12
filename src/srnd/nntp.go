@@ -116,7 +116,7 @@ func (self *nntpConnection) Quit(conn *textproto.Conn) (err error) {
 
 // send a banner for inbound connections
 func (self *nntpConnection) inboundHandshake(conn *textproto.Conn) (err error) {
-  err = conn.PrintfLine("200 Posting Allowed")
+  err = conn.PrintfLine("201 Posting NOT Allowed")
   return err
 }
 
@@ -626,6 +626,20 @@ func (self *nntpConnection) handleLine(daemon NNTPDaemon, code int, line string,
             conn.PrintfLine("500 error, %s", err.Error())
           }
         }
+      } else if cmd == "LIST" {
+        conn.PrintfLine("215 list of newsgroups follows")
+        // handle list command
+        groups := daemon.database.GetAllNewsgroups()
+        dw := conn.DotWriter()
+        for _, group := range groups {
+          last, first, err := daemon.database.GetLastAndFirstForGroup(group)
+          if err == nil {
+            io.WriteString(dw, fmt.Sprintf("%s %d %d y\r\n", group, last, first))
+          } else {
+            log.Println("cannot get last/first ids for group", group, err)
+          }
+        }
+        dw.Close()
       } else if cmd == "GROUP" {
         // handle GROUP command
         group := parts[1]
@@ -966,7 +980,7 @@ func (self *nntpConnection) runConnection(daemon NNTPDaemon, inbound, stream, re
               // set reader mode
               self.mode = "READER"
               // we'll allow posting for reader
-              conn.PrintfLine("201 Not Posting Permitted Yo")
+              conn.PrintfLine("201 Posting NOT Permitted Yo")
             } else if parts[1] == "STREAM" {
               if daemon.RequireTLS() && ! self.tls_state.HandshakeComplete {
                 conn.PrintfLine("483 Streaming requires TLS")

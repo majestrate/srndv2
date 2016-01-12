@@ -478,58 +478,6 @@ func (self *nntpConnection) handleLine(daemon NNTPDaemon, code int, line string,
           // we dont got it
           conn.PrintfLine("430 %s", msgid)
         }
-      } else if cmd == "POST" {
-        if daemon.RequireTLS() && ! self.tls_state.HandshakeComplete {
-          // needs tls to work
-          conn.PrintfLine("483 You cannot submit articles without tls")
-        } else {
-          // handle POST command
-          conn.PrintfLine("340 Post it nigguh; end with <CR-LF>.<CR-LF>")
-          hdr, err := conn.ReadMIMEHeader()
-          var success bool
-          if err == nil {
-            hdr["Message-ID"] = []string{genMessageID(daemon.instance_name)}
-            reason, err := self.checkMIMEHeader(daemon, hdr)
-            success = reason == "" && err == nil
-            if success {
-              dr := conn.DotReader()
-              reference := hdr.Get("References")
-              newsgroup := hdr.Get("Newsgroups")
-              if reference != "" && ValidMessageID(reference) && ! daemon.store.HasArticle(reference) && ! daemon.database.IsExpired(reference) {
-                log.Println(self.name, "got reply to", reference, "but we don't have it")
-                daemon.ask_for_article <- ArticleEntry{reference, newsgroup}
-              }
-              f := daemon.store.CreateTempFile(msgid)
-              if f == nil {
-                log.Println(self.name, "discarding", msgid, "we are already loading it")
-                // discard
-                io.Copy(ioutil.Discard, dr)
-              } else {
-                // write header
-                err = writeMIMEHeader(f, hdr)
-                // write body
-                _, err = io.Copy(f, dr)
-                if err == nil || err == io.EOF {
-                  f.Close()
-                  // we gud, tell daemon
-                  daemon.infeed_load <- msgid
-                } else {
-                  log.Println(self.name, "error reading message", err)
-                }
-              }
-            }
-          }
-          if success && err == nil {
-            // all gud
-            conn.PrintfLine("240 We got it, thnkxbai")
-          } else {
-            // failed posting
-            if err != nil {
-              log.Println(self.name, "failed nntp POST", err)
-            }
-            conn.PrintfLine("441 Posting Failed")
-          }
-        }
       } else if cmd == "IHAVE" {
         if daemon.RequireTLS() && ! self.tls_state.HandshakeComplete {
           conn.PrintfLine("483 You have not authenticated")
@@ -672,6 +620,58 @@ func (self *nntpConnection) handleLine(daemon NNTPDaemon, code int, line string,
           }
         }
         dw.Close()
+      } else if line == "POST" {
+        if daemon.RequireTLS() && ! self.tls_state.HandshakeComplete {
+          // needs tls to work
+          conn.PrintfLine("483 You cannot submit articles without tls")
+        } else {
+          // handle POST command
+          conn.PrintfLine("340 Post it nigguh; end with <CR-LF>.<CR-LF>")
+          hdr, err := conn.ReadMIMEHeader()
+          var success bool
+          if err == nil {
+            hdr["Message-ID"] = []string{genMessageID(daemon.instance_name)}
+            reason, err := self.checkMIMEHeader(daemon, hdr)
+            success = reason == "" && err == nil
+            if success {
+              dr := conn.DotReader()
+              reference := hdr.Get("References")
+              newsgroup := hdr.Get("Newsgroups")
+              if reference != "" && ValidMessageID(reference) && ! daemon.store.HasArticle(reference) && ! daemon.database.IsExpired(reference) {
+                log.Println(self.name, "got reply to", reference, "but we don't have it")
+                daemon.ask_for_article <- ArticleEntry{reference, newsgroup}
+              }
+              f := daemon.store.CreateTempFile(msgid)
+              if f == nil {
+                log.Println(self.name, "discarding", msgid, "we are already loading it")
+                // discard
+                io.Copy(ioutil.Discard, dr)
+              } else {
+                // write header
+                err = writeMIMEHeader(f, hdr)
+                // write body
+                _, err = io.Copy(f, dr)
+                if err == nil || err == io.EOF {
+                  f.Close()
+                  // we gud, tell daemon
+                  daemon.infeed_load <- msgid
+                } else {
+                  log.Println(self.name, "error reading message", err)
+                }
+              }
+            }
+          }
+          if success && err == nil {
+            // all gud
+            conn.PrintfLine("240 We got it, thnkxbai")
+          } else {
+            // failed posting
+            if err != nil {
+              log.Println(self.name, "failed nntp POST", err)
+            }
+            conn.PrintfLine("441 Posting Failed")
+          }
+        }
       }
     }
   }

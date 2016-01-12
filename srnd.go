@@ -38,16 +38,17 @@ func main() {
           srnd.KeygenTool()
         } else if tool == "nntp" {
           if len(os.Args) >= 5 {
-            var daemon srnd.NNTPDaemon
-            daemon.Setup()
-
             action := os.Args[3]
             if action == "del-login" {
+              var daemon srnd.NNTPDaemon
+              daemon = daemon.Setup()
               daemon.DelNNTPLogin(os.Args[4])
             } else if action == "add-login" {
               if len(os.Args) == 6 {
                 username := os.Args[4]
                 passwd := os.Args[5]
+                var daemon srnd.NNTPDaemon
+                daemon = daemon.Setup()
                 daemon.AddNNTPLogin(username, passwd)
               } else {
                 fmt.Fprintf(os.Stdout, "Usage: %s tool nntp add-login username password\n", os.Args[0])

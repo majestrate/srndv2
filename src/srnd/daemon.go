@@ -59,7 +59,7 @@ func (self NNTPDaemon) End() {
 }
 
 // for srnd tool
-func (self NNTPDaemon) DelNNTPLogin(username string) {
+func (self *NNTPDaemon) DelNNTPLogin(username string) {
   exists, err := self.database.CheckNNTPUserExists(username)
   if ! exists {
     log.Println("user", username, "does not exist")
@@ -74,7 +74,7 @@ func (self NNTPDaemon) DelNNTPLogin(username string) {
   }
 }
 // for srnd tool
-func (self NNTPDaemon) AddNNTPLogin(username, password string) {
+func (self *NNTPDaemon) AddNNTPLogin(username, password string) {
   exists, err := self.database.CheckNNTPUserExists(username)
   if exists {
     log.Println("user", username, "exists")

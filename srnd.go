@@ -40,32 +40,15 @@ func main() {
           if len(os.Args) >= 5 {
             var daemon srnd.NNTPDaemon
             daemon.Setup()
-            db := daemon.GetDB()
+
             action := os.Args[3]
             if action == "del-login" {
-              username := os.Args[4]
-              exists, err := db.CheckNNTPUserExists(username)
-              if exists {
-                err = db.RemoveNNTPLogin(username)
-              } else if err == nil {
-                fmt.Fprintf(os.Stdout, "no such user: %s", username)
-              } else {
-                fmt.Fprintf(os.Stdout, "error while deleting user: %s", err.Error())
-              }
+              daemon.DelNNTPLogin(os.Args[4])
             } else if action == "add-login" {
               if len(os.Args) == 6 {
                 username := os.Args[4]
                 passwd := os.Args[5]
-                exists, err := db.CheckNNTPUserExists(username)
-                if err == nil {
-                  if exists {
-                    fmt.Fprintf(os.Stdout, "user %s already exists", username)
-                  } else {
-                    db.AddNNTPLogin(username, passwd)
-                  }
-                } else {
-                  fmt.Fprintf(os.Stdout, "error checking for user: %s", err.Error())
-                }
+                daemon.AddNNTPLogin(username, passwd)
               } else {
                 fmt.Fprintf(os.Stdout, "Usage: %s tool nntp add-login username password\n", os.Args[0])
               }

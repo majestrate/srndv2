@@ -58,8 +58,35 @@ func (self NNTPDaemon) End() {
   self.listener.Close()
 }
 
-func (self NNTPDaemon) GetDB() Database {
-  return self.database
+// for srnd tool
+func (self NNTPDaemon) DelNNTPLogin(username string) {
+  exists, err := self.database.CheckNNTPUserExists(username)
+  if ! exists {
+    log.Println("user", username, "does not exist")
+    return
+  } else if err == nil {
+    err = self.database.RemoveNNTPLogin(username)
+  }
+  if err == nil {
+    log.Println("removed user", username)
+  } else {
+    log.Fatalf("error removing nntp login: %s", err.Error())
+  }
+}
+// for srnd tool
+func (self NNTPDaemon) AddNNTPLogin(username, password string) {
+  exists, err := self.database.CheckNNTPUserExists(username)
+  if exists {
+    log.Println("user", username, "exists")
+    return
+  } else if err == nil {
+    err = self.database.AddNNTPLogin(username, password)
+  }
+  if err == nil {
+    log.Println("added user", username)
+  } else {
+    log.Fatalf("error adding nntp login: %s", err.Error())
+  }
 }
 
 func (self NNTPDaemon) dialOut(proxy_type, proxy_addr, remote_addr string) (conn net.Conn, err error) {

@@ -397,7 +397,7 @@ func (self *nntpConnection) handleLine(daemon NNTPDaemon, code int, line string,
 
       } else if cmd == "AUTHINFO" {
         if len(parts) > 1 {
-          auth_cmd := parts[1]
+          auth_cmd := strings.ToUpper(parts[1])
           if auth_cmd == "USER" {
             // first part
             self.username = parts[2]

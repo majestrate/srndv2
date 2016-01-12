@@ -292,6 +292,7 @@ func (self NNTPDaemon) Run() {
     }
   }
 
+  log.Println("we have", len(self.conf.feeds), "feeds") 
   
   defer self.listener.Close()
   // run expiration mainloop
@@ -594,5 +595,6 @@ func (self NNTPDaemon) Setup() NNTPDaemon {
     database:  self.database,
     chnl: make(chan NNTPMessage),
   }
+  
   return self
 }

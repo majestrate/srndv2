@@ -1039,6 +1039,7 @@ func (self *nntpConnection) runConnection(daemon NNTPDaemon, inbound, stream, re
     self.authenticated = ! daemon.RequireTLS()
     conn = textproto.NewConn(nconn)
   }
+  var ready bool
   if conf != nil && ! inbound {
     // we have a feed config
     // check for authentication
@@ -1054,34 +1055,7 @@ func (self *nntpConnection) runConnection(daemon NNTPDaemon, inbound, stream, re
             code, line, err = conn.ReadCodeLine(281)
             if code == 281 {
               log.Println(self.name, "Auth Successful")
-              if preferMode == "stream" {
-                // try outbound streaming
-                if stream {
-                  success, err = self.modeSwitch("STREAM", conn)
-                  self.mode = "STREAM"
-                  if success {
-                    // start outbound streaming in background
-                    go self.startStreaming(daemon, reader, conn)
-                  }
-                }
-              } else if reader {
-                // try reader mode
-                success, err = self.modeSwitch("READER", conn)
-                if success {
-                  self.mode = "READER"
-                  self.startReader(daemon, conn)
-                }
-              }
-              if success {
-                log.Println(self.name, "mode set to", self.mode)
-              } else {
-                // bullshit
-                // we can't do anything so we quit
-                log.Println(self.name, "can't stream or read, wtf?")
-                conn.PrintfLine("QUIT")
-                conn.Close()
-                return
-              }
+              ready = true
             } else {
               log.Println(self.name, "Auth incorrect")
               conn.PrintfLine("QUIT")
@@ -1091,6 +1065,36 @@ func (self *nntpConnection) runConnection(daemon NNTPDaemon, inbound, stream, re
           }
         }
       }
+    }
+  }
+  if ready {
+    if preferMode == "stream" {
+      // try outbound streaming
+      if stream {
+        success, err = self.modeSwitch("STREAM", conn)
+        self.mode = "STREAM"
+        if success {
+          // start outbound streaming in background
+          go self.startStreaming(daemon, reader, conn)
+        }
+      }
+    } else if reader {
+      // try reader mode
+      success, err = self.modeSwitch("READER", conn)
+      if success {
+        self.mode = "READER"
+        self.startReader(daemon, conn)
+      }
+    }
+    if success {
+      log.Println(self.name, "mode set to", self.mode)
+    } else {
+      // bullshit
+      // we can't do anything so we quit
+      log.Println(self.name, "can't stream or read, wtf?")
+      conn.PrintfLine("QUIT")
+      conn.Close()
+      return
     }
   }
   

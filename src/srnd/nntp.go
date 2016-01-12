@@ -626,20 +626,6 @@ func (self *nntpConnection) handleLine(daemon NNTPDaemon, code int, line string,
             conn.PrintfLine("500 error, %s", err.Error())
           }
         }
-      } else if cmd == "LIST" {
-        conn.PrintfLine("215 list of newsgroups follows")
-        // handle list command
-        groups := daemon.database.GetAllNewsgroups()
-        dw := conn.DotWriter()
-        for _, group := range groups {
-          last, first, err := daemon.database.GetLastAndFirstForGroup(group)
-          if err == nil {
-            io.WriteString(dw, fmt.Sprintf("%s %d %d y\r\n", group, last, first))
-          } else {
-            log.Println("cannot get last/first ids for group", group, err)
-          }
-        }
-        dw.Close()
       } else if cmd == "GROUP" {
         // handle GROUP command
         group := parts[1]
@@ -667,6 +653,22 @@ func (self *nntpConnection) handleLine(daemon NNTPDaemon, code int, line string,
       } else {
         log.Println(self.name, "invalid command recv'd", cmd)
         conn.PrintfLine("500 Invalid command: %s", cmd)
+      }
+    } else {
+      if line == "LIST" {
+        conn.PrintfLine("215 list of newsgroups follows")
+        // handle list command
+        groups := daemon.database.GetAllNewsgroups()
+        dw := conn.DotWriter()
+        for _, group := range groups {
+          last, first, err := daemon.database.GetLastAndFirstForGroup(group)
+          if err == nil {
+            io.WriteString(dw, fmt.Sprintf("%s %d %d y\r\n", group, last, first))
+          } else {
+            log.Println("cannot get last/first ids for group", group, err)
+          }
+        }
+        dw.Close()
       }
     }
   }

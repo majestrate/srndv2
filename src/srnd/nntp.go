@@ -998,10 +998,9 @@ func (self *nntpConnection) runConnection(daemon NNTPDaemon, inbound, stream, re
     conn = textproto.NewConn(nconn)
   }
   for err == nil {
+    line, err = conn.ReadLine()
     if self.mode == "" {
       if inbound  {
-        // no mode and inbound
-        line, err = conn.ReadLine()
         if len(line) == 0 {
           conn.Close()
           return
@@ -1109,8 +1108,6 @@ func (self *nntpConnection) runConnection(daemon NNTPDaemon, inbound, stream, re
         }
       }
     } else {
-      // we have our mode set
-      line, err = conn.ReadLine()
       if err == nil {
         parts := strings.Split(line, " ")
         var code64 int64

@@ -425,6 +425,7 @@ func (self *nntpConnection) handleLine(daemon NNTPDaemon, code int, line string,
                 // there was an error
                 // logit
                 log.Println(self.name, "error while logging in as", self.username, err)
+                conn.PrintfLine("501 error while logging in")
               }
             }
           }
@@ -475,9 +476,12 @@ func (self *nntpConnection) handleLine(daemon NNTPDaemon, code int, line string,
               log.Println(self.name, "got reply to", reference, "but we don't have it")
               daemon.ask_for_article <- ArticleEntry{reference, newsgroup}
             }
-            f := daemon.store.CreateTempFile(msgid)
+            var f io.WriteCloser
+            if self.mode == "STREAM" {
+              f = daemon.store.CreateTempFile(msgid)
+            }
             if f == nil {
-              log.Println(self.name, "discarding", msgid, "we are already loading it")
+              log.Println(self.name, "discarding", msgid)
               // discard
               io.Copy(ioutil.Discard, dr)
             } else {

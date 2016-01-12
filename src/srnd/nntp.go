@@ -696,9 +696,10 @@ func (self *nntpConnection) handleLine(daemon NNTPDaemon, code int, line string,
           var success bool
           var reason string
           if err == nil {
-            msgid = genMessageID(daemon.instance_name)
-            
-            hdr.Set("Message-ID", msgid)
+            if hdr.Get("Message-ID") == "" {
+              hdr.Set("Message-ID", genMessageID(daemon.instance_name))
+            }
+            msgid = hdr.Get("Message-ID")
             hdr.Set("Date", timeNowStr())
             reason, err = self.checkMIMEHeader(daemon, hdr)
             success = reason == "" && err == nil

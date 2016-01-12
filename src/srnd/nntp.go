@@ -227,7 +227,11 @@ func (self *nntpConnection) checkMIMEHeader(daemon NNTPDaemon, hdr textproto.MIM
     reason = "not authenticated"
     return
   }
-  
+  reason, err = self.checkMIMEHeaderNoAuth(daemon, hdr)
+  return
+}
+
+func (self *nntpConnection) checkMIMEHeaderNoAuth(daemon NNTPDaemon, hdr textproto.MIMEHeader) (reason string, err error) {
   newsgroup := hdr.Get("Newsgroups")
   reference := hdr.Get("References")
   msgid := hdr.Get("Message-Id")
@@ -955,7 +959,7 @@ func (self *nntpConnection) requestArticle(daemon NNTPDaemon, conn *textproto.Co
       // prepare to read body
       dr := conn.DotReader()
       // check header and decide if we want this
-      reason, err := self.checkMIMEHeader(daemon, hdr)
+      reason, err := self.checkMIMEHeaderNoAuth(daemon, hdr)
       if err == nil {
         if len(reason) > 0 {
           log.Println(self.name, "discarding", msgid, reason)

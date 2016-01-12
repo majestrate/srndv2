@@ -223,7 +223,7 @@ func (self *nntpConnection) handleStreaming(daemon NNTPDaemon, reader bool, conn
 // returns empty string if it's okay otherwise an error message
 func (self *nntpConnection) checkMIMEHeader(daemon NNTPDaemon, hdr textproto.MIMEHeader) (reason string, err error) {
 
-  if ( daemon.RequireTLS() && ! self.tls_state.HandshakeComplete ) || ! self.authenticated {
+  if ! self.authenticated {
     reason = "not authenticated"
     return
   }
@@ -533,7 +533,7 @@ func (self *nntpConnection) handleLine(daemon NNTPDaemon, code int, line string,
           conn.PrintfLine("430 %s", msgid)
         }
       } else if cmd == "IHAVE" {
-        if ( daemon.RequireTLS() && ! self.tls_state.HandshakeComplete ) || !self.authenticated {
+        if ! self.authenticated {
           conn.PrintfLine("483 You have not authenticated")
         } else {
           // handle IHAVE command
@@ -689,11 +689,10 @@ func (self *nntpConnection) handleLine(daemon NNTPDaemon, code int, line string,
         }
         dw.Close()
       } else if line == "POST" {
-        // XXX: what happens when TLS is not required?
-        if ( daemon.RequireTLS() && ! self.tls_state.HandshakeComplete ) || ( ! self.authenticated ) {
+        if ! self.authenticated {
           // needs tls to work if not logged in
           conn.PrintfLine("440 Posting Not Allowed")
-        } else if self.authenticated {
+        } else {
           // handle POST command
           conn.PrintfLine("340 Post it nigguh; end with <CR-LF>.<CR-LF>")
           var hdr textproto.MIMEHeader
@@ -755,8 +754,6 @@ func (self *nntpConnection) handleLine(daemon NNTPDaemon, code int, line string,
             }
             conn.PrintfLine("441 Posting Failed %s", reason)
           }
-        } else {
-          conn.PrintfLine("440 Posting Not Allowed")
         }
       } else {
         conn.PrintfLine("500 wut?")
@@ -1024,14 +1021,18 @@ func (self *nntpConnection) runConnection(daemon NNTPDaemon, inbound, stream, re
   var conn *textproto.Conn
   
   if use_tls && daemon.CanTLS() && ! inbound {
-    _conn, _, err := SendStartTLS(nconn, daemon.GetTLSConfig(self.hostname))
+    _conn, state, err := SendStartTLS(nconn, daemon.GetTLSConfig(self.hostname))
     if err == nil {
       // we upgraded
       conn = _conn
+      self.authenticated = state.HandshakeComplete
     } else {
+      // we didn't upgrade, fall back
       conn = textproto.NewConn(nconn)
     }
   } else {
+    // we are authenticated if we are don't need tls
+    self.authenticated = ! daemon.RequireTLS()
     conn = textproto.NewConn(nconn)
   }
   for err == nil {
@@ -1054,6 +1055,7 @@ func (self *nntpConnection) runConnection(daemon NNTPDaemon, inbound, stream, re
             // we are now tls
             conn = _conn
             self.tls_state = state
+            self.authenticated = state.HandshakeComplete
             log.Println("TLS initiated")
           } else {
             log.Println("STARTTLS failed:", err)
@@ -1081,7 +1083,7 @@ func (self *nntpConnection) runConnection(daemon NNTPDaemon, inbound, stream, re
               // we'll allow posting for reader
               conn.PrintfLine("200 Posting is Permitted awee yeh")
             } else if mode == "STREAM" {
-              if ( daemon.RequireTLS() && ! self.tls_state.HandshakeComplete ) || ! self.authenticated {
+              if ! self.authenticated {
                 conn.PrintfLine("483 Streaming Denied")
               } else {
                 // set streaming mode
@@ -1102,6 +1104,7 @@ func (self *nntpConnection) runConnection(daemon NNTPDaemon, inbound, stream, re
               // we are now tls
               conn = _conn
               self.tls_state = state
+              self.authenticated = state.HandshakeComplete
               log.Println("TLS initiated")
             } else {
               log.Println("STARTTLS failed:", err)

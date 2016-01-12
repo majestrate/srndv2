@@ -688,7 +688,8 @@ func (self *nntpConnection) handleLine(daemon NNTPDaemon, code int, line string,
         } else if self.authenticated {
           // handle POST command
           conn.PrintfLine("340 Post it nigguh; end with <CR-LF>.<CR-LF>")
-          hdr, err := conn.ReadMIMEHeader()
+          var hdr textproto.MIMEHeader
+          hdr, err = conn.ReadMIMEHeader()
           var success bool
           var reason string
           if err == nil {

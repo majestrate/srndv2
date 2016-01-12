@@ -663,7 +663,7 @@ func (self *nntpConnection) handleLine(daemon NNTPDaemon, code int, line string,
         // XXX: what happens when TLS is not required?
         if ( ! self.authenticated ) && daemon.RequireTLS() && ! self.tls_state.HandshakeComplete {
           // needs tls to work if not logged in
-          conn.PrintfLine("483 You cannot submit articles without tls")
+          conn.PrintfLine("481 You cannot submit articles without tls")
         } else {
           // handle POST command
           conn.PrintfLine("340 Post it nigguh; end with <CR-LF>.<CR-LF>")

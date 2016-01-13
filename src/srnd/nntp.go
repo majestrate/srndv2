@@ -1066,6 +1066,8 @@ func (self *nntpConnection) runConnection(daemon NNTPDaemon, inbound, stream, re
         }
       }
     }
+  } else {
+    ready = true
   }
   if ready {
     if preferMode == "stream" {

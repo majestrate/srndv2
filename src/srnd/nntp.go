@@ -494,7 +494,7 @@ func (self *nntpConnection) handleLine(daemon NNTPDaemon, code int, line string,
             log.Println(self.name, "rejected", msgid, reason)
             _, err = io.Copy(ioutil.Discard, dr)
             err = daemon.database.BanArticle(msgid, reason)
-          } else {
+          } else if err == nil {
             // check if we don't have the rootpost
             reference := hdr.Get("References")
             newsgroup := hdr.Get("Newsgroups")
@@ -525,6 +525,13 @@ func (self *nntpConnection) handleLine(daemon NNTPDaemon, code int, line string,
             }
             code = 239
             reason = "gotten"
+          } else {
+            // error?
+            // discard, we do not want
+            code = 439
+            log.Println(self.name, "rejected", msgid, reason)
+            _, err = io.Copy(ioutil.Discard, dr)
+            err = daemon.database.BanArticle(msgid, reason)
           }
         } else {
           log.Println(self.name, "error reading mime header:", err)

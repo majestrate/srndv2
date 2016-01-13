@@ -127,10 +127,10 @@ func (self *nntpConnection) inboundHandshake(conn *textproto.Conn) (err error) {
 
 // outbound setup, check capabilities and set mode
 // returns (supports stream, supports reader, supports tls) + error
-func (self *nntpConnection) outboundHandshake(conn *textproto.Conn) (stream, reader, tls bool, err error) {
+func (self *nntpConnection) outboundHandshake(conn *textproto.Conn, conf *FeedConfig) (stream, reader, tls bool, err error) {
   log.Println(self.name, "outbound handshake")
-  var code int
   var line string
+  var code int
   for err == nil {
     code, line, err = conn.ReadCodeLine(-1)
     log.Println(self.name, line)
@@ -171,7 +171,7 @@ func (self *nntpConnection) outboundHandshake(conn *textproto.Conn) (stream, rea
             }
           }
           // return after reading
-          return
+          break
         }
       } else if code == 201 {
         log.Println("feed", self.name,"does not allow posting")
@@ -182,7 +182,29 @@ func (self *nntpConnection) outboundHandshake(conn *textproto.Conn) (stream, rea
       }
     }
   }
-  conn = nil
+  if conf != nil && len(conf.username) > 0 && len(conf.passwd) > 0 {
+    log.Println(self.name, "authenticating...")
+    err = conn.PrintfLine("AUTHINFO USER %s", conf.username)
+    if err == nil {
+      var code int
+      code, line, err = conn.ReadCodeLine(381)
+      if code == 381 {
+        err = conn.PrintfLine("AUTHINFO PASS %s", conf.passwd)
+        if err == nil {
+          code, line, err = conn.ReadCodeLine(281)
+          if code == 281 {
+            log.Println(self.name, "Auth Successful")
+          } else {
+            log.Println(self.name, "Auth incorrect")
+            conn.PrintfLine("QUIT")
+            conn.Close()
+            return false, false, false, io.EOF
+          }
+        }
+      }
+    }
+  }
+
   return
 }
 
@@ -1036,70 +1058,8 @@ func (self *nntpConnection) runConnection(daemon NNTPDaemon, inbound, stream, re
     }
   } else {
     // we are authenticated if we are don't need tls
-    self.authenticated = ! daemon.RequireTLS()
     conn = textproto.NewConn(nconn)
   }
-  var ready bool
-  if conf != nil && ! inbound {
-    // we have a feed config
-    // check for authentication
-    if len(conf.username) > 0 && len(conf.passwd) > 0 {
-      log.Println(self.name, "authenticating...")
-      err = conn.PrintfLine("AUTHINFO USER %s", conf.username)
-      if err == nil {
-        var code int
-        code, line, err = conn.ReadCodeLine(381)
-        if code == 381 {
-          err = conn.PrintfLine("AUTHINFO PASS %s", conf.passwd)
-          if err == nil {
-            code, line, err = conn.ReadCodeLine(281)
-            if code == 281 {
-              log.Println(self.name, "Auth Successful")
-              ready = true
-            } else {
-              log.Println(self.name, "Auth incorrect")
-              conn.PrintfLine("QUIT")
-              conn.Close()
-              return
-            }
-          }
-        }
-      }
-    }
-  } else {
-    ready = true
-  }
-  if ready {
-    if preferMode == "stream" {
-      // try outbound streaming
-      if stream {
-        success, err = self.modeSwitch("STREAM", conn)
-        self.mode = "STREAM"
-        if success {
-          // start outbound streaming in background
-          go self.startStreaming(daemon, reader, conn)
-        }
-      }
-    } else if reader {
-      // try reader mode
-      success, err = self.modeSwitch("READER", conn)
-      if success {
-        self.mode = "READER"
-        self.startReader(daemon, conn)
-      }
-    }
-    if success {
-      log.Println(self.name, "mode set to", self.mode)
-    } else {
-      // bullshit
-      // we can't do anything so we quit
-      log.Println(self.name, "can't stream or read, wtf?")
-      conn.PrintfLine("QUIT")
-      conn.Close()
-      return
-    }
-  }
-  
   for err == nil {
     line, err = conn.ReadLine()
     if self.mode == "" {
@@ -1129,7 +1089,7 @@ func (self *nntpConnection) runConnection(daemon NNTPDaemon, inbound, stream, re
           // write capabilities
           conn.PrintfLine("101 i support to the following:")
           dw := conn.DotWriter()
-          caps := []string{"VERSION 2", "READER", "STREAMING", "IMPLEMENTATION srndv2", "POST", "IHAVE"}
+          caps := []string{"VERSION 2", "READER", "STREAMING", "IMPLEMENTATION srndv2", "POST", "IHAVE", "AUTHINFO"}
           if daemon.CanTLS() {
             caps = append(caps, "STARTTLS")
           }
@@ -1190,10 +1150,11 @@ func (self *nntpConnection) runConnection(daemon NNTPDaemon, inbound, stream, re
           // try outbound streaming
           if stream {
             success, err = self.modeSwitch("STREAM", conn)
-            self.mode = "STREAM"
             if success {
+              self.mode = "STREAM"
               // start outbound streaming in background
               go self.startStreaming(daemon, reader, conn)
+              continue
             }
           }
         } else if reader {
@@ -1202,6 +1163,7 @@ func (self *nntpConnection) runConnection(daemon NNTPDaemon, inbound, stream, re
           if success {
             self.mode = "READER"
             self.startReader(daemon, conn)
+            return
           }
         }
         if success {

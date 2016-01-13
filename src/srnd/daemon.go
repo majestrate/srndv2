@@ -184,7 +184,7 @@ func (self NNTPDaemon) persistFeed(conf FeedConfig, mode string) {
       nntp := createNNTPConnection(conf.addr)
       nntp.policy = conf.policy
       nntp.name = conf.name + "-" + mode
-      stream, reader, use_tls, err := nntp.outboundHandshake(textproto.NewConn(conn))
+      stream, reader, use_tls, err := nntp.outboundHandshake(textproto.NewConn(conn), &conf)
       if err == nil {
         if mode == "reader" && ! reader {
           log.Println(nntp.name, "we don't support reader on this feed, dropping")
@@ -211,7 +211,7 @@ func (self NNTPDaemon) syncPull(proxy_type, proxy_addr, remote_addr string) {
     nntp := createNNTPConnection(remote_addr)
     nntp.name = remote_addr+"-sync"
     // do handshake
-    _, reader, _ , err := nntp.outboundHandshake(conn)
+    _, reader, _ , err := nntp.outboundHandshake(conn, nil)
 
     if err != nil {
       log.Println("failed to scrape server", err)

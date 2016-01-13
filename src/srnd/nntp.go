@@ -1060,6 +1060,38 @@ func (self *nntpConnection) runConnection(daemon NNTPDaemon, inbound, stream, re
     // we are authenticated if we are don't need tls
     conn = textproto.NewConn(nconn)
   }
+  if ! inbound {
+    if preferMode == "stream" {
+      // try outbound streaming
+      if stream {
+        success, err = self.modeSwitch("STREAM", conn)
+        if success {
+          self.mode = "STREAM"
+          // start outbound streaming in background
+          go self.startStreaming(daemon, reader, conn)
+        }
+      }
+    } else if reader {
+      // try reader mode
+      success, err = self.modeSwitch("READER", conn)
+      if success {
+        self.mode = "READER"
+        self.startReader(daemon, conn)
+        return
+      }
+    }
+    if success {
+      log.Println(self.name, "mode set to", self.mode)
+    } else {
+      // bullshit
+      // we can't do anything so we quit
+      log.Println(self.name, "can't stream or read, wtf?")
+      conn.PrintfLine("QUIT")
+      conn.Close()
+      return
+    }
+  }
+  
   for err == nil {
     line, err = conn.ReadLine()
     if self.mode == "" {
@@ -1144,37 +1176,6 @@ func (self *nntpConnection) runConnection(daemon NNTPDaemon, inbound, stream, re
           } else {
             err = self.handleLine(daemon, 0, line, conn)
           }
-        }
-      } else { // no mode and outbound
-        if preferMode == "stream" {
-          // try outbound streaming
-          if stream {
-            success, err = self.modeSwitch("STREAM", conn)
-            if success {
-              self.mode = "STREAM"
-              // start outbound streaming in background
-              go self.startStreaming(daemon, reader, conn)
-              continue
-            }
-          }
-        } else if reader {
-          // try reader mode
-          success, err = self.modeSwitch("READER", conn)
-          if success {
-            self.mode = "READER"
-            self.startReader(daemon, conn)
-            return
-          }
-        }
-        if success {
-          log.Println(self.name, "mode set to", self.mode)
-        } else {
-          // bullshit
-          // we can't do anything so we quit
-          log.Println(self.name, "can't stream or read, wtf?")
-          conn.PrintfLine("QUIT")
-          conn.Close()
-          return
         }
       }
     } else {

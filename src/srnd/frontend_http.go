@@ -14,9 +14,11 @@ import (
   "bytes"
   "encoding/base64"
   "encoding/json"
+  "errors"
   "fmt"
   "io"
   "log"
+  "mime"
   "net"
   "net/http"
   "os"
@@ -25,6 +27,34 @@ import (
   "time"
 )
 
+
+
+type bannedFunc func()
+type errorFunc func(error)
+type successFunc func(NNTPMessage)
+
+// an attachment in a post
+type postAttachment struct {
+  Filename string `json:"name"`
+  Filedata string `json:"data"`
+  Filetype string `json:"type"`
+}
+
+
+// an api post request
+type postRequest struct {
+  Reference string `json:"reference"`
+  Name string `json:"name"`
+  Email string `json:"email"`
+  Subject string `json:"subject"`
+  Frontend string `json:"frontend"`
+  Attachment postAttachment `json:"file"`
+  Group string `json:"newsgroup"`
+  IpAddress string `json:"ip"`
+  Destination string `json:"i2p"`
+  Dubs bool `json:"dubs"`
+  Message string `json:"message"`
+}
 
 // regenerate a newsgroup page
 type groupRegenRequest struct {
@@ -64,6 +94,10 @@ type httpFrontend struct {
   store *sessions.CookieStore
 
   upgrader websocket.Upgrader
+
+  jsonUsername string
+  jsonPassword string
+  enableJson bool
 }
 
 // do we allow this newsgroup?
@@ -269,34 +303,17 @@ func (self httpFrontend) handle_newboard(wr http.ResponseWriter, r *http.Request
 // handle new post via http request for a board
 func (self httpFrontend) handle_postform(wr http.ResponseWriter, r *http.Request, board string) {
 
-  // always lower case newsgroups
-  board = strings.ToLower(board)
+  // the post we will turn into an nntp article
+  var pr postRequest
 
-  // post fail message
-  post_fail := ""
-  banned, _ := self.daemon.database.NewsgroupBanned(board)
-  if banned {
-    post_fail += "newsgroup banned "
-  }
+  mp_reader, err := r.MultipartReader()
 
-  if ! self.daemon.database.HasNewsgroup(board) {
-    post_fail += "we don't have this newsgroup "
+  if err != nil {
+    wr.WriteHeader(500)
+    io.WriteString(wr, err.Error())
+    return
   }
-    
-  // post message
-  msg := ""
   
-  // the nntp message
-  var nntp nntpArticle
-  nntp.headers = make(ArticleHeaders)
-
-
-  // tripcode private key
-  var tripcode_privkey []byte
-
-  var dubs bool
-
-
   // encrypt IP Addresses
   // when a post is recv'd from a frontend, the remote address is given its own symetric key that the local srnd uses to encrypt the address with, for privacy
   // when a mod event is fired, it includes the encrypted IP address and the symetric key that frontend used to encrypt it, thus allowing others to determine the IP address
@@ -305,74 +322,22 @@ func (self httpFrontend) handle_postform(wr http.ResponseWriter, r *http.Request
   
   // get the "real" ip address from the request
 
-  address , _, err := net.SplitHostPort(r.RemoteAddr)
+  pr.IpAddress , _, err = net.SplitHostPort(r.RemoteAddr)
   // TODO: have in config upstream proxy ip and check for that
-  if strings.HasPrefix(address, "127.") {
+  if strings.HasPrefix(pr.IpAddress, "127.") {
     // if it's loopback check headers for reverse proxy headers
     // TODO: make sure this isn't a tor user being sneaky
-    address = getRealIP(r.Header.Get("X-Real-IP"))
+    pr.IpAddress = getRealIP(r.Header.Get("X-Real-IP"))
   }
-    
-  // check for banned
-  if len(address) > 0 {
-    banned, err :=  self.daemon.database.CheckIPBanned(address)
-    if err == nil {
-      if banned {
-        wr.WriteHeader(403)
-        // TODO: ban messages
-        io.WriteString(wr,  "nigguh u banned.")
-        return
-      }
-    } else {
-      wr.WriteHeader(500)
-      io.WriteString(wr, "error checking for ban: ")
-      io.WriteString(wr, err.Error())
-      return
-    }
-  }
-  if len(address) == 0 {
-    address = "Tor"
-  }
-  if ! strings.HasPrefix(address, "127.") {
-    // set the ip address of the poster to be put into article headers
-    // if we cannot determine it, i.e. we are on Tor/i2p, this value is not set
-    if address == "Tor" {
-      nntp.headers.Set("X-Tor-Poster", "1")
-    } else {
-      address, err = self.daemon.database.GetEncAddress(address)
-      nntp.headers.Set("X-Encrypted-IP", address)
-      // TODO: add x-tor-poster header for tor exits
-    }
-  }
-  
-  // if we don't have an address for the poster try checking for i2p httpd headers
-  address = r.Header.Get("X-I2P-DestHash")
-  // TODO: make sure this isn't a Tor user being sneaky
-  if len(address) > 0 {
-    nntp.headers.Set("X-I2P-DestHash", address)
-  }
-  
-
-  // set newsgroup
-  nntp.headers.Set("Newsgroups", board)
-  
-  // redirect url
-  url := ""
-  // mime part handler
-  var part_buff bytes.Buffer
-  mp_reader, err := r.MultipartReader()
-  if err != nil {
-    errmsg := fmt.Sprintf("httpfrontend post handler parse multipart POST failed: %s", err)
-    log.Println(errmsg)
-    wr.WriteHeader(500)
-    io.WriteString(wr, errmsg)
-    return
-  }
+  pr.Destination = r.Header.Get("X-I2P-DestHash")
 
   var captcha_retry bool
-  var subject, name, reference, captcha_solution, captcha_id string
+  var captcha_solution, captcha_id string
   var att_filename, att_mime string
   var att_buff bytes.Buffer
+  var att NNTPAttachment
+  var url string
+  var part_buff bytes.Buffer
   for {
     part, err := mp_reader.NextPart()
     if err == nil {
@@ -382,42 +347,24 @@ func (self httpFrontend) handle_postform(wr http.ResponseWriter, r *http.Request
       // read part for attachment
       if partname == "attachment" && self.attachments {
         log.Println("attaching file...")
-        att := readAttachmentFromMimePart(part)
-        if att != nil {
-          nntp = nntp.Attach(att).(nntpArticle)
-        }
+        att = readAttachmentFromMimePart(part)
         continue
       }
-
       io.Copy(&part_buff, part)
       
       // check for values we want
       if partname == "subject" {
-        subject = part_buff.String()
+        pr.Subject = part_buff.String()
       } else if partname == "name" {
-        name = part_buff.String()
+        pr.Name = part_buff.String()
       } else if partname == "message" {
-        msg = part_buff.String()
+        pr.Message = part_buff.String()
       } else if partname == "reference" {
-        ref := part_buff.String()
-        if len(ref) == 0 {
+        pr.Reference = part_buff.String()
+        if len(pr.Reference) == 0 {
           url = fmt.Sprintf("%s-0.html", board)
-        } else if ValidMessageID(ref) {
-          if self.daemon.database.HasArticleLocal(ref) {
-            nntp.headers.Set("References", ref)
-            url = fmt.Sprintf("thread-%s.html", ShortHashMessageID(ref))
-            reference = ref
-          } else {
-            // no such article
-            url = fmt.Sprintf("%s.html", board)
-            post_fail += "we don't have "
-            post_fail += ref
-            post_fail += "locally, can't reply. "
-          }
         } else {
-          post_fail += "invalid reference: "
-          post_fail += ref
-          post_fail += ", not posting. "
+          url = fmt.Sprintf("thread-%s.html", ShortHashMessageID(pr.Reference))
         }
       } else if partname == "captcha_id" {
         captcha_id = part_buff.String()
@@ -425,20 +372,14 @@ func (self httpFrontend) handle_postform(wr http.ResponseWriter, r *http.Request
         captcha_solution = part_buff.String()
       } else if partname == "attachment_data" {
         // repost of data
-        atts := nntp.Attachments()
-        if len(atts) == 0 {
-          dec := base64.NewDecoder(base64.StdEncoding, &part_buff)
-          _, err = io.Copy(&att_buff, dec)
-        } else {
-          // we have already attached something?
-          log.Println("not attachming another attachment, already added one")
-        }
+        dec := base64.NewDecoder(base64.StdEncoding, &part_buff)
+        _, err = io.Copy(&att_buff, dec)
       } else if partname == "attachment_filename" {
         att_filename = part_buff.String()
       } else if partname == "attachment_mime" {
         att_mime = part_buff.String()
       } else if partname == "dubs" {
-        dubs = part_buff.String() == "on"
+        pr.Dubs = part_buff.String() == "on"
       }
     
       // we done
@@ -490,37 +431,21 @@ func (self httpFrontend) handle_postform(wr http.ResponseWriter, r *http.Request
     }
   }
 
-  if att_buff.Len() > 0 && len(att_filename) > 0 && len(att_mime) > 0  && self.attachments {
-    att := createAttachment(att_mime, att_filename, &att_buff)
-    if att == nil {
-      // failed to parse
-      log.Println("failed to parse attachment")
-    } else {
-      log.Println("attaching reupload")
-      nntp = nntp.Attach(att).(nntpArticle)
-    }
-  }
-  
-  // check message size
-  if len(nntp.attachments) == 0 && len(msg) == 0 {
-    post_fail += "no message. "
-  } else if len(msg) > 1024 * 1024 * 10 {
-    post_fail += "your message is too big"
+  if att_buff.Len() > 0 && len(att_filename) > 0 && len(att_mime) > 0 {
+    att = createAttachment(att_mime, att_filename, &att_buff)
   }
   
   if captcha_retry {
     // retry the post with a new captcha
     wr.WriteHeader(200)
     resp_map = make(map[string]string)
-    resp_map["subject"] = subject
-    resp_map["name"] = name
-    resp_map["message"] = msg
-    resp_map["reference"] = reference
-    atts := nntp.Attachments()
-    if atts == nil {
+    resp_map["subject"] = pr.Subject
+    resp_map["name"] = pr.Name
+    resp_map["message"] = pr.Message
+    resp_map["reference"] = pr.Reference
+    if att == nil {
       // no attachments
     } else {
-      att := atts[0]
       // 1 attachment
       var buff bytes.Buffer
       enc := base64.NewEncoder(base64.StdEncoding, &buff)
@@ -535,20 +460,145 @@ func (self httpFrontend) handle_postform(wr http.ResponseWriter, r *http.Request
     s, _ := self.store.Get(r, self.name)
     s.Values["captcha_id"] = c
     s.Save(r, wr)
-    resp_map["fail_message"] = post_fail
+    resp_map["fail_message"] = "try posting again"
     resp_map["prefix"] = self.prefix
     io.WriteString(wr, template.renderTemplate("post_retry.mustache", resp_map))
     return
   }
+
+  if att != nil {
+    pr.Attachment = postAttachment{
+      Filename: att.Filename(),
+      Filetype: att.Mime(),
+      Filedata: att.Filedata(),
+    }
+  }
   
-  // send fail message if it's there
-  if len(post_fail) > 0 {
+  b := func() {
+    wr.WriteHeader(403)
+    io.WriteString(wr, "nigguh u banned")
+  }
+
+  e := func (err error) {
     wr.WriteHeader(200)
-    resp_map["reason"] = post_fail
+    resp_map["reason"] = err.Error()
+    resp_map["prefix"] = self.prefix
+    resp_map["redirect_url"] = url
     io.WriteString(wr, template.renderTemplate("post_fail.mustache", resp_map))
+  }
+  
+  s := func (nntp NNTPMessage) {
+    // send success reply
+    wr.WriteHeader(200)
+    // determine the root post so we can redirect to the thread for it
+    msg_id := nntp.Headers().Get("References", nntp.MessageID())
+    // render response as success
+    url = fmt.Sprintf("%sthread-%s.html", self.prefix, ShortHashMessageID(msg_id))
+    io.WriteString(wr, template.renderTemplate("post_success.mustache", map[string]string {"prefix" : self.prefix,  "message_id" : nntp.MessageID(), "redirect_url" : url}))
+  }
+  self.handle_postRequest(&pr, b, e, s)
+}
+
+// turn a post request into an nntp article write it to temp dir and tell daemon
+func (self httpFrontend) handle_postRequest(pr *postRequest, b bannedFunc, e errorFunc, s successFunc) {
+  var err error
+  var nntp nntpArticle
+  var banned bool
+  nntp.headers = make(ArticleHeaders)
+  address := pr.IpAddress
+  // check for banned
+  if len(address) > 0 {
+    banned, err =  self.daemon.database.CheckIPBanned(address)
+    if err == nil {
+      if banned {
+        b()
+        return
+      }
+    } else {
+      e(err)
+      return
+    }
+  }
+  if len(address) == 0 {
+    address = "Tor"
+  }
+
+  if ! strings.HasPrefix(address, "127.") {
+    // set the ip address of the poster to be put into article headers
+    // if we cannot determine it, i.e. we are on Tor/i2p, this value is not set
+    if address == "Tor" {
+      nntp.headers.Set("X-Tor-Poster", "1")
+    } else {
+      address, err = self.daemon.database.GetEncAddress(address)
+      if err == nil {
+        nntp.headers.Set("X-Encrypted-IP", address)
+      } else {
+        e(err)
+        return
+      }
+      // TODO: add x-tor-poster header for tor exits
+    }
+  }
+
+
+  // always lower case newsgroups
+  board := strings.ToLower(pr.Group)
+
+  // post fail message
+  banned, err = self.daemon.database.NewsgroupBanned(board)
+  if banned {
+    e(errors.New("newsgroup banned "))
     return
   }
- 
+  if err != nil {
+    e(err)
+  }
+
+  if ! self.daemon.database.HasNewsgroup(board) {
+    e(errors.New("we don't have this newsgroup "))
+    return
+  }
+
+  
+  // if we don't have an address for the poster try checking for i2p httpd headers
+  if len(pr.Destination) == i2pDestHashLen() {
+    nntp.headers.Set("X-I2P-DestHash", pr.Destination)
+  }
+
+  ref := pr.Reference
+  if len(ref) > 0 {
+    if ValidMessageID(ref) {
+      if self.daemon.database.HasArticleLocal(ref) {
+        nntp.headers.Set("References", ref)  
+      } else {
+        e(errors.New("article referenced not locally available"))
+        return
+      }
+    } else {
+      e(errors.New("invalid reference"))
+      return
+    }
+  }
+
+  // set newsgroup
+  nntp.headers.Set("Newsgroups", pr.Group)
+  
+  // check message size
+  if len(pr.Attachment.Filedata) == 0 && len(pr.Message) == 0 {
+    e(errors.New("no message"))
+    return
+  } else if len(pr.Message) > 1024 * 1024 * 10 {
+    e(errors.New("your message is too big"))
+    return
+  }
+
+  if len(pr.Frontend) == 0 {
+    // :-DDD
+    pr.Frontend = "mongo.db.is.web.scale"
+  }
+  
+  subject := pr.Subject
+  
   // set subject
   if len(subject) == 0 {
     subject = "None"
@@ -558,6 +608,10 @@ func (self httpFrontend) handle_postform(wr http.ResponseWriter, r *http.Request
     nntp.headers.Set("X-Sage", "1")
   }
 
+  name := pr.Name
+
+  var tripcode_privkey []byte
+  
   // set name
   if len(name) == 0 {
     name = "Anonymous"
@@ -572,23 +626,28 @@ func (self httpFrontend) handle_postform(wr http.ResponseWriter, r *http.Request
       }
     }
   }
-  msgid := genMessageID(self.name)
+  msgid := genMessageID(pr.Frontend)
   // roll until dubs if desired
-  for dubs && ! MessageIDWillDoDubs(msgid) {
-    msgid = genMessageID(self.name)
+  for pr.Dubs && ! MessageIDWillDoDubs(msgid) {
+    msgid = genMessageID(pr.Frontend)
   }
   
-  nntp.headers.Set("From", nntpSanitize(fmt.Sprintf("%s <anon@%s>", name, self.name)))
+  nntp.headers.Set("From", nntpSanitize(fmt.Sprintf("%s <poster@%s>", name, pr.Frontend)))
   nntp.headers.Set("Message-ID", msgid)
   
   // set message
-  nntp.message = createPlaintextAttachment(msg)
+  nntp.message = createPlaintextAttachment(pr.Message)
   // set date
   nntp.headers.Set("Date", timeNowStr())
   // append path from frontend
-  nntp.AppendPath(self.name)
-  // send message off to daemon
-  log.Printf("uploaded %d attachments", len(nntp.Attachments()))
+  nntp.AppendPath(pr.Frontend)
+
+  att := pr.Attachment
+  
+  // add attachment
+  if self.attachments && len(att.Filedata) > 0 {
+    nntp = nntp.Attach(createAttachment(att.Filetype, att.Filename, strings.NewReader(att.Filedata))).(nntpArticle)
+  }
   // pack it before sending so that the article is well formed
   nntp.Pack()
 
@@ -596,29 +655,21 @@ func (self httpFrontend) handle_postform(wr http.ResponseWriter, r *http.Request
   if len(tripcode_privkey) == nacl.CryptoSignSeedLen() {
     nntp, err = signArticle(nntp, tripcode_privkey)
     if err != nil {
-      // wtf? error!?
-      log.Println("error signing", err)
-      wr.WriteHeader(500)
-      io.WriteString(wr, err.Error())
+      // error signing
+      e(err)
       return 
     }
   }
-  // XXX: write it temp instead
-  // self.postchan <- nntp
+  // success
+  go s(nntp)
+  // store in temp
   f := self.daemon.store.CreateTempFile(nntp.MessageID())
   if f != nil {
     nntp.WriteTo(f, "\n")
     f.Close()
+    // tell daemon
+    self.daemon.infeed_load <- nntp.MessageID()
   }
-  self.daemon.infeed_load <- nntp.MessageID()
-
-  // send success reply
-  wr.WriteHeader(200)
-  // determine the root post so we can redirect to the thread for it
-  msg_id := nntp.headers.Get("References", nntp.MessageID())
-  // render response as success
-  url = fmt.Sprintf("%sthread-%s.html", self.prefix, ShortHashMessageID(msg_id))
-  io.WriteString(wr, template.renderTemplate("post_success.mustache", map[string]string {"prefix" : self.prefix,  "message_id" : nntp.MessageID(), "redirect_url" : url}))
 }
 
 
@@ -658,12 +709,103 @@ func (self httpFrontend) new_captcha(wr http.ResponseWriter, r *http.Request) {
   }
 }
 
+// send error
+func api_error(wr http.ResponseWriter, err error) {
+  resp := make(map[string]string)
+  resp["error"] = err.Error()
+  wr.Header().Add("Content-Type", "text/json; encoding=UTF-8")
+  enc := json.NewEncoder(wr)
+  enc.Encode(resp)
+}
+
+// authenticated part of api
+// handle all functions that require authentication
+func (self httpFrontend) handle_authed_api(wr http.ResponseWriter, r *http.Request, api string) {
+  // check valid format
+  ct := strings.ToLower(r.Header.Get("Content-Type"))
+  mtype, _, err := mime.ParseMediaType(ct)
+  if err == nil {
+    if strings.HasSuffix(mtype, "/json") {
+      // valid :^)
+    } else {
+      // bad content type
+      api_error(wr, errors.New(fmt.Sprintf("invalid content type: %s", ct)))
+      return
+      }
+  } else {
+    // bad content type
+    api_error(wr, err)
+    return
+  }
+
+  b := func() {
+    api_error(wr, errors.New("banned"))
+  }
+
+  e := func(err error) {
+    api_error(wr, err)
+  }
+
+  s := func(nntp NNTPMessage) {
+    resp := make(map[string]string)
+    resp["id"] = nntp.MessageID()
+    enc := json.NewEncoder(wr)
+    enc.Encode(resp)
+  }
+  
+  dec := json.NewDecoder(r.Body)  
+  if api == "post" {
+    var pr postRequest
+    err = dec.Decode(pr)
+    if err == nil {
+      // we parsed it
+      self.handle_postRequest(&pr, b, e, s)
+    } else {
+      // bad parsing?
+      api_error(wr, err)
+    }
+  } else {
+    // no such method
+    wr.WriteHeader(404)
+  }
+}
+
+// handle un authenticated part of api
+func (self httpFrontend) handle_unauthed_api(wr http.ResponseWriter, r *http.Request, api string) {
+  
+}
+
+func (self httpFrontend) handle_api(wr http.ResponseWriter, r *http.Request) {
+  if self.enableJson {
+    vars := mux.Vars(r)
+    meth := vars["meth"]
+    if r.Method == "POST" {
+      u, p, ok := r.BasicAuth()
+      if ok && u == self.jsonUsername && p == self.jsonPassword {
+        // authenticated
+        self.handle_authed_api(wr, r, meth)
+      } else {
+        // invalid auth
+        wr.WriteHeader(401)
+      }
+    } else if r.Method == "GET" {
+      self.handle_unauthed_api(wr, r, meth)
+    } else {
+      // wtf?
+      wr.WriteHeader(405)
+    }
+  } else {
+    // not enabled, gone
+    wr.WriteHeader(410)
+  }
+}
+
 func (self httpFrontend) Mainloop() {
   EnsureDir(self.webroot_dir)
   if ! CheckFile(self.template_dir) {
     log.Fatalf("no such template folder %s", self.template_dir)
   }
-
+  
   template.changeTemplateDir(self.template_dir)
   
   threads := self.regen_threads 
@@ -678,7 +820,7 @@ func (self httpFrontend) Mainloop() {
   
   // create mod ui
   self.modui = createHttpModUI(self)
-
+  
   // modui handlers
   self.httpmux.Path("/mod/").HandlerFunc(self.modui.ServeModPage).Methods("GET")
   self.httpmux.Path("/mod/keygen").HandlerFunc(self.modui.HandleKeyGen).Methods("GET")
@@ -703,7 +845,8 @@ func (self httpFrontend) Mainloop() {
   self.httpmux.Path("/captcha/new.json").HandlerFunc(self.new_captcha_json).Methods("GET")
   // helper handlers
   self.httpmux.Path("/new/").HandlerFunc(self.handle_newboard).Methods("GET")
-  
+  // api handler
+  self.httpmux.Path("/api/{meth}").HandlerFunc(self.handle_api).Methods("POST", "GET")
   var err error
 
   // poll channels
@@ -757,6 +900,11 @@ func NewHTTPFrontend(daemon *NNTPDaemon, config map[string]string, url string) F
   front.prefix = config["prefix"]
   front.regen_on_start = config["regen_on_start"] == "1"
   front.regen_threads = mapGetInt(config, "regen_threads", 1)
+  if config["json-api"] == "1" {
+    front.jsonUsername = config["json-api-username"]
+    front.jsonPassword = config["json-api-password"]
+    front.enableJson = true
+  }
   front.store = sessions.NewCookieStore([]byte(config["api-secret"]))
   front.store.Options = &sessions.Options{
     // TODO: detect http:// etc in prefix

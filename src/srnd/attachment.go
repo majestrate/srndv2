@@ -38,6 +38,8 @@ type NNTPAttachment interface {
   Header() textproto.MIMEHeader
   // make into a model
   ToModel(prefix string) AttachmentModel
+  // base64'd file data
+  Filedata() string
 }
 
 type nntpAttachment struct {
@@ -56,6 +58,10 @@ func (self nntpAttachment) ToModel(prefix string) AttachmentModel {
     filepath: self.Filepath(),
     filename: self.Filename(),
   }
+}
+
+func (self nntpAttachment) Filedata() string {
+  return base64.StdEncoding.EncodeToString(self.body.Bytes())
 }
 
 func (self nntpAttachment) Filename() string {
@@ -128,7 +134,6 @@ func createPlaintextAttachment(msg string) nntpAttachment {
     header: header,
   }
 }
-
 
 func createAttachment(content_type, fname string, body io.Reader) NNTPAttachment {
   

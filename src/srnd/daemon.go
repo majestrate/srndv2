@@ -276,6 +276,9 @@ func (self NNTPDaemon) Run() {
   if self.conf.frontend["enable"] == "1" {
     log.Printf("frontend %s enabled", self.conf.frontend["name"]) 
     http_frontend := NewHTTPFrontend(&self, self.conf.frontend, self.conf.worker["url"])
+    if self.conf.frontend["json-api"] == "1" {
+      
+    }
     nntp_frontend := NewNNTPFrontend(&self, self.conf.frontend["nntp"])
     self.frontend = MuxFrontends(http_frontend, nntp_frontend)
     go self.frontend.Mainloop()

@@ -244,7 +244,7 @@ func (self httpFrontend) new_captcha_json(wr http.ResponseWriter, r *http.Reques
   // url of the image
   resp["url"] = fmt.Sprintf("%s%s.png", self.prefix, captcha_id)
   enc := json.NewEncoder(wr)
-  enc.Encode(resp)
+  enc.Encode(&resp)
 }
 
 // regen every page of the board
@@ -313,6 +313,8 @@ func (self httpFrontend) handle_postform(wr http.ResponseWriter, r *http.Request
     io.WriteString(wr, err.Error())
     return
   }
+
+  pr.Group = board
   
   // encrypt IP Addresses
   // when a post is recv'd from a frontend, the remote address is given its own symetric key that the local srnd uses to encrypt the address with, for privacy
@@ -330,13 +332,15 @@ func (self httpFrontend) handle_postform(wr http.ResponseWriter, r *http.Request
     pr.IpAddress = getRealIP(r.Header.Get("X-Real-IP"))
   }
   pr.Destination = r.Header.Get("X-I2P-DestHash")
-
+  pr.Frontend = self.name
+  
   var captcha_retry bool
   var captcha_solution, captcha_id string
   var att_filename, att_mime string
   var att_buff bytes.Buffer
   var att NNTPAttachment
   var url string
+  url = fmt.Sprintf("%s-0.html", board)
   var part_buff bytes.Buffer
   for {
     part, err := mp_reader.NextPart()
@@ -483,7 +487,7 @@ func (self httpFrontend) handle_postform(wr http.ResponseWriter, r *http.Request
     wr.WriteHeader(200)
     resp_map["reason"] = err.Error()
     resp_map["prefix"] = self.prefix
-    resp_map["redirect_url"] = url
+    resp_map["redirect_url"] = self.prefix + url
     io.WriteString(wr, template.renderTemplate("post_fail.mustache", resp_map))
   }
   
@@ -493,7 +497,7 @@ func (self httpFrontend) handle_postform(wr http.ResponseWriter, r *http.Request
     // determine the root post so we can redirect to the thread for it
     msg_id := nntp.Headers().Get("References", nntp.MessageID())
     // render response as success
-    url = fmt.Sprintf("%sthread-%s.html", self.prefix, ShortHashMessageID(msg_id))
+    url := fmt.Sprintf("%sthread-%s.html", self.prefix, ShortHashMessageID(msg_id))
     io.WriteString(wr, template.renderTemplate("post_success.mustache", map[string]string {"prefix" : self.prefix,  "message_id" : nntp.MessageID(), "redirect_url" : url}))
   }
   self.handle_postRequest(&pr, b, e, s)
@@ -555,7 +559,7 @@ func (self httpFrontend) handle_postRequest(pr *postRequest, b bannedFunc, e err
   }
 
   if ! self.daemon.database.HasNewsgroup(board) {
-    e(errors.New("we don't have this newsgroup "))
+    e(errors.New("we don't have this newsgroup "+board))
     return
   }
 
@@ -661,7 +665,7 @@ func (self httpFrontend) handle_postRequest(pr *postRequest, b bannedFunc, e err
     }
   }
   // success
-  go s(nntp)
+  s(nntp)
   // store in temp
   f := self.daemon.store.CreateTempFile(nntp.MessageID())
   if f != nil {
@@ -756,7 +760,7 @@ func (self httpFrontend) handle_authed_api(wr http.ResponseWriter, r *http.Reque
   dec := json.NewDecoder(r.Body)  
   if api == "post" {
     var pr postRequest
-    err = dec.Decode(pr)
+    err = dec.Decode(&pr)
     if err == nil {
       // we parsed it
       self.handle_postRequest(&pr, b, e, s)

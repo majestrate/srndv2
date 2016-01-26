@@ -77,6 +77,9 @@ func (self PostgresDatabase) CreateTables() {
       // upgrade to version 2
       self.upgrade1to2()
     } else if version == 2 {
+      // upgrade to version 3
+      self.upgrade2to3()
+    } else if version == 3 {
       // we are up to date
       log.Println("we are up to date at version", version)
       return
@@ -108,6 +111,40 @@ func (self PostgresDatabase) upgrade1to2() {
     }
   }
   self.setDBVersion(2)
+}
+
+func (self PostgresDatabase) upgrade2to3() {
+  log.Println("migrating... 2 -> 3")
+
+  var err error
+
+  tables := make(map[string]string)
+
+  tables["NNTPHeaders"] = `(
+                             header_name VARCHAR(255) NOT NULL,
+                             header_value TEXT NOT NULL,
+                             header_article_message_id VARCHAR(255) NOT NULL,
+                             FORIEGN KEY(header_article_message_id) REFERENCES ArticlePosts(message_id)
+                           )`
+
+  table_order := []string{"NNTPHeaders",}
+
+  for _, table := range table_order {
+    q := tables[table]
+    // create table
+    _, err = self.conn.Exec(fmt.Sprintf("CREATE TABLE IF NOT EXISTS %s%s", table, q))
+    if err != nil {
+      log.Fatalf("cannot create table %s, %s, login was '%s'", table, err,self.db_str)
+    }
+  }
+  cmds := []string{
+    "CREATE INDEX ON NNTPHeaders(header_name)",
+  }
+  for _, cmd := range cmds {
+    _, err = self.conn.Exec(cmd)
+    checkError(err)
+  }
+  self.setDBVersion(3)  
 }
 
 func (self PostgresDatabase) upgrade0to1() {
@@ -920,6 +957,32 @@ func (self PostgresDatabase) RegisterArticle(message NNTPMessage) {
       continue
     }
   }
+  // register article header
+  for k, val := range message.Headers() {
+    for _, v := range val {
+      _, err = self.conn.Exec("INSERT INTO NNTPHeaders(header_name, header_value, header_article_message_id) VALUES($1, $2, $3)", k, v, msgid)
+      if err != nil {
+        log.Println("failed to register nntp article header", err)
+        continue
+      }
+    }
+  }
+}
+
+//
+// get message ids of articles with this header name and value
+//
+func (self PostgresDatabase) GetMessageIDByHeader(name, val string) (msgids []string, err error) {
+  var rows *sql.Rows
+  rows, err = self.conn.Query("SELCET header_article_message_id FROM NNTPHeaders WHERE header_name = $1 AND header_value = $2", name, val)
+  if err == nil {
+    for rows.Next() {
+      var msgid string
+      rows.Scan(&msgid)
+      msgids = append(msgids, msgid)
+    }
+  }
+  return
 }
 
 func (self PostgresDatabase) RegisterSigned(message_id , pubkey string) (err error) {

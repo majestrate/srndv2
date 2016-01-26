@@ -787,7 +787,20 @@ func (self httpFrontend) handle_authed_api(wr http.ResponseWriter, r *http.Reque
 
 // handle un authenticated part of api
 func (self httpFrontend) handle_unauthed_api(wr http.ResponseWriter, r *http.Request, api string) {
-  
+  var err error
+  if api == "header" {
+    var msgids []string
+    q := r.URL.Query()
+    name := q.Get("name")
+    val :=  q.Get("value")
+    msgids, err = self.daemon.database.GetMessageIDByHeader(name, val)
+    if err == nil {
+      enc := json.NewEncoder(wr)
+      enc.Encode(msgids)
+    } else {
+      api_error(wr, err)
+    }
+  }
 }
 
 func (self httpFrontend) handle_api(wr http.ResponseWriter, r *http.Request) {

@@ -226,7 +226,11 @@ type Database interface {
   // remove an nntp login credential
   RemoveNNTPLogin(username string) error
 
+  // check if an nntp login credential given a user exists
   CheckNNTPUserExists(username string) (bool, error)
+
+  // get the message ids of an article that has this header with the given value
+  GetMessageIDByHeader(name, value string) ([]string, error)
   
 }
 

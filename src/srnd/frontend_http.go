@@ -54,6 +54,7 @@ type postRequest struct {
   Destination string `json:"i2p"`
   Dubs bool `json:"dubs"`
   Message string `json:"message"`
+  ExtraHeaders map[string]string `json:"headers"`
 }
 
 // regenerate a newsgroup page
@@ -646,6 +647,16 @@ func (self httpFrontend) handle_postRequest(pr *postRequest, b bannedFunc, e err
   // append path from frontend
   nntp.AppendPath(pr.Frontend)
 
+  // add extra headers if needed
+  if pr.ExtraHeaders != nil {
+    for name, val := range pr.ExtraHeaders {
+      // don't overwrite existing headers
+      if nntp.headers.Get(name, "") == "" {
+        nntp.headers.Set(name, val)
+      }
+    }
+  }
+  
   att := pr.Attachment
   
   // add attachment

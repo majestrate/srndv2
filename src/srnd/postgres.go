@@ -17,6 +17,7 @@ import (
   "errors"
   "fmt"
   "log"
+  "math"
   "os"
   "strconv"
   "time"
@@ -589,7 +590,7 @@ func (self PostgresDatabase) GetGroupPageCount(newsgroup string) int64 {
     log.Println("failed to count pages in group", newsgroup, err)
   }
   // divide by threads per page
-  return ( count / 10 ) + 1
+  return int64(math.Ceil(float64(count / 10 )))
 }
 
 // only fetches root posts

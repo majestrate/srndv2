@@ -943,6 +943,17 @@ func (self PostgresDatabase) RegisterArticle(message NNTPMessage) {
       return
     }
   }
+
+   // register article header
+  for k, val := range message.Headers() {
+    for _, v := range val {
+      _, err = self.conn.Exec("INSERT INTO NNTPHeaders(header_name, header_value, header_article_message_id) VALUES($1, $2, $3)", k, v, msgid)
+      if err != nil {
+        log.Println("failed to register nntp article header", err)
+        continue
+      }
+    }
+  }
   
   // register all attachments
   atts := message.Attachments()
@@ -957,16 +968,6 @@ func (self PostgresDatabase) RegisterArticle(message NNTPMessage) {
       continue
     }
   }
-  // register article header
-  for k, val := range message.Headers() {
-    for _, v := range val {
-      _, err = self.conn.Exec("INSERT INTO NNTPHeaders(header_name, header_value, header_article_message_id) VALUES($1, $2, $3)", k, v, msgid)
-      if err != nil {
-        log.Println("failed to register nntp article header", err)
-        continue
-      }
-    }
-  }
 }
 
 //
@@ -974,13 +975,15 @@ func (self PostgresDatabase) RegisterArticle(message NNTPMessage) {
 //
 func (self PostgresDatabase) GetMessageIDByHeader(name, val string) (msgids []string, err error) {
   var rows *sql.Rows
-  rows, err = self.conn.Query("SELCET header_article_message_id FROM NNTPHeaders WHERE header_name = $1 AND header_value = $2", name, val)
+  rows, err = self.conn.Query("SELECT header_article_message_id FROM NNTPHeaders WHERE header_name = $1 AND header_value = $2", name, val)
   if err == nil {
+    msgids = []string{}
     for rows.Next() {
       var msgid string
       rows.Scan(&msgid)
       msgids = append(msgids, msgid)
     }
+    rows.Close()
   }
   return
 }

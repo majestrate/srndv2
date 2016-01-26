@@ -124,7 +124,7 @@ func (self PostgresDatabase) upgrade2to3() {
                              header_name VARCHAR(255) NOT NULL,
                              header_value TEXT NOT NULL,
                              header_article_message_id VARCHAR(255) NOT NULL,
-                             FORIEGN KEY(header_article_message_id) REFERENCES ArticlePosts(message_id)
+                             FOREIGN KEY(header_article_message_id) REFERENCES ArticlePosts(message_id)
                            )`
 
   table_order := []string{"NNTPHeaders",}

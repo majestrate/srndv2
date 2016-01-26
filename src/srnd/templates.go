@@ -222,9 +222,11 @@ func (self *templateEngine) genUkko(prefix, frontend, outfile string, database D
     // update first page
     board = board.Update(0, database)
     // grab the root post in question
-    th := board[0].GetThread(msgid)
-    if th != nil {
+    if len(board) > 0 {
+      th := board[0].GetThread(msgid)
+      if th != nil {
         threads = append(threads, th.Update(database))
+      }
     }
     // save board model
     self.groups[newsgroup] = board

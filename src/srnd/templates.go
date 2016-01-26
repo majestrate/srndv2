@@ -256,10 +256,12 @@ func (self *templateEngine) genThread(root ArticleEntry, prefix, frontend, outfi
 
   if th == nil {
     // a new thread?
-    board[0] = board[0].Update(db)
-    t := board[0].GetThread(msgid)
-    if t != nil {
-      th = t
+    if len(board) > 0 {
+      board[0] = board[0].Update(db)
+      t := board[0].GetThread(msgid)
+      if t != nil {
+        th = t
+      }
     }
   }
   

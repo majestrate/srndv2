@@ -219,7 +219,7 @@ func (self *templateEngine) genBoardPage(allowFiles bool, prefix, frontend, news
 		updateLinkCacheForBoard(board[page])
 		board[page].RenderTo(wr)
 		wr.Close()
-		log.Println("wrote file", outfile)
+		// log.Println("wrote file", outfile)
 	} else {
 		log.Println("error generating board page", page, "for", newsgroup, err)
 	}
@@ -249,7 +249,7 @@ func (self *templateEngine) genBoard(allowFiles bool, prefix, frontend, newsgrou
 			board[page].SetAllowFiles(allowFiles)
 			board[page].RenderTo(wr)
 			wr.Close()
-			log.Println("wrote file", outfile)
+			// log.Println("wrote file", outfile)
 		} else {
 			log.Println("error generating board page", page, "for", newsgroup, err)
 		}
@@ -326,7 +326,7 @@ func (self *templateEngine) genThread(allowFiles bool, root ArticleEntry, prefix
 			updateLinkCacheForThread(th)
 			th.RenderTo(wr)
 			wr.Close()
-			log.Println("wrote file", outfile)
+			// log.Println("wrote file", outfile)
 		} else {
 			log.Println("did not write", outfile, err)
 		}

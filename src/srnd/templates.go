@@ -13,6 +13,7 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
+	"sync"
 )
 
 type templateEngine struct {
@@ -26,16 +27,28 @@ type templateEngine struct {
 	templates map[string]string
 	// root directory for templates
 	template_dir string
+	// mutex for accessing links
+	links_mtx sync.RWMutex
+	// mutex for accessing shortlinks
+	links_short_mtx sync.RWMutex
+	// mutex for accessing groups
+	groups_mtx sync.RWMutex
+	// mutex for accessing templates
+	templates_mtx sync.RWMutex
 }
 
 func (self *templateEngine) templateCached(name string) (ok bool) {
+	self.templates_mtx.Lock()
 	_, ok = self.templates[name]
+	self.templates_mtx.Unlock()
 	return
 }
 
 // explicitly reload a template
 func (self *templateEngine) reloadTemplate(name string) {
+	self.templates_mtx.Lock()
 	self.templates[name] = self.loadTemplate(name)
+	self.templates_mtx.Unlock()
 }
 
 // check if we have this template
@@ -47,9 +60,11 @@ func (self *templateEngine) hasTemplate(name string) bool {
 func (self *templateEngine) reloadAllTemplates() {
 	loadThese := []string{}
 	// get all the names of the templates we have loaded
+	self.templates_mtx.Lock()
 	for tname, _ := range self.templates {
 		loadThese = append(loadThese, tname)
 	}
+	self.templates_mtx.Unlock()
 	// for each template we have loaded, reload the contents from file
 	for _, tname := range loadThese {
 		self.reloadTemplate(tname)
@@ -60,8 +75,8 @@ func (self *templateEngine) reloadAllTemplates() {
 func updateLinkCache() {
 	// clear existing cache
 	template.links = make(map[string]string)
-
 	// for each group
+	template.groups_mtx.Lock()
 	for _, group := range template.groups {
 		// for each page in group
 		for _, page := range group {
@@ -69,6 +84,7 @@ func updateLinkCache() {
 			updateLinkCacheForBoard(page)
 		}
 	}
+	template.groups_mtx.Unlock()
 }
 
 // update the link -> url cache given a board page
@@ -85,6 +101,8 @@ func updateLinkCacheForThread(thread ThreadModel) {
 	u := thread.OP().PostURL()
 	s := ShorterHashMessageID(m)
 	h := ShortHashMessageID(m)
+	template.links_mtx.Lock()
+	template.links_short_mtx.Lock()
 	template.links_short[s] = u
 	template.links[h] = u
 	// for each reply
@@ -97,15 +115,22 @@ func updateLinkCacheForThread(thread ThreadModel) {
 		template.links_short[s] = u
 		template.links[h] = u
 	}
+	template.links_mtx.Unlock()
+	template.links_short_mtx.Unlock()
 }
 
 // get the url for a backlink
 func (self *templateEngine) findLink(hash string) (url string) {
 	if len(hash) == 10 {
+	
+		template.links_short_mtx.Lock()
 		// short version of hash
 		url, _ = self.links_short[hash]
+		template.links_short_mtx.Unlock()
 	} else {
+		template.links_mtx.Lock()
 		url, _ = self.links[hash]
+		template.links_mtx.Unlock()
 	}
 	return
 }
@@ -132,10 +157,12 @@ func (self *templateEngine) loadTemplate(name string) (t string) {
 
 // get a template, if it's not cached load from file and cache it
 func (self *templateEngine) getTemplate(name string) (t string) {
+	self.templates_mtx.Lock()
 	if !self.templateCached(name) {
 		self.templates[name] = self.loadTemplate(name)
 	}
 	t, _ = self.templates[name]
+	self.templates_mtx.Unlock()
 	return
 }
 
@@ -163,7 +190,9 @@ func (self *templateEngine) obtainBoard(prefix, frontend, group string, db Datab
 		for page := 0; page < pages; page++ {
 			model = append(model, db.GetGroupForPage(prefix, frontend, group, page, int(perpage)))
 		}
+		self.groups_mtx.Lock()
 		self.groups[group] = model
+		self.groups_mtx.Unlock()
 	}
 	return
 
@@ -190,7 +219,9 @@ func (self *templateEngine) genBoardPage(prefix, frontend, newsgroup string, pag
 		log.Println("error generating board page", page, "for", newsgroup, err)
 	}
 	// save it
+	self.groups_mtx.Lock()
 	self.groups[newsgroup] = board
+	self.groups_mtx.Unlock()
 }
 
 // generate every page for a board
@@ -200,7 +231,9 @@ func (self *templateEngine) genBoard(prefix, frontend, newsgroup, outdir string,
 	// update the entire board model
 	board.UpdateAll(db)
 	// save the model
+	self.groups_mtx.Lock()
 	self.groups[newsgroup] = board
+	self.groups_mtx.Unlock()
 	updateLinkCache()
 
 	pages := len(board)
@@ -236,7 +269,9 @@ func (self *templateEngine) genUkko(prefix, frontend, outfile string, database D
 			}
 		}
 		// save board model
+		self.groups_mtx.Lock()
 		self.groups[newsgroup] = board
+		self.groups_mtx.Unlock()
 	}
 	wr, err := OpenFileWriter(outfile)
 	if err == nil {
@@ -290,7 +325,9 @@ func (self *templateEngine) genThread(root ArticleEntry, prefix, frontend, outfi
 		}
 	}
 	// save it
+	self.groups_mtx.Lock()
 	self.groups[newsgroup] = board
+	self.groups_mtx.Unlock()
 }
 
 // change the directory we are using for templates

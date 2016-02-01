@@ -6,7 +6,7 @@ package srnd
 
 import (
   "fmt"
-  "github.com/hoisie/mustache"
+  "github.com/cbroglie/mustache"
   "io"
   "io/ioutil"
   "log"
@@ -142,7 +142,12 @@ func (self *templateEngine) getTemplate(name string) (t string) {
 // render a template, self explanitory
 func (self *templateEngine) renderTemplate(name string, obj interface{}) string {
   t := self.getTemplate(name)
-  return mustache.Render(t, obj)
+	s, err := mustache.Render(t, obj)
+	if err == nil {
+		return s
+	} else {
+		return err.Error()
+	}
 }
 
 // get a board model given a newsgroup
@@ -168,7 +173,7 @@ func (self *templateEngine) genBoardPage(prefix, frontend, newsgroup string, pag
   // get the board model
   board := self.obtainBoard(prefix, frontend, newsgroup, db)
   // update the board page
-  board = board.Update(page, db)
+  board.Update(page, db)
   if page >= len(board) {
     log.Println("board page should not exist", newsgroup, "page", page)
     return
@@ -192,7 +197,7 @@ func (self *templateEngine) genBoard(prefix, frontend, newsgroup, outdir string,
   // get the board model
   board := self.obtainBoard(prefix, frontend, newsgroup, db)
   // update the entire board model
-  board = board.UpdateAll(db)
+  board.UpdateAll(db)
   // save the model
   self.groups[newsgroup] = board
   updateLinkCache()
@@ -220,12 +225,13 @@ func (self *templateEngine) genUkko(prefix, frontend, outfile string, database D
     // obtain board model
     board := self.obtainBoard(prefix, frontend, newsgroup, database)
     // update first page
-    board = board.Update(0, database)
+		board.Update(0, database)
     // grab the root post in question
     if len(board) > 0 {
       th := board[0].GetThread(msgid)
       if th != nil {
-        threads = append(threads, th.Update(database))
+				th.Update(database)
+				threads = append(threads, th)
       }
     }
     // save board model
@@ -259,7 +265,7 @@ func (self *templateEngine) genThread(root ArticleEntry, prefix, frontend, outfi
   if th == nil {
     // a new thread?
     if len(board) > 0 {
-      board[0] = board[0].Update(db)
+      board[0].Update(db)
       t := board[0].GetThread(msgid)
       if t != nil {
         th = t
@@ -271,7 +277,7 @@ func (self *templateEngine) genThread(root ArticleEntry, prefix, frontend, outfi
     log.Println("we didn't find thread for", msgid, "did not regenerate")
   } else {
     // update thread model and write it out
-    th = th.Update(db)
+		th.Update(db)
     wr, err := OpenFileWriter(outfile)
     if err == nil {
       updateLinkCacheForThread(th)
@@ -306,13 +312,13 @@ func newTemplateEngine(dir string) *templateEngine {
 var template = newTemplateEngine(defaultTemplateDir())
 
 
-func renderPostForm(prefix, board, op_msg_id string) string {
+func renderPostForm(prefix, board, op_msg_id string, files bool) string {
   url := prefix + "post/" + board
   button := "New Thread"
   if op_msg_id != "" {
     button = "Reply"
   }
-  return template.renderTemplate("postform.mustache", map[string]string { "post_url" : url, "reference" : op_msg_id , "button" : button } )
+  return template.renderTemplate("postform.mustache", map[string]interface{} { "post_url" : url, "reference" : op_msg_id , "button" : button, "files": files } )
 }
 
 

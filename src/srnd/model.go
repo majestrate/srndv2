@@ -83,7 +83,9 @@ type ThreadModel interface {
 
   BaseModel
   NavbarModel
-  
+
+  SetAllowFiles(allow bool)
+	AllowFiles() bool
   OP() PostModel
   Replies() []PostModel
   Board() string
@@ -92,8 +94,7 @@ type ThreadModel interface {
   // does not include all replies
   Truncate() ThreadModel
   // update the thread's replies
-  // return the updated model
-  Update(db Database) ThreadModel
+  Update(db Database) 
 }
 
 // board interface
@@ -107,9 +108,12 @@ type BoardModel interface {
   Name() string
   Threads() []ThreadModel
 
+	AllowFiles() bool
+	SetAllowFiles(files bool)
+	
   // JUST update this thread
   // if we don't have it already loaded do nothing
-  UpdateThread(message_id string, db Database) BoardModel
+  UpdateThread(message_id string, db Database)
 
   // get a thread model with this id
   // returns nil if we don't have it
@@ -119,8 +123,7 @@ type BoardModel interface {
   HasThread(message_id string) bool
   
   // update the board's contents
-  // return the updated model
-  Update(db Database) BoardModel
+  Update(db Database) 
 }
 
 type LinkModel interface {
@@ -136,24 +139,25 @@ type GroupModel []BoardModel
 // TODO: optimize using 1 query?
 // update every page
 // return updated model
-func (self GroupModel) UpdateAll(db Database) GroupModel {
-  for idx, page := range self {
-    self[idx] = page.Update(db)
+func (self *GroupModel) UpdateAll(db Database) {
+	m := *self
+  for _, page := range m {
+		page.Update(db)
   }
-  return self
 }
 
 // update a certain page
 // does nothing if out of bounds
-func (self GroupModel) Update(page int, db Database) GroupModel {
-  if len(self) > page {
-    self[page] = self[page].Update(db)
+func (self *GroupModel) Update(page int, db Database) {
+	m := *self
+  if len(m) > page {
+    m[page].Update(db)
   }
-  return self
 }
 
 
 type boardModel struct {
+	allowFiles bool
   frontend string
   prefix string
   board string
@@ -162,8 +166,15 @@ type boardModel struct {
   threads []ThreadModel
 }
 
+func (self *boardModel) SetAllowFiles(allow bool) {
+	self.allowFiles = allow
+}
 
-func (self boardModel) Navbar() string {
+func (self *boardModel) AllowFiles() bool {
+	return self.allowFiles
+}
+
+func (self *boardModel) Navbar() string {
   param := make(map[string]interface{})
   param["name"] = fmt.Sprintf("page %d for %s", self.page, self.board)
   param["frontend"] = self.frontend
@@ -179,19 +190,18 @@ func (self boardModel) Navbar() string {
   return template.renderTemplate("navbar.mustache", param)
 }
 
-func (self boardModel) UpdateThread(messageID string, db Database) BoardModel {
+func (self *boardModel) UpdateThread(messageID string, db Database) {
 
-  for idx, th := range self.threads {
+  for _, th := range self.threads {
     if th.OP().MessageID() == messageID {
       // found it
-      self.threads[idx] = th.Update(db)
+      th.Update(db)
       break
     }
   }
-  return self
 }
 
-func (self boardModel) GetThread(messageID string) ThreadModel {
+func (self *boardModel) GetThread(messageID string) ThreadModel {
   for _, th := range self.threads {
     if th.OP().MessageID() == messageID {
       return th
@@ -200,52 +210,47 @@ func (self boardModel) GetThread(messageID string) ThreadModel {
   return nil
 }
 
-func (self boardModel) HasThread(messageID string) bool {
+func (self *boardModel) HasThread(messageID string) bool {
   return self.GetThread(messageID) != nil
 }
 
-func (self boardModel) Frontend() string {
+func (self *boardModel) Frontend() string {
   return self.frontend
 }
 
-func (self boardModel) Prefix() string {
+func (self *boardModel) Prefix() string {
   return self.prefix
 }
 
-func (self boardModel) Name() string {
+func (self *boardModel) Name() string {
   return self.board
 }
 
-func (self boardModel) Threads() []ThreadModel {
+func (self *boardModel) Threads() []ThreadModel {
   return self.threads
 }
 
-func (self boardModel) RenderTo(wr io.Writer) error {
+func (self *boardModel) RenderTo(wr io.Writer) error {
   param := make(map[string]interface{})
   param["board"] = self
-  param["form"] = renderPostForm(self.Prefix(), self.board, "")
+  param["form"] = renderPostForm(self.Prefix(), self.board, "", self.allowFiles)
   _, err := io.WriteString(wr, template.renderTemplate("board.mustache", param))
   return err
 }
 
 // refetch all threads on this page
-func (self boardModel) Update(db Database) BoardModel {
+func (self *boardModel) Update(db Database) {
   // ignore error
   perpage, _ := db.GetThreadsPerPage(self.board)
   // refetch all on this page
   model := db.GetGroupForPage(self.prefix, self.frontend, self.board, self.page, int(perpage))
   var threads []ThreadModel
   for _, th := range model.Threads() {
-    threads = append(threads, th.Update(db))
+		// XXX: do we need to update it again?
+		th.Update(db)
+    threads = append(threads, th)
   }
-  return boardModel{
-    frontend: self.frontend,
-    prefix: self.prefix,
-    board: self.board,
-    page: self.page,
-    pages: self.pages,
-    threads: threads,
-  }
+	self.threads = threads
 }
 
 type post struct {
@@ -273,29 +278,29 @@ type attachment struct {
   filename string
 }
 
-func (self attachment) Prefix() string {
+func (self *attachment) Prefix() string {
   return self.prefix
 }
 
-func (self attachment) RenderTo(wr io.Writer) error {
+func (self *attachment) RenderTo(wr io.Writer) error {
   // does nothing
   return nil
 }
 
-func (self attachment) Thumbnail() string {
+func (self *attachment) Thumbnail() string {
   return self.prefix + "thm/" + self.filepath + ".jpg"
 }
 
-func (self attachment) Source() string {
+func (self *attachment) Source() string {
   return self.prefix + "img/" + self.filepath
 }
 
-func (self attachment) Filename() string {
+func (self *attachment) Filename() string {
   return self.filename
 }
 
 func PostModelFromMessage(parent, prefix string, nntp NNTPMessage) PostModel {
-  p := post{}
+  p := new(post)
   p.name = nntp.Name()
   p.subject = nntp.Subject()
   p.message = nntp.Message()
@@ -315,15 +320,15 @@ func PostModelFromMessage(parent, prefix string, nntp NNTPMessage) PostModel {
   return p
 }
 
-func (self post) Reference() string {
+func (self *post) Reference() string {
   return self.parent
 }
 
-func (self post) ShortHash() string {
+func (self *post) ShortHash() string {
   return ShortHashMessageID(self.message_id)
 }
 
-func (self post) Pubkey() string {
+func (self *post) Pubkey() string {
   if len(self.pubkey) > 0 {
     return fmt.Sprintf("<label title=\"%s\">%s</label>", self.pubkey, makeTripcode(self.pubkey))
   }
@@ -331,11 +336,11 @@ func (self post) Pubkey() string {
 }
 
 
-func (self post) Sage() bool {
+func (self *post) Sage() bool {
   return self.sage
 }
 
-func (self post) CSSClass() string {
+func (self *post) CSSClass() string {
   if self.OP() {
     return "post op"
   } else {
@@ -343,23 +348,23 @@ func (self post) CSSClass() string {
   }
 }
 
-func (self post) OP() bool {
+func (self *post) OP() bool {
   return self.parent == self.message_id || len(self.parent) == 0
 }
 
-func (self post) Date() string {
+func (self *post) Date() string {
   return time.Unix(self.posted, 0).Format(time.ANSIC)
 }
 
-func (self post) TemplateDir() string {
+func (self *post) TemplateDir() string {
   return filepath.Join("contrib", "templates", "default")
 }
 
-func (self post) MessageID() string  {
+func (self *post) MessageID() string  {
   return self.message_id
 }
 
-func (self post) Frontend() string {
+func (self *post) Frontend() string {
   idx := strings.LastIndex(self.path, "!")
   if idx == -1 {
     return self.path
@@ -367,89 +372,95 @@ func (self post) Frontend() string {
   return self.path[idx+1:]
 }
 
-func (self post) Board() string {
+func (self *post) Board() string {
   return self.board
 }
 
-func (self post) PostHash() string {
+func (self *post) PostHash() string {
   return HashMessageID(self.message_id)
 }
 
-func (self post) Name() string {
+func (self *post) Name() string {
   return self.name
 }
 
-func (self post) Subject() string {
+func (self *post) Subject() string {
   return self.subject
 }
 
-func (self post) Attachments() []AttachmentModel {
+func (self *post) Attachments() []AttachmentModel {
   return self.attachments
 }
 
-func (self post) PostURL() string {
+func (self *post) PostURL() string {
   return fmt.Sprintf("%sthread-%s.html#%s", self.Prefix(), ShortHashMessageID(self.parent), self.PostHash())
 }
 
-func (self post) Prefix() string {
+func (self *post) Prefix() string {
   return self.prefix 
 }
 
-func (self post) IsClearnet() bool {
+func (self *post) IsClearnet() bool {
   return len(self.addr) == encAddrLen()
 }
 
-func (self post) IsI2P() bool {
+func (self *post) IsI2P() bool {
   return len(self.addr) == i2pDestHashLen()
 }
 
-func (self post) IsTor() bool {
+func (self *post) IsTor() bool {
   return len(self.addr) == 0
 }
 
-func (self post) RenderTo(wr io.Writer) error {
+func (self *post) RenderTo(wr io.Writer) error {
   _, err := io.WriteString(wr, self.RenderPost())
   return err
 }
 
-func (self post) RenderPost() string {
+func (self *post) RenderPost() string {
   return template.renderTemplate("post.mustache", self)
 }
 
-func (self post) Truncate() PostModel {
+func (self *post) Truncate() PostModel {
+	message := self.message
+	subject := self.subject
+	name := self.name
   if len(self.message) > 500 {
-    message := self.message[:500] + "\n...\n[Post Truncated]\n"
-    subject := self.subject
-    if len(subject) > 100 {
-      subject = subject[:100] + "..."
-    }
-    return post{
-      message: message,
-      prefix: self.prefix,
-      board: self.board,
-      name: self.name,
-      subject: subject,
-      message_id: self.message_id,
-      path: self.path,
-      op: self.op,
-      posted: self.posted,
-      parent: self.parent,
-      sage: self.sage,
-      pubkey: self.pubkey,
-      reference: self.reference,
-      attachments: self.attachments,
-      addr: self.addr,
-    }
-  }
-  return self
+    message = self.message[:500] + "\n...\n[Post Truncated]\n"
+	} 
+	if len(self.subject) > 100 {
+		subject = self.subject[:100] + "..."
+	}
+	if len(self.name) > 100 {
+		name = self.name[:100] + "..."
+	}
+	
+	return &post{
+		prefix: self.prefix,
+		board: self.board,
+		name: name,
+		subject: subject,
+		message: message,
+		message_id: self.message_id,
+		path: self.path,
+		addr: self.addr,
+		op: self.op,
+		posted: self.posted,
+		parent: self.parent,
+		sage: self.sage,
+		pubkey: self.pubkey,
+		reference: self.reference,
+		// TODO: copy?
+		attachments: self.attachments,
+	}
 }
 
-func (self post) RenderShortBody() string {
+func (self *post) RenderShortBody() string {
   // TODO: hardcoded limit
   return memeposting(self.message)
 }
 
-func (self post) RenderBody() string {
+func (self *post) RenderBody() string {
   // :^)
   if len(self.message_rendered) == 0 {
     self.message_rendered = memeposting(self.message)
@@ -458,16 +469,17 @@ func (self post) RenderBody() string {
 }
 
 type thread struct {
+	allowFiles bool
   prefix string
   links []LinkModel
   posts []PostModel
 }
 
-func (self thread) Prefix() string {
+func (self *thread) Prefix() string {
   return self.prefix
 }
 
-func (self thread) Navbar() string {
+func (self *thread) Navbar() string {
   param := make(map[string]interface{})
   param["name"] = fmt.Sprintf("Thread %s", self.posts[0].ShortHash())
   param["frontend"] = self.Board()
@@ -476,11 +488,11 @@ func (self thread) Navbar() string {
   return template.renderTemplate("navbar.mustache", param)
 }
 
-func (self thread) Board() string {
+func (self *thread) Board() string {
   return self.posts[0].Board()
 }
 
-func (self thread) BoardURL() string {
+func (self *thread) BoardURL() string {
   return fmt.Sprintf("%s%s-0.html", self.Prefix(), self.Board())
 }
 
@@ -489,28 +501,37 @@ func defaultTemplateDir() string {
   return  filepath.Join("contrib", "templates", "default")
 }
 
-func (self thread) RenderTo(wr io.Writer) error {
-  postform := renderPostForm(self.prefix, self.Board(), self.posts[0].MessageID())
+func (self *thread) RenderTo(wr io.Writer) error {
+  postform := renderPostForm(self.prefix, self.Board(), self.posts[0].MessageID(), self.allowFiles)
   data := template.renderTemplate("thread.mustache", map[string]interface{} { "thread": self, "form" : postform})
   io.WriteString(wr, data)
   return nil
 }
 
-func (self thread) OP() PostModel {
+func (self *thread) OP() PostModel {
   return self.posts[0]
 }
 
-func (self thread) Replies() []PostModel {
+func (self *thread) Replies() []PostModel {
   if len(self.posts) > 1 {
     return self.posts[1:]
   }
   return []PostModel{}
 }
 
-func (self thread) Truncate() ThreadModel {
+func (self *thread) AllowFiles() bool {
+	return self.allowFiles
+}
+
+func (self *thread) SetAllowFiles(allow bool) {
+	self.allowFiles = allow
+}
+
+func (self *thread) Truncate() ThreadModel {
   trunc := 5
   if len(self.posts) > trunc {
-    return thread{
+    return &thread{
+			allowFiles: self.allowFiles,
       links: self.links,
       posts: append([]PostModel{self.posts[0]}, self.posts[len(self.posts)-trunc:]...),
       prefix: self.prefix,
@@ -520,19 +541,14 @@ func (self thread) Truncate() ThreadModel {
 }
 
 // refetch all replies if anything differs
-func (self thread) Update(db Database) ThreadModel {
+func (self *thread) Update(db Database) {
   root := self.posts[0].MessageID()
   reply_count := db.CountThreadReplies(root)
 
   if int(reply_count) + 1 != len(self.posts) {
-
-    return thread{
-      posts: append([]PostModel{self.posts[0]}, db.GetThreadReplyPostModels(self.prefix, root, 0)...),
-      links: self.links,
-      prefix: self.prefix,
-    }
+		// TODO: optimize
+		self.posts = append([]PostModel{self.posts[0]}, db.GetThreadReplyPostModels(self.prefix, root, 0)...)
   }
-  return self
 }
 
 

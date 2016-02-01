@@ -602,7 +602,7 @@ func (self PostgresDatabase) GetGroupForPage(prefix, frontend, newsgroup string,
   if err == nil {
     for rows.Next() {
 
-      p := post{
+      p := &post{
         prefix: prefix,
       }
       rows.Scan(&p.board, &p.message_id, &p.name, &p.subject, &p.path, &p.posted, &p.message)
@@ -614,7 +614,7 @@ func (self PostgresDatabase) GetGroupForPage(prefix, frontend, newsgroup string,
       if atts != nil {
         p.attachments = append(p.attachments, atts...)
       }
-      threads = append(threads, thread{
+      threads = append(threads, &thread{
         prefix: prefix,
         posts: []PostModel{p},
         links: []LinkModel{
@@ -629,7 +629,7 @@ func (self PostgresDatabase) GetGroupForPage(prefix, frontend, newsgroup string,
   } else {
     log.Println("failed to fetch board model for", newsgroup, "page", pageno, err)
   }
-  return boardModel{
+  return &boardModel{
     prefix: prefix,
     frontend: frontend,
     board: newsgroup,
@@ -645,7 +645,7 @@ func (self PostgresDatabase) GetPostsInGroup(newsgroup string) (models []PostMod
   rows, err := self.conn.Query("SELECT newsgroup, message_id, ref_id, name, subject, path, time_posted, message, addr FROM ArticlePosts WHERE newsgroup = $1 ORDER BY time_posted", newsgroup)
   if err == nil {
     for rows.Next() {
-      model := post{}
+      model := new(post)
       rows.Scan(&model.board, &model.message_id, &model.parent, &model.name, &model.subject, &model.path, &model.posted, &model.message, &model.addr)
       models = append(models, model)
     }
@@ -655,7 +655,7 @@ func (self PostgresDatabase) GetPostsInGroup(newsgroup string) (models []PostMod
 }
 
 func (self PostgresDatabase) GetPostModel(prefix, messageID string) PostModel {
-  model := post{}
+  model := new(post)
   err := self.conn.QueryRow("SELECT newsgroup, message_id, ref_id, name, subject, path, time_posted, message, addr FROM ArticlePosts WHERE message_id = $1 LIMIT 1", messageID).Scan(&model.board, &model.message_id, &model.parent, &model.name, &model.subject, &model.path, &model.posted, &model.message, &model.addr)
   if err == nil {
     model.op = len(model.parent) == 0
@@ -699,7 +699,7 @@ func (self PostgresDatabase) GetThreadReplyPostModels(prefix, rootpost string, l
   
   if err == nil {
     for rows.Next() {
-      model := post{}
+      model := new(post)
       model.prefix = prefix
       rows.Scan(&model.board, &model.message_id, &model.parent, &model.name, &model.subject, &model.path, &model.posted, &model.message, &model.addr)
       model.op = len(model.parent) == 0
@@ -872,7 +872,7 @@ func (self PostgresDatabase) GetPostAttachmentModels(prefix, messageID string) (
     for rows.Next() {
       var fpath, fname string
       rows.Scan(&fpath, &fname)
-      atts = append(atts, attachment{
+      atts = append(atts, &attachment{
         prefix: prefix,
         filepath: fpath,
         filename: fname,
@@ -1147,7 +1147,7 @@ func (self PostgresDatabase) GetLastPostedPostModels(prefix string, n int64) (po
   rows, err := self.conn.Query("SELECT newsgroup, message_id, ref_id, name, subject, path, time_posted, message, addr FROM ArticlePosts WHERE newsgroup != 'ctl' ORDER BY time_posted DESC LIMIT $1", n)
   if err == nil {
     for rows.Next() {
-      var model post
+			model := new(post)
       rows.Scan(&model.board, &model.message_id, &model.parent, &model.name, &model.subject, &model.path, &model.posted, &model.message, &model.addr)
       model.op = len(model.parent) == 0
       if len(model.parent) == 0 {

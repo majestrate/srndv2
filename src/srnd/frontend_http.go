@@ -244,12 +244,12 @@ func (self httpFrontend) new_captcha_json(wr http.ResponseWriter, r *http.Reques
 }
 
 // regen every page of the board
-func (self httpFrontend) regenerateBoard(group string) {
+func (self *httpFrontend) regenerateBoard(group string) {
 	template.genBoard(self.prefix, self.name, group, self.webroot_dir, self.daemon.database)
 }
 
 // regenerate just a thread page
-func (self httpFrontend) regenerateThread(root ArticleEntry) {
+func (self *httpFrontend) regenerateThread(root ArticleEntry) {
 	msgid := root.MessageID()
 	if self.daemon.store.HasArticle(msgid) {
 		log.Println("rengerate thread", msgid)
@@ -261,24 +261,24 @@ func (self httpFrontend) regenerateThread(root ArticleEntry) {
 }
 
 // regenerate just a page on a board
-func (self httpFrontend) regenerateBoardPage(board string, page int) {
+func (self *httpFrontend) regenerateBoardPage(board string, page int) {
 	fname := self.getFilenameForBoardPage(board, page)
 	template.genBoardPage(self.prefix, self.name, board, page, fname, self.daemon.database)
 }
 
 // regenerate the front page
-func (self httpFrontend) regenFrontPage() {
+func (self *httpFrontend) regenFrontPage() {
 	template.genFrontPage(10, self.prefix, self.name, self.webroot_dir, self.daemon.database)
 }
 
 // regenerate the overboard
-func (self httpFrontend) regenUkko() {
+func (self *httpFrontend) regenUkko() {
 	fname := filepath.Join(self.webroot_dir, "ukko.html")
 	template.genUkko(self.prefix, self.name, fname, self.daemon.database)
 }
 
 // regenerate pages after a mod event
-func (self httpFrontend) regenOnModEvent(newsgroup, msgid, root string, page int) {
+func (self *httpFrontend) regenOnModEvent(newsgroup, msgid, root string, page int) {
 	if root == msgid {
 		fname := self.getFilenameForThread(root)
 		log.Println("remove file", fname)
@@ -290,14 +290,14 @@ func (self httpFrontend) regenOnModEvent(newsgroup, msgid, root string, page int
 }
 
 // handle newboard page
-func (self httpFrontend) handle_newboard(wr http.ResponseWriter, r *http.Request) {
+func (self *httpFrontend) handle_newboard(wr http.ResponseWriter, r *http.Request) {
 	param := make(map[string]string)
 	param["prefix"] = self.prefix
 	io.WriteString(wr, template.renderTemplate("newboard.mustache", param))
 }
 
 // handle new post via http request for a board
-func (self httpFrontend) handle_postform(wr http.ResponseWriter, r *http.Request, board string) {
+func (self *httpFrontend) handle_postform(wr http.ResponseWriter, r *http.Request, board string) {
 
 	// the post we will turn into an nntp article
 	var pr postRequest
@@ -500,7 +500,7 @@ func (self httpFrontend) handle_postform(wr http.ResponseWriter, r *http.Request
 }
 
 // turn a post request into an nntp article write it to temp dir and tell daemon
-func (self httpFrontend) handle_postRequest(pr *postRequest, b bannedFunc, e errorFunc, s successFunc) {
+func (self *httpFrontend) handle_postRequest(pr *postRequest, b bannedFunc, e errorFunc, s successFunc) {
 	var err error
 	var nntp nntpArticle
 	var banned bool
@@ -699,7 +699,7 @@ func (self httpFrontend) handle_poster(wr http.ResponseWriter, r *http.Request) 
 	}
 }
 
-func (self httpFrontend) new_captcha(wr http.ResponseWriter, r *http.Request) {
+func (self *httpFrontend) new_captcha(wr http.ResponseWriter, r *http.Request) {
 	s, err := self.store.Get(r, self.name)
 	if err == nil {
 		captcha_id := captcha.New()
@@ -777,7 +777,7 @@ func (self httpFrontend) handle_authed_api(wr http.ResponseWriter, r *http.Reque
 }
 
 // handle un authenticated part of api
-func (self httpFrontend) handle_unauthed_api(wr http.ResponseWriter, r *http.Request, api string) {
+func (self *httpFrontend) handle_unauthed_api(wr http.ResponseWriter, r *http.Request, api string) {
 	var err error
 	if api == "header" {
 		var msgids []string
@@ -794,7 +794,7 @@ func (self httpFrontend) handle_unauthed_api(wr http.ResponseWriter, r *http.Req
 	}
 }
 
-func (self httpFrontend) handle_api(wr http.ResponseWriter, r *http.Request) {
+func (self *httpFrontend) handle_api(wr http.ResponseWriter, r *http.Request) {
 	if self.enableJson {
 		vars := mux.Vars(r)
 		meth := vars["meth"]
@@ -819,7 +819,7 @@ func (self httpFrontend) handle_api(wr http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func (self httpFrontend) Mainloop() {
+func (self *httpFrontend) Mainloop() {
 	EnsureDir(self.webroot_dir)
 	if !CheckFile(self.template_dir) {
 		log.Fatalf("no such template folder %s", self.template_dir)
@@ -892,14 +892,14 @@ func (self httpFrontend) Mainloop() {
 	}
 }
 
-func (self httpFrontend) Regen(msg ArticleEntry) {
+func (self *httpFrontend) Regen(msg ArticleEntry) {
 	self.regenThreadChan <- msg
 	self.regenerateBoard(msg.Newsgroup())
 }
 
 // create a new http based frontend
 func NewHTTPFrontend(daemon *NNTPDaemon, config map[string]string, url string) Frontend {
-	var front httpFrontend
+	front := new(httpFrontend)
 	front.daemon = daemon
 	front.regenBoardTicker = time.NewTicker(time.Second * 10)
 	front.longTermTicker = time.NewTicker(time.Hour)

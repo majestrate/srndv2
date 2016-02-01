@@ -33,7 +33,7 @@ type httpModUI struct {
 	mod_prefix       string
 }
 
-func createHttpModUI(frontend httpFrontend) httpModUI {
+func createHttpModUI(frontend *httpFrontend) httpModUI {
 	return httpModUI{frontend.regenAll, frontend.Regen, frontend.regenerateBoard, frontend.deleteThreadMarkup, frontend.deleteBoardMarkup, make(chan NNTPMessage), frontend.daemon.database, frontend.daemon.store, frontend.store, frontend.prefix, frontend.prefix + "mod/"}
 
 }

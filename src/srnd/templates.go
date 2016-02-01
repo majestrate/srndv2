@@ -157,10 +157,12 @@ func (self *templateEngine) loadTemplate(name string) (t string) {
 
 // get a template, if it's not cached load from file and cache it
 func (self *templateEngine) getTemplate(name string) (t string) {
-	self.templates_mtx.Lock()
 	if !self.templateCached(name) {
+		self.templates_mtx.Lock()
 		self.templates[name] = self.loadTemplate(name)
+		self.templates_mtx.Unlock()
 	}
+	self.templates_mtx.Lock()
 	t, _ = self.templates[name]
 	self.templates_mtx.Unlock()
 	return

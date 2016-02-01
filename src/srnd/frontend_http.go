@@ -245,7 +245,7 @@ func (self httpFrontend) new_captcha_json(wr http.ResponseWriter, r *http.Reques
 
 // regen every page of the board
 func (self *httpFrontend) regenerateBoard(group string) {
-	template.genBoard(self.prefix, self.name, group, self.webroot_dir, self.daemon.database)
+	template.genBoard(self.attachments, self.prefix, self.name, group, self.webroot_dir, self.daemon.database)
 }
 
 // regenerate just a thread page
@@ -254,7 +254,7 @@ func (self *httpFrontend) regenerateThread(root ArticleEntry) {
 	if self.daemon.store.HasArticle(msgid) {
 		log.Println("rengerate thread", msgid)
 		fname := self.getFilenameForThread(msgid)
-		template.genThread(root, self.prefix, self.name, fname, self.daemon.database)
+		template.genThread(self.attachments, root, self.prefix, self.name, fname, self.daemon.database)
 	} else {
 		log.Println("don't have root post", msgid, "not regenerating thread")
 	}
@@ -263,7 +263,7 @@ func (self *httpFrontend) regenerateThread(root ArticleEntry) {
 // regenerate just a page on a board
 func (self *httpFrontend) regenerateBoardPage(board string, page int) {
 	fname := self.getFilenameForBoardPage(board, page)
-	template.genBoardPage(self.prefix, self.name, board, page, fname, self.daemon.database)
+	template.genBoardPage(self.attachments, self.prefix, self.name, board, page, fname, self.daemon.database)
 }
 
 // regenerate the front page

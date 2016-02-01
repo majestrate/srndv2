@@ -182,7 +182,9 @@ func (self *templateEngine) renderTemplate(name string, obj interface{}) string 
 // get a board model given a newsgroup
 // load un updated board model if we don't have it
 func (self *templateEngine) obtainBoard(prefix, frontend, group string, db Database) (model GroupModel) {
+	self.groups_mtx.Lock()
 	model, ok := self.groups[group]
+	self.groups_mtx.Unlock()
 	// if we don't already have the board loaded load it
 	if !ok {
 		p := db.GetGroupPageCount(group)
@@ -201,7 +203,7 @@ func (self *templateEngine) obtainBoard(prefix, frontend, group string, db Datab
 }
 
 // generate a board page
-func (self *templateEngine) genBoardPage(prefix, frontend, newsgroup string, page int, outfile string, db Database) {
+func (self *templateEngine) genBoardPage(allowFiles bool, prefix, frontend, newsgroup string, page int, outfile string, db Database) {
 	// get the board model
 	board := self.obtainBoard(prefix, frontend, newsgroup, db)
 	// update the board page
@@ -213,6 +215,7 @@ func (self *templateEngine) genBoardPage(prefix, frontend, newsgroup string, pag
 	// render it
 	wr, err := OpenFileWriter(outfile)
 	if err == nil {
+		board[page].SetAllowFiles(allowFiles)
 		updateLinkCacheForBoard(board[page])
 		board[page].RenderTo(wr)
 		wr.Close()
@@ -227,7 +230,7 @@ func (self *templateEngine) genBoardPage(prefix, frontend, newsgroup string, pag
 }
 
 // generate every page for a board
-func (self *templateEngine) genBoard(prefix, frontend, newsgroup, outdir string, db Database) {
+func (self *templateEngine) genBoard(allowFiles bool, prefix, frontend, newsgroup, outdir string, db Database) {
 	// get the board model
 	board := self.obtainBoard(prefix, frontend, newsgroup, db)
 	// update the entire board model
@@ -243,6 +246,7 @@ func (self *templateEngine) genBoard(prefix, frontend, newsgroup, outdir string,
 		outfile := filepath.Join(outdir, fmt.Sprintf("%s-%d.html", newsgroup, page))
 		wr, err := OpenFileWriter(outfile)
 		if err == nil {
+			board[page].SetAllowFiles(allowFiles)
 			board[page].RenderTo(wr)
 			wr.Close()
 			log.Println("wrote file", outfile)
@@ -285,7 +289,7 @@ func (self *templateEngine) genUkko(prefix, frontend, outfile string, database D
 	}
 }
 
-func (self *templateEngine) genThread(root ArticleEntry, prefix, frontend, outfile string, db Database) {
+func (self *templateEngine) genThread(allowFiles bool, root ArticleEntry, prefix, frontend, outfile string, db Database) {
 	newsgroup := root.Newsgroup()
 	msgid := root.MessageID()
 	var th ThreadModel
@@ -316,6 +320,7 @@ func (self *templateEngine) genThread(root ArticleEntry, prefix, frontend, outfi
 	} else {
 		// update thread model and write it out
 		th.Update(db)
+		th.SetAllowFiles(allowFiles)
 		wr, err := OpenFileWriter(outfile)
 		if err == nil {
 			updateLinkCacheForThread(th)

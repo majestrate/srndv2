@@ -11,5 +11,5 @@ var minor_version = 2
 var program_name = "srnd"
 
 func Version() string {
-  return fmt.Sprintf("%s version 2.%d.%d", program_name, major_version, minor_version)
+	return fmt.Sprintf("%s version 2.%d.%d", program_name, major_version, minor_version)
 }

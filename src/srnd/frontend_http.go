@@ -157,11 +157,11 @@ func (self httpFrontend) regenAll() {
 	}
 }
 
-func (self httpFrontend) regenLongTerm() {
+func (self *httpFrontend) regenLongTerm() {
 	template.genGraphs(self.prefix, self.webroot_dir, self.daemon.database)
 }
 
-func (self httpFrontend) pollLongTerm() {
+func (self *httpFrontend) pollLongTerm() {
 	for {
 		<-self.longTermTicker.C
 		// regenerate long term stuff
@@ -169,7 +169,7 @@ func (self httpFrontend) pollLongTerm() {
 	}
 }
 
-func (self httpFrontend) pollRegen() {
+func (self *httpFrontend) pollRegen() {
 	for {
 		select {
 		// listen for regen board requests
@@ -191,7 +191,7 @@ func (self httpFrontend) pollRegen() {
 	}
 }
 
-func (self httpFrontend) poll() {
+func (self *httpFrontend) poll() {
 
 	// regenerate front page
 	self.regenFrontPage()

@@ -522,6 +522,10 @@ func (self PostgresDatabase) GetIPAddress(encaddr string) (addr string, err erro
 }
 
 func (self PostgresDatabase) MarkModPubkeyGlobal(pubkey string) (err error) {
+	if len(pubkey) != 64 {
+		err = errors.New("invalid pubkey length")
+		return
+	}
 	if self.CheckModPubkeyGlobal(pubkey) {
 		// already marked
 		log.Println("pubkey already marked as global", pubkey)

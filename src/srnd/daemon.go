@@ -59,6 +59,10 @@ func (self NNTPDaemon) End() {
 	self.listener.Close()
 }
 
+func (self *NNTPDaemon) GetDatabase() Database {
+	return self.database
+}
+
 // for srnd tool
 func (self *NNTPDaemon) DelNNTPLogin(username string) {
 	exists, err := self.database.CheckNNTPUserExists(username)
@@ -550,7 +554,7 @@ func (self *NNTPDaemon) CanTLS() (can bool) {
 	return
 }
 
-func (self NNTPDaemon) Setup() NNTPDaemon {
+func (self *NNTPDaemon) Setup() {
 	log.Println("checking for configs...")
 	// check that are configs exist
 	CheckConfig()
@@ -595,6 +599,4 @@ func (self NNTPDaemon) Setup() NNTPDaemon {
 		database: self.database,
 		chnl:     make(chan NNTPMessage),
 	}
-
-	return self
 }

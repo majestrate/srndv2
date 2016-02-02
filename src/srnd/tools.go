@@ -36,6 +36,27 @@ func ThumbnailTool() {
 	reThumbnail(4, store)
 }
 
+func RegenTool() {
+	conf := ReadConfig()
+	db_host := conf.database["host"]
+	db_port := conf.database["port"]
+	db_user := conf.database["user"]
+	db_passwd := conf.database["password"]
+	db_type := conf.database["type"]
+	db_sche := conf.database["schema"]
+	db := NewDatabase(db_type, db_sche, db_host, db_port, db_user, db_passwd)
+	groups := db.GetAllNewsgroups()
+	if groups != nil {
+		for _, group := range groups {
+			go regenGroup(group, db)
+		}
+	}
+}
+
+func regenGroup(name string, db Database) {
+	log.Println("regenerating", name)
+}
+
 // run thumbnailer tool with unspecified number of threads
 func reThumbnail(threads int, store ArticleStore) {
 

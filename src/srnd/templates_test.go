@@ -11,7 +11,7 @@ func BenchmarkRenderBoardPage(b *testing.B) {
 	defer db.Close()
 	b.RunParallel(func (pb *testing.PB) {
 		for pb.Next() {
-			template.genBoardPage(true, "prefix", "test", "overchan.overchan", 0, "boardpage.html", db)
+			template.genBoardPage(true, "prefix", "test", "overchan.random", 0, "boardpage.html", db)
 		}
 	})
 }
@@ -22,7 +22,7 @@ func BenchmarkRenderThread(b *testing.B) {
 	defer db.Close()
 	b.RunParallel(func (pb *testing.PB) {
 		for pb.Next() {
-			template.genThread(true, ArticleEntry{"<ab0ff1453596701@web.oniichan.onion>", "overchan.technology"}, "prefix", "frontend", "thread.html", db)
+			template.genThread(true, ArticleEntry{"<25ae01453624341@web.ucavviu7wl6azuw7.onion>", "overchan.random"}, "prefix", "frontend", "thread.html", db)
 		}
 	})
 }

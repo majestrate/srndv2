@@ -336,7 +336,6 @@ func (self *nntpConnection) checkMIMEHeaderNoAuth(daemon NNTPDaemon, hdr textpro
 					return
 				} else {
 					// not banned
-					return
 				}
 			}
 		} else {

@@ -753,6 +753,7 @@ func (self httpFrontend) handle_authed_api(wr http.ResponseWriter, r *http.Reque
 	}
 
 	s := func(nntp NNTPMessage) {
+		wr.Header().Add("Content-Type", "text/json; encoding=UTF-8")
 		resp := make(map[string]string)
 		resp["id"] = nntp.MessageID()
 		enc := json.NewEncoder(wr)
@@ -773,6 +774,7 @@ func (self httpFrontend) handle_authed_api(wr http.ResponseWriter, r *http.Reque
 	} else {
 		// no such method
 		wr.WriteHeader(404)
+		io.WriteString(wr, "No such method")
 	}
 }
 

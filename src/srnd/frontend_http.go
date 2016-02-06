@@ -786,11 +786,13 @@ func (self *httpFrontend) handle_unauthed_api(wr http.ResponseWriter, r *http.Re
 		val := q.Get("value")
 		msgids, err = self.daemon.database.GetMessageIDByHeader(name, val)
 		if err == nil {
+			wr.Header().Add("Content-Type", "text/json; encoding=UTF-8")
 			json.NewEncoder(wr).Encode(msgids)
 		} else {
 			api_error(wr, err)
 		}
 	} else if api == "groups" {
+		wr.Header().Add("Content-Type", "text/json; encoding=UTF-8")
 		groups := self.daemon.database.GetAllNewsgroups()
 		json.NewEncoder(wr).Encode(groups)
 	}

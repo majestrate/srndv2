@@ -496,11 +496,11 @@ func (self *httpFrontend) handle_postform(wr http.ResponseWriter, r *http.Reques
 		url := fmt.Sprintf("%sthread-%s.html", self.prefix, ShortHashMessageID(msg_id))
 		io.WriteString(wr, template.renderTemplate("post_success.mustache", map[string]string{"prefix": self.prefix, "message_id": nntp.MessageID(), "redirect_url": url}))
 	}
-	self.handle_postRequest(&pr, b, e, s)
+	self.handle_postRequest(&pr, b, e, s, false)
 }
 
 // turn a post request into an nntp article write it to temp dir and tell daemon
-func (self *httpFrontend) handle_postRequest(pr *postRequest, b bannedFunc, e errorFunc, s successFunc) {
+func (self *httpFrontend) handle_postRequest(pr *postRequest, b bannedFunc, e errorFunc, s successFunc, createGroup bool) {
 	var err error
 	var nntp nntpArticle
 	var banned bool
@@ -553,7 +553,7 @@ func (self *httpFrontend) handle_postRequest(pr *postRequest, b bannedFunc, e er
 		e(err)
 	}
 
-	if !self.daemon.database.HasNewsgroup(board) {
+	if !createGroup && !self.daemon.database.HasNewsgroup(board) {
 		e(errors.New("we don't have this newsgroup " + board))
 		return
 	}
@@ -765,7 +765,7 @@ func (self httpFrontend) handle_authed_api(wr http.ResponseWriter, r *http.Reque
 		err = dec.Decode(&pr)
 		if err == nil {
 			// we parsed it
-			self.handle_postRequest(&pr, b, e, s)
+			self.handle_postRequest(&pr, b, e, s, true)
 		} else {
 			// bad parsing?
 			api_error(wr, err)
@@ -778,7 +778,7 @@ func (self httpFrontend) handle_authed_api(wr http.ResponseWriter, r *http.Reque
 
 // handle un authenticated part of api
 func (self *httpFrontend) handle_unauthed_api(wr http.ResponseWriter, r *http.Request, api string) {
-	var err error
+	var err error	
 	if api == "header" {
 		var msgids []string
 		q := r.URL.Query()
@@ -786,11 +786,13 @@ func (self *httpFrontend) handle_unauthed_api(wr http.ResponseWriter, r *http.Re
 		val := q.Get("value")
 		msgids, err = self.daemon.database.GetMessageIDByHeader(name, val)
 		if err == nil {
-			enc := json.NewEncoder(wr)
-			enc.Encode(msgids)
+			json.NewEncoder(wr).Encode(msgids)
 		} else {
 			api_error(wr, err)
 		}
+	} else if api == "groups" {
+		groups := self.daemon.database.GetAllNewsgroups()
+		json.NewEncoder(wr).Encode(groups)
 	}
 }
 

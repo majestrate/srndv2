@@ -567,11 +567,8 @@ func (self RedisDB) GroupHasPosts(group string) bool {
 
 // check if a newsgroup exists
 func (self RedisDB) HasNewsgroup(group string) bool {
-	res, err := self.client.ZRank(GROUP_POSTTIME_WKR, group).Result()
-	if err != nil {
-		log.Println("failed to check for newsgroup", group, err)
-	}
-	return res > 0
+	_, err := self.client.ZRank(GROUP_POSTTIME_WKR, group).Result()
+	return err != nil
 }
 
 // check if an article exists

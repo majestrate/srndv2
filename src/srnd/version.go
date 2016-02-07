@@ -6,8 +6,8 @@ package srnd
 
 import "fmt"
 
-var major_version = 0
-var minor_version = 2
+var major_version = 3
+var minor_version = 1
 var program_name = "srnd"
 
 func Version() string {

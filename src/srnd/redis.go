@@ -194,7 +194,7 @@ func (self RedisDB) GetPageForRootMessage(root_message_id string) (group string,
 		var index int64
 		perpage, _ := self.GetPagesPerBoard(group)
 		index, err = self.client.ZRevRank(GROUP_THREAD_BUMPTIME_WKR_PREFIX+group, root_message_id).Result()
-		page = int64(math.Floor(float64(index-1) / float64(perpage))) //index starts from 1
+		page = int64(math.Floor(float64(index) / float64(perpage)))
 	}
 	return
 }

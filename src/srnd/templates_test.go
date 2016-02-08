@@ -4,9 +4,13 @@ import (
 	"testing"
 )
 
+func makeBenchmarkDB() Database {
+	//return NewDatabase("postgres", "srnd", "/var/run/postgresql", "", "", "")
+	return NewDatabase("redis", "single", "localhost", "6379", "", "")
+}
 
 func BenchmarkRenderBoardPage(b *testing.B) {
-	db := NewDatabase("postgres", "srnd", "/var/run/postgresql", "", "", "")
+	db := makeBenchmarkDB()
 	db.CreateTables()
 	defer db.Close()
 	b.RunParallel(func (pb *testing.PB) {
@@ -17,12 +21,12 @@ func BenchmarkRenderBoardPage(b *testing.B) {
 }
 
 func BenchmarkRenderThread(b *testing.B) {
-	db := NewDatabase("postgres", "srnd", "/var/run/postgresql", "", "", "")
+	db := makeBenchmarkDB()
 	db.CreateTables()
 	defer db.Close()
 	b.RunParallel(func (pb *testing.PB) {
 		for pb.Next() {
-			template.genThread(true, ArticleEntry{"<25ae01453624341@web.ucavviu7wl6azuw7.onion>", "overchan.random"}, "prefix", "frontend", "thread.html", db)
+			template.genThread(true, ArticleEntry{"<c49be1451427261@nntp.nsfl.tk>", "overchan.random"}, "prefix", "frontend", "thread.html", db)
 		}
 	})
 }

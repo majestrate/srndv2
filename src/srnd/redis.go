@@ -443,7 +443,7 @@ func (self RedisDB) DeleteThread(msgid string) (err error) {
 	for _, r := range repls {
 		self.DeleteArticle(r)
 	}
-	group, _ := self.client.HGet(ARTICLE_PREFIX+msgid, "newsgroup").Result()
+	group, _ := self.client.HGet(ARTICLE_PREFIX+msgid, "message_newsgroup").Result()
 	if group != "" {
 		self.client.ZRem(GROUP_THREAD_POSTTIME_WKR_PREFIX+group, msgid)
 		self.client.ZRem(GROUP_THREAD_BUMPTIME_WKR_PREFIX+group, msgid)

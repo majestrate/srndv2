@@ -61,6 +61,7 @@ func (self expire) DeletePost(messageID string) {
 		} else {
 			log.Println("failed to get replies for", messageID)
 		}
+		self.database.DeleteThread(messageID)
 	}
 	self.delChan <- deleteEvent(self.store.GetFilename(messageID))
 }
@@ -70,7 +71,6 @@ func (self expire) ExpireGroup(newsgroup string, keep int) {
 	threads := self.database.GetRootPostsForExpiration(newsgroup, keep)
 	for _, root := range threads {
 		self.DeletePost(root)
-		self.database.DeleteThread(root)
 	}
 }
 

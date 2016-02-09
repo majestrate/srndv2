@@ -7,7 +7,6 @@ package srnd
 
 import (
 	"bytes"
-	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -391,8 +390,7 @@ func (self *httpFrontend) handle_postform(wr http.ResponseWriter, r *http.Reques
 				captcha_solution = part_buff.String()
 			} else if partname == "attachment_data" {
 				// repost of data
-				dec := base64.NewDecoder(base64.StdEncoding, &part_buff)
-				_, err = io.Copy(&att_buff, dec)
+				_, err = io.Copy(&att_buff, &part_buff)
 			} else if partname == "attachment_filename" {
 				att_filename = part_buff.String()
 			} else if partname == "attachment_mime" {

@@ -131,12 +131,14 @@ func createPlaintextAttachment(msg string) nntpAttachment {
 	}
 }
 
+// assumes base64'd
 func createAttachment(content_type, fname string, body io.Reader) NNTPAttachment {
 
 	media_type, _, err := mime.ParseMediaType(content_type)
 	if err == nil {
 		a := nntpAttachment{}
-		_, err = io.Copy(&a.body, body)
+		enc := base64.NewDecoder(base64.StdEncoding, body)
+		_, err = io.Copy(&a.body, enc)
 		if err == nil {
 			a.header = make(textproto.MIMEHeader)
 			a.mime = media_type + "; charset=UTF-8"
@@ -147,6 +149,7 @@ func createAttachment(content_type, fname string, body io.Reader) NNTPAttachment
 			}
 			a.header.Set("Content-Disposition", `form-data; filename="`+fname+`"; name="attachment"`)
 			a.header.Set("Content-Type", a.mime)
+			a.header.Set("Content-Transfer-Encoding", "base64")
 			h := sha512.Sum512(a.body.Bytes())
 			hashstr := base32.StdEncoding.EncodeToString(h[:])
 			a.hash = h[:]

@@ -309,10 +309,13 @@ func (self *templateEngine) genThread(allowFiles bool, root ArticleEntry, prefix
 	if th == nil {
 		// a new thread?
 		if len(board) > 0 {
-			board[0].Update(db)
-			t := board[0].GetThread(msgid)
-			if t != nil {
-				th = t
+			board.UpdateAll(db)
+			for _, page := range board {
+				t := page.GetThread(msgid)
+				if t != nil {
+					th = t
+					break
+				}
 			}
 		}
 	}

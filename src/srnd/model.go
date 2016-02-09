@@ -235,6 +235,7 @@ func (self *boardModel) Update(db Database) {
 		// XXX: do we really need to update it again?
 		th.Update(db)
 	}
+	self.threads = model.Threads()
 }
 
 type post struct {

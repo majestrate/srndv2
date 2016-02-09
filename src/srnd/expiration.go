@@ -49,7 +49,7 @@ func (self expire) DeletePost(messageID string) {
 		return
 	}
 	// is this a root post ?
-	ref := headers.Get("Reference", "")
+	ref := headers.Get("References", "")
 	if ref == "" {
 		// ya, get all replies
 		replies := self.database.GetThreadReplies(ref, 0)
@@ -77,7 +77,7 @@ func (self expire) ExpireGroup(newsgroup string, keep int) {
 func (self expire) Mainloop() {
 	for {
 		ev := <-self.delChan
-		log.Println("expire")
+		log.Println("expire", ev.MessageID())
 		atts := self.database.GetPostAttachments(ev.MessageID())
 		// remove all attachments
 		if atts != nil {

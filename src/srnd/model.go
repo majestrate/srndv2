@@ -231,13 +231,10 @@ func (self *boardModel) Update(db Database) {
 	perpage, _ := db.GetThreadsPerPage(self.board)
 	// refetch all on this page
 	model := db.GetGroupForPage(self.prefix, self.frontend, self.board, self.page, int(perpage))
-	var threads []ThreadModel
 	for _, th := range model.Threads() {
-		// XXX: do we need to update it again?
+		// XXX: do we really need to update it again?
 		th.Update(db)
-		threads = append(threads, th)
 	}
-	self.threads = threads
 }
 
 type post struct {

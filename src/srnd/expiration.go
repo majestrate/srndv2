@@ -49,8 +49,8 @@ func (self expire) DeletePost(messageID string) {
 		return
 	}
 	// is this a root post ?
-	ref := headers.Get("Reference", "")
-	if ref != "" {
+	ref := headers.Get("References", "")
+	if ref == "" {
 		// ya, get all replies
 		replies := self.database.GetThreadReplies(ref, 0)
 		if replies != nil {
@@ -61,6 +61,7 @@ func (self expire) DeletePost(messageID string) {
 		} else {
 			log.Println("failed to get replies for", messageID)
 		}
+		self.database.DeleteThread(messageID)
 	}
 	self.delChan <- deleteEvent(self.store.GetFilename(messageID))
 }
@@ -70,14 +71,13 @@ func (self expire) ExpireGroup(newsgroup string, keep int) {
 	threads := self.database.GetRootPostsForExpiration(newsgroup, keep)
 	for _, root := range threads {
 		self.DeletePost(root)
-		self.database.DeleteThread(root)
 	}
 }
 
 func (self expire) Mainloop() {
 	for {
 		ev := <-self.delChan
-		log.Println("expire")
+		log.Println("expire", ev.MessageID())
 		atts := self.database.GetPostAttachments(ev.MessageID())
 		// remove all attachments
 		if atts != nil {
@@ -90,7 +90,6 @@ func (self expire) Mainloop() {
 		}
 		// remove article
 		os.Remove(ev.Path())
-		log.Println("expire")
 		err := self.database.DeleteArticle(ev.MessageID())
 		if err != nil {
 			log.Println("failed to delete article", err)

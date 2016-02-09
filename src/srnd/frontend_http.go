@@ -24,6 +24,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"time"
 )
 
@@ -82,12 +83,14 @@ type httpFrontend struct {
 	prefix          string
 	regenThreadChan chan ArticleEntry
 	regenGroupChan  chan groupRegenRequest
-	regenBoard      map[string]groupRegenRequest
-
+	regenBoardMap      map[string]groupRegenRequest
+	regenThreadMap     map[string]ArticleEntry
+	
 	regenBoardTicker *time.Ticker
 	ukkoTicker       *time.Ticker
 	longTermTicker   *time.Ticker
-
+	regenThreadTicker *time.Ticker
+	
 	store *sessions.CookieStore
 
 	upgrader websocket.Upgrader
@@ -95,6 +98,9 @@ type httpFrontend struct {
 	jsonUsername string
 	jsonPassword string
 	enableJson   bool
+
+	regenThreadLock sync.RWMutex
+	regenBoardLock sync.RWMutex
 }
 
 // do we allow this newsgroup?
@@ -174,19 +180,32 @@ func (self *httpFrontend) pollRegen() {
 		select {
 		// listen for regen board requests
 		case req := <-self.regenGroupChan:
-			self.regenBoard[fmt.Sprintf("%s|%s", req.group, req.page)] = req
+			self.regenBoardLock.Lock()
+			self.regenBoardMap[fmt.Sprintf("%s|%s", req.group, req.page)] = req
+			self.regenBoardLock.Unlock()
 			// listen for regen thread requests
 		case entry := <-self.regenThreadChan:
-			self.regenerateThread(entry)
+			self.regenThreadLock.Lock()
+			self.regenThreadMap[fmt.Sprintf("%s|%s", entry[0], entry[1])] = entry
+			self.regenThreadLock.Unlock()
 			// regen ukko
 		case _ = <-self.ukkoTicker.C:
 			self.regenUkko()
 			self.regenFrontPage()
+		case _ = <- self.regenThreadTicker.C:
+			self.regenThreadLock.Lock()
+			for _, entry := range self.regenThreadMap {
+				self.regenerateThread(entry)
+			}
+			self.regenThreadMap = make(map[string]ArticleEntry)
+			self.regenThreadLock.Unlock()
 		case _ = <-self.regenBoardTicker.C:
-			for _, v := range self.regenBoard {
+			self.regenBoardLock.Lock()
+			for _, v := range self.regenBoardMap {
 				self.regenerateBoardPage(v.group, v.page)
 			}
-			self.regenBoard = make(map[string]groupRegenRequest)
+			self.regenBoardMap = make(map[string]groupRegenRequest)
+			self.regenBoardLock.Unlock()
 		}
 	}
 }
@@ -912,7 +931,9 @@ func NewHTTPFrontend(daemon *NNTPDaemon, config map[string]string, url string) F
 	front.regenBoardTicker = time.NewTicker(time.Second * 10)
 	front.longTermTicker = time.NewTicker(time.Hour)
 	front.ukkoTicker = time.NewTicker(time.Second * 30)
-	front.regenBoard = make(map[string]groupRegenRequest)
+	front.regenThreadTicker = time.NewTicker(time.Second)
+	front.regenBoardMap = make(map[string]groupRegenRequest)
+	front.regenThreadMap = make(map[string]ArticleEntry)
 	front.attachments = mapGetInt(config, "allow_files", 1) == 1
 	front.bindaddr = config["bind"]
 	front.name = config["name"]

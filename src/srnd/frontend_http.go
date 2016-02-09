@@ -466,11 +466,7 @@ func (self *httpFrontend) handle_postform(wr http.ResponseWriter, r *http.Reques
 			// no attachments
 		} else {
 			// 1 attachment
-			var buff bytes.Buffer
-			enc := base64.NewEncoder(base64.StdEncoding, &buff)
-			_, err = io.Copy(enc, att)
-			enc.Close()
-			resp_map["attachment"] = buff.String()
+			resp_map["attachment"] = att.Filedata()
 			resp_map["attachment_filename"] = att.Filename()
 			resp_map["attachment_type"] = att.Mime()
 		}

@@ -239,7 +239,7 @@ func NewDatabase(db_type, schema, host, port, user, password string) Database {
 	}
 	if db_type == "redis" {
 		if schema == "single" {
-			return NewRedisDatabase(host, port, password )
+			return NewRedisDatabase(host, port, password)
 		}
 	}
 	log.Fatalf("invalid database type: %s/%s", db_type, schema)

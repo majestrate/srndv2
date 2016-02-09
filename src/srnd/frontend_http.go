@@ -83,14 +83,14 @@ type httpFrontend struct {
 	prefix          string
 	regenThreadChan chan ArticleEntry
 	regenGroupChan  chan groupRegenRequest
-	regenBoardMap      map[string]groupRegenRequest
-	regenThreadMap     map[string]ArticleEntry
-	
-	regenBoardTicker *time.Ticker
-	ukkoTicker       *time.Ticker
-	longTermTicker   *time.Ticker
+	regenBoardMap   map[string]groupRegenRequest
+	regenThreadMap  map[string]ArticleEntry
+
+	regenBoardTicker  *time.Ticker
+	ukkoTicker        *time.Ticker
+	longTermTicker    *time.Ticker
 	regenThreadTicker *time.Ticker
-	
+
 	store *sessions.CookieStore
 
 	upgrader websocket.Upgrader
@@ -100,7 +100,7 @@ type httpFrontend struct {
 	enableJson   bool
 
 	regenThreadLock sync.RWMutex
-	regenBoardLock sync.RWMutex
+	regenBoardLock  sync.RWMutex
 }
 
 // do we allow this newsgroup?
@@ -192,7 +192,7 @@ func (self *httpFrontend) pollRegen() {
 		case _ = <-self.ukkoTicker.C:
 			self.regenUkko()
 			self.regenFrontPage()
-		case _ = <- self.regenThreadTicker.C:
+		case _ = <-self.regenThreadTicker.C:
 			self.regenThreadLock.Lock()
 			for _, entry := range self.regenThreadMap {
 				self.regenerateThread(entry)
@@ -606,7 +606,7 @@ func (self *httpFrontend) handle_postRequest(pr *postRequest, b bannedFunc, e er
 		return
 	}
 	// TODO: make configurable
-	if len(pr.Message) > 1024*1024*10 {
+	if len(pr.Message) > 1024*1024 {
 		e(errors.New("your message is too big"))
 		return
 	}
@@ -614,6 +614,9 @@ func (self *httpFrontend) handle_postRequest(pr *postRequest, b bannedFunc, e er
 	if len(pr.Frontend) == 0 {
 		// :-DDD
 		pr.Frontend = "mongo.db.is.web.scale"
+	} else if len(pr.Frontend) > 128 {
+		e(errors.New("frontend name is too long"))
+		return
 	}
 
 	subject := pr.Subject
@@ -621,7 +624,12 @@ func (self *httpFrontend) handle_postRequest(pr *postRequest, b bannedFunc, e er
 	// set subject
 	if len(subject) == 0 {
 		subject = "None"
+	} else if len(subject) > 256 {
+		// subject too big
+		e(errors.New("Subject is too long"))
+		return
 	}
+
 	nntp.headers.Set("Subject", subject)
 	if isSage(subject) {
 		nntp.headers.Set("X-Sage", "1")
@@ -644,6 +652,11 @@ func (self *httpFrontend) handle_postRequest(pr *postRequest, b bannedFunc, e er
 				name = "Anonymous"
 			}
 		}
+	}
+	if len(name) > 128 {
+		// name too long
+		e(errors.New("name too long"))
+		return
 	}
 	msgid := genMessageID(pr.Frontend)
 	// roll until dubs if desired
@@ -801,7 +814,7 @@ func (self httpFrontend) handle_authed_api(wr http.ResponseWriter, r *http.Reque
 
 // handle un authenticated part of api
 func (self *httpFrontend) handle_unauthed_api(wr http.ResponseWriter, r *http.Request, api string) {
-	var err error	
+	var err error
 	if api == "header" {
 		var msgids []string
 		q := r.URL.Query()
@@ -900,8 +913,8 @@ func (self *httpFrontend) Mainloop() {
 
 	// use N threads for regeneration
 	for threads > 0 {
-	  go self.pollRegen()
-	  threads --
+		go self.pollRegen()
+		threads--
 	}
 	// run daemon's mod engine with our frontend
 	go RunModEngine(self.daemon.mod, self.regenOnModEvent)

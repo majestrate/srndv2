@@ -194,7 +194,7 @@ func (self RedisDB) GetPageForRootMessage(root_message_id string) (group string,
 		var index int64
 		perpage, _ := self.GetPagesPerBoard(group)
 		index, err = self.client.ZRevRank(GROUP_THREAD_BUMPTIME_WKR_PREFIX+group, root_message_id).Result()
-		page = int64(math.Floor(float64(index-1) / float64(perpage))) //index starts from 1
+		page = int64(math.Floor(float64(index) / float64(perpage)))
 	}
 	return
 }
@@ -443,7 +443,7 @@ func (self RedisDB) DeleteThread(msgid string) (err error) {
 	for _, r := range repls {
 		self.DeleteArticle(r)
 	}
-	group, _ := self.client.HGet(ARTICLE_PREFIX+msgid, "newsgroup").Result()
+	group, _ := self.client.HGet(ARTICLE_PREFIX+msgid, "message_newsgroup").Result()
 	if group != "" {
 		self.client.ZRem(GROUP_THREAD_POSTTIME_WKR_PREFIX+group, msgid)
 		self.client.ZRem(GROUP_THREAD_BUMPTIME_WKR_PREFIX+group, msgid)

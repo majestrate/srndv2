@@ -182,24 +182,30 @@ func (self *templateEngine) renderTemplate(name string, obj interface{}) string 
 // get a board model given a newsgroup
 // load un updated board model if we don't have it
 func (self *templateEngine) obtainBoard(prefix, frontend, group string, db Database) (model GroupModel) {
+	// warning, we attempt to do smart reloading
+	// dark magic may lurk here
 	self.groups_mtx.Lock()
-	model, ok := self.groups[group]
+	var ok bool
+	model, ok = self.groups[group]
 	self.groups_mtx.Unlock()
-	// if we don't already have the board loaded load it
-	if !ok {
-		p := db.GetGroupPageCount(group)
-		pages := int(p)
-		// ignore error
+	p := db.GetGroupPageCount(group)
+	pages := int(p)
+	// model is not up to date
+	if (!ok) || len(model) < pages {
 		perpage, _ := db.GetThreadsPerPage(group)
-		for page := 0; page < pages; page++ {
-			model = append(model, db.GetGroupForPage(prefix, frontend, group, page, int(perpage)))
+		// reload all the pages
+		var newModel GroupModel
+		for page := 0 ; page < pages ; page ++ {
+			newModel = append(newModel, db.GetGroupForPage(prefix, frontend, group, page, int(perpage)))
 		}
-		self.groups_mtx.Lock()
-		self.groups[group] = model
-		self.groups_mtx.Unlock()
+		model = newModel	
 	}
+	
+	self.groups_mtx.Lock()
+	self.groups[group] = model
+	self.groups_mtx.Unlock()
+	
 	return
-
 }
 
 // generate a board page
@@ -223,10 +229,6 @@ func (self *templateEngine) genBoardPage(allowFiles bool, prefix, frontend, news
 	} else {
 		log.Println("error generating board page", page, "for", newsgroup, err)
 	}
-	// save it
-	self.groups_mtx.Lock()
-	self.groups[newsgroup] = board
-	self.groups_mtx.Unlock()
 }
 
 // generate every page for a board

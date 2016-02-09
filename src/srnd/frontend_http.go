@@ -24,6 +24,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"time"
 )
 
@@ -97,6 +98,9 @@ type httpFrontend struct {
 	jsonUsername string
 	jsonPassword string
 	enableJson   bool
+
+	regenThreadLock sync.RWMutex
+	regenBoardLock sync.RWMutex
 }
 
 // do we allow this newsgroup?
@@ -176,24 +180,32 @@ func (self *httpFrontend) pollRegen() {
 		select {
 		// listen for regen board requests
 		case req := <-self.regenGroupChan:
+			self.regenBoardLock.Lock()
 			self.regenBoardMap[fmt.Sprintf("%s|%s", req.group, req.page)] = req
+			self.regenBoardLock.Unlock()
 			// listen for regen thread requests
 		case entry := <-self.regenThreadChan:
+			self.regenThreadLock.Lock()
 			self.regenThreadMap[fmt.Sprintf("%s|%s", entry[0], entry[1])] = entry
+			self.regenThreadLock.Unlock()
 			// regen ukko
 		case _ = <-self.ukkoTicker.C:
 			self.regenUkko()
 			self.regenFrontPage()
 		case _ = <- self.regenThreadTicker.C:
+			self.regenThreadLock.Lock()
 			for _, entry := range self.regenThreadMap {
 				self.regenerateThread(entry)
 			}
 			self.regenThreadMap = make(map[string]ArticleEntry)
+			self.regenThreadLock.Unlock()
 		case _ = <-self.regenBoardTicker.C:
+			self.regenBoardLock.Lock()
 			for _, v := range self.regenBoardMap {
 				self.regenerateBoardPage(v.group, v.page)
 			}
 			self.regenBoardMap = make(map[string]groupRegenRequest)
+			self.regenBoardLock.Unlock()
 		}
 	}
 }

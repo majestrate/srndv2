@@ -50,7 +50,7 @@ func (self expire) DeletePost(messageID string) {
 	}
 	// is this a root post ?
 	ref := headers.Get("Reference", "")
-	if ref != "" {
+	if ref == "" {
 		// ya, get all replies
 		replies := self.database.GetThreadReplies(ref, 0)
 		if replies != nil {

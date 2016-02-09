@@ -585,7 +585,9 @@ func (self *httpFrontend) handle_postRequest(pr *postRequest, b bannedFunc, e er
 	if len(pr.Attachment.Filedata) == 0 && len(pr.Message) == 0 {
 		e(errors.New("no message"))
 		return
-	} else if len(pr.Message) > 1024*1024*10 {
+	}
+	// TODO: make configurable
+	if len(pr.Message) > 1024*1024*10 {
 		e(errors.New("your message is too big"))
 		return
 	}

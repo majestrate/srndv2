@@ -56,7 +56,12 @@ type NNTPDaemon struct {
 }
 
 func (self NNTPDaemon) End() {
-	self.listener.Close()
+	if self.listener != nil {
+		self.listener.Close()
+	}
+	if self.database != nil {
+		self.database.Close()
+	}
 }
 
 func (self *NNTPDaemon) GetDatabase() Database {

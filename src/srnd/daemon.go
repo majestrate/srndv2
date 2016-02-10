@@ -259,11 +259,11 @@ func (self NNTPDaemon) Run() {
 
 	self.register_outfeed = make(chan nntpConnection)
 	self.deregister_outfeed = make(chan nntpConnection)
-	self.infeed = make(chan NNTPMessage, 8)
-	self.infeed_load = make(chan string, 4)
-	self.send_all_feeds = make(chan ArticleEntry, 16)
+	self.infeed = make(chan NNTPMessage, 1024)
+	self.infeed_load = make(chan string, 1024)
+	self.send_all_feeds = make(chan ArticleEntry, 1024)
 	self.feeds = make(map[string]nntpConnection)
-	self.ask_for_article = make(chan ArticleEntry, 16)
+	self.ask_for_article = make(chan ArticleEntry, 1024)
 
 	self.expire = createExpirationCore(self.database, self.store)
 	self.sync_on_start = self.conf.daemon["sync_on_start"] == "1"
@@ -597,6 +597,6 @@ func (self *NNTPDaemon) Setup() {
 	self.mod = modEngine{
 		store:    self.store,
 		database: self.database,
-		chnl:     make(chan NNTPMessage),
+		chnl:     make(chan NNTPMessage, 1024),
 	}
 }

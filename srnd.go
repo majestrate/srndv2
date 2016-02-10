@@ -5,6 +5,8 @@ import (
 	"github.com/majestrate/srndv2/src/srnd"
 	"log"
 	"os"
+	"os/signal"
+	"syscall"
 	//   _ "net/http/pprof"
 	//  "net/http"
 )
@@ -25,6 +27,15 @@ func main() {
 		} else if action == "run" {
 			log.Printf("Starting up %s...", srnd.Version())
 			daemon.Setup()
+			c := make(chan os.Signal, 1)
+			signal.Notify(c, os.Interrupt)
+			signal.Notify(c, syscall.SIGTERM)
+			go func() {
+				<-c
+				log.Println("Shutting down...")
+				daemon.End()
+				os.Exit(0)
+			}()
 			daemon.Run()
 		} else if action == "tool" {
 			if len(os.Args) > 2 {

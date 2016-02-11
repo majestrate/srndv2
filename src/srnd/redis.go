@@ -31,8 +31,10 @@ import (
 	"gopkg.in/redis.v3"
 	"log"
 	"math"
+	"net"
 	"os"
 	"strconv"
+	"strings"
 	"time"
 )
 
@@ -58,6 +60,7 @@ const (
 	ADDRS_ENCRYPTED_ADDRS_PREFIX = APP_PREFIX + "AddrsEncryptedAddrs::"
 	ENCRYPTED_IP_BAN_PREFIX      = APP_PREFIX + "EncIPBan::"
 	IP_BAN_PREFIX                = APP_PREFIX + "IPBan::"
+	IP_RANGE_BAN_PREFIX          = APP_PREFIX + "IPRangeBan::"
 )
 
 //keyrings - these can be seen as index
@@ -77,6 +80,7 @@ const (
 	MESSAGEID_HEADER_KR_PREFIX        = APP_PREFIX + "MessageIDHeaderKR::"
 	ARTICLE_ATTACHMENT_KR_PREFIX      = APP_PREFIX + "ArticleAttachmentsKR::"
 	ATTACHMENT_ARTICLE_KR_PREFIX      = APP_PREFIX + "AttachmentArticlesKR::"
+	IP_RANGE_BAN_KR                   = APP_PREFIX + "IPRangeBanKR"
 )
 
 type RedisDB struct {
@@ -285,6 +289,36 @@ func (self RedisDB) GetEncKey(encAddr string) (enckey string, err error) {
 
 func (self RedisDB) CheckIPBanned(addr string) (banned bool, err error) {
 	banned, err = self.client.Exists(IP_BAN_PREFIX + addr).Result()
+	if banned {
+		return
+	}
+	isnet, ipnet := IsSubnet(addr)
+	var start string
+	var range_start string
+
+	if isnet {
+		min, max := IPNet2MinMax(ipnet)
+		range_start = ZeroIPString(min)
+		start = ZeroIPString(max)
+	} else {
+		ip := net.ParseIP(addr)
+		if ip == nil {
+			return false, errors.New("Couldn't parse IP")
+		}
+		start = ZeroIPString(ip)
+		range_start = start
+	}
+	res, err := self.client.ZRangeByLex(IP_RANGE_BAN_KR, redis.ZRangeByScore{Min: "[" + start, Max: "+", Count: 1}).Result()
+	if err == nil && len(res) > 0 {
+		var range_min string
+		range_max := res[0]
+		range_min, err = self.client.HGet(IP_RANGE_BAN_PREFIX+range_max, "start").Result()
+		if err != nil {
+			return
+		}
+		banned = strings.Compare(range_start, range_min) >= 0
+	}
+
 	return
 }
 
@@ -789,13 +823,56 @@ func (self RedisDB) GetMessageIDByHash(hash string) (article ArticleEntry, err e
 }
 
 func (self RedisDB) BanAddr(addr string) (err error) {
-	_, err = self.client.HMSet(IP_BAN_PREFIX+addr, "addr", addr, "made", strconv.Itoa(int(timeNow())), "-1").Result()
+	isnet, ipnet := IsSubnet(addr)
+	if !isnet {
+		_, err = self.client.HMSet(IP_BAN_PREFIX+addr, "addr", addr, "made", strconv.Itoa(int(timeNow()))).Result()
+		return
+	}
+	isBanned, err := self.CheckIPBanned(addr)
+	if !isBanned && err == nil { //make sure this range isn't banned already
+		min, max := IPNet2MinMax(ipnet)
+		start := ZeroIPString(min)
+		end := ZeroIPString(max)
+		self.clearIPRange(start, end) //delete all banned ranges that are contained within this range
+		_, err = self.client.ZAdd(IP_RANGE_BAN_KR, redis.Z{Score: 0.0, Member: end}).Result()
+
+		if err != nil {
+			return
+		}
+		_, err = self.client.HMSet(IP_RANGE_BAN_PREFIX+end, "start", start, "end", end, "made", strconv.Itoa(int(timeNow()))).Result()
+	}
+
 	return
 }
 
-// assumes it is there
 func (self RedisDB) UnbanAddr(addr string) (err error) {
 	_, err = self.client.Del(IP_BAN_PREFIX + addr).Result()
+	isnet, ipnet := IsSubnet(addr)
+	var start string
+	var range_start string
+
+	if isnet {
+		min, max := IPNet2MinMax(ipnet)
+		range_start = ZeroIPString(min)
+		start = ZeroIPString(max)
+	} else {
+		_, err = self.client.Del(IP_BAN_PREFIX + addr).Result()
+		return
+	}
+	res, err := self.client.ZRangeByLex(IP_RANGE_BAN_KR, redis.ZRangeByScore{Min: "[" + start, Max: "+", Count: 1}).Result()
+	if err == nil && len(res) > 0 {
+		var range_min string
+		range_max := res[0]
+		range_min, err = self.client.HGet(IP_RANGE_BAN_PREFIX+range_max, "start").Result()
+		if err != nil {
+			return
+		}
+		banned := strings.Compare(range_start, range_min) >= 0
+		if banned {
+			self.client.ZRem(IP_RANGE_BAN_KR, range_max)
+			self.client.Del(IP_RANGE_BAN_PREFIX + range_max)
+		}
+	}
 	return
 }
 
@@ -805,7 +882,7 @@ func (self RedisDB) CheckEncIPBanned(encaddr string) (banned bool, err error) {
 }
 
 func (self RedisDB) BanEncAddr(encaddr string) (err error) {
-	_, err = self.client.HMSet(ENCRYPTED_IP_BAN_PREFIX+encaddr, "encaddr", encaddr, "made", strconv.Itoa(int(timeNow())), "-1").Result()
+	_, err = self.client.HMSet(ENCRYPTED_IP_BAN_PREFIX+encaddr, "encaddr", encaddr, "made", strconv.Itoa(int(timeNow()))).Result()
 	return
 }
 
@@ -977,6 +1054,14 @@ func (self RedisDB) RemoveNNTPLogin(username string) (err error) {
 func (self RedisDB) CheckNNTPUserExists(username string) (exists bool, err error) {
 	exists, err = self.client.Exists(NNTP_LOGIN_PREFIX + username).Result()
 	return
+}
+
+func (self RedisDB) clearIPRange(start, end string) {
+	ranges, _ := self.client.ZRangeByLex(IP_RANGE_BAN_KR, redis.ZRangeByScore{Min: "(" + start, Max: "[" + end}).Result()
+	for _, iprange := range ranges {
+		self.client.ZRem(IP_RANGE_BAN_KR, iprange)
+		self.client.Del(IP_RANGE_BAN_PREFIX + iprange)
+	}
 }
 
 func processHashResult(hash []string) (mapRes map[string]string) {

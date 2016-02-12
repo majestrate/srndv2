@@ -38,6 +38,9 @@ type NNTPDaemon struct {
 	// http frontend
 	frontend Frontend
 
+	//cache driver
+	cache CacheInterface
+
 	// map of addr -> NNTPConnection
 	feeds map[string]nntpConnection
 	// for registering and deregistering outbound feeds
@@ -61,6 +64,9 @@ func (self NNTPDaemon) End() {
 	}
 	if self.database != nil {
 		self.database.Close()
+	}
+	if self.cache != nil {
+		self.cache.Close()
 	}
 }
 
@@ -285,7 +291,8 @@ func (self NNTPDaemon) Run() {
 	// do we enable the frontend?
 	if self.conf.frontend["enable"] == "1" {
 		log.Printf("frontend %s enabled", self.conf.frontend["name"])
-		http_frontend := NewHTTPFrontend(&self, self.conf.frontend, self.conf.worker["url"])
+		self.cache = NewCache(self.conf.frontend, self.database, self.store)
+		http_frontend := NewHTTPFrontend(&self, self.cache, self.conf.frontend, self.conf.worker["url"])
 		if self.conf.frontend["json-api"] == "1" {
 
 		}

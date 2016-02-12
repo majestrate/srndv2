@@ -82,7 +82,13 @@ func (self *FileCache) RegenAll() {
 }
 
 func (self *FileCache) regenLongTerm() {
-	template.genGraphs(self.prefix, self.webroot_dir, self.database)
+	wr, err := os.Create(filepath.Join(self.webroot_dir, "history.html"))
+	defer wr.Close()
+	if err != nil {
+		log.Println("cannot render history graph", err)
+		return
+	}
+	template.genGraphs(self.prefix, wr, self.database)
 }
 
 func (self *FileCache) pollLongTerm() {
@@ -130,7 +136,10 @@ func (self *FileCache) pollRegen() {
 
 // regen every page of the board
 func (self *FileCache) RegenerateBoard(group string) {
-	template.genBoard(self.attachments, self.prefix, self.name, group, self.webroot_dir, self.database)
+	pages := template.prepareGenBoard(self.attachments, self.prefix, self.name, group, self.database)
+	for page := 0; page < pages; page++ {
+		self.regenerateBoardPage(group, page)
+	}
 }
 
 // regenerate just a thread page
@@ -139,7 +148,13 @@ func (self *FileCache) regenerateThread(root ArticleEntry) {
 	if self.store.HasArticle(msgid) {
 		log.Println("rengerate thread", msgid)
 		fname := self.getFilenameForThread(msgid)
-		template.genThread(self.attachments, root, self.prefix, self.name, fname, self.database)
+		wr, err := os.Create(fname)
+		defer wr.Close()
+		if err != nil {
+			log.Println("did not write", fname, err)
+			return
+		}
+		template.genThread(self.attachments, root, self.prefix, self.name, wr, self.database)
 	} else {
 		log.Println("don't have root post", msgid, "not regenerating thread")
 	}
@@ -148,18 +163,43 @@ func (self *FileCache) regenerateThread(root ArticleEntry) {
 // regenerate just a page on a board
 func (self *FileCache) regenerateBoardPage(board string, page int) {
 	fname := self.getFilenameForBoardPage(board, page)
-	template.genBoardPage(self.attachments, self.prefix, self.name, board, page, fname, self.database)
+	wr, err := os.Create(fname)
+	defer wr.Close()
+	if err != nil {
+		log.Println("error generating board page", page, "for", board, err)
+		return
+	}
+	template.genBoardPage(self.attachments, self.prefix, self.name, board, page, wr, self.database)
 }
 
 // regenerate the front page
 func (self *FileCache) RegenFrontPage() {
-	template.genFrontPage(10, self.prefix, self.name, self.webroot_dir, self.database)
+	indexwr, err1 := os.Create(filepath.Join(self.webroot_dir, "index.html"))
+	defer indexwr.Close()
+	if err1 != nil {
+		log.Println("cannot render front page", err1)
+		return
+	}
+	boardswr, err2 := os.Create(filepath.Join(self.webroot_dir, "boards.html"))
+	defer boardswr.Close()
+	if err2 != nil {
+		log.Println("cannot render board list page", err2)
+		return
+	}
+
+	template.genFrontPage(10, self.prefix, self.name, indexwr, boardswr, self.database)
 }
 
 // regenerate the overboard
 func (self *FileCache) regenUkko() {
 	fname := filepath.Join(self.webroot_dir, "ukko.html")
-	template.genUkko(self.prefix, self.name, fname, self.database)
+	wr, err := os.Create(fname)
+	defer wr.Close()
+	if err != nil {
+		log.Println("error generating ukko", err)
+		return
+	}
+	template.genUkko(self.prefix, self.name, wr, self.database)
 }
 
 // regenerate pages after a mod event

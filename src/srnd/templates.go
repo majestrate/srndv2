@@ -5,7 +5,6 @@
 package srnd
 
 import (
-	"fmt"
 	"github.com/cbroglie/mustache"
 	"io"
 	"io/ioutil"
@@ -209,7 +208,7 @@ func (self *templateEngine) obtainBoard(prefix, frontend, group string, db Datab
 }
 
 // generate a board page
-func (self *templateEngine) genBoardPage(allowFiles bool, prefix, frontend, newsgroup string, page int, outfile string, db Database) {
+func (self *templateEngine) genBoardPage(allowFiles bool, prefix, frontend, newsgroup string, page int, wr io.Writer, db Database) {
 	// get the board model
 	board := self.obtainBoard(prefix, frontend, newsgroup, db)
 	// update the board page
@@ -219,20 +218,13 @@ func (self *templateEngine) genBoardPage(allowFiles bool, prefix, frontend, news
 		return
 	}
 	// render it
-	wr, err := OpenFileWriter(outfile)
-	if err == nil {
-		board[page].SetAllowFiles(allowFiles)
-		updateLinkCacheForBoard(board[page])
-		board[page].RenderTo(wr)
-		wr.Close()
-		// log.Println("wrote file", outfile)
-	} else {
-		log.Println("error generating board page", page, "for", newsgroup, err)
-	}
+	board[page].SetAllowFiles(allowFiles)
+	updateLinkCacheForBoard(board[page])
+	board[page].RenderTo(wr)
 }
 
-// generate every page for a board
-func (self *templateEngine) genBoard(allowFiles bool, prefix, frontend, newsgroup, outdir string, db Database) {
+// prepare generation of every page for a board
+func (self *templateEngine) prepareGenBoard(allowFiles bool, prefix, frontend, newsgroup string, db Database) int {
 	// get the board model
 	board := self.obtainBoard(prefix, frontend, newsgroup, db)
 	// update the entire board model
@@ -243,22 +235,10 @@ func (self *templateEngine) genBoard(allowFiles bool, prefix, frontend, newsgrou
 	self.groups_mtx.Unlock()
 	updateLinkCache()
 
-	pages := len(board)
-	for page := 0; page < pages; page++ {
-		outfile := filepath.Join(outdir, fmt.Sprintf("%s-%d.html", newsgroup, page))
-		wr, err := OpenFileWriter(outfile)
-		if err == nil {
-			board[page].SetAllowFiles(allowFiles)
-			board[page].RenderTo(wr)
-			wr.Close()
-			// log.Println("wrote file", outfile)
-		} else {
-			log.Println("error generating board page", page, "for", newsgroup, err)
-		}
-	}
+	return len(board)
 }
 
-func (self *templateEngine) genUkko(prefix, frontend, outfile string, database Database) {
+func (self *templateEngine) genUkko(prefix, frontend string, wr io.Writer, database Database) {
 	var threads []ThreadModel
 	// get the last 15 bumped threads globally, for each...
 	for _, article := range database.GetLastBumpedThreads("", 15) {
@@ -281,17 +261,11 @@ func (self *templateEngine) genUkko(prefix, frontend, outfile string, database D
 		self.groups[newsgroup] = board
 		self.groups_mtx.Unlock()
 	}
-	wr, err := OpenFileWriter(outfile)
-	if err == nil {
-		updateLinkCache()
-		io.WriteString(wr, template.renderTemplate("ukko.mustache", map[string]interface{}{"prefix": prefix, "threads": threads}))
-		wr.Close()
-	} else {
-		log.Println("error generating ukko", err)
-	}
+	updateLinkCache()
+	io.WriteString(wr, template.renderTemplate("ukko.mustache", map[string]interface{}{"prefix": prefix, "threads": threads}))
 }
 
-func (self *templateEngine) genThread(allowFiles bool, root ArticleEntry, prefix, frontend, outfile string, db Database) {
+func (self *templateEngine) genThread(allowFiles bool, root ArticleEntry, prefix, frontend string, wr io.Writer, db Database) {
 	newsgroup := root.Newsgroup()
 	msgid := root.MessageID()
 	var th ThreadModel
@@ -326,15 +300,8 @@ func (self *templateEngine) genThread(allowFiles bool, root ArticleEntry, prefix
 		// update thread model and write it out
 		th.Update(db)
 		th.SetAllowFiles(allowFiles)
-		wr, err := OpenFileWriter(outfile)
-		if err == nil {
-			updateLinkCacheForThread(th)
-			th.RenderTo(wr)
-			wr.Close()
-			// log.Println("wrote file", outfile)
-		} else {
-			log.Println("did not write", outfile, err)
-		}
+		updateLinkCacheForThread(th)
+		th.RenderTo(wr)
 	}
 	// save it
 	self.groups_mtx.Lock()
@@ -371,7 +338,7 @@ func renderPostForm(prefix, board, op_msg_id string, files bool) string {
 }
 
 // generate misc graphs
-func (self *templateEngine) genGraphs(prefix, outdir string, db Database) {
+func (self *templateEngine) genGraphs(prefix string, wr io.Writer, db Database) {
 
 	//
 	// begin gen history.html
@@ -393,17 +360,10 @@ func (self *templateEngine) genGraphs(prefix, outdir string, db Database) {
 	}
 	sort.Sort(all_posts)
 
-	wr, err := OpenFileWriter(filepath.Join(outdir, "history.html"))
-	if err != nil {
-		log.Println("cannot render history graph", err)
-		return
-	}
-
-	_, err = io.WriteString(wr, self.renderTemplate("graph_history.mustache", map[string]interface{}{"history": all_posts}))
+	_, err := io.WriteString(wr, self.renderTemplate("graph_history.mustache", map[string]interface{}{"history": all_posts}))
 	if err != nil {
 		log.Println("error writing history graph", err)
 	}
-	wr.Close()
 
 	//
 	// end gen history.html
@@ -412,7 +372,7 @@ func (self *templateEngine) genGraphs(prefix, outdir string, db Database) {
 }
 
 // generate front page and board list
-func (self *templateEngine) genFrontPage(top_count int, prefix, frontend_name, outdir string, db Database) {
+func (self *templateEngine) genFrontPage(top_count int, prefix, frontend_name string, indexwr, boardswr io.Writer, db Database) {
 	// the graph for the front page
 	var frontpage_graph boardPageRows
 
@@ -449,11 +409,7 @@ func (self *templateEngine) genFrontPage(top_count int, prefix, frontend_name, o
 
 	models := db.GetLastPostedPostModels(prefix, 20)
 
-	wr, err := OpenFileWriter(filepath.Join(outdir, "index.html"))
-	if err != nil {
-		log.Println("cannot render front page", err)
-		return
-	}
+	wr := indexwr
 
 	param := make(map[string]interface{})
 
@@ -469,22 +425,15 @@ func (self *templateEngine) genFrontPage(top_count int, prefix, frontend_name, o
 	}
 	param["frontend"] = frontend_name
 	param["totalposts"] = db.ArticleCount()
-	_, err = io.WriteString(wr, self.renderTemplate("frontpage.mustache", param))
+	_, err := io.WriteString(wr, self.renderTemplate("frontpage.mustache", param))
 	if err != nil {
 		log.Println("error writing front page", err)
 	}
-	wr.Close()
 
-	wr, err = OpenFileWriter(filepath.Join(outdir, "boards.html"))
-	if err != nil {
-		log.Println("cannot render board list page", err)
-		return
-	}
-
+	wr = boardswr
 	param["graph"] = frontpage_graph
 	_, err = io.WriteString(wr, self.renderTemplate("boardlist.mustache", param))
 	if err != nil {
 		log.Println("error writing board list page", err)
 	}
-	wr.Close()
 }

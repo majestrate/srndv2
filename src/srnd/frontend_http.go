@@ -20,11 +20,7 @@ import (
 	"mime"
 	"net"
 	"net/http"
-	"os"
-	"path/filepath"
 	"strings"
-	"sync"
-	"time"
 )
 
 type bannedFunc func()
@@ -66,6 +62,7 @@ type httpFrontend struct {
 	modui        ModUI
 	httpmux      *mux.Router
 	daemon       *NNTPDaemon
+	cache        CacheInterface
 	postchan     chan NNTPMessage
 	recvpostchan chan NNTPMessage
 	bindaddr     string
@@ -82,13 +79,6 @@ type httpFrontend struct {
 	prefix          string
 	regenThreadChan chan ArticleEntry
 	regenGroupChan  chan groupRegenRequest
-	regenBoardMap   map[string]groupRegenRequest
-	regenThreadMap  map[string]ArticleEntry
-
-	regenBoardTicker  *time.Ticker
-	ukkoTicker        *time.Ticker
-	longTermTicker    *time.Ticker
-	regenThreadTicker *time.Ticker
 
 	store *sessions.CookieStore
 
@@ -97,9 +87,6 @@ type httpFrontend struct {
 	jsonUsername string
 	jsonPassword string
 	enableJson   bool
-
-	regenThreadLock sync.RWMutex
-	regenBoardLock  sync.RWMutex
 }
 
 // do we allow this newsgroup?
@@ -107,32 +94,6 @@ func (self httpFrontend) AllowNewsgroup(group string) bool {
 	// XXX: hardcoded nntp prefix
 	// TODO: make configurable nntp prefix
 	return strings.HasPrefix(group, "overchan.") && newsgroupValidFormat(group) || group == "ctl" && group != "overchan."
-}
-
-// try to delete root post's page
-func (self httpFrontend) deleteThreadMarkup(root_post_id string) {
-	fname := self.getFilenameForThread(root_post_id)
-	log.Println("delete file", fname)
-	os.Remove(fname)
-}
-
-func (self httpFrontend) getFilenameForThread(root_post_id string) string {
-	fname := fmt.Sprintf("thread-%s.html", ShortHashMessageID(root_post_id))
-	return filepath.Join(self.webroot_dir, fname)
-}
-
-func (self httpFrontend) deleteBoardMarkup(group string) {
-	pages, _ := self.daemon.database.GetPagesPerBoard(group)
-	for page := 0; page < pages; page++ {
-		fname := self.getFilenameForBoardPage(group, page)
-		log.Println("delete file", fname)
-		os.Remove(fname)
-	}
-}
-
-func (self httpFrontend) getFilenameForBoardPage(boardname string, pageno int) string {
-	fname := fmt.Sprintf("%s-%d.html", boardname, pageno)
-	return filepath.Join(self.webroot_dir, fname)
 }
 
 func (self httpFrontend) NewPostsChan() chan NNTPMessage {
@@ -143,80 +104,34 @@ func (self httpFrontend) PostsChan() chan NNTPMessage {
 	return self.recvpostchan
 }
 
-// regen every newsgroup
+func (self *httpFrontend) Regen(msg ArticleEntry) {
+	self.cache.Regen(msg)
+}
+
 func (self httpFrontend) regenAll() {
-	log.Println("regen all on http frontend")
-
-	// get all groups
-	groups := self.daemon.database.GetAllNewsgroups()
-	if groups != nil {
-		for _, group := range groups {
-			// send every thread for this group down the regen thread channel
-			go self.daemon.database.GetGroupThreads(group, self.regenThreadChan)
-			pages := self.daemon.database.GetGroupPageCount(group)
-			var pg int64
-			for pg = 0; pg < pages; pg++ {
-				self.regenGroupChan <- groupRegenRequest{group, int(pg)}
-			}
-		}
-	}
+	self.cache.RegenAll()
 }
 
-func (self *httpFrontend) regenLongTerm() {
-	template.genGraphs(self.prefix, self.webroot_dir, self.daemon.database)
+func (self *httpFrontend) regenerateBoard(group string) {
+	self.cache.RegenerateBoard(group)
 }
 
-func (self *httpFrontend) pollLongTerm() {
-	for {
-		<-self.longTermTicker.C
-		// regenerate long term stuff
-		self.regenLongTerm()
-	}
+func (self httpFrontend) deleteThreadMarkup(root_post_id string) {
+	self.cache.DeleteThreadMarkup(root_post_id)
 }
 
-func (self *httpFrontend) pollRegen() {
-	for {
-		select {
-		// listen for regen board requests
-		case req := <-self.regenGroupChan:
-			self.regenBoardLock.Lock()
-			self.regenBoardMap[fmt.Sprintf("%s|%s", req.group, req.page)] = req
-			self.regenBoardLock.Unlock()
-			// listen for regen thread requests
-		case entry := <-self.regenThreadChan:
-			self.regenThreadLock.Lock()
-			self.regenThreadMap[fmt.Sprintf("%s|%s", entry[0], entry[1])] = entry
-			self.regenThreadLock.Unlock()
-			// regen ukko
-		case _ = <-self.ukkoTicker.C:
-			self.regenUkko()
-			self.regenFrontPage()
-		case _ = <-self.regenThreadTicker.C:
-			self.regenThreadLock.Lock()
-			for _, entry := range self.regenThreadMap {
-				self.regenerateThread(entry)
-			}
-			self.regenThreadMap = make(map[string]ArticleEntry)
-			self.regenThreadLock.Unlock()
-		case _ = <-self.regenBoardTicker.C:
-			self.regenBoardLock.Lock()
-			for _, v := range self.regenBoardMap {
-				self.regenerateBoardPage(v.group, v.page)
-			}
-			self.regenBoardMap = make(map[string]groupRegenRequest)
-			self.regenBoardLock.Unlock()
-		}
-	}
+func (self httpFrontend) deleteBoardMarkup(group string) {
+	self.cache.DeleteBoardMarkup(group)
 }
 
 func (self *httpFrontend) poll() {
 
 	// regenerate front page
-	self.regenFrontPage()
+	self.cache.RegenFrontPage()
 
 	// trigger regen
 	if self.regen_on_start {
-		self.regenAll()
+		self.cache.RegenAll()
 	}
 
 	modChnl := self.modui.MessageChan()
@@ -259,52 +174,6 @@ func (self httpFrontend) new_captcha_json(wr http.ResponseWriter, r *http.Reques
 	resp["url"] = fmt.Sprintf("%s%s.png", self.prefix, captcha_id)
 	enc := json.NewEncoder(wr)
 	enc.Encode(&resp)
-}
-
-// regen every page of the board
-func (self *httpFrontend) regenerateBoard(group string) {
-	template.genBoard(self.attachments, self.prefix, self.name, group, self.webroot_dir, self.daemon.database)
-}
-
-// regenerate just a thread page
-func (self *httpFrontend) regenerateThread(root ArticleEntry) {
-	msgid := root.MessageID()
-	if self.daemon.store.HasArticle(msgid) {
-		log.Println("rengerate thread", msgid)
-		fname := self.getFilenameForThread(msgid)
-		template.genThread(self.attachments, root, self.prefix, self.name, fname, self.daemon.database)
-	} else {
-		log.Println("don't have root post", msgid, "not regenerating thread")
-	}
-}
-
-// regenerate just a page on a board
-func (self *httpFrontend) regenerateBoardPage(board string, page int) {
-	fname := self.getFilenameForBoardPage(board, page)
-	template.genBoardPage(self.attachments, self.prefix, self.name, board, page, fname, self.daemon.database)
-}
-
-// regenerate the front page
-func (self *httpFrontend) regenFrontPage() {
-	template.genFrontPage(10, self.prefix, self.name, self.webroot_dir, self.daemon.database)
-}
-
-// regenerate the overboard
-func (self *httpFrontend) regenUkko() {
-	fname := filepath.Join(self.webroot_dir, "ukko.html")
-	template.genUkko(self.prefix, self.name, fname, self.daemon.database)
-}
-
-// regenerate pages after a mod event
-func (self *httpFrontend) regenOnModEvent(newsgroup, msgid, root string, page int) {
-	if root == msgid {
-		fname := self.getFilenameForThread(root)
-		log.Println("remove file", fname)
-		os.Remove(fname)
-	} else {
-		self.regenThreadChan <- ArticleEntry{root, newsgroup}
-	}
-	self.regenGroupChan <- groupRegenRequest{newsgroup, int(page)}
 }
 
 // handle newboard page
@@ -858,21 +727,15 @@ func (self *httpFrontend) Mainloop() {
 	if !CheckFile(self.template_dir) {
 		log.Fatalf("no such template folder %s", self.template_dir)
 	}
-
 	template.changeTemplateDir(self.template_dir)
-
-	threads := self.regen_threads
-
-	// check for invalid number of threads
-	if threads <= 0 {
-		threads = 1
-	}
 
 	// set up handler mux
 	self.httpmux = mux.NewRouter()
 
 	// create mod ui
 	self.modui = createHttpModUI(self)
+
+	cache_handler := self.cache.GetHandler()
 
 	// modui handlers
 	self.httpmux.Path("/mod/").HandlerFunc(self.modui.ServeModPage).Methods("GET")
@@ -885,10 +748,10 @@ func (self *httpFrontend) Mainloop() {
 	self.httpmux.Path("/mod/delkey/{pubkey}").HandlerFunc(self.modui.HandleDelPubkey).Methods("GET")
 	self.httpmux.Path("/mod/admin/{action}").HandlerFunc(self.modui.HandleAdminCommand).Methods("GET", "POST")
 	// webroot handler
-	self.httpmux.Path("/").Handler(http.FileServer(http.Dir(self.webroot_dir)))
+	self.httpmux.Path("/").Handler(cache_handler)
 	self.httpmux.Path("/thm/{f}").Handler(http.FileServer(http.Dir(self.webroot_dir)))
 	self.httpmux.Path("/img/{f}").Handler(http.FileServer(http.Dir(self.webroot_dir)))
-	self.httpmux.Path("/{f}.html").Handler(http.FileServer(http.Dir(self.webroot_dir)))
+	self.httpmux.Path("/{f}.html").Handler(cache_handler)
 	self.httpmux.Path("/static/{f}").Handler(http.FileServer(http.Dir(self.static_dir)))
 	// post handler
 	self.httpmux.Path("/post/{f}").HandlerFunc(self.handle_poster).Methods("POST")
@@ -902,19 +765,13 @@ func (self *httpFrontend) Mainloop() {
 	self.httpmux.Path("/api/{meth}").HandlerFunc(self.handle_api).Methods("POST", "GET")
 	var err error
 
+	// run daemon's mod engine with our frontend
+	go RunModEngine(self.daemon.mod, self.cache.RegenOnModEvent)
+
+	self.cache.Start()
+
 	// poll channels
 	go self.poll()
-
-	// use N threads for regeneration
-	for threads > 0 {
-		go self.pollRegen()
-		threads--
-	}
-	// run daemon's mod engine with our frontend
-	go RunModEngine(self.daemon.mod, self.regenOnModEvent)
-
-	// run long term regen jobs
-	go self.regenLongTerm()
 
 	// start webserver here
 	log.Printf("frontend %s binding to %s", self.name, self.bindaddr)
@@ -926,21 +783,11 @@ func (self *httpFrontend) Mainloop() {
 	}
 }
 
-func (self *httpFrontend) Regen(msg ArticleEntry) {
-	self.regenThreadChan <- msg
-	self.regenerateBoard(msg.Newsgroup())
-}
-
 // create a new http based frontend
-func NewHTTPFrontend(daemon *NNTPDaemon, config map[string]string, url string) Frontend {
+func NewHTTPFrontend(daemon *NNTPDaemon, cache CacheInterface, config map[string]string, url string) Frontend {
 	front := new(httpFrontend)
 	front.daemon = daemon
-	front.regenBoardTicker = time.NewTicker(time.Second * 10)
-	front.longTermTicker = time.NewTicker(time.Hour)
-	front.ukkoTicker = time.NewTicker(time.Second * 30)
-	front.regenThreadTicker = time.NewTicker(time.Second)
-	front.regenBoardMap = make(map[string]groupRegenRequest)
-	front.regenThreadMap = make(map[string]ArticleEntry)
+	front.cache = cache
 	front.attachments = mapGetInt(config, "allow_files", 1) == 1
 	front.bindaddr = config["bind"]
 	front.name = config["name"]
@@ -949,7 +796,6 @@ func NewHTTPFrontend(daemon *NNTPDaemon, config map[string]string, url string) F
 	front.template_dir = config["templates"]
 	front.prefix = config["prefix"]
 	front.regen_on_start = config["regen_on_start"] == "1"
-	front.regen_threads = mapGetInt(config, "regen_threads", 1)
 	if config["json-api"] == "1" {
 		front.jsonUsername = config["json-api-username"]
 		front.jsonPassword = config["json-api-password"]
@@ -963,7 +809,7 @@ func NewHTTPFrontend(daemon *NNTPDaemon, config map[string]string, url string) F
 	}
 	front.postchan = make(chan NNTPMessage, 16)
 	front.recvpostchan = make(chan NNTPMessage, 16)
-	front.regenThreadChan = make(chan ArticleEntry, 16)
-	front.regenGroupChan = make(chan groupRegenRequest, 8)
+	front.regenThreadChan = front.cache.GetThreadChan()
+	front.regenGroupChan = front.cache.GetGroupChan()
 	return front
 }

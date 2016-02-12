@@ -1,0 +1,235 @@
+package srnd
+
+import (
+	//"io"
+	"fmt"
+	"log"
+	"net/http"
+	"os"
+	"path/filepath"
+	"sync"
+	"time"
+)
+
+type FileCache struct {
+	database Database
+	store    ArticleStore
+
+	webroot_dir string
+	name        string
+
+	regen_threads int
+	attachments   bool
+
+	prefix          string
+	regenThreadChan chan ArticleEntry
+	regenGroupChan  chan groupRegenRequest
+	regenBoardMap   map[string]groupRegenRequest
+	regenThreadMap  map[string]ArticleEntry
+
+	regenBoardTicker  *time.Ticker
+	ukkoTicker        *time.Ticker
+	longTermTicker    *time.Ticker
+	regenThreadTicker *time.Ticker
+
+	regenThreadLock sync.RWMutex
+	regenBoardLock  sync.RWMutex
+}
+
+func (self *FileCache) DeleteBoardMarkup(group string) {
+	pages, _ := self.database.GetPagesPerBoard(group)
+	for page := 0; page < pages; page++ {
+		fname := self.getFilenameForBoardPage(group, page)
+		log.Println("delete file", fname)
+		os.Remove(fname)
+	}
+}
+
+// try to delete root post's page
+func (self *FileCache) DeleteThreadMarkup(root_post_id string) {
+	fname := self.getFilenameForThread(root_post_id)
+	log.Println("delete file", fname)
+	os.Remove(fname)
+}
+
+func (self *FileCache) getFilenameForThread(root_post_id string) string {
+	fname := fmt.Sprintf("thread-%s.html", ShortHashMessageID(root_post_id))
+	return filepath.Join(self.webroot_dir, fname)
+}
+
+func (self *FileCache) getFilenameForBoardPage(boardname string, pageno int) string {
+	fname := fmt.Sprintf("%s-%d.html", boardname, pageno)
+	return filepath.Join(self.webroot_dir, fname)
+}
+
+// regen every newsgroup
+func (self *FileCache) RegenAll() {
+	log.Println("regen all on http frontend")
+
+	// get all groups
+	groups := self.database.GetAllNewsgroups()
+	if groups != nil {
+		for _, group := range groups {
+			// send every thread for this group down the regen thread channel
+			go self.database.GetGroupThreads(group, self.regenThreadChan)
+			pages := self.database.GetGroupPageCount(group)
+			var pg int64
+			for pg = 0; pg < pages; pg++ {
+				self.regenGroupChan <- groupRegenRequest{group, int(pg)}
+			}
+		}
+	}
+}
+
+func (self *FileCache) regenLongTerm() {
+	template.genGraphs(self.prefix, self.webroot_dir, self.database)
+}
+
+func (self *FileCache) pollLongTerm() {
+	for {
+		<-self.longTermTicker.C
+		// regenerate long term stuff
+		self.regenLongTerm()
+	}
+}
+
+func (self *FileCache) pollRegen() {
+	for {
+		select {
+		// listen for regen board requests
+		case req := <-self.regenGroupChan:
+			self.regenBoardLock.Lock()
+			self.regenBoardMap[fmt.Sprintf("%s|%s", req.group, req.page)] = req
+			self.regenBoardLock.Unlock()
+			// listen for regen thread requests
+		case entry := <-self.regenThreadChan:
+			self.regenThreadLock.Lock()
+			self.regenThreadMap[fmt.Sprintf("%s|%s", entry[0], entry[1])] = entry
+			self.regenThreadLock.Unlock()
+			// regen ukko
+		case _ = <-self.ukkoTicker.C:
+			self.regenUkko()
+			self.RegenFrontPage()
+		case _ = <-self.regenThreadTicker.C:
+			self.regenThreadLock.Lock()
+			for _, entry := range self.regenThreadMap {
+				self.regenerateThread(entry)
+			}
+			self.regenThreadMap = make(map[string]ArticleEntry)
+			self.regenThreadLock.Unlock()
+		case _ = <-self.regenBoardTicker.C:
+			self.regenBoardLock.Lock()
+			for _, v := range self.regenBoardMap {
+				self.regenerateBoardPage(v.group, v.page)
+			}
+			self.regenBoardMap = make(map[string]groupRegenRequest)
+			self.regenBoardLock.Unlock()
+		}
+	}
+}
+
+// regen every page of the board
+func (self *FileCache) RegenerateBoard(group string) {
+	template.genBoard(self.attachments, self.prefix, self.name, group, self.webroot_dir, self.database)
+}
+
+// regenerate just a thread page
+func (self *FileCache) regenerateThread(root ArticleEntry) {
+	msgid := root.MessageID()
+	if self.store.HasArticle(msgid) {
+		log.Println("rengerate thread", msgid)
+		fname := self.getFilenameForThread(msgid)
+		template.genThread(self.attachments, root, self.prefix, self.name, fname, self.database)
+	} else {
+		log.Println("don't have root post", msgid, "not regenerating thread")
+	}
+}
+
+// regenerate just a page on a board
+func (self *FileCache) regenerateBoardPage(board string, page int) {
+	fname := self.getFilenameForBoardPage(board, page)
+	template.genBoardPage(self.attachments, self.prefix, self.name, board, page, fname, self.database)
+}
+
+// regenerate the front page
+func (self *FileCache) RegenFrontPage() {
+	template.genFrontPage(10, self.prefix, self.name, self.webroot_dir, self.database)
+}
+
+// regenerate the overboard
+func (self *FileCache) regenUkko() {
+	fname := filepath.Join(self.webroot_dir, "ukko.html")
+	template.genUkko(self.prefix, self.name, fname, self.database)
+}
+
+// regenerate pages after a mod event
+func (self *FileCache) RegenOnModEvent(newsgroup, msgid, root string, page int) {
+	if root == msgid {
+		fname := self.getFilenameForThread(root)
+		log.Println("remove file", fname)
+		os.Remove(fname)
+	} else {
+		self.regenThreadChan <- ArticleEntry{root, newsgroup}
+	}
+	self.regenGroupChan <- groupRegenRequest{newsgroup, int(page)}
+}
+
+func (self *FileCache) Start() {
+	threads := self.regen_threads
+
+	// check for invalid number of threads
+	if threads <= 0 {
+		threads = 1
+	}
+
+	// use N threads for regeneration
+	for threads > 0 {
+		go self.pollRegen()
+		threads--
+	}
+	// run long term regen jobs
+	go self.regenLongTerm()
+}
+
+func (self *FileCache) Regen(msg ArticleEntry) {
+	self.regenThreadChan <- msg
+	self.RegenerateBoard(msg.Newsgroup())
+}
+
+func (self *FileCache) GetThreadChan() chan ArticleEntry {
+	return self.regenThreadChan
+}
+
+func (self *FileCache) GetGroupChan() chan groupRegenRequest {
+	return self.regenGroupChan
+}
+
+func (self *FileCache) GetHandler() http.Handler {
+	return http.FileServer(http.Dir(self.webroot_dir))
+}
+
+func (self *FileCache) Close() {
+	//nothig to do
+}
+
+func NewFileCache(prefix, webroot, name string, threads int, attachments bool, db Database, store ArticleStore) CacheInterface {
+	cache := new(FileCache)
+	cache.regenBoardTicker = time.NewTicker(time.Second * 10)
+	cache.longTermTicker = time.NewTicker(time.Hour)
+	cache.ukkoTicker = time.NewTicker(time.Second * 30)
+	cache.regenThreadTicker = time.NewTicker(time.Second)
+	cache.regenBoardMap = make(map[string]groupRegenRequest)
+	cache.regenThreadMap = make(map[string]ArticleEntry)
+	cache.regenThreadChan = make(chan ArticleEntry, 16)
+	cache.regenGroupChan = make(chan groupRegenRequest, 8)
+
+	cache.prefix = prefix
+	cache.webroot_dir = webroot
+	cache.name = name
+	cache.regen_threads = threads
+	cache.attachments = attachments
+	cache.database = db
+	cache.store = store
+
+	return cache
+}

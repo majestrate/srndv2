@@ -43,6 +43,7 @@ type SRNdConfig struct {
 	crypto   *CryptoConfig
 	store    map[string]string
 	database map[string]string
+	cache    map[string]string
 	feeds    []FeedConfig
 	frontend map[string]string
 	system   map[string]string
@@ -129,6 +130,10 @@ func GenSRNdConfig() error {
 	sect.Add("user", "srnd")
 	sect.Add("password", "srnd")
 
+	// cache backend config
+	sect = conf.NewSection("cache")
+	sect.Add("type", "file")
+
 	// baked in static html frontend
 	sect = conf.NewSection("frontend")
 	sect.Add("enable", "1")
@@ -200,6 +205,16 @@ func ReadConfig() *SRNdConfig {
 	}
 
 	sconf.database = s.Options()
+
+	s, err = conf.Section("cache")
+	if err != nil {
+		log.Println("no section 'cache' in srnd.ini")
+		log.Println("falling back to default cache config")
+		sconf.cache = make(map[string]string)
+		sconf.cache["type"] = "file"
+	} else {
+		sconf.cache = s.Options()
+	}
 
 	s, err = conf.Section("articles")
 	if err != nil {

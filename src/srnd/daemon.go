@@ -291,7 +291,7 @@ func (self NNTPDaemon) Run() {
 	// do we enable the frontend?
 	if self.conf.frontend["enable"] == "1" {
 		log.Printf("frontend %s enabled", self.conf.frontend["name"])
-		self.cache = NewCache(self.conf.frontend, self.database, self.store)
+		self.cache = NewCache(self.conf.cache["type"], self.conf.frontend, self.database, self.store)
 		http_frontend := NewHTTPFrontend(&self, self.cache, self.conf.frontend, self.conf.worker["url"])
 		if self.conf.frontend["json-api"] == "1" {
 

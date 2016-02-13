@@ -180,7 +180,7 @@ func (self *templateEngine) renderTemplate(name string, obj interface{}) string 
 
 // get a board model given a newsgroup
 // load un updated board model if we don't have it
-func (self *templateEngine) obtainBoard(prefix, frontend, group string, db Database) (model GroupModel) {
+func (self *templateEngine) obtainBoard(prefix, frontend, group string, update bool, db Database) (model GroupModel) {
 	// warning, we attempt to do smart reloading
 	// dark magic may lurk here
 	self.groups_mtx.Lock()
@@ -190,7 +190,7 @@ func (self *templateEngine) obtainBoard(prefix, frontend, group string, db Datab
 	p := db.GetGroupPageCount(group)
 	pages := int(p)
 	// model is not up to date
-	if (!ok) || len(model) < pages {
+	if (!ok) || (len(model) < pages && update)  {
 		perpage, _ := db.GetThreadsPerPage(group)
 		// reload all the pages
 		var newModel GroupModel
@@ -210,7 +210,7 @@ func (self *templateEngine) obtainBoard(prefix, frontend, group string, db Datab
 // generate a board page
 func (self *templateEngine) genBoardPage(allowFiles bool, prefix, frontend, newsgroup string, page int, wr io.Writer, db Database) {
 	// get the board model
-	board := self.obtainBoard(prefix, frontend, newsgroup, db)
+	board := self.obtainBoard(prefix, frontend, newsgroup, true, db)
 	// update the board page
 	board.Update(page, db)
 	if page >= len(board) {
@@ -226,7 +226,7 @@ func (self *templateEngine) genBoardPage(allowFiles bool, prefix, frontend, news
 // prepare generation of every page for a board
 func (self *templateEngine) prepareGenBoard(allowFiles bool, prefix, frontend, newsgroup string, db Database) int {
 	// get the board model
-	board := self.obtainBoard(prefix, frontend, newsgroup, db)
+	board := self.obtainBoard(prefix, frontend, newsgroup, true, db)
 	// update the entire board model
 	board.UpdateAll(db)
 	// save the model
@@ -245,9 +245,8 @@ func (self *templateEngine) genUkko(prefix, frontend string, wr io.Writer, datab
 		// get the newsgroup and root post id
 		newsgroup, msgid := article[1], article[0]
 		// obtain board model
-		board := self.obtainBoard(prefix, frontend, newsgroup, database)
-		// update first page
-		board.Update(0, database)
+		// don't update model so we go fast
+		board := self.obtainBoard(prefix, frontend, newsgroup, false, database)
 		// grab the root post in question
 		if len(board) > 0 {
 			th := board[0].GetThread(msgid)
@@ -270,7 +269,7 @@ func (self *templateEngine) genThread(allowFiles bool, root ArticleEntry, prefix
 	msgid := root.MessageID()
 	var th ThreadModel
 	// get the board model
-	board := self.obtainBoard(prefix, frontend, newsgroup, db)
+	board := self.obtainBoard(prefix, frontend, newsgroup, true, db)
 	// find the thread model in question
 	for _, pagemodel := range board {
 		t := pagemodel.GetThread(msgid)

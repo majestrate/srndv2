@@ -1,3 +1,4 @@
+
 package srnd
 
 import (
@@ -58,6 +59,7 @@ func (self *nullHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		if err != nil {
 			msg := fmt.Sprintf("could not serve %s : %s", file, err.Error())
 			log.Println(msg)
+			w.WriteHeader(500)
 			io.WriteString(w, msg)
 			return
 		}

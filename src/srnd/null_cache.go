@@ -1,8 +1,9 @@
+
 package srnd
 
 import (
-	"fmt"
 	"io/ioutil"
+	"log"
 	"net/http"
 	"path/filepath"
 	"regexp"
@@ -54,7 +55,7 @@ func (self *nullHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		}
 		msg, err := self.cache.database.GetMessageIDByHash(hash)
 		if err != nil {
-			fmt.Println("couldn't serve", file, err)
+			log.Println("couldn't serve", file, err)
 			goto notfound
 		}
 		template.genThread(self.cache.attachments, msg, self.cache.prefix, self.cache.name, w, self.cache.database)

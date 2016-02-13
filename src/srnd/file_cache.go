@@ -53,7 +53,7 @@ func (self *FileCache) DeleteThreadMarkup(root_post_id string) {
 }
 
 func (self *FileCache) getFilenameForThread(root_post_id string) string {
-	fname := fmt.Sprintf("thread-%s.html", ShortHashMessageID(root_post_id))
+	fname := fmt.Sprintf("thread-%s.html", HashMessageID(root_post_id))
 	return filepath.Join(self.webroot_dir, fname)
 }
 

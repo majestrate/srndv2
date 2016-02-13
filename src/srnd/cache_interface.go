@@ -34,6 +34,9 @@ func NewCache(cache_type string, config map[string]string, db Database, store Ar
 	if cache_type == "file" {
 		return NewFileCache(prefix, webroot, name, threads, attachments, db, store)
 	}
+	if cache_type == "null" {
+		return NewNullCache(prefix, webroot, name, attachments, db, store)
+	}
 
 	log.Fatalf("invalid cache type: %s", cache_type)
 	return nil

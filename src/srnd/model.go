@@ -377,7 +377,7 @@ func (self *post) Attachments() []AttachmentModel {
 }
 
 func (self *post) PostURL() string {
-	return fmt.Sprintf("%sthread-%s.html#%s", self.Prefix(), ShortHashMessageID(self.parent), self.PostHash())
+	return fmt.Sprintf("%sthread-%s.html#%s", self.Prefix(), HashMessageID(self.parent), self.PostHash())
 }
 
 func (self *post) Prefix() string {

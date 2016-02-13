@@ -94,9 +94,11 @@ func NewRedisDatabase(host, port, password string) Database {
 	log.Println("Connecting to redis...")
 
 	client.client = redis.NewClient(&redis.Options{
-		Addr:     net.JoinHostPort(host, port),
-		Password: password,
-		DB:       0, // use default DB
+		Addr:        net.JoinHostPort(host, port),
+		Password:    password,
+		DB:          0, // use default DB
+		PoolTimeout: 10 * time.Second,
+		PoolSize:    1000,
 	})
 
 	_, err = client.client.Ping().Result() //check for successful connection

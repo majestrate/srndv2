@@ -251,7 +251,7 @@ func (self *httpFrontend) handle_postform(wr http.ResponseWriter, r *http.Reques
 				if len(pr.Reference) == 0 {
 					url = fmt.Sprintf("%s-0.html", board)
 				} else {
-					url = fmt.Sprintf("thread-%s.html", ShortHashMessageID(pr.Reference))
+					url = fmt.Sprintf("thread-%s.html", HashMessageID(pr.Reference))
 				}
 			} else if partname == "captcha_id" {
 				captcha_id = part_buff.String()
@@ -375,7 +375,7 @@ func (self *httpFrontend) handle_postform(wr http.ResponseWriter, r *http.Reques
 		// determine the root post so we can redirect to the thread for it
 		msg_id := nntp.Headers().Get("References", nntp.MessageID())
 		// render response as success
-		url := fmt.Sprintf("%sthread-%s.html", self.prefix, ShortHashMessageID(msg_id))
+		url := fmt.Sprintf("%sthread-%s.html", self.prefix, HashMessageID(msg_id))
 		io.WriteString(wr, template.renderTemplate("post_success.mustache", map[string]string{"prefix": self.prefix, "message_id": nntp.MessageID(), "redirect_url": url}))
 	}
 	self.handle_postRequest(&pr, b, e, s, false)

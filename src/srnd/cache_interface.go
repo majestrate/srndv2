@@ -21,6 +21,8 @@ type CacheInterface interface {
 	GetThreadChan() chan ArticleEntry
 	GetGroupChan() chan groupRegenRequest
 	GetHandler() http.Handler
+
+	MarkThreadDirty(root_post ArticleEntry)
 }
 
 //TODO only pass needed config

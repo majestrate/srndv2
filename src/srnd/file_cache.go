@@ -36,6 +36,10 @@ type FileCache struct {
 	regenBoardLock  sync.RWMutex
 }
 
+func (self *FileCache) MarkThreadDirty(root ArticleEntry) {
+	// we don't care as we are not dynamicly generated
+}
+
 func (self *FileCache) DeleteBoardMarkup(group string) {
 	pages, _ := self.database.GetPagesPerBoard(group)
 	for page := 0; page < pages; page++ {

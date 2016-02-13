@@ -567,6 +567,10 @@ func (self *httpFrontend) handle_postRequest(pr *postRequest, b bannedFunc, e er
 	}
 	// success
 	s(nntp)
+	// mark cache dirty
+	if len(ref) > 0 {	
+		self.cache.MarkThreadDirty(ArticleEntry{ref, nntp.Newsgroup()})
+	}
 	// store in temp
 	f := self.daemon.store.CreateTempFile(nntp.MessageID())
 	if f != nil {

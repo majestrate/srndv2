@@ -187,6 +187,10 @@ func (self *templateEngine) obtainBoard(prefix, frontend, group string, update b
 	var ok bool
 	model, ok = self.groups[group]
 	self.groups_mtx.Unlock()
+	if ok && !update {
+		// we gud
+		return
+	}
 	p := db.GetGroupPageCount(group)
 	pages := int(p)
 	// model is not up to date
@@ -210,7 +214,7 @@ func (self *templateEngine) obtainBoard(prefix, frontend, group string, update b
 // generate a board page
 func (self *templateEngine) genBoardPage(allowFiles bool, prefix, frontend, newsgroup string, page int, wr io.Writer, db Database) {
 	// get the board model
-	board := self.obtainBoard(prefix, frontend, newsgroup, true, db)
+	board := self.obtainBoard(prefix, frontend, newsgroup, false, db)
 	// update the board page
 	board.Update(page, db)
 	if page >= len(board) {
@@ -227,8 +231,6 @@ func (self *templateEngine) genBoardPage(allowFiles bool, prefix, frontend, news
 func (self *templateEngine) prepareGenBoard(allowFiles bool, prefix, frontend, newsgroup string, db Database) int {
 	// get the board model
 	board := self.obtainBoard(prefix, frontend, newsgroup, true, db)
-	// update the entire board model
-	board.UpdateAll(db)
 	// save the model
 	self.groups_mtx.Lock()
 	self.groups[newsgroup] = board
@@ -251,7 +253,6 @@ func (self *templateEngine) genUkko(prefix, frontend string, wr io.Writer, datab
 		if len(board) > 0 {
 			th := board[0].GetThread(msgid)
 			if th != nil {
-				th.Update(database)
 				threads = append(threads, th)
 			}
 		}
@@ -264,48 +265,69 @@ func (self *templateEngine) genUkko(prefix, frontend string, wr io.Writer, datab
 	io.WriteString(wr, template.renderTemplate("ukko.mustache", map[string]interface{}{"prefix": prefix, "threads": threads}))
 }
 
-func (self *templateEngine) genThread(allowFiles bool, root ArticleEntry, prefix, frontend string, wr io.Writer, db Database) {
+func (self *templateEngine) MarkThreadDirty(root ArticleEntry, prefix, frontend string, db Database) {
 	newsgroup := root.Newsgroup()
 	msgid := root.MessageID()
-	var th ThreadModel
-	// get the board model
-	board := self.obtainBoard(prefix, frontend, newsgroup, true, db)
+	// get the board model, don't update the board
+	board := self.obtainBoard(prefix, frontend, newsgroup, false, db)
 	// find the thread model in question
 	for _, pagemodel := range board {
 		t := pagemodel.GetThread(msgid)
 		if t != nil {
-			th = t
-			break
+			t.MarkDirty()
+			return
 		}
 	}
+}
 
-	if th == nil {
-		// a new thread?
-		if len(board) > 0 {
-			board.UpdateAll(db)
-			for _, page := range board {
-				t := page.GetThread(msgid)
-				if t != nil {
-					th = t
-					break
-				}
+func (self *templateEngine) genThread(allowFiles bool, root ArticleEntry, prefix, frontend string, wr io.Writer, db Database) {
+	newsgroup := root.Newsgroup()
+	msgid := root.MessageID()
+	// get the board model, don't update the board
+	board := self.obtainBoard(prefix, frontend, newsgroup, false, db)
+	// find the thread model in question
+	for _, pagemodel := range board {
+		t := pagemodel.GetThread(msgid)
+		if t != nil {
+			// we found it
+			if t.IsDirty() {
+				// thread is dirty so update it
+				t.Update(db)
+				pagemodel.PutThread(t)
 			}
+			// render thread
+			t.SetAllowFiles(allowFiles)
+			updateLinkCacheForThread(t)
+			t.RenderTo(wr)
+			return
 		}
 	}
-
-	if th == nil {
-		log.Println("we didn't find thread for", msgid, "did not regenerate")
-	} else {
-		// update thread model and write it out
-		th.Update(db)
-		th.SetAllowFiles(allowFiles)
-		updateLinkCacheForThread(th)
-		th.RenderTo(wr)
+	// we didn't find it D:
+	// reload everything
+	// TODO: should we reload everything!?
+	board = self.obtainBoard(prefix, frontend, newsgroup, true, db)
+	// find the thread model in question
+	for _, pagemodel := range board {
+		t := pagemodel.GetThread(msgid)
+		if t != nil {
+			// we found it
+			if t.IsDirty() {
+				// thread is dirty so update it
+				t.Update(db)
+				pagemodel.PutThread(t)
+			}
+			// render thread
+			t.SetAllowFiles(allowFiles)
+			updateLinkCacheForThread(t)
+			t.RenderTo(wr)
+			self.groups_mtx.Lock()
+			self.groups[newsgroup] = board
+			self.groups_mtx.Unlock()
+			return
+		}
 	}
-	// save it
-	self.groups_mtx.Lock()
-	self.groups[newsgroup] = board
-	self.groups_mtx.Unlock()
+	// it's not there wtf
+	log.Println("thread not found for message id", msgid)
 }
 
 // change the directory we are using for templates

@@ -190,7 +190,7 @@ func (self modEngine) DeletePost(msgid string, regen RegenFunc) (err error) {
 		if ref == "" {
 			// is root post
 			// delete replies too
-			repls := self.database.GetThreadReplies(msgid, 0)
+			repls := self.database.GetThreadReplies(msgid, 0, 0)
 			if repls == nil {
 				log.Println("cannot get thread replies for", msgid)
 			} else {

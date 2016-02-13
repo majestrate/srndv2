@@ -52,7 +52,7 @@ func (self expire) DeletePost(messageID string) {
 	ref := headers.Get("References", "")
 	if ref == "" {
 		// ya, get all replies
-		replies := self.database.GetThreadReplies(ref, 0)
+		replies := self.database.GetThreadReplies(ref, 0, 0)
 		if replies != nil {
 			for _, repl := range replies {
 				// scehedule delete of the reply

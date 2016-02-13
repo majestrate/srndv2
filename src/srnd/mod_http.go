@@ -518,7 +518,7 @@ func (self httpModUI) handleDeletePost(msg ArticleEntry, r *http.Request) map[st
 		// is it a root post?
 		if ref == "" {
 			// load replies
-			replies := self.database.GetThreadReplies(msgid, 0)
+			replies := self.database.GetThreadReplies(msgid, 0, 0)
 			if replies != nil {
 				for _, repl := range replies {
 					// append mod line to mod message for reply

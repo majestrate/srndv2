@@ -81,7 +81,8 @@ type Database interface {
 
 	// get all replies to a thread
 	// if last > 0 then get that many of the last replies
-	GetThreadReplies(root_message_id string, last int) []string
+	// start at reply number start
+	GetThreadReplies(root_message_id string, start, last int) []string
 
 	// count the number of replies to this thread
 	CountThreadReplies(root_message_id string) int64
@@ -115,7 +116,7 @@ type Database interface {
 
 	// get the PostModels for replies to a thread
 	// prefix is injected into the post models
-	GetThreadReplyPostModels(prefix, rootMessageID string, limit int) []PostModel
+	GetThreadReplyPostModels(prefix, rootMessageID string, start, limit int) []PostModel
 
 	// get a post model for a post
 	// prefix is injected into the post model

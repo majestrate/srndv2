@@ -85,6 +85,10 @@ type ThreadModel interface {
 	Truncate() ThreadModel
 	// update the thread's replies
 	Update(db Database)
+	// is this thread dirty and needing updating?
+	IsDirty() bool
+	// mark thread as dirty
+	MarkDirty()
 }
 
 // board interface
@@ -108,6 +112,9 @@ type BoardModel interface {
 	// returns nil if we don't have it
 	GetThread(message_id string) ThreadModel
 
+	// put a thread back after updating externally
+	PutThread(th ThreadModel)
+	
 	// deprecated, use GetThread
 	HasThread(message_id string) bool
 
@@ -159,6 +166,19 @@ func (self *boardModel) SetAllowFiles(allow bool) {
 
 func (self *boardModel) AllowFiles() bool {
 	return self.allowFiles
+}
+
+func (self *boardModel) PutThread(th ThreadModel) {
+	idx := -1
+	for i, t := range self.threads {
+		if th.OP().MessageID() == t.OP().MessageID() {
+			idx = i
+			break
+		}
+	}
+	if idx != -1 {
+		self.threads[idx] = th
+	}
 }
 
 func (self *boardModel) Navbar() string {
@@ -457,6 +477,15 @@ type thread struct {
 	prefix     string
 	links      []LinkModel
 	posts      []PostModel
+	dirty      bool
+}
+
+func (self *thread) IsDirty() bool {
+	return self.dirty
+}
+
+func (self *thread) MarkDirty() {
+	self.dirty = true
 }
 
 func (self *thread) Prefix() string {
@@ -519,20 +548,20 @@ func (self *thread) Truncate() ThreadModel {
 			links:      self.links,
 			posts:      append([]PostModel{self.posts[0]}, self.posts[len(self.posts)-trunc:]...),
 			prefix:     self.prefix,
+			dirty:      false,
 		}
 	}
 	return self
 }
 
-// refetch all replies if anything differs
 func (self *thread) Update(db Database) {
 	root := self.posts[0].MessageID()
 	reply_count := db.CountThreadReplies(root)
 
-	if int(reply_count)+1 != len(self.posts) {
-		// TODO: optimize
-		self.posts = append([]PostModel{self.posts[0]}, db.GetThreadReplyPostModels(self.prefix, root, 0)...)
+	if int(reply_count) > len(self.posts) {
+		self.posts = append([]PostModel{self.posts[0]}, db.GetThreadReplyPostModels(self.prefix, root, 0, 0)...)
 	}
+	self.dirty = false
 }
 
 type linkModel struct {

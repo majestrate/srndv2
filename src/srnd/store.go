@@ -329,7 +329,7 @@ func (self articleStore) readfile(fname string) NNTPMessage {
 func (self articleStore) GetThreadReplies(messageID string, last int) []NNTPMessage {
 	var repls []NNTPMessage
 	if self.database.ThreadHasReplies(messageID) {
-		rpls := self.database.GetThreadReplies(messageID, last)
+		rpls := self.database.GetThreadReplies(messageID, 0, last)
 		if rpls == nil {
 			return repls
 		}

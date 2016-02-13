@@ -405,6 +405,7 @@ func (self RedisDB) GetGroupForPage(prefix, frontend, newsgroup string, pageno, 
 		for _, msgid := range threadids {
 			p := self.GetPostModel(prefix, msgid)
 			threads = append(threads, &thread{
+				dirty: true,
 				prefix: prefix,
 				posts:  []PostModel{p},
 				links: []LinkModel{
@@ -475,7 +476,7 @@ func (self RedisDB) GetPostModel(prefix, messageID string) PostModel {
 }
 
 func (self RedisDB) DeleteThread(msgid string) (err error) {
-	repls := self.GetThreadReplies(msgid, 0)
+	repls := self.GetThreadReplies(msgid, 0, 0)
 	for _, r := range repls {
 		self.DeleteArticle(r)
 	}
@@ -526,8 +527,8 @@ func (self RedisDB) DeleteArticle(msgid string) (err error) {
 	return
 }
 
-func (self RedisDB) GetThreadReplyPostModels(prefix, rootpost string, limit int) (repls []PostModel) {
-	posts := self.GetThreadReplies(rootpost, limit)
+func (self RedisDB) GetThreadReplyPostModels(prefix, rootpost string, start, limit int) (repls []PostModel) {
+	posts := self.GetThreadReplies(rootpost, start, limit)
 
 	for _, msgid := range posts {
 		repls = append(repls, self.GetPostModel(prefix, msgid))
@@ -537,12 +538,12 @@ func (self RedisDB) GetThreadReplyPostModels(prefix, rootpost string, limit int)
 
 }
 
-func (self RedisDB) GetThreadReplies(rootpost string, limit int) (repls []string) {
+func (self RedisDB) GetThreadReplies(rootpost string, start, limit int) (repls []string) {
 	var err error
 	if limit < 1 {
 		limit = 1
 	}
-	repls, _ = self.client.ZRange(THREAD_POST_WKR+rootpost, int64(-limit+1), -1).Result()
+	repls, _ = self.client.ZRange(THREAD_POST_WKR+rootpost, int64((start-limit)+1), -1).Result()
 	if err != nil {
 		log.Println("failed to get thread replies", rootpost, err)
 	}

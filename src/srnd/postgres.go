@@ -615,6 +615,7 @@ func (self PostgresDatabase) GetGroupForPage(prefix, frontend, newsgroup string,
 				p.attachments = append(p.attachments, atts...)
 			}
 			threads = append(threads, &thread{
+				dirty: true,
 				prefix: prefix,
 				posts:  []PostModel{p},
 				links: []LinkModel{
@@ -687,7 +688,7 @@ func (self PostgresDatabase) DeleteArticle(msgid string) (err error) {
 	return
 }
 
-func (self PostgresDatabase) GetThreadReplyPostModels(prefix, rootpost string, limit int) (repls []PostModel) {
+func (self PostgresDatabase) GetThreadReplyPostModels(prefix, rootpost string, start, limit int) (repls []PostModel) {
 	var rows *sql.Rows
 	var err error
 	if limit > 0 {
@@ -695,9 +696,14 @@ func (self PostgresDatabase) GetThreadReplyPostModels(prefix, rootpost string, l
 	} else {
 		rows, err = self.conn.Query("SELECT newsgroup, message_id, ref_id, name, subject, path, time_posted, message, addr FROM ArticlePosts WHERE message_id IN ( SELECT message_id FROM ArticlePosts WHERE ref_id = $1 ) ORDER BY time_posted ASC", rootpost)
 	}
-
+	offset := start
 	if err == nil {
 		for rows.Next() {
+			// TODO: this is a hack, optimize queries plz
+			if offset > 0 {
+				offset --
+				continue
+			}
 			model := new(post)
 			model.prefix = prefix
 			rows.Scan(&model.board, &model.message_id, &model.parent, &model.name, &model.subject, &model.path, &model.posted, &model.message, &model.addr)
@@ -724,7 +730,7 @@ func (self PostgresDatabase) GetThreadReplyPostModels(prefix, rootpost string, l
 
 }
 
-func (self PostgresDatabase) GetThreadReplies(rootpost string, limit int) (repls []string) {
+func (self PostgresDatabase) GetThreadReplies(rootpost string, start, limit int) (repls []string) {
 	var rows *sql.Rows
 	var err error
 	if limit > 0 {
@@ -732,8 +738,14 @@ func (self PostgresDatabase) GetThreadReplies(rootpost string, limit int) (repls
 	} else {
 		rows, err = self.conn.Query("SELECT message_id FROM ArticlePosts WHERE message_id IN ( SELECT message_id FROM ArticlePosts WHERE ref_id = $1 ) ORDER BY time_posted ASC", rootpost)
 	}
+	offset := start
 	if err == nil {
 		for rows.Next() {
+			// TODO: this is a hack, optimize queries plz
+			if offset > 0 {
+				offset --
+				continue
+			}
 			var msgid string
 			rows.Scan(&msgid)
 			repls = append(repls, msgid)

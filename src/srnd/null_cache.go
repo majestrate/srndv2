@@ -31,6 +31,10 @@ type nullHandler struct {
 	cache *NullCache
 }
 
+func (self *NullCache) MarkThreadDirty(rootMsg ArticleEntry) {
+	template.MarkThreadDirty(rootMsg, self.prefix, self.name, self.database)
+}
+
 func (self *nullHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	_, file := filepath.Split(r.URL.Path)
 	if len(file) == 0 || strings.HasPrefix(file, "index") {

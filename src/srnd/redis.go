@@ -445,7 +445,7 @@ func (self RedisDB) GetPostModel(prefix, messageID string) PostModel {
 	hashres, err := self.client.HGetAll(ARTICLE_POST_PREFIX + messageID).Result()
 	if err == nil {
 		mapRes := processHashResult(hashres)
-
+		model.prefix = prefix
 		model.board = mapRes["newsgroup"]
 		model.message_id = mapRes["message_id"]
 		model.parent = mapRes["ref_id"]

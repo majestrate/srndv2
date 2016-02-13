@@ -354,7 +354,7 @@ func renderPostForm(prefix, board, op_msg_id string, files bool) string {
 	if op_msg_id != "" {
 		button = "Reply"
 	}
-	return template.renderTemplate("postform.mustache", map[string]interface{}{"post_url": url, "reference": op_msg_id, "button": button, "files": files})
+	return template.renderTemplate("postform.mustache", map[string]interface{}{"post_url": url, "reference": op_msg_id, "button": button, "files": files, "prefix": prefix})
 }
 
 // generate misc graphs

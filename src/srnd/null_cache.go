@@ -30,7 +30,7 @@ type nullHandler struct {
 }
 
 func (self *nullHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	log.Println("Requested", file)
+	_, file := filepath.Split(r.URL.Path)
 	if len(file) == 0 || strings.HasPrefix(file, "index") {
 		template.genFrontPage(10, self.cache.prefix, self.cache.name, w, ioutil.Discard, self.cache.database)
 		return

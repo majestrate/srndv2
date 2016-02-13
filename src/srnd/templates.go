@@ -194,7 +194,7 @@ func (self *templateEngine) obtainBoard(prefix, frontend, group string, update b
 	p := db.GetGroupPageCount(group)
 	pages := int(p)
 	// model is not up to date
-	if (!ok) || (len(model) < pages && update) {
+	if (!ok) || len(model) < pages {
 		perpage, _ := db.GetThreadsPerPage(group)
 		// reload all the pages
 		var newModel GroupModel
@@ -304,9 +304,9 @@ func (self *templateEngine) genThread(allowFiles bool, root ArticleEntry, prefix
 	// we didn't find it D:
 	// reload everything
 	// TODO: should we reload everything!?
-	board = self.obtainBoard(prefix, frontend, newsgroup, true, db)
+	b := self.obtainBoard(prefix, frontend, newsgroup, true, db)
 	// find the thread model in question
-	for _, pagemodel := range board {
+	for _, pagemodel := range b {
 		t := pagemodel.GetThread(msgid)
 		if t != nil {
 			// we found it
@@ -320,7 +320,7 @@ func (self *templateEngine) genThread(allowFiles bool, root ArticleEntry, prefix
 			updateLinkCacheForThread(t)
 			t.RenderTo(wr)
 			self.groups_mtx.Lock()
-			self.groups[newsgroup] = board
+			self.groups[newsgroup] = b
 			self.groups_mtx.Unlock()
 			return
 		}

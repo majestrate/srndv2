@@ -293,7 +293,6 @@ func (self *templateEngine) genThread(allowFiles bool, root ArticleEntry, prefix
 			if t.IsDirty() {
 				// thread is dirty so update it
 				t.Update(db)
-				pagemodel.PutThread(t)
 			}
 			// render thread
 			t.SetAllowFiles(allowFiles)

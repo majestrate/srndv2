@@ -405,7 +405,7 @@ func (self RedisDB) GetGroupForPage(prefix, frontend, newsgroup string, pageno, 
 		for _, msgid := range threadids {
 			p := self.GetPostModel(prefix, msgid)
 			threads = append(threads, &thread{
-				dirty: true,
+				dirty:  true,
 				prefix: prefix,
 				posts:  []PostModel{p},
 				links: []LinkModel{

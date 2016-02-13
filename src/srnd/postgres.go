@@ -615,7 +615,7 @@ func (self PostgresDatabase) GetGroupForPage(prefix, frontend, newsgroup string,
 				p.attachments = append(p.attachments, atts...)
 			}
 			threads = append(threads, &thread{
-				dirty: true,
+				dirty:  true,
 				prefix: prefix,
 				posts:  []PostModel{p},
 				links: []LinkModel{
@@ -701,7 +701,7 @@ func (self PostgresDatabase) GetThreadReplyPostModels(prefix, rootpost string, s
 		for rows.Next() {
 			// TODO: this is a hack, optimize queries plz
 			if offset > 0 {
-				offset --
+				offset--
 				continue
 			}
 			model := new(post)
@@ -743,7 +743,7 @@ func (self PostgresDatabase) GetThreadReplies(rootpost string, start, limit int)
 		for rows.Next() {
 			// TODO: this is a hack, optimize queries plz
 			if offset > 0 {
-				offset --
+				offset--
 				continue
 			}
 			var msgid string

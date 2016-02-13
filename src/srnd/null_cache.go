@@ -124,6 +124,11 @@ func (self *NullCache) DeleteThreadMarkup(root_post_id string) {
 
 // regen every newsgroup
 func (self *NullCache) RegenAll() {
+	// we will do this as it's used by rengen on start for frontend
+	groups := self.database.GetAllNewsgroups()
+	for _, group := range groups {
+		self.database.GetGroupThreads(group, self.regenThreadChan)
+	}
 }
 
 func (self *NullCache) RegenFrontPage() {
@@ -136,8 +141,10 @@ func (self *NullCache) pollRegen() {
 		case _ = <-self.regenGroupChan:
 			{
 			}
-		case _ = <-self.regenThreadChan:
+		case ent := <-self.regenThreadChan:
 			{
+				// mark it as dirty
+				self.MarkThreadDirty(ent)
 			}
 		}
 	}

@@ -194,7 +194,7 @@ func (self *templateEngine) obtainBoard(prefix, frontend, group string, update b
 	p := db.GetGroupPageCount(group)
 	pages := int(p)
 	// model is not up to date
-	if (!ok) || (len(model) < pages && update)  {
+	if (!ok) || (len(model) < pages && update) {
 		perpage, _ := db.GetThreadsPerPage(group)
 		// reload all the pages
 		var newModel GroupModel

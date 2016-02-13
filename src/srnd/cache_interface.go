@@ -1,6 +1,7 @@
 package srnd
 
 import (
+	"log"
 	"net/http"
 )
 
@@ -23,12 +24,17 @@ type CacheInterface interface {
 }
 
 //TODO only pass needed config
-func NewCache(config map[string]string, db Database, store ArticleStore) CacheInterface {
+func NewCache(cache_type string, config map[string]string, db Database, store ArticleStore) CacheInterface {
 	prefix := config["prefix"]
 	webroot := config["webroot"]
 	threads := mapGetInt(config, "regen_threads", 1)
 	name := config["name"]
 	attachments := mapGetInt(config, "allow_files", 1) == 1
 
-	return NewFileCache(prefix, webroot, name, threads, attachments, db, store)
+	if cache_type == "file" {
+		return NewFileCache(prefix, webroot, name, threads, attachments, db, store)
+	}
+
+	log.Fatalf("invalid cache type: %s", cache_type)
+	return nil
 }

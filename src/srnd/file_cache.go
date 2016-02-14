@@ -232,7 +232,7 @@ func (self *FileCache) Start() {
 		threads--
 	}
 	// run long term regen jobs
-	go self.regenLongTerm()
+	go self.pollLongTerm()
 }
 
 func (self *FileCache) Regen(msg ArticleEntry) {

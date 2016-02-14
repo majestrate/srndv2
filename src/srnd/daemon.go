@@ -423,16 +423,12 @@ func (self *NNTPDaemon) polloutfeeds() {
 			delete(self.feeds, outfeed.name)
 		case nntp := <-self.send_all_feeds:
 			if self.Federate() {
-				log.Println("federate", nntp.MessageID())
 				feeds := self.feeds
 				for _, feed := range feeds {
 					if feed.policy.AllowsNewsgroup(nntp.Newsgroup()) {
 						if strings.HasSuffix(feed.name, "-stream") {
-							log.Println("send", nntp.MessageID(), "to", feed.name)
 							feed.stream <- nntpCHECK(nntp.MessageID())
 						}
-					} else {
-						log.Println("not allowed", feed.name)
 					}
 				}
 			}

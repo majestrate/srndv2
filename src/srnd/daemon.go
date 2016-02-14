@@ -298,7 +298,7 @@ func (self *NNTPDaemon) Run() {
 		cache_passwd := self.conf.cache["password"]
 		self.cache = NewCache(self.conf.cache["type"], cache_host, cache_port, cache_user, cache_passwd, self.conf.frontend, self.database, self.store)
 
-		http_frontend := NewHTTPFrontend(&self, self.cache, self.conf.frontend, self.conf.worker["url"])
+		http_frontend := NewHTTPFrontend(self, self.cache, self.conf.frontend, self.conf.worker["url"])
 		if self.conf.frontend["json-api"] == "1" {
 
 		}

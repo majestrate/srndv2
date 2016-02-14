@@ -293,6 +293,9 @@ func (self *attachment) RenderTo(wr io.Writer) error {
 }
 
 func (self *attachment) Thumbnail() string {
+	if strings.HasSuffix(self.filepath, ".gif") {
+		return self.prefix + "thm/" + self.filepath
+	}
 	return self.prefix + "thm/" + self.filepath + ".jpg"
 }
 

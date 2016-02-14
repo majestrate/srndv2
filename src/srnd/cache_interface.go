@@ -21,7 +21,6 @@ type CacheInterface interface {
 	GetThreadChan() chan ArticleEntry
 	GetGroupChan() chan groupRegenRequest
 	GetHandler() http.Handler
-
 }
 
 //TODO only pass needed config

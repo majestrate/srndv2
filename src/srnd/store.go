@@ -247,6 +247,9 @@ func (self articleStore) AttachmentFilepath(fname string) string {
 // get the filepath for a thumbanil
 func (self articleStore) ThumbnailFilepath(fname string) string {
 	// all thumbnails are jpegs now
+	if strings.HasSuffix(fname, ".gif") {
+		return filepath.Join(self.thumbs, fname)
+	}
 	return filepath.Join(self.thumbs, fname+".jpg")
 }
 

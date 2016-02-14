@@ -26,10 +26,6 @@ type nullHandler struct {
 	cache *NullCache
 }
 
-func (self *NullCache) MarkThreadDirty(rootMsg ArticleEntry) {
-	template.MarkThreadDirty(rootMsg, self.prefix, self.name, self.database)
-}
-
 func (self *nullHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	_, file := filepath.Split(r.URL.Path)
 	if len(file) == 0 || strings.HasPrefix(file, "index") {
@@ -106,10 +102,8 @@ func (self *NullCache) pollRegen() {
 		case _ = <-self.regenGroupChan:
 			{
 			}
-		case ent := <-self.regenThreadChan:
+		case _ = <-self.regenThreadChan:
 			{
-				// mark it as dirty
-				self.MarkThreadDirty(ent)
 			}
 		}
 	}

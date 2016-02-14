@@ -265,21 +265,6 @@ func (self *templateEngine) genUkko(prefix, frontend string, wr io.Writer, datab
 	io.WriteString(wr, template.renderTemplate("ukko.mustache", map[string]interface{}{"prefix": prefix, "threads": threads}))
 }
 
-func (self *templateEngine) MarkThreadDirty(root ArticleEntry, prefix, frontend string, db Database) {
-	newsgroup := root.Newsgroup()
-	msgid := root.MessageID()
-	// get the board model, don't update the board
-	board := self.obtainBoard(prefix, frontend, newsgroup, false, db)
-	// find the thread model in question
-	for _, pagemodel := range board {
-		t := pagemodel.GetThread(msgid)
-		if t != nil {
-			t.MarkDirty()
-			return
-		}
-	}
-}
-
 func (self *templateEngine) genThread(allowFiles bool, root ArticleEntry, prefix, frontend string, wr io.Writer, db Database) {
 	newsgroup := root.Newsgroup()
 	msgid := root.MessageID()
@@ -289,11 +274,8 @@ func (self *templateEngine) genThread(allowFiles bool, root ArticleEntry, prefix
 	for _, pagemodel := range board {
 		t := pagemodel.GetThread(msgid)
 		if t != nil {
-			// we found it
-			if t.IsDirty() {
-				// thread is dirty so update it
-				t.Update(db)
-			}
+			// update thread
+			t.Update(db)
 			// render thread
 			t.SetAllowFiles(allowFiles)
 			updateLinkCacheForThread(t)
@@ -310,11 +292,6 @@ func (self *templateEngine) genThread(allowFiles bool, root ArticleEntry, prefix
 		t := pagemodel.GetThread(msgid)
 		if t != nil {
 			// we found it
-			if t.IsDirty() {
-				// thread is dirty so update it
-				t.Update(db)
-				pagemodel.PutThread(t)
-			}
 			// render thread
 			t.SetAllowFiles(allowFiles)
 			updateLinkCacheForThread(t)

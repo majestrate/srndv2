@@ -299,7 +299,6 @@ func ReadConfig() *SRNdConfig {
 				fconf.sync_interval = time.Second * time.Duration(i)
 			}
 
-
 			// username / password auth
 			fconf.username = sect.ValueOf("username")
 			fconf.passwd = sect.ValueOf("password")

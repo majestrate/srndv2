@@ -198,10 +198,6 @@ func (self *redisHandler) serveBoardPage(w http.ResponseWriter, r *http.Request,
 	io.WriteString(w, html)
 }
 
-func (self *RedisCache) MarkThreadDirty(root ArticleEntry) {
-	// we don't care as we are not dynamicly generated
-}
-
 func (self *RedisCache) DeleteBoardMarkup(group string) {
 	pages, _ := self.database.GetPagesPerBoard(group)
 	keys := make([]string, 0)

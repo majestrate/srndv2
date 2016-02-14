@@ -283,7 +283,7 @@ func (self *NNTPDaemon) Run() {
 	self.allow_anon = self.conf.daemon["allow_anon"] == "1"
 	self.allow_anon_attachments = self.conf.daemon["allow_anon_attachments"] == "1"
 	self.allow_attachments = self.conf.daemon["allow_attachments"] == "1"
-	
+
 	if self.debug {
 		log.Println("debug mode activated")
 	}

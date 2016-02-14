@@ -11,6 +11,7 @@ import (
 	"log"
 	"path/filepath"
 	"strings"
+	"time"
 )
 
 type FeedConfig struct {
@@ -24,6 +25,7 @@ type FeedConfig struct {
 	passwd           string
 	linkauth_keyfile string
 	name             string
+	sync_interval    time.Duration
 }
 
 type APIConfig struct {
@@ -289,7 +291,14 @@ func ReadConfig() *SRNdConfig {
 			val = sect.ValueOf("sync")
 			if val == "1" {
 				fconf.sync = true
+				// sync interval in seconds
+				i := mapGetInt(sect.Options(), "sync-interval", 60)
+				if i < 60 {
+					i = 60
+				}
+				fconf.sync_interval = time.Second * time.Duration(i)
 			}
+
 
 			// username / password auth
 			fconf.username = sect.ValueOf("username")

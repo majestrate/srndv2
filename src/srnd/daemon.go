@@ -283,7 +283,7 @@ func (self *NNTPDaemon) Run() {
 	self.allow_anon = self.conf.daemon["allow_anon"] == "1"
 	self.allow_anon_attachments = self.conf.daemon["allow_anon_attachments"] == "1"
 	self.allow_attachments = self.conf.daemon["allow_attachments"] == "1"
-
+	
 	if self.debug {
 		log.Println("debug mode activated")
 	}
@@ -332,8 +332,12 @@ func (self *NNTPDaemon) Run() {
 		go self.persistFeed(f, "stream")
 		if f.sync {
 			// this feed wants to sync
-			// fire off a 1 time sync
-			go self.syncPull(f.proxy_type, f.proxy_addr, f.addr)
+			go func(fc FeedConfig) {
+				for {
+					self.syncPull(f.proxy_type, f.proxy_addr, f.addr)
+					time.Sleep(f.sync_interval)
+				}
+			}(f)
 		}
 	}
 	// start accepting incoming connections

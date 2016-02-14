@@ -4,8 +4,6 @@ import (
 	"io/ioutil"
 	"net/http"
 	"path/filepath"
-	"regexp"
-	"strconv"
 	"strings"
 )
 
@@ -80,32 +78,6 @@ func (self *nullHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 notfound:
 	http.NotFound(w, r)
-}
-
-func getThreadHash(file string) (thread string) {
-	exp := regexp.MustCompilePOSIX(`thread-([0-9a-f]+)\.html.*`)
-	matches := exp.FindStringSubmatch(file)
-	if len(matches) != 2 {
-		return ""
-	}
-	thread = matches[1]
-	return
-}
-
-func getGroupAndPage(file string) (board string, page int) {
-	exp := regexp.MustCompilePOSIX(`(.*)-([0-9]+)\.html.*`)
-	matches := exp.FindStringSubmatch(file)
-	if len(matches) != 3 {
-		return "", -1
-	}
-	var err error
-	board = matches[1]
-	tmp := matches[2]
-	page, err = strconv.Atoi(tmp)
-	if err != nil {
-		page = -1
-	}
-	return
 }
 
 func (self *NullCache) DeleteBoardMarkup(group string) {

@@ -16,6 +16,7 @@ import (
 	"net"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strconv"
 	"strings"
 	"time"
@@ -498,4 +499,30 @@ func ZeroIPString(ip net.IP) string {
 		return fmt.Sprintf("[%02x%02x:%02x%02x:%02x%02x:%02x%02x:%02x%02x:%02x%02x:%02x%02x:%02x%02x]", p[0], p[1], p[2], p[3], p[4], p[5], p[6], p[7], p[8], p[9], p[10], p[11], p[12], p[13], p[14], p[15])
 	}
 	return "?"
+}
+
+func getThreadHash(file string) (thread string) {
+	exp := regexp.MustCompilePOSIX(`thread-([0-9a-f]+)\.html.*`)
+	matches := exp.FindStringSubmatch(file)
+	if len(matches) != 2 {
+		return ""
+	}
+	thread = matches[1]
+	return
+}
+
+func getGroupAndPage(file string) (board string, page int) {
+	exp := regexp.MustCompilePOSIX(`(.*)-([0-9]+)\.html.*`)
+	matches := exp.FindStringSubmatch(file)
+	if len(matches) != 3 {
+		return "", -1
+	}
+	var err error
+	board = matches[1]
+	tmp := matches[2]
+	page, err = strconv.Atoi(tmp)
+	if err != nil {
+		page = -1
+	}
+	return
 }

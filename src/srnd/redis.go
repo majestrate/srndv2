@@ -98,7 +98,7 @@ func NewRedisDatabase(host, port, password string) Database {
 		Password:    password,
 		DB:          0, // use default DB
 		PoolTimeout: 10 * time.Second,
-		PoolSize:    1000,
+		PoolSize:    100,
 	})
 
 	_, err = client.client.Ping().Result() //check for successful connection

@@ -433,7 +433,7 @@ func NewRedisCache(prefix, webroot, name string, threads int, attachments bool, 
 		Password:    password,
 		DB:          0, // use default DB
 		PoolTimeout: 10 * time.Second,
-		PoolSize:    1000,
+		PoolSize:    100,
 	})
 
 	_, err := cache.client.Ping().Result() //check for successful connection

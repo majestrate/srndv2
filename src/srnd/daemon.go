@@ -106,7 +106,7 @@ func (self *NNTPDaemon) AddNNTPLogin(username, password string) {
 	}
 }
 
-func (self NNTPDaemon) dialOut(proxy_type, proxy_addr, remote_addr string) (conn net.Conn, err error) {
+func (self *NNTPDaemon) dialOut(proxy_type, proxy_addr, remote_addr string) (conn net.Conn, err error) {
 
 	if proxy_type == "" || proxy_type == "none" {
 		// connect out without proxy
@@ -189,7 +189,7 @@ func (self NNTPDaemon) dialOut(proxy_type, proxy_addr, remote_addr string) (conn
 	return
 }
 
-func (self NNTPDaemon) persistFeed(conf FeedConfig, mode string) {
+func (self *NNTPDaemon) persistFeed(conf FeedConfig, mode string) {
 	for {
 		if self.running {
 			conn, err := self.dialOut(conf.proxy_type, conf.proxy_addr, conf.addr)
@@ -219,7 +219,7 @@ func (self NNTPDaemon) persistFeed(conf FeedConfig, mode string) {
 }
 
 // do a oneshot pull based sync with another server
-func (self NNTPDaemon) syncPull(proxy_type, proxy_addr, remote_addr string) {
+func (self *NNTPDaemon) syncPull(proxy_type, proxy_addr, remote_addr string) {
 	c, err := self.dialOut(proxy_type, proxy_addr, remote_addr)
 	if err == nil {
 		conn := textproto.NewConn(c)
@@ -257,7 +257,7 @@ func (self NNTPDaemon) syncPull(proxy_type, proxy_addr, remote_addr string) {
 }
 
 // run daemon
-func (self NNTPDaemon) Run() {
+func (self *NNTPDaemon) Run() {
 
 	self.bind_addr = self.conf.daemon["bind"]
 
@@ -302,7 +302,7 @@ func (self NNTPDaemon) Run() {
 		if self.conf.frontend["json-api"] == "1" {
 
 		}
-		nntp_frontend := NewNNTPFrontend(&self, self.conf.frontend["nntp"])
+		nntp_frontend := NewNNTPFrontend(self, self.conf.frontend["nntp"])
 		self.frontend = MuxFrontends(http_frontend, nntp_frontend)
 		go self.frontend.Mainloop()
 	}
@@ -373,6 +373,8 @@ func (self NNTPDaemon) Run() {
 
 	if self.sync_on_start {
 		go func() {
+			// wait 10 seconds for feeds to establish
+			time.Sleep(10 * time.Second)
 			for _, article := range self.database.GetAllArticles() {
 				self.send_all_feeds <- article
 			}
@@ -388,7 +390,7 @@ func (self NNTPDaemon) Run() {
 	self.polloutfeeds()
 }
 
-func (self NNTPDaemon) pollfrontend() {
+func (self *NNTPDaemon) pollfrontend() {
 	chnl := self.frontend.NewPostsChan()
 	for {
 		nntp := <-chnl
@@ -397,7 +399,7 @@ func (self NNTPDaemon) pollfrontend() {
 		self.infeed <- nntp
 	}
 }
-func (self NNTPDaemon) pollinfeed() {
+func (self *NNTPDaemon) pollinfeed() {
 	for {
 		msgid := <-self.infeed_load
 		log.Println("load from infeed", msgid)
@@ -408,7 +410,7 @@ func (self NNTPDaemon) pollinfeed() {
 	}
 }
 
-func (self NNTPDaemon) polloutfeeds() {
+func (self *NNTPDaemon) polloutfeeds() {
 
 	for {
 		select {
@@ -448,7 +450,7 @@ func (self NNTPDaemon) polloutfeeds() {
 	}
 }
 
-func (self NNTPDaemon) pollmessages() {
+func (self *NNTPDaemon) pollmessages() {
 	var chnl chan NNTPMessage
 	modchnl := self.mod.MessageChan()
 	if self.frontend != nil {
@@ -509,7 +511,7 @@ func (self NNTPDaemon) pollmessages() {
 	}
 }
 
-func (self NNTPDaemon) acceptloop() {
+func (self *NNTPDaemon) acceptloop() {
 	for {
 		// accept
 		conn, err := self.listener.Accept()

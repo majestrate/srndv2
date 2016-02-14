@@ -209,7 +209,7 @@ func (self *nntpConnection) outboundHandshake(conn *textproto.Conn, conf *FeedCo
 
 // handle streaming event
 // this function should send only
-func (self *nntpConnection) handleStreaming(daemon NNTPDaemon, reader bool, conn *textproto.Conn) (err error) {
+func (self *nntpConnection) handleStreaming(daemon *NNTPDaemon, reader bool, conn *textproto.Conn) (err error) {
 	for err == nil {
 		ev := <-self.stream
 		log.Println(self.name, ev)
@@ -242,7 +242,7 @@ func (self *nntpConnection) handleStreaming(daemon NNTPDaemon, reader bool, conn
 
 // check if we want the article given its mime header
 // returns empty string if it's okay otherwise an error message
-func (self *nntpConnection) checkMIMEHeader(daemon NNTPDaemon, hdr textproto.MIMEHeader) (reason string, err error) {
+func (self *nntpConnection) checkMIMEHeader(daemon *NNTPDaemon, hdr textproto.MIMEHeader) (reason string, err error) {
 
 	if !self.authenticated {
 		reason = "not authenticated"
@@ -252,7 +252,7 @@ func (self *nntpConnection) checkMIMEHeader(daemon NNTPDaemon, hdr textproto.MIM
 	return
 }
 
-func (self *nntpConnection) checkMIMEHeaderNoAuth(daemon NNTPDaemon, hdr textproto.MIMEHeader) (reason string, err error) {
+func (self *nntpConnection) checkMIMEHeaderNoAuth(daemon *NNTPDaemon, hdr textproto.MIMEHeader) (reason string, err error) {
 	newsgroup := hdr.Get("Newsgroups")
 	reference := hdr.Get("References")
 	msgid := hdr.Get("Message-Id")
@@ -359,7 +359,7 @@ func (self *nntpConnection) checkMIMEHeaderNoAuth(daemon NNTPDaemon, hdr textpro
 	return
 }
 
-func (self *nntpConnection) handleLine(daemon NNTPDaemon, code int, line string, conn *textproto.Conn) (err error) {
+func (self *nntpConnection) handleLine(daemon *NNTPDaemon, code int, line string, conn *textproto.Conn) (err error) {
 	parts := strings.Split(line, " ")
 	var msgid string
 	if code == 0 && len(parts) > 1 {
@@ -794,7 +794,7 @@ func (self *nntpConnection) handleLine(daemon NNTPDaemon, code int, line string,
 	return
 }
 
-func (self *nntpConnection) startStreaming(daemon NNTPDaemon, reader bool, conn *textproto.Conn) {
+func (self *nntpConnection) startStreaming(daemon *NNTPDaemon, reader bool, conn *textproto.Conn) {
 	var err error
 	for err == nil {
 		err = self.handleStreaming(daemon, reader, conn)
@@ -804,7 +804,7 @@ func (self *nntpConnection) startStreaming(daemon NNTPDaemon, reader bool, conn 
 
 // scrape all posts in a newsgroup
 // download ones we do not have
-func (self *nntpConnection) scrapeGroup(daemon NNTPDaemon, conn *textproto.Conn, group string) (err error) {
+func (self *nntpConnection) scrapeGroup(daemon *NNTPDaemon, conn *textproto.Conn, group string) (err error) {
 	log.Println(self.name, "scrape newsgroup", group)
 	// send GROUP command
 	err = conn.PrintfLine("GROUP %s", group)
@@ -897,7 +897,7 @@ func (self *nntpConnection) scrapeGroup(daemon NNTPDaemon, conn *textproto.Conn,
 }
 
 // grab every post from the remote server, assumes outbound connection
-func (self *nntpConnection) scrapeServer(daemon NNTPDaemon, conn *textproto.Conn) (err error) {
+func (self *nntpConnection) scrapeServer(daemon *NNTPDaemon, conn *textproto.Conn) (err error) {
 	log.Println(self.name, "scrape remote server")
 	success := true
 	if success {
@@ -971,7 +971,7 @@ func (self *nntpConnection) scrapeServer(daemon NNTPDaemon, conn *textproto.Conn
 
 // ask for an article from the remote server
 // feed it to the daemon if we get it
-func (self *nntpConnection) requestArticle(daemon NNTPDaemon, conn *textproto.Conn, msgid string) (err error) {
+func (self *nntpConnection) requestArticle(daemon *NNTPDaemon, conn *textproto.Conn, msgid string) (err error) {
 	log.Println(self.name, "asking for", msgid)
 	// send command
 	err = conn.PrintfLine("ARTICLE %s", msgid)
@@ -1028,7 +1028,7 @@ func (self *nntpConnection) requestArticle(daemon NNTPDaemon, conn *textproto.Co
 	return
 }
 
-func (self *nntpConnection) startReader(daemon NNTPDaemon, conn *textproto.Conn) {
+func (self *nntpConnection) startReader(daemon *NNTPDaemon, conn *textproto.Conn) {
 	log.Println(self.name, "run reader mode")
 	var err error
 	for err == nil {
@@ -1044,7 +1044,7 @@ func (self *nntpConnection) startReader(daemon NNTPDaemon, conn *textproto.Conn)
 // run the mainloop for this connection
 // stream if true means they support streaming mode
 // reader if true means they support reader mode
-func (self *nntpConnection) runConnection(daemon NNTPDaemon, inbound, stream, reader, use_tls bool, preferMode string, nconn net.Conn, conf *FeedConfig) {
+func (self *nntpConnection) runConnection(daemon *NNTPDaemon, inbound, stream, reader, use_tls bool, preferMode string, nconn net.Conn, conf *FeedConfig) {
 
 	var err error
 	var line string

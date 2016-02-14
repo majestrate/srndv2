@@ -95,15 +95,14 @@ func (self *nntpConnection) modeSwitch(mode string, conn *textproto.Conn) (succe
 	self.access.Lock()
 	mode = strings.ToUpper(mode)
 	conn.PrintfLine("MODE %s", mode)
-	log.Println("MODE", mode)
 	var code int
 	code, _, err = conn.ReadCodeLine(-1)
 	if code >= 200 && code < 300 {
 		// accepted mode change
 		if len(self.mode) > 0 {
-			log.Printf("mode switch %s -> %s", self.mode, mode)
+			log.Printf(self.name, "mode switch %s -> %s", self.mode, mode)
 		} else {
-			log.Println("switched to mode", mode)
+			log.Println(self.name, "switched to mode", mode)
 		}
 		self.mode = mode
 		success = len(self.mode) > 0
@@ -212,7 +211,6 @@ func (self *nntpConnection) outboundHandshake(conn *textproto.Conn, conf *FeedCo
 func (self *nntpConnection) handleStreaming(daemon *NNTPDaemon, reader bool, conn *textproto.Conn) (err error) {
 	for err == nil {
 		ev := <-self.stream
-		log.Println(self.name, ev)
 		if ValidMessageID(ev.MessageID()) {
 			cmd, msgid := ev.Command(), ev.MessageID()
 			if cmd == "TAKETHIS" {

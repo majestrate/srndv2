@@ -227,6 +227,10 @@ func (self *post) Date() string {
 	return time.Unix(self.posted, 0).Format(time.ANSIC)
 }
 
+func (self *post) DateRFC() string {
+	return time.Unix(self.posted, 0).Format(time.RFC3339)
+}
+
 func (self *post) TemplateDir() string {
 	return filepath.Join("contrib", "templates", "default")
 }

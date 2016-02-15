@@ -28,7 +28,7 @@ func backlink(word string) (markup string) {
 				return "<span class='memearrows'>&gt;&gt;" + link + "</span>"
 			}
 			// backlink exists
-			return `<a href="` + url + `">&gt;&gt;` + link + "</a>"
+			return `<a class='backlink' href="` + url + `">&gt;&gt;` + link + "</a>"
 		} else {
 			return html.EscapeString(word)
 		}
@@ -39,6 +39,7 @@ func backlink(word string) (markup string) {
 func formatline(line string) (markup string) {
 	line = strings.Trim(line, "\t\r\n ")
 	if len(line) > 0 {
+		markup+="<div class='post_body_line'>"
 		if strings.HasPrefix(line, ">") && !(strings.HasPrefix(line, ">>") && re_backlink.MatchString(strings.Split(line, " ")[0])) {
 			// le ebin meme arrows
 			markup += "<span class='memearrows'>"
@@ -64,8 +65,8 @@ func formatline(line string) (markup string) {
 				markup += " "
 			}
 		}
+		markup+="</div>"
 	}
-	markup += "<br />"
 	return
 }
 

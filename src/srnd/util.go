@@ -162,7 +162,7 @@ func randStr(length int) string {
 
 // time for right now as int64
 func timeNow() int64 {
-	return time.Now().Unix()
+	return time.Now().UTC().Unix()
 }
 
 // sanitize data for nntp

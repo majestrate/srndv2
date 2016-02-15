@@ -62,23 +62,28 @@ type RedisCache struct {
 type redisHandler struct {
 	cache *RedisCache
 }
+type recacheRedis func(io.Writer)
 
 func (self *redisHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	_, file := filepath.Split(r.URL.Path)
 	if len(file) == 0 || strings.HasPrefix(file, "index") {
-		self.serveIndex(w, r)
+		self.serveCached(w, r, INDEX, func(out io.Writer) {
+			self.cache.regenFrontPageLocal(out, ioutil.Discard)
+		})
 		return
 	}
 	if strings.HasPrefix(file, "history.html") {
-		self.serveHistory(w, r)
+		self.serveCached(w, r, HISTORY, self.cache.regenLongTerm)
 		return
 	}
 	if strings.HasPrefix(file, "boards.html") {
-		self.serveBoards(w, r)
+		self.serveCached(w, r, BOARDS, func(out io.Writer) {
+			self.cache.regenFrontPageLocal(ioutil.Discard, out)
+		})
 		return
 	}
 	if strings.HasPrefix(file, "ukko.html") {
-		self.serveUkko(w, r)
+		self.serveCached(w, r, UKKO, self.cache.regenUkko)
 		return
 	}
 	if strings.HasPrefix(file, "thread-") {
@@ -90,7 +95,10 @@ func (self *redisHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		if err != nil {
 			goto notfound
 		}
-		self.serveThread(w, r, msg)
+		key := THREAD_PREFIX + HashMessageID(msg.MessageID())
+		self.serveCached(w, r, key, func(out io.Writer) {
+			self.cache.regenerateThread(msg, out)
+		})
 		return
 	} else {
 		group, page := getGroupAndPage(file)
@@ -105,7 +113,10 @@ func (self *redisHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		if page >= int(pages) {
 			goto notfound
 		}
-		self.serveBoardPage(w, r, group, page)
+		key := GROUP_PREFIX + group + "::Page::" + strconv.Itoa(page)
+		self.serveCached(w, r, key, func(out io.Writer) {
+			self.cache.regenerateBoardPage(group, page, out)
+		})
 		return
 	}
 
@@ -113,82 +124,11 @@ notfound:
 	http.NotFound(w, r)
 }
 
-func (self *redisHandler) serveIndex(w http.ResponseWriter, r *http.Request) {
-	html, err := self.cache.client.Get(INDEX).Result()
+func (self *redisHandler) serveCached(w http.ResponseWriter, r *http.Request, key string, handler recacheRedis) {
+	html, err := self.cache.client.Get(key).Result()
 
 	if err == redis.Nil || len(html) == 0 { //cache miss
-		self.cache.regenFrontPageLocal(w, ioutil.Discard)
-		return
-	}
-	if err != nil {
-		http.Error(w, err.Error(), 500)
-		return
-	}
-	io.WriteString(w, html)
-}
-
-func (self *redisHandler) serveBoards(w http.ResponseWriter, r *http.Request) {
-	html, err := self.cache.client.Get(BOARDS).Result()
-
-	if err == redis.Nil || len(html) == 0 { //cache miss
-		self.cache.regenFrontPageLocal(ioutil.Discard, w)
-		return
-	}
-	if err != nil {
-		http.Error(w, err.Error(), 500)
-		return
-	}
-	io.WriteString(w, html)
-}
-
-func (self *redisHandler) serveHistory(w http.ResponseWriter, r *http.Request) {
-	html, err := self.cache.client.Get(HISTORY).Result()
-
-	if err == redis.Nil || len(html) == 0 { //cache miss
-		self.cache.regenLongTerm(w)
-		return
-	}
-	if err != nil {
-		http.Error(w, err.Error(), 500)
-		return
-	}
-	io.WriteString(w, html)
-}
-
-func (self *redisHandler) serveUkko(w http.ResponseWriter, r *http.Request) {
-	html, err := self.cache.client.Get(UKKO).Result()
-
-	if err == redis.Nil || len(html) == 0 { //cache miss
-		self.cache.regenUkko(w)
-		return
-	}
-	if err != nil {
-		http.Error(w, err.Error(), 500)
-		return
-	}
-	io.WriteString(w, html)
-}
-
-func (self *redisHandler) serveThread(w http.ResponseWriter, r *http.Request, root ArticleEntry) {
-	msgid := root.MessageID()
-	html, err := self.cache.client.Get(THREAD_PREFIX + HashMessageID(msgid)).Result()
-
-	if err == redis.Nil || len(html) == 0 { //cache miss
-		self.cache.regenerateThread(root, w)
-		return
-	}
-	if err != nil {
-		http.Error(w, err.Error(), 500)
-		return
-	}
-	io.WriteString(w, html)
-}
-
-func (self *redisHandler) serveBoardPage(w http.ResponseWriter, r *http.Request, board string, page int) {
-	html, err := self.cache.client.Get(GROUP_PREFIX + board + "::Page::" + strconv.Itoa(page)).Result()
-
-	if err == redis.Nil || len(html) == 0 { //cache miss
-		self.cache.regenerateBoardPage(board, page, w)
+		handler(w)
 		return
 	}
 	if err != nil {

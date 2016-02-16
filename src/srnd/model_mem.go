@@ -13,7 +13,6 @@ import (
 	"time"
 )
 
-
 type boardModel struct {
 	allowFiles bool
 	frontend   string

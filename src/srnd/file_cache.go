@@ -39,26 +39,40 @@ type FileCache struct {
 func (self *FileCache) DeleteBoardMarkup(group string) {
 	pages, _ := self.database.GetPagesPerBoard(group)
 	for page := 0; page < pages; page++ {
-		fname := self.getFilenameForBoardPage(group, page)
-		log.Println("delete file", fname)
+		fname := self.getFilenameForBoardPage(group, page, false)
+		os.Remove(fname)
+		fname = self.getFilenameForBoardPage(group, page, true)
 		os.Remove(fname)
 	}
 }
 
 // try to delete root post's page
 func (self *FileCache) DeleteThreadMarkup(root_post_id string) {
-	fname := self.getFilenameForThread(root_post_id)
-	log.Println("delete file", fname)
+	fname := self.getFilenameForThread(root_post_id, false)
+	os.Remove(fname)
+	fname = self.getFilenameForThread(root_post_id, true)
 	os.Remove(fname)
 }
 
-func (self *FileCache) getFilenameForThread(root_post_id string) string {
-	fname := fmt.Sprintf("thread-%s.html", HashMessageID(root_post_id))
+func (self *FileCache) getFilenameForThread(root_post_id string, json bool) string {
+	var ext string
+	if json {
+		ext = "json"
+	} else {
+		ext = "html"
+	}
+	fname := fmt.Sprintf("thread-%s.%s", HashMessageID(root_post_id), ext)
 	return filepath.Join(self.webroot_dir, fname)
 }
 
-func (self *FileCache) getFilenameForBoardPage(boardname string, pageno int) string {
-	fname := fmt.Sprintf("%s-%d.html", boardname, pageno)
+func (self *FileCache) getFilenameForBoardPage(boardname string, pageno int, json bool) string {
+	var ext string
+	if json {
+		ext = "json"
+	} else {
+		ext = "html"
+	}
+	fname := fmt.Sprintf("%s-%d.%s", boardname, pageno, ext)
 	return filepath.Join(self.webroot_dir, fname)
 }
 
@@ -119,14 +133,16 @@ func (self *FileCache) pollRegen() {
 		case _ = <-self.regenThreadTicker.C:
 			self.regenThreadLock.Lock()
 			for _, entry := range self.regenThreadMap {
-				self.regenerateThread(entry)
+				self.regenerateThread(entry, false)
+				self.regenerateThread(entry, true)
 			}
 			self.regenThreadMap = make(map[string]ArticleEntry)
 			self.regenThreadLock.Unlock()
 		case _ = <-self.regenBoardTicker.C:
 			self.regenBoardLock.Lock()
 			for _, v := range self.regenBoardMap {
-				self.regenerateBoardPage(v.group, v.page)
+				self.regenerateBoardPage(v.group, v.page, false)
+				self.regenerateBoardPage(v.group, v.page, true)
 			}
 			self.regenBoardMap = make(map[string]groupRegenRequest)
 			self.regenBoardLock.Unlock()
@@ -138,38 +154,38 @@ func (self *FileCache) pollRegen() {
 func (self *FileCache) RegenerateBoard(group string) {
 	pages := template.prepareGenBoard(self.attachments, self.prefix, self.name, group, self.database)
 	for page := 0; page < pages; page++ {
-		self.regenerateBoardPage(group, page)
+		self.regenerateBoardPage(group, page, false)
+		self.regenerateBoardPage(group, page, true)
 	}
 }
 
 // regenerate just a thread page
-func (self *FileCache) regenerateThread(root ArticleEntry) {
+func (self *FileCache) regenerateThread(root ArticleEntry, json bool) {
 	msgid := root.MessageID()
 	if self.store.HasArticle(msgid) {
-		log.Println("rengerate thread", msgid)
-		fname := self.getFilenameForThread(msgid)
+		fname := self.getFilenameForThread(msgid, json)
 		wr, err := os.Create(fname)
 		defer wr.Close()
 		if err != nil {
 			log.Println("did not write", fname, err)
 			return
 		}
-		template.genThread(self.attachments, root, self.prefix, self.name, wr, self.database)
+		template.genThread(self.attachments, root, self.prefix, self.name, wr, self.database, json)
 	} else {
 		log.Println("don't have root post", msgid, "not regenerating thread")
 	}
 }
 
 // regenerate just a page on a board
-func (self *FileCache) regenerateBoardPage(board string, page int) {
-	fname := self.getFilenameForBoardPage(board, page)
+func (self *FileCache) regenerateBoardPage(board string, page int, json bool) {
+	fname := self.getFilenameForBoardPage(board, page, json)
 	wr, err := os.Create(fname)
 	defer wr.Close()
 	if err != nil {
 		log.Println("error generating board page", page, "for", board, err)
 		return
 	}
-	template.genBoardPage(self.attachments, self.prefix, self.name, board, page, wr, self.database)
+	template.genBoardPage(self.attachments, self.prefix, self.name, board, page, wr, self.database, json)
 }
 
 // regenerate the front page
@@ -192,21 +208,34 @@ func (self *FileCache) RegenFrontPage() {
 
 // regenerate the overboard
 func (self *FileCache) regenUkko() {
+
+	// markup
 	fname := filepath.Join(self.webroot_dir, "ukko.html")
 	wr, err := os.Create(fname)
 	defer wr.Close()
 	if err != nil {
-		log.Println("error generating ukko", err)
+		log.Println("error generating ukko markup", err)
 		return
 	}
-	template.genUkko(self.prefix, self.name, wr, self.database)
+	template.genUkko(self.prefix, self.name, wr, self.database, false)
+
+	// json
+	fname = filepath.Join(self.webroot_dir, "ukko.json")
+	wr, err = os.Create(fname)
+	defer wr.Close()
+	if err != nil {
+		log.Println("error generating ukko json", err)
+		return
+	}
+	template.genUkko(self.prefix, self.name, wr, self.database, true)
 }
 
 // regenerate pages after a mod event
 func (self *FileCache) RegenOnModEvent(newsgroup, msgid, root string, page int) {
 	if root == msgid {
-		fname := self.getFilenameForThread(root)
-		log.Println("remove file", fname)
+		fname := self.getFilenameForThread(root, false)
+		os.Remove(fname)
+		fname = self.getFilenameForThread(root, true)
 		os.Remove(fname)
 	} else {
 		self.regenThreadChan <- ArticleEntry{root, newsgroup}

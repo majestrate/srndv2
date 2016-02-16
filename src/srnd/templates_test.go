@@ -19,7 +19,7 @@ func BenchmarkRenderBoardPage(b *testing.B) {
 		for pb.Next() {
 			wr, err := os.Create("boardpage.html")
 			if err == nil {
-				template.genBoardPage(true, "prefix", "test", "overchan.random", 0, wr, db)
+				template.genBoardPage(true, "prefix", "test", "overchan.random", 0, wr, db, false)
 			} else {
 				log.Println("did not write", "boardpage.html", err)
 			}
@@ -36,7 +36,7 @@ func BenchmarkRenderThread(b *testing.B) {
 		for pb.Next() {
 			wr, err := os.Create("thread.html")
 			if err == nil {
-				template.genThread(true, ArticleEntry{"<c49be1451427261@nntp.nsfl.tk>", "overchan.random"}, "prefix", "frontend", wr, db)
+				template.genThread(true, ArticleEntry{"<c49be1451427261@nntp.nsfl.tk>", "overchan.random"}, "prefix", "frontend", wr, db, false)
 			} else {
 				log.Println("did not write", "thread.html", err)
 			}

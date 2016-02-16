@@ -25,12 +25,15 @@ const CACHE_PREFIX = "NNTPCache::"
 // for expample NNTPCache::Thread::1234 stores the data of the thread with primary key (hash) 1234
 
 const (
-	HISTORY       = CACHE_PREFIX + "History"
-	INDEX         = CACHE_PREFIX + "Index"
-	BOARDS        = CACHE_PREFIX + "Boards"
-	UKKO          = CACHE_PREFIX + "Ukko"
-	THREAD_PREFIX = CACHE_PREFIX + "Thread::"
-	GROUP_PREFIX  = CACHE_PREFIX + "Group::"
+	HISTORY            = CACHE_PREFIX + "History"
+	INDEX              = CACHE_PREFIX + "Index"
+	BOARDS             = CACHE_PREFIX + "Boards"
+	UKKO               = CACHE_PREFIX + "Ukko"
+	JSON_UKKO          = "JSON::" + UKKO
+	THREAD_PREFIX      = CACHE_PREFIX + "Thread::"
+	JSON_THREAD_PREFIX = "JSON::" + THREAD_PREFIX
+	GROUP_PREFIX       = CACHE_PREFIX + "Group::"
+	JSON_GROUP_PREFIX  = "JSON::" + GROUP_PREFIX
 )
 
 type RedisCache struct {
@@ -83,9 +86,15 @@ func (self *redisHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if strings.HasPrefix(file, "ukko.html") {
-		self.serveCached(w, r, UKKO, self.cache.regenUkko)
+		self.serveCached(w, r, UKKO, self.cache.regenUkkoMarkup)
 		return
 	}
+	if strings.HasPrefix(file, "ukko.json") {
+		self.serveCached(w, r, JSON_UKKO, self.cache.regenUkkoJSON)
+		return
+	}
+	json := strings.HasSuffix(file, ".json")
+
 	if strings.HasPrefix(file, "thread-") {
 		hash := getThreadHash(file)
 		if len(hash) == 0 {
@@ -95,9 +104,14 @@ func (self *redisHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		if err != nil {
 			goto notfound
 		}
-		key := THREAD_PREFIX + HashMessageID(msg.MessageID())
+		key := HashMessageID(msg.MessageID())
+		if json {
+			key = JSON_THREAD_PREFIX + key
+		} else {
+			key = THREAD_PREFIX + key
+		}
 		self.serveCached(w, r, key, func(out io.Writer) {
-			self.cache.regenerateThread(msg, out)
+			self.cache.regenerateThread(msg, out, json)
 		})
 		return
 	} else {
@@ -113,9 +127,14 @@ func (self *redisHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		if page >= int(pages) {
 			goto notfound
 		}
-		key := GROUP_PREFIX + group + "::Page::" + strconv.Itoa(page)
+		key := group + "::Page::" + strconv.Itoa(page)
+		if json {
+			key = JSON_GROUP_PREFIX + key
+		} else {
+			key = GROUP_PREFIX + key
+		}
 		self.serveCached(w, r, key, func(out io.Writer) {
-			self.cache.regenerateBoardPage(group, page, out)
+			self.cache.regenerateBoardPage(group, page, out, json)
 		})
 		return
 	}
@@ -165,6 +184,8 @@ func (self *RedisCache) DeleteBoardMarkup(group string) {
 	for page := 0; page < pages; page++ {
 		key := GROUP_PREFIX + group + "::Page::" + strconv.Itoa(page)
 		keys = append(keys, key, key+"::Time")
+		key = JSON_GROUP_PREFIX + group + "::PAGE::" + strconv.Itoa(page)
+		keys = append(keys, key, key+"::Time")
 	}
 	self.client.Del(keys...)
 }
@@ -173,6 +194,8 @@ func (self *RedisCache) DeleteBoardMarkup(group string) {
 func (self *RedisCache) DeleteThreadMarkup(root_post_id string) {
 	self.client.Del(THREAD_PREFIX + HashMessageID(root_post_id))
 	self.client.Del(THREAD_PREFIX + HashMessageID(root_post_id) + "::Time")
+	self.client.Del(JSON_THREAD_PREFIX + HashMessageID(root_post_id))
+	self.client.Del(JSON_THREAD_PREFIX + HashMessageID(root_post_id) + "::Time")
 }
 
 // regen every newsgroup
@@ -224,19 +247,22 @@ func (self *RedisCache) pollRegen() {
 			self.regenThreadLock.Unlock()
 			// regen ukko
 		case _ = <-self.ukkoTicker.C:
-			self.regenUkko(ioutil.Discard)
+			self.regenUkkoMarkup(ioutil.Discard)
+			self.regenUkkoJSON(ioutil.Discard)
 			self.regenFrontPageLocal(ioutil.Discard, ioutil.Discard)
 		case _ = <-self.regenThreadTicker.C:
 			self.regenThreadLock.Lock()
 			for _, entry := range self.regenThreadMap {
-				self.regenerateThread(entry, ioutil.Discard)
+				self.regenerateThread(entry, ioutil.Discard, false)
+				self.regenerateThread(entry, ioutil.Discard, true)
 			}
 			self.regenThreadMap = make(map[string]ArticleEntry)
 			self.regenThreadLock.Unlock()
 		case _ = <-self.regenBoardTicker.C:
 			self.regenBoardLock.Lock()
 			for _, v := range self.regenBoardMap {
-				self.regenerateBoardPage(v.group, v.page, ioutil.Discard)
+				self.regenerateBoardPage(v.group, v.page, ioutil.Discard, false)
+				self.regenerateBoardPage(v.group, v.page, ioutil.Discard, true)
 			}
 			self.regenBoardMap = make(map[string]groupRegenRequest)
 			self.regenBoardLock.Unlock()
@@ -271,28 +297,41 @@ func (self *RedisCache) cache(key string, buf *bytes.Buffer) {
 func (self *RedisCache) RegenerateBoard(group string) {
 	pages := template.prepareGenBoard(self.attachments, self.prefix, self.name, group, self.database)
 	for page := 0; page < pages; page++ {
-		self.regenerateBoardPage(group, page, ioutil.Discard)
+		self.regenerateBoardPage(group, page, ioutil.Discard, false)
+		self.regenerateBoardPage(group, page, ioutil.Discard, true)
 	}
 }
 
 // regenerate just a thread page
-func (self *RedisCache) regenerateThread(root ArticleEntry, out io.Writer) {
+func (self *RedisCache) regenerateThread(root ArticleEntry, out io.Writer, json bool) {
 	msgid := root.MessageID()
 	buf := new(bytes.Buffer)
 	wr := io.MultiWriter(out, buf)
-	template.genThread(self.attachments, root, self.prefix, self.name, wr, self.database)
 
-	key := THREAD_PREFIX + HashMessageID(msgid)
+	template.genThread(self.attachments, root, self.prefix, self.name, wr, self.database, json)
+
+	key := HashMessageID(msgid)
+
+	if json {
+		key = JSON_THREAD_PREFIX + key
+	} else {
+		key = THREAD_PREFIX + key
+	}
+
 	self.cache(key, buf)
 }
 
 // regenerate just a page on a board
-func (self *RedisCache) regenerateBoardPage(board string, page int, out io.Writer) {
+func (self *RedisCache) regenerateBoardPage(board string, page int, out io.Writer, json bool) {
 	buf := new(bytes.Buffer)
 	wr := io.MultiWriter(out, buf)
-	template.genBoardPage(self.attachments, self.prefix, self.name, board, page, wr, self.database)
-
-	key := GROUP_PREFIX + board + "::Page::" + strconv.Itoa(page)
+	template.genBoardPage(self.attachments, self.prefix, self.name, board, page, wr, self.database, json)
+	key := board + "::Page::" + strconv.Itoa(page)
+	if json {
+		key = JSON_GROUP_PREFIX + key
+	} else {
+		key = GROUP_PREFIX + key
+	}
 	self.cache(key, buf)
 }
 
@@ -312,12 +351,20 @@ func (self *RedisCache) RegenFrontPage() {
 	self.regenFrontPageLocal(ioutil.Discard, ioutil.Discard)
 }
 
-// regenerate the overboard
-func (self *RedisCache) regenUkko(out io.Writer) {
+// regenerate the overboard html
+func (self *RedisCache) regenUkkoMarkup(out io.Writer) {
 	buf := new(bytes.Buffer)
 	wr := io.MultiWriter(out, buf)
-	template.genUkko(self.prefix, self.name, wr, self.database)
+	template.genUkko(self.prefix, self.name, wr, self.database, false)
 	self.cache(UKKO, buf)
+}
+
+// regenerate the overboard json
+func (self *RedisCache) regenUkkoJSON(out io.Writer) {
+	buf := new(bytes.Buffer)
+	wr := io.MultiWriter(out, buf)
+	template.genUkko(self.prefix, self.name, wr, self.database, true)
+	self.cache(JSON_UKKO, buf)
 }
 
 // regenerate pages after a mod event

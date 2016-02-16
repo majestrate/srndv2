@@ -28,9 +28,16 @@ type nullHandler struct {
 
 func (self *nullHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	_, file := filepath.Split(r.URL.Path)
-	if len(file) == 0 || strings.HasPrefix(file, "index") {
+	if len(file) == 0 || file == "index.html" {
 		template.genFrontPage(10, self.cache.prefix, self.cache.name, w, ioutil.Discard, self.cache.database)
 		return
+	}
+
+	isjson := strings.HasSuffix(file, ".json")
+
+	if file == "index.json" {
+		// TODO: index.json
+		goto notfound
 	}
 	if strings.HasPrefix(file, "history.html") {
 		template.genGraphs(self.cache.prefix, w, self.cache.database)
@@ -41,7 +48,11 @@ func (self *nullHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if strings.HasPrefix(file, "ukko.html") {
-		template.genUkko(self.cache.prefix, self.cache.name, w, self.cache.database)
+		template.genUkko(self.cache.prefix, self.cache.name, w, self.cache.database, false)
+		return
+	}
+	if strings.HasPrefix(file, "ukko.json") {
+		template.genUkko(self.cache.prefix, self.cache.name, w, self.cache.database, true)
 		return
 	}
 	if strings.HasPrefix(file, "thread-") {
@@ -53,7 +64,7 @@ func (self *nullHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		if err != nil {
 			goto notfound
 		}
-		template.genThread(self.cache.attachments, msg, self.cache.prefix, self.cache.name, w, self.cache.database)
+		template.genThread(self.cache.attachments, msg, self.cache.prefix, self.cache.name, w, self.cache.database, isjson)
 		return
 	} else {
 		group, page := getGroupAndPage(file)
@@ -68,7 +79,11 @@ func (self *nullHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		if page >= int(pages) {
 			goto notfound
 		}
-		template.genBoardPage(self.cache.attachments, self.cache.prefix, self.cache.name, group, page, w, self.cache.database)
+		if isjson {
+
+		} else {
+			template.genBoardPage(self.cache.attachments, self.cache.prefix, self.cache.name, group, page, w, self.cache.database, isjson)
+		}
 		return
 	}
 

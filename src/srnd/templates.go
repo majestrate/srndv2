@@ -5,6 +5,7 @@
 package srnd
 
 import (
+	"encoding/json"
 	"github.com/cbroglie/mustache"
 	"io"
 	"io/ioutil"
@@ -178,6 +179,11 @@ func (self *templateEngine) renderTemplate(name string, obj interface{}) string 
 	}
 }
 
+// easy wrapper for json.NewEncoder
+func (self *templateEngine) renderJSON(wr io.Writer, obj interface{}) {
+	json.NewEncoder(wr).Encode(obj)
+}
+
 // get a board model given a newsgroup
 // load un updated board model if we don't have it
 func (self *templateEngine) obtainBoard(prefix, frontend, group string, update bool, db Database) (model GroupModel) {
@@ -212,7 +218,7 @@ func (self *templateEngine) obtainBoard(prefix, frontend, group string, update b
 }
 
 // generate a board page
-func (self *templateEngine) genBoardPage(allowFiles bool, prefix, frontend, newsgroup string, page int, wr io.Writer, db Database) {
+func (self *templateEngine) genBoardPage(allowFiles bool, prefix, frontend, newsgroup string, page int, wr io.Writer, db Database, json bool) {
 	// get the board model
 	board := self.obtainBoard(prefix, frontend, newsgroup, false, db)
 	// update the board page
@@ -224,7 +230,11 @@ func (self *templateEngine) genBoardPage(allowFiles bool, prefix, frontend, news
 	// render it
 	board[page].SetAllowFiles(allowFiles)
 	updateLinkCacheForBoard(board[page])
-	board[page].RenderTo(wr)
+	if json {
+		self.renderJSON(wr, board[page])
+	} else {
+		board[page].RenderTo(wr)
+	}
 }
 
 // prepare generation of every page for a board
@@ -240,7 +250,7 @@ func (self *templateEngine) prepareGenBoard(allowFiles bool, prefix, frontend, n
 	return len(board)
 }
 
-func (self *templateEngine) genUkko(prefix, frontend string, wr io.Writer, database Database) {
+func (self *templateEngine) genUkko(prefix, frontend string, wr io.Writer, database Database, json bool) {
 	var threads []ThreadModel
 	// get the last 15 bumped threads globally, for each...
 	for _, article := range database.GetLastBumpedThreads("", 15) {
@@ -262,10 +272,15 @@ func (self *templateEngine) genUkko(prefix, frontend string, wr io.Writer, datab
 		self.groups_mtx.Unlock()
 	}
 	updateLinkCache()
-	io.WriteString(wr, template.renderTemplate("ukko.mustache", map[string]interface{}{"prefix": prefix, "threads": threads}))
+	obj := map[string]interface{}{"prefix": prefix, "threads": threads}
+	if json {
+		self.renderJSON(wr, obj)
+	} else {
+		io.WriteString(wr, template.renderTemplate("ukko.mustache", obj))
+	}
 }
 
-func (self *templateEngine) genThread(allowFiles bool, root ArticleEntry, prefix, frontend string, wr io.Writer, db Database) {
+func (self *templateEngine) genThread(allowFiles bool, root ArticleEntry, prefix, frontend string, wr io.Writer, db Database, json bool) {
 	newsgroup := root.Newsgroup()
 	msgid := root.MessageID()
 	// get the board model, don't update the board
@@ -279,7 +294,11 @@ func (self *templateEngine) genThread(allowFiles bool, root ArticleEntry, prefix
 			// render thread
 			t.SetAllowFiles(allowFiles)
 			updateLinkCacheForThread(t)
-			t.RenderTo(wr)
+			if json {
+				self.renderJSON(wr, t)
+			} else {
+				t.RenderTo(wr)
+			}
 			return
 		}
 	}
@@ -295,7 +314,11 @@ func (self *templateEngine) genThread(allowFiles bool, root ArticleEntry, prefix
 			// render thread
 			t.SetAllowFiles(allowFiles)
 			updateLinkCacheForThread(t)
-			t.RenderTo(wr)
+			if json {
+				self.renderJSON(wr, t)
+			} else {
+				t.RenderTo(wr)
+			}
 			self.groups_mtx.Lock()
 			self.groups[newsgroup] = b
 			self.groups_mtx.Unlock()

@@ -752,6 +752,7 @@ func (self *httpFrontend) Mainloop() {
 	self.httpmux.Path("/thm/{f}").Handler(http.FileServer(http.Dir(self.webroot_dir)))
 	self.httpmux.Path("/img/{f}").Handler(http.FileServer(http.Dir(self.webroot_dir)))
 	self.httpmux.Path("/{f}.html").Handler(cache_handler)
+	self.httpmux.Path("/{f}.json").Handler(cache_handler)
 	self.httpmux.Path("/static/{f}").Handler(http.FileServer(http.Dir(self.static_dir)))
 	// post handler
 	self.httpmux.Path("/post/{f}").HandlerFunc(self.handle_poster).Methods("POST")

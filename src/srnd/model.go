@@ -17,6 +17,9 @@ type BaseModel interface {
 
 	// render to a writer
 	RenderTo(wr io.Writer) error
+
+	// impelements json.Marshaller
+	MarshalJSON() ([]byte, error)
 }
 
 // for attachments

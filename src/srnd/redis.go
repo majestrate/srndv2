@@ -407,7 +407,7 @@ func (self RedisDB) GetGroupForPage(prefix, frontend, newsgroup string, pageno, 
 			threads = append(threads, &thread{
 				dirty:  true,
 				prefix: prefix,
-				posts:  []PostModel{p},
+				Posts:  []PostModel{p},
 				links: []LinkModel{
 					linkModel{
 						text: newsgroup,
@@ -447,27 +447,27 @@ func (self RedisDB) GetPostModel(prefix, messageID string) PostModel {
 		mapRes := processHashResult(hashres)
 		model.prefix = prefix
 		model.board = mapRes["newsgroup"]
-		model.message_id = mapRes["message_id"]
-		model.parent = mapRes["ref_id"]
-		model.name = mapRes["name"]
-		model.subject = mapRes["subject"]
-		model.path = mapRes["path"]
+		model.Message_id = mapRes["message_id"]
+		model.Parent = mapRes["ref_id"]
+		model.PostName = mapRes["name"]
+		model.PostSubject = mapRes["subject"]
+		model.MessagePath = mapRes["path"]
 		tmp, _ := strconv.Atoi(mapRes["time_posted"])
-		model.posted = int64(tmp)
+		model.Posted = int64(tmp)
 		model.addr = mapRes["addr"]
-		model.message = mapRes["message"]
+		model.PostMessage = mapRes["message"]
 
-		model.op = len(model.parent) == 0
-		if len(model.parent) == 0 {
-			model.parent = model.message_id
+		model.op = len(model.Parent) == 0
+		if len(model.Parent) == 0 {
+			model.Parent = model.Message_id
 		}
-		model.sage = isSage(model.subject)
+		model.sage = isSage(model.PostSubject)
 		atts := self.GetPostAttachmentModels(prefix, messageID)
 		if atts != nil {
-			model.attachments = append(model.attachments, atts...)
+			model.Files = append(model.Files, atts...)
 		}
 		// quiet fail
-		model.pubkey, _ = self.client.Get(ARTICLE_KEY_PREFIX + messageID).Result()
+		model.Key, _ = self.client.Get(ARTICLE_KEY_PREFIX + messageID).Result()
 		return model
 	} else {
 		log.Println("failed to prepare query for geting post model for", messageID, err)
@@ -669,9 +669,9 @@ func (self RedisDB) GetPostAttachmentModels(prefix, messageID string) (atts []At
 			fname, _ = self.client.HGet(ATTACHMENT_PREFIX+hash, "filename").Result()
 
 			atts = append(atts, &attachment{
-				prefix:   prefix,
-				filepath: fpath,
-				filename: fname,
+				prefix: prefix,
+				Path:   fpath,
+				Name:   fname,
 			})
 		}
 	} else {

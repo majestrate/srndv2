@@ -502,7 +502,7 @@ func ZeroIPString(ip net.IP) string {
 }
 
 func getThreadHash(file string) (thread string) {
-	exp := regexp.MustCompilePOSIX(`thread-([0-9a-f]+)\.html.*`)
+	exp := regexp.MustCompilePOSIX(`thread-([0-9a-f]+)\.*`)
 	matches := exp.FindStringSubmatch(file)
 	if len(matches) != 2 {
 		return ""
@@ -512,7 +512,7 @@ func getThreadHash(file string) (thread string) {
 }
 
 func getGroupAndPage(file string) (board string, page int) {
-	exp := regexp.MustCompilePOSIX(`(.*)-([0-9]+)\.html.*`)
+	exp := regexp.MustCompilePOSIX(`(.*)-([0-9]+)\.*`)
 	matches := exp.FindStringSubmatch(file)
 	if len(matches) != 3 {
 		return "", -1

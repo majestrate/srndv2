@@ -181,7 +181,10 @@ func (self *templateEngine) renderTemplate(name string, obj interface{}) string 
 
 // easy wrapper for json.NewEncoder
 func (self *templateEngine) renderJSON(wr io.Writer, obj interface{}) {
-	json.NewEncoder(wr).Encode(obj)
+	err := json.NewEncoder(wr).Encode(obj)
+	if err != nil {
+		log.Println("error rendering json", err)
+	}
 }
 
 // get a board model given a newsgroup
@@ -231,7 +234,8 @@ func (self *templateEngine) genBoardPage(allowFiles bool, prefix, frontend, news
 	board[page].SetAllowFiles(allowFiles)
 	updateLinkCacheForBoard(board[page])
 	if json {
-		self.renderJSON(wr, board[page])
+		p := board[page]
+		self.renderJSON(wr, p)
 	} else {
 		board[page].RenderTo(wr)
 	}

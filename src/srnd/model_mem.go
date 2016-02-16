@@ -6,6 +6,7 @@
 package srnd
 
 import (
+	"encoding/json"
 	"fmt"
 	"io"
 	"path/filepath"
@@ -21,6 +22,10 @@ type boardModel struct {
 	page       int
 	pages      int
 	threads    []ThreadModel
+}
+
+func (self *boardModel) MarshalJSON() (b []byte, err error) {
+	return json.Marshal(self.threads)
 }
 
 func (self *boardModel) SetAllowFiles(allow bool) {
@@ -124,26 +129,33 @@ func (self *boardModel) Update(db Database) {
 type post struct {
 	prefix           string
 	board            string
-	name             string
-	subject          string
-	message          string
+	PostName         string
+	PostSubject      string
+	PostMessage      string
 	message_rendered string
-	message_id       string
-	path             string
+	Message_id       string
+	MessagePath      string
 	addr             string
 	op               bool
-	posted           int64
-	parent           string
+	Posted           int64
+	Parent           string
 	sage             bool
-	pubkey           string
-	reference        string
-	attachments      []AttachmentModel
+	Key              string
+	Files            []AttachmentModel
+}
+
+func (self *post) MarshalJSON() (b []byte, err error) {
+	return json.Marshal(*self)
 }
 
 type attachment struct {
-	prefix   string
-	filepath string
-	filename string
+	prefix string
+	Path   string
+	Name   string
+}
+
+func (self *attachment) MarshalJSON() (b []byte, err error) {
+	return json.Marshal(*self)
 }
 
 func (self *attachment) Prefix() string {
@@ -156,52 +168,52 @@ func (self *attachment) RenderTo(wr io.Writer) error {
 }
 
 func (self *attachment) Thumbnail() string {
-	if strings.HasSuffix(self.filepath, ".gif") {
-		return self.prefix + "thm/" + self.filepath
+	if strings.HasSuffix(self.Path, ".gif") {
+		return self.prefix + "thm/" + self.Path
 	}
-	return self.prefix + "thm/" + self.filepath + ".jpg"
+	return self.prefix + "thm/" + self.Path + ".jpg"
 }
 
 func (self *attachment) Source() string {
-	return self.prefix + "img/" + self.filepath
+	return self.prefix + "img/" + self.Path
 }
 
 func (self *attachment) Filename() string {
-	return self.filename
+	return self.Name
 }
 
 func PostModelFromMessage(parent, prefix string, nntp NNTPMessage) PostModel {
 	p := new(post)
-	p.name = nntp.Name()
-	p.subject = nntp.Subject()
-	p.message = nntp.Message()
-	p.path = nntp.Path()
-	p.message_id = nntp.MessageID()
+	p.PostName = nntp.Name()
+	p.PostSubject = nntp.Subject()
+	p.PostMessage = nntp.Message()
+	p.MessagePath = nntp.Path()
+	p.Message_id = nntp.MessageID()
 	p.board = nntp.Newsgroup()
-	p.posted = nntp.Posted()
+	p.Posted = nntp.Posted()
 	p.op = nntp.OP()
 	p.prefix = prefix
-	p.parent = parent
+	p.Parent = parent
 	p.addr = nntp.Addr()
 	p.sage = nntp.Sage()
-	p.pubkey = nntp.Pubkey()
+	p.Key = nntp.Pubkey()
 	for _, att := range nntp.Attachments() {
-		p.attachments = append(p.attachments, att.ToModel(prefix))
+		p.Files = append(p.Files, att.ToModel(prefix))
 	}
 	return p
 }
 
 func (self *post) Reference() string {
-	return self.parent
+	return self.Parent
 }
 
 func (self *post) ShortHash() string {
-	return ShortHashMessageID(self.message_id)
+	return ShortHashMessageID(self.MessageID())
 }
 
 func (self *post) Pubkey() string {
-	if len(self.pubkey) > 0 {
-		return fmt.Sprintf("<label title=\"%s\">%s</label>", self.pubkey, makeTripcode(self.pubkey))
+	if len(self.Key) > 0 {
+		return fmt.Sprintf("<label title=\"%s\">%s</label>", self.Key, makeTripcode(self.Key))
 	}
 	return ""
 }
@@ -219,15 +231,15 @@ func (self *post) CSSClass() string {
 }
 
 func (self *post) OP() bool {
-	return self.parent == self.message_id || len(self.parent) == 0
+	return self.Parent == self.Message_id || len(self.Parent) == 0
 }
 
 func (self *post) Date() string {
-	return time.Unix(self.posted, 0).Format(time.ANSIC)
+	return time.Unix(self.Posted, 0).Format(time.ANSIC)
 }
 
 func (self *post) DateRFC() string {
-	return time.Unix(self.posted, 0).Format(time.RFC3339)
+	return time.Unix(self.Posted, 0).Format(time.RFC3339)
 }
 
 func (self *post) TemplateDir() string {
@@ -235,15 +247,15 @@ func (self *post) TemplateDir() string {
 }
 
 func (self *post) MessageID() string {
-	return self.message_id
+	return self.Message_id
 }
 
 func (self *post) Frontend() string {
-	idx := strings.LastIndex(self.path, "!")
+	idx := strings.LastIndex(self.MessagePath, "!")
 	if idx == -1 {
-		return self.path
+		return self.MessagePath
 	}
-	return self.path[idx+1:]
+	return self.MessagePath[idx+1:]
 }
 
 func (self *post) Board() string {
@@ -251,23 +263,23 @@ func (self *post) Board() string {
 }
 
 func (self *post) PostHash() string {
-	return HashMessageID(self.message_id)
+	return HashMessageID(self.Message_id)
 }
 
 func (self *post) Name() string {
-	return self.name
+	return self.PostName
 }
 
 func (self *post) Subject() string {
-	return self.subject
+	return self.PostSubject
 }
 
 func (self *post) Attachments() []AttachmentModel {
-	return self.attachments
+	return self.Files
 }
 
 func (self *post) PostURL() string {
-	return fmt.Sprintf("%sthread-%s.html#%s", self.Prefix(), HashMessageID(self.parent), self.PostHash())
+	return fmt.Sprintf("%sthread-%s.html#%s", self.Prefix(), HashMessageID(self.Parent), self.PostHash())
 }
 
 func (self *post) Prefix() string {
@@ -296,48 +308,46 @@ func (self *post) RenderPost() string {
 }
 
 func (self *post) Truncate() PostModel {
-	message := self.message
-	subject := self.subject
-	name := self.name
-	if len(self.message) > 500 {
-		message = self.message[:500] + "\n...\n[Post Truncated]\n"
+	message := self.PostMessage
+	subject := self.PostSubject
+	name := self.PostName
+	if len(message) > 500 {
+		message = message[:500] + "\n...\n[Post Truncated]\n"
 	}
-	if len(self.subject) > 100 {
-		subject = self.subject[:100] + "..."
+	if len(subject) > 100 {
+		subject = subject[:100] + "..."
 	}
-	if len(self.name) > 100 {
-		name = self.name[:100] + "..."
+	if len(name) > 100 {
+		name = name[:100] + "..."
 	}
 
 	return &post{
-		prefix:     self.prefix,
-		board:      self.board,
-		name:       name,
-		subject:    subject,
-		message:    message,
-		message_id: self.message_id,
-		path:       self.path,
-		addr:       self.addr,
-		op:         self.op,
-		posted:     self.posted,
-		parent:     self.parent,
-		sage:       self.sage,
-		pubkey:     self.pubkey,
-		reference:  self.reference,
+		prefix:      self.prefix,
+		board:       self.board,
+		PostName:    name,
+		PostSubject: subject,
+		PostMessage: message,
+		Message_id:  self.Message_id,
+		MessagePath: self.MessagePath,
+		addr:        self.addr,
+		op:          self.op,
+		Posted:      self.Posted,
+		Parent:      self.Parent,
+		sage:        self.sage,
+		Key:         self.Key,
 		// TODO: copy?
-		attachments: self.attachments,
+		Files: self.Files,
 	}
 }
 
 func (self *post) RenderShortBody() string {
-	// TODO: hardcoded limit
-	return memeposting(self.message)
+	return memeposting(self.PostMessage)
 }
 
 func (self *post) RenderBody() string {
 	// :^)
 	if len(self.message_rendered) == 0 {
-		self.message_rendered = memeposting(self.message)
+		self.message_rendered = memeposting(self.PostMessage)
 	}
 	return self.message_rendered
 }
@@ -346,8 +356,12 @@ type thread struct {
 	allowFiles bool
 	prefix     string
 	links      []LinkModel
-	posts      []PostModel
+	Posts      []PostModel
 	dirty      bool
+}
+
+func (self *thread) MarshalJSON() (b []byte, err error) {
+	return json.Marshal(self.Posts)
 }
 
 func (self *thread) IsDirty() bool {
@@ -364,7 +378,7 @@ func (self *thread) Prefix() string {
 
 func (self *thread) Navbar() string {
 	param := make(map[string]interface{})
-	param["name"] = fmt.Sprintf("Thread %s", self.posts[0].ShortHash())
+	param["name"] = fmt.Sprintf("Thread %s", self.Posts[0].ShortHash())
 	param["frontend"] = self.Board()
 	param["links"] = self.links
 	param["prefix"] = self.prefix
@@ -372,7 +386,7 @@ func (self *thread) Navbar() string {
 }
 
 func (self *thread) Board() string {
-	return self.posts[0].Board()
+	return self.Posts[0].Board()
 }
 
 func (self *thread) BoardURL() string {
@@ -385,19 +399,19 @@ func defaultTemplateDir() string {
 }
 
 func (self *thread) RenderTo(wr io.Writer) error {
-	postform := renderPostForm(self.prefix, self.Board(), self.posts[0].MessageID(), self.allowFiles)
+	postform := renderPostForm(self.prefix, self.Board(), self.Posts[0].MessageID(), self.allowFiles)
 	data := template.renderTemplate("thread.mustache", map[string]interface{}{"thread": self, "form": postform})
 	io.WriteString(wr, data)
 	return nil
 }
 
 func (self *thread) OP() PostModel {
-	return self.posts[0]
+	return self.Posts[0]
 }
 
 func (self *thread) Replies() []PostModel {
-	if len(self.posts) > 1 {
-		return self.posts[1:]
+	if len(self.Posts) > 1 {
+		return self.Posts[1:]
 	}
 	return []PostModel{}
 }
@@ -412,11 +426,11 @@ func (self *thread) SetAllowFiles(allow bool) {
 
 func (self *thread) Truncate() ThreadModel {
 	trunc := 5
-	if len(self.posts) > trunc {
+	if len(self.Posts) > trunc {
 		return &thread{
 			allowFiles: self.allowFiles,
 			links:      self.links,
-			posts:      append([]PostModel{self.posts[0]}, self.posts[len(self.posts)-trunc:]...),
+			Posts:      append([]PostModel{self.Posts[0]}, self.Posts[len(self.Posts)-trunc:]...),
 			prefix:     self.prefix,
 			dirty:      false,
 		}
@@ -425,17 +439,17 @@ func (self *thread) Truncate() ThreadModel {
 }
 
 func (self *thread) Update(db Database) {
-	root := self.posts[0].MessageID()
+	root := self.Posts[0].MessageID()
 	reply_count := db.CountThreadReplies(root)
 	i_reply_count := int(reply_count)
-	if len(self.posts) > 1 && i_reply_count > len(self.posts[1:]) {
+	if len(self.Posts) > 1 && i_reply_count > len(self.Posts[1:]) {
 		// was from a new post(s)
-		diff := i_reply_count - len(self.posts[1:])
+		diff := i_reply_count - len(self.Posts[1:])
 		newposts := db.GetThreadReplyPostModels(self.prefix, root, i_reply_count-diff, diff)
-		self.posts = append(self.posts, newposts...)
+		self.Posts = append(self.Posts, newposts...)
 	} else {
 		// mod event
-		self.posts = append([]PostModel{self.posts[0]}, db.GetThreadReplyPostModels(self.prefix, root, 0, 0)...)
+		self.Posts = append([]PostModel{self.Posts[0]}, db.GetThreadReplyPostModels(self.prefix, root, 0, 0)...)
 	}
 	self.dirty = false
 }

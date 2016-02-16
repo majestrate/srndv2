@@ -605,19 +605,19 @@ func (self PostgresDatabase) GetGroupForPage(prefix, frontend, newsgroup string,
 			p := &post{
 				prefix: prefix,
 			}
-			rows.Scan(&p.board, &p.message_id, &p.name, &p.subject, &p.path, &p.posted, &p.message)
-			p.parent = p.message_id
+			rows.Scan(&p.board, &p.Message_id, &p.PostName, &p.PostSubject, &p.MessagePath, &p.Posted, &p.PostMessage)
+			p.Parent = p.Message_id
 			p.op = true
-			_ = self.conn.QueryRow("SELECT pubkey FROM ArticleKeys WHERE message_id = $1", p.message_id).Scan(&p.pubkey)
-			p.sage = isSage(p.subject)
-			atts := self.GetPostAttachmentModels(prefix, p.message_id)
+			_ = self.conn.QueryRow("SELECT pubkey FROM ArticleKeys WHERE message_id = $1", p.Message_id).Scan(&p.Key)
+			p.sage = isSage(p.PostSubject)
+			atts := self.GetPostAttachmentModels(prefix, p.Message_id)
 			if atts != nil {
-				p.attachments = append(p.attachments, atts...)
+				p.Files = append(p.Files, atts...)
 			}
 			threads = append(threads, &thread{
 				dirty:  true,
 				prefix: prefix,
-				posts:  []PostModel{p},
+				Posts:  []PostModel{p},
 				links: []LinkModel{
 					linkModel{
 						text: newsgroup,
@@ -646,7 +646,7 @@ func (self PostgresDatabase) GetPostsInGroup(newsgroup string) (models []PostMod
 	if err == nil {
 		for rows.Next() {
 			model := new(post)
-			rows.Scan(&model.board, &model.message_id, &model.parent, &model.name, &model.subject, &model.path, &model.posted, &model.message, &model.addr)
+			rows.Scan(&model.board, &model.Message_id, &model.Parent, &model.PostName, &model.PostSubject, &model.MessagePath, &model.Posted, &model.PostMessage, &model.addr)
 			models = append(models, model)
 		}
 		rows.Close()
@@ -656,19 +656,19 @@ func (self PostgresDatabase) GetPostsInGroup(newsgroup string) (models []PostMod
 
 func (self PostgresDatabase) GetPostModel(prefix, messageID string) PostModel {
 	model := new(post)
-	err := self.conn.QueryRow("SELECT newsgroup, message_id, ref_id, name, subject, path, time_posted, message, addr FROM ArticlePosts WHERE message_id = $1 LIMIT 1", messageID).Scan(&model.board, &model.message_id, &model.parent, &model.name, &model.subject, &model.path, &model.posted, &model.message, &model.addr)
+	err := self.conn.QueryRow("SELECT newsgroup, message_id, ref_id, name, subject, path, time_posted, message, addr FROM ArticlePosts WHERE message_id = $1 LIMIT 1", messageID).Scan(&model.board, &model.Message_id, &model.Parent, &model.PostName, &model.PostSubject, &model.MessagePath, &model.Posted, &model.PostMessage, &model.addr)
 	if err == nil {
-		model.op = len(model.parent) == 0
-		if len(model.parent) == 0 {
-			model.parent = model.message_id
+		model.op = len(model.Parent) == 0
+		if len(model.Parent) == 0 {
+			model.Parent = model.Message_id
 		}
-		model.sage = isSage(model.subject)
+		model.sage = isSage(model.PostSubject)
 		atts := self.GetPostAttachmentModels(prefix, messageID)
 		if atts != nil {
-			model.attachments = append(model.attachments, atts...)
+			model.Files = append(model.Files, atts...)
 		}
 		// quiet fail
-		self.conn.QueryRow("SELECT pubkey FROM ArticleKeys WHERE message_id = $1", messageID).Scan(&model.pubkey)
+		self.conn.QueryRow("SELECT pubkey FROM ArticleKeys WHERE message_id = $1", messageID).Scan(&model.Key)
 		return model
 	} else {
 		log.Println("failed to prepare query for geting post model for", messageID, err)
@@ -706,19 +706,19 @@ func (self PostgresDatabase) GetThreadReplyPostModels(prefix, rootpost string, s
 			}
 			model := new(post)
 			model.prefix = prefix
-			rows.Scan(&model.board, &model.message_id, &model.parent, &model.name, &model.subject, &model.path, &model.posted, &model.message, &model.addr)
-			model.op = len(model.parent) == 0
-			if len(model.parent) == 0 {
-				model.parent = model.message_id
+			rows.Scan(&model.board, &model.Message_id, &model.Parent, &model.PostName, &model.PostSubject, &model.MessagePath, &model.Posted, &model.PostMessage, &model.addr)
+			model.op = len(model.Parent) == 0
+			if len(model.Parent) == 0 {
+				model.Parent = model.Message_id
 			}
-			model.sage = isSage(model.subject)
-			atts := self.GetPostAttachmentModels(prefix, model.message_id)
+			model.sage = isSage(model.PostSubject)
+			atts := self.GetPostAttachmentModels(prefix, model.Message_id)
 			if atts != nil {
-				model.attachments = append(model.attachments, atts...)
+				model.Files = append(model.Files, atts...)
 			}
 			// get pubkey if it exists
 			// quiet fail
-			_ = self.conn.QueryRow("SELECT pubkey FROM ArticleKeys WHERE message_id = $1", model.message_id).Scan(&model.pubkey)
+			_ = self.conn.QueryRow("SELECT pubkey FROM ArticleKeys WHERE message_id = $1", model.Message_id).Scan(&model.Key)
 			repls = append(repls, model)
 		}
 		rows.Close()
@@ -882,9 +882,9 @@ func (self PostgresDatabase) GetPostAttachmentModels(prefix, messageID string) (
 			var fpath, fname string
 			rows.Scan(&fpath, &fname)
 			atts = append(atts, &attachment{
-				prefix:   prefix,
-				filepath: fpath,
-				filename: fname,
+				prefix: prefix,
+				Path:   fpath,
+				Name:   fname,
 			})
 		}
 		rows.Close()
@@ -1153,18 +1153,18 @@ func (self PostgresDatabase) GetLastPostedPostModels(prefix string, n int64) (po
 	if err == nil {
 		for rows.Next() {
 			model := new(post)
-			rows.Scan(&model.board, &model.message_id, &model.parent, &model.name, &model.subject, &model.path, &model.posted, &model.message, &model.addr)
-			model.op = len(model.parent) == 0
-			if len(model.parent) == 0 {
-				model.parent = model.message_id
+			rows.Scan(&model.board, &model.Message_id, &model.Parent, &model.PostName, &model.PostSubject, &model.MessagePath, &model.Posted, &model.PostMessage, &model.addr)
+			model.op = len(model.Parent) == 0
+			if len(model.Parent) == 0 {
+				model.Parent = model.Message_id
 			}
-			model.sage = isSage(model.subject)
-			atts := self.GetPostAttachmentModels(prefix, model.message_id)
+			model.sage = isSage(model.PostSubject)
+			atts := self.GetPostAttachmentModels(prefix, model.Message_id)
 			if atts != nil {
-				model.attachments = append(model.attachments, atts...)
+				model.Files = append(model.Files, atts...)
 			}
 			// quiet fail
-			self.conn.QueryRow("SELECT pubkey FROM ArticleKeys WHERE message_id = $1", model.message_id).Scan(&model.pubkey)
+			self.conn.QueryRow("SELECT pubkey FROM ArticleKeys WHERE message_id = $1", model.Message_id).Scan(&model.Key)
 			posts = append(posts, model)
 		}
 		rows.Close()

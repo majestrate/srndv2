@@ -65,6 +65,21 @@ func (self *boardModel) Navbar() string {
 	return template.renderTemplate("navbar.mustache", param)
 }
 
+func (self *boardModel) Board() string {
+	return self.board
+}
+
+func (self *boardModel) PageList() []LinkModel {
+	var links []LinkModel
+	for i := 0; i < self.pages; i++ {
+		links = append(links, linkModel{
+			link: fmt.Sprintf("%s%s-%d.html", self.prefix, self.board, i),
+			text: fmt.Sprintf("%d", i),
+		})
+	}
+	return links
+}
+
 func (self *boardModel) UpdateThread(messageID string, db Database) {
 
 	for _, th := range self.threads {

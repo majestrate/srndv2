@@ -65,6 +65,10 @@ func (self *boardModel) Navbar() string {
 	return template.renderTemplate("navbar.mustache", param)
 }
 
+func (self *boardModel) Board() string {
+	return self.board
+}
+
 func (self *boardModel) PageList() []LinkModel {
 	var links []LinkModel
 	for i := 0; i < self.pages; i++ {

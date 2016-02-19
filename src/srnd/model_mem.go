@@ -10,9 +10,75 @@ import (
 	"fmt"
 	"io"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"time"
 )
+
+type catalogModel struct {
+	frontend string
+	prefix   string
+	board    string
+	threads  []CatalogItemModel
+}
+
+type catalogItemModel struct {
+	page       int
+	replycount int
+	op         PostModel
+}
+
+func (self *catalogModel) Navbar() string {
+	param := make(map[string]interface{})
+	param["name"] = fmt.Sprintf("Catalog for %s", self.board)
+	param["frontend"] = self.frontend
+	var links []LinkModel
+	links = append(links, linkModel{
+		link: fmt.Sprintf("%s%s-%d.html", self.prefix, self.board, 0),
+		text: "Board index",
+	})
+	param["prefix"] = self.prefix
+	param["links"] = links
+	return template.renderTemplate("navbar.mustache", param)
+}
+
+func (self *catalogModel) RenderTo(wr io.Writer) error {
+	data := template.renderTemplate("catalog.mustache", map[string]interface{}{"board": self})
+	io.WriteString(wr, data)
+	return nil
+}
+
+func (self *catalogModel) MarshalJSON() (b []byte, err error) {
+	return nil, nil
+}
+
+func (self *catalogModel) Frontend() string {
+	return self.frontend
+}
+
+func (self *catalogModel) Prefix() string {
+	return self.prefix
+}
+
+func (self *catalogModel) Name() string {
+	return self.board
+}
+
+func (self *catalogModel) Threads() []CatalogItemModel {
+	return self.threads
+}
+
+func (self *catalogItemModel) OP() PostModel {
+	return self.op
+}
+
+func (self *catalogItemModel) Page() string {
+	return strconv.Itoa(self.page)
+}
+
+func (self *catalogItemModel) ReplyCount() string {
+	return strconv.Itoa(self.replycount)
+}
 
 type boardModel struct {
 	allowFiles bool

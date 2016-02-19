@@ -66,6 +66,18 @@ func (self *nullHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		}
 		template.genThread(self.cache.attachments, msg, self.cache.prefix, self.cache.name, w, self.cache.database, isjson)
 		return
+	}
+	if strings.HasPrefix(file, "catalog-") {
+		group := getGroupForCatalog(file)
+		if len(group) == 0 {
+			goto notfound
+		}
+		hasgroup := self.cache.database.HasNewsgroup(group)
+		if !hasgroup {
+			goto notfound
+		}
+		template.genCatalog(self.cache.prefix, self.cache.name, group, w, self.cache.database)
+		return
 	} else {
 		group, page := getGroupAndPage(file)
 		if len(group) == 0 || page < 0 {

@@ -220,6 +220,22 @@ func (self *templateEngine) obtainBoard(prefix, frontend, group string, update b
 	return
 }
 
+func (self *templateEngine) genCatalog(prefix, frontend, group string, wr io.Writer, db Database) {
+	board := self.obtainBoard(prefix, frontend, group, true, db)
+	catalog := new(catalogModel)
+	catalog.prefix = prefix
+	catalog.frontend = frontend
+	catalog.board = group
+
+	for page, bm := range board {
+		for _, th := range bm.Threads() {
+			th.Update(db)
+			catalog.threads = append(catalog.threads, &catalogItemModel{op: th.OP(), page: page, replycount: len(th.Replies())})
+		}
+	}
+	catalog.RenderTo(wr)
+}
+
 // generate a board page
 func (self *templateEngine) genBoardPage(allowFiles bool, prefix, frontend, newsgroup string, page int, wr io.Writer, db Database, json bool) {
 	// get the board model

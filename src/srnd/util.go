@@ -526,3 +526,13 @@ func getGroupAndPage(file string) (board string, page int) {
 	}
 	return
 }
+
+func getGroupForCatalog(file string) (group string) {
+	exp := regexp.MustCompilePOSIX(`catalog-(.+)\.html`)
+	matches := exp.FindStringSubmatch(file)
+	if len(matches) != 2 {
+		return ""
+	}
+	group = matches[1]
+	return
+}

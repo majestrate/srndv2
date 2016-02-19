@@ -122,6 +122,21 @@ type BoardModel interface {
 	Update(db Database)
 }
 
+type CatalogModel interface {
+	BaseModel
+	NavbarModel
+
+	Frontend() string
+	Name() string
+	Threads() []CatalogItemModel
+}
+
+type CatalogItemModel interface {
+	OP() PostModel
+	ReplyCount() string
+	Page() string
+}
+
 type LinkModel interface {
 	Text() string
 	LinkURL() string

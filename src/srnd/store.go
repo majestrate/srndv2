@@ -177,19 +177,25 @@ func (self *articleStore) StorePost(nntp NNTPMessage) (err error) {
 		// no inner article
 		// store the data in the article
 		self.database.RegisterArticle(nntp)
-		for _, att := range nntp.Attachments() {
-			// save attachments
-			go self.saveAttachment(att)
-		}
+		go func() {
+			for _, att := range nntp.Attachments() {
+				// save attachments
+				self.saveAttachment(att)
+			}
+			nntp.Reset()
+		}()
 	} else {
 		// we have inner data
 		// store the signed data
 		self.database.RegisterArticle(nntp_inner)
 		// record a tripcode
 		self.database.RegisterSigned(nntp.MessageID(), nntp.Pubkey())
-		for _, att := range nntp_inner.Attachments() {
-			go self.saveAttachment(att)
-		}
+		go func() {
+			for _, att := range nntp_inner.Attachments() {
+				self.saveAttachment(att)
+			}
+			nntp.Reset()
+		}()
 	}
 	return
 }
@@ -218,6 +224,7 @@ func (self *articleStore) saveAttachment(att NNTPAttachment) {
 	if err == nil {
 		_, err = io.Copy(f, att)
 		f.Close()
+
 	}
 	if err != nil {
 		log.Println("did not save attachment", err)

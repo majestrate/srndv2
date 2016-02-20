@@ -5,7 +5,6 @@ package srnd
 
 import (
 	"bytes"
-	"encoding/base64"
 	"fmt"
 	"github.com/majestrate/nacl"
 	"io"
@@ -117,8 +116,9 @@ func (self *nntpArticle) Reset() {
 		self.message.Reset()
 		self.message = nil
 	}
-	for _, att := range self.attachments {
-		att.Reset()
+	for idx, _ := range self.attachments {
+		self.attachments[idx].Reset()
+		self.attachments[idx] = nil
 	}
 	self.attachments = []NNTPAttachment{}
 	if self.signedPart != nil {
@@ -323,9 +323,6 @@ func (self *nntpArticle) Posted() int64 {
 }
 
 func (self *nntpArticle) Message() string {
-	if self.message == nil {
-		return ""
-	}
 	return strings.Trim(self.message.AsString(), "\x00")
 }
 
@@ -374,7 +371,7 @@ func (self *nntpArticle) WriteBody(wr io.Writer, delim string) (err error) {
 	}
 	if len(self.attachments) == 0 {
 		// write plaintext and be done
-		_, err = self.message.WriteTo(wr)
+		_, err = io.WriteString(wr, self.message.AsString())
 		return
 	}
 	content_type := self.ContentType()
@@ -399,9 +396,7 @@ func (self *nntpArticle) WriteBody(wr io.Writer, delim string) (err error) {
 				}
 				hdr.Set("Content-Transfer-Encoding", "base64")
 				part, err := w.CreatePart(hdr)
-				enc := base64.NewEncoder(base64.StdEncoding, part)
-				_, err = io.Copy(enc, att)
-				enc.Close()
+				_, err = io.WriteString(part, att.Filedata())
 				if err != nil {
 					break
 				}
@@ -412,7 +407,7 @@ func (self *nntpArticle) WriteBody(wr io.Writer, delim string) (err error) {
 		}
 		err = w.Close()
 	} else {
-		_, err = self.message.WriteTo(wr)
+		_, err = io.WriteString(wr, self.message.AsString())
 	}
 	return err
 }

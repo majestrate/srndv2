@@ -454,11 +454,6 @@ func (self *NNTPDaemon) pollmessages() {
 		msgid := nntp.MessageID()
 		log.Println("daemon got", msgid)
 
-		// store article and attachments
-		// register with database
-		// this also generates thumbnails
-		self.store.StorePost(nntp)
-
 		ref := nntp.Reference()
 		if ref != "" && ValidMessageID(ref) && !self.database.HasArticleLocal(ref) {
 			// we don't have the root post
@@ -479,22 +474,25 @@ func (self *NNTPDaemon) pollmessages() {
 			rollover = tpp * ppb
 		}
 
+		// store article and attachments
+		// register with database
+		// this also generates thumbnails
+		self.store.StorePost(nntp)
 		// roll over old content
 		self.expire.ExpireGroup(group, rollover)
 		// queue to all outfeeds
 		self.send_all_feeds <- ArticleEntry{msgid, group}
 		// send to upper layers
 		if group == "ctl" {
-			modchnl <- nntp.MessageID()
+			modchnl <- msgid
 		}
 		if self.frontend != nil {
 			if self.frontend.AllowNewsgroup(group) {
-				self.frontend.PostsChan() <- frontendPost{nntp.MessageID(), nntp.Reference(), nntp.Newsgroup()}
+				self.frontend.PostsChan() <- frontendPost{msgid, ref, group}
 			} else {
 				log.Println("frontend does not allow", group, "not sending")
 			}
 		}
-		nntp.Reset()
 	}
 }
 

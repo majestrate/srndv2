@@ -57,7 +57,10 @@ type nntpAttachment struct {
 }
 
 func (self *nntpAttachment) Reset() {
-	self.body.Reset()
+	if self.body != nil {
+		self.body.Reset()
+		self.body = nil
+	}
 	self.header = nil
 	self.hash = nil
 	self.filepath = ""
@@ -203,8 +206,7 @@ func readAttachmentFromMimePart(part *multipart.Part) NNTPAttachment {
 	if transfer_encoding == "base64" {
 		// decode
 		dec := base64.NewDecoder(base64.StdEncoding, part)
-		var b [1024]byte
-		_, err = io.CopyBuffer(buff, dec, b[:])
+		_, err = io.Copy(buff, dec)
 		dec = nil
 		part = nil
 	} else {

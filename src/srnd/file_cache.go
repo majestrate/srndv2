@@ -1,7 +1,6 @@
 package srnd
 
 import (
-	//"io"
 	"fmt"
 	"log"
 	"net/http"
@@ -26,14 +25,17 @@ type FileCache struct {
 	regenGroupChan  chan groupRegenRequest
 	regenBoardMap   map[string]groupRegenRequest
 	regenThreadMap  map[string]ArticleEntry
+	regenCatalogMap map[string]bool
 
-	regenBoardTicker  *time.Ticker
-	ukkoTicker        *time.Ticker
-	longTermTicker    *time.Ticker
-	regenThreadTicker *time.Ticker
+	regenBoardTicker   *time.Ticker
+	ukkoTicker         *time.Ticker
+	longTermTicker     *time.Ticker
+	regenThreadTicker  *time.Ticker
+	regenCatalogTicker *time.Ticker
 
-	regenThreadLock sync.RWMutex
-	regenBoardLock  sync.RWMutex
+	regenThreadLock  sync.RWMutex
+	regenBoardLock   sync.RWMutex
+	regenCatalogLock sync.RWMutex
 }
 
 func (self *FileCache) DeleteBoardMarkup(group string) {
@@ -73,6 +75,11 @@ func (self *FileCache) getFilenameForBoardPage(boardname string, pageno int, jso
 		ext = "html"
 	}
 	fname := fmt.Sprintf("%s-%d.%s", boardname, pageno, ext)
+	return filepath.Join(self.webroot_dir, fname)
+}
+
+func (self *FileCache) getFilenameForCatalog(boardname string) string {
+	fname := fmt.Sprintf("catalog-%s.html", boardname)
 	return filepath.Join(self.webroot_dir, fname)
 }
 
@@ -121,6 +128,10 @@ func (self *FileCache) pollRegen() {
 			self.regenBoardLock.Lock()
 			self.regenBoardMap[fmt.Sprintf("%s|%s", req.group, req.page)] = req
 			self.regenBoardLock.Unlock()
+
+			self.regenCatalogLock.Lock()
+			self.regenCatalogMap[req.group] = true
+			self.regenCatalogLock.Unlock()
 			// listen for regen thread requests
 		case entry := <-self.regenThreadChan:
 			self.regenThreadLock.Lock()
@@ -146,6 +157,13 @@ func (self *FileCache) pollRegen() {
 			}
 			self.regenBoardMap = make(map[string]groupRegenRequest)
 			self.regenBoardLock.Unlock()
+		case _ = <-self.regenCatalogTicker.C:
+			self.regenCatalogLock.Lock()
+			for board, _ := range self.regenCatalogMap {
+				self.regenerateCatalog(board)
+			}
+			self.regenCatalogMap = make(map[string]bool)
+			self.regenCatalogLock.Unlock()
 		}
 	}
 }
@@ -186,6 +204,18 @@ func (self *FileCache) regenerateBoardPage(board string, page int, json bool) {
 		return
 	}
 	template.genBoardPage(self.attachments, self.prefix, self.name, board, page, wr, self.database, json)
+}
+
+// regenerate the catalog for a board
+func (self *FileCache) regenerateCatalog(board string) {
+	fname := self.getFilenameForCatalog(board)
+	wr, err := os.Create(fname)
+	defer wr.Close()
+	if err != nil {
+		log.Println("error generating catalog for", board, err)
+		return
+	}
+	template.genCatalog(self.prefix, self.name, board, wr, self.database)
 }
 
 // regenerate the front page
@@ -283,12 +313,17 @@ func (self *FileCache) Close() {
 
 func NewFileCache(prefix, webroot, name string, threads int, attachments bool, db Database, store ArticleStore) CacheInterface {
 	cache := new(FileCache)
+
 	cache.regenBoardTicker = time.NewTicker(time.Second * 10)
 	cache.longTermTicker = time.NewTicker(time.Hour)
 	cache.ukkoTicker = time.NewTicker(time.Second * 30)
 	cache.regenThreadTicker = time.NewTicker(time.Second)
+	cache.regenCatalogTicker = time.NewTicker(time.Second * 20)
+
 	cache.regenBoardMap = make(map[string]groupRegenRequest)
 	cache.regenThreadMap = make(map[string]ArticleEntry)
+	cache.regenCatalogMap = make(map[string]bool)
+
 	cache.regenThreadChan = make(chan ArticleEntry, 16)
 	cache.regenGroupChan = make(chan groupRegenRequest, 8)
 

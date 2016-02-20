@@ -274,8 +274,19 @@ func RunModEngine(mod ModEngine, regen RegenFunc) {
 					} else if action == "overchan-inet-ban" {
 						// ban action
 						target := ev.Target()
+						if target[0] == '[' {
+							// probably a literal ipv6 rangeban
+							if mod.AllowBan(pubkey) {
+								err := mod.BanAddress(target)
+								if err != nil {
+									log.Println("failed to do literal ipv6 range ban on", target, err)
+								}
+							}
+							return
+						}
 						parts := strings.Split(target, ":")
 						if len(parts) == 3 {
+							// encrypted ip
 							encaddr, key := parts[0], parts[1]
 							cidr := decAddr(encaddr, key)
 							if cidr == "" {
@@ -283,7 +294,16 @@ func RunModEngine(mod ModEngine, regen RegenFunc) {
 							} else if mod.AllowBan(pubkey) {
 								err := mod.BanAddress(cidr)
 								if err != nil {
-									log.Println(cidr, err)
+									log.Println("failed to do range ban on", cidr, err)
+								}
+							}
+						} else if len(parts) == 1 {
+							// literal cidr
+							cidr := parts[0]
+							if mod.AllowBan(pubkey) {
+								err := mod.BanAddress(cidr)
+								if err != nil {
+									log.Println("failed to do literal range ban on", cidr, err)
 								}
 							}
 						} else {

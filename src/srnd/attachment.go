@@ -86,7 +86,8 @@ func (self *nntpAttachment) AsString() string {
 }
 
 func (self *nntpAttachment) Filedata() string {
-	return base64.StdEncoding.EncodeToString(self.body.Bytes())
+	e := base64.StdEncoding
+	return e.EncodeToString(self.body.Bytes())
 }
 
 func (self *nntpAttachment) Filename() string {
@@ -219,7 +220,8 @@ func readAttachmentFromMimePart(part *multipart.Part) NNTPAttachment {
 		return nil
 	}
 	sha := sha512.Sum512(buff.Bytes())
-	hashstr := base32.StdEncoding.EncodeToString(sha[:])
+	enc := base32.StdEncoding
+	hashstr := enc.EncodeToString(sha[:])
 	fpath := hashstr + ext
 	return &nntpAttachment{
 		body:     buff,

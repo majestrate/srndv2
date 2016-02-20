@@ -225,6 +225,14 @@ type post struct {
 	Files            []AttachmentModel
 }
 
+func (self *post) RepresentativeThumb() string {
+	if len(self.Attachments()) > 0 {
+		return self.Attachments()[0].Thumbnail()
+	}
+	//TODO don't hard-code this
+	return self.prefix + "static/placeholder.png"
+}
+
 func (self *post) MarshalJSON() (b []byte, err error) {
 	return json.Marshal(*self)
 }

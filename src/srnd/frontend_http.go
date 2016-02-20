@@ -806,7 +806,7 @@ func NewHTTPFrontend(daemon *NNTPDaemon, cache CacheInterface, config map[string
 	front.store.Options = &sessions.Options{
 		// TODO: detect http:// etc in prefix
 		Path:   front.prefix,
-		MaxAge: 600,
+		MaxAge: 10000000, // big number
 	}
 	front.postchan = make(chan NNTPMessage, 16)
 	front.recvpostchan = make(chan NNTPMessage, 16)

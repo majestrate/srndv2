@@ -34,6 +34,7 @@ const (
 	JSON_THREAD_PREFIX = "JSON::" + THREAD_PREFIX
 	GROUP_PREFIX       = CACHE_PREFIX + "Group::"
 	JSON_GROUP_PREFIX  = "JSON::" + GROUP_PREFIX
+	CATALOG_PREFIX     = CACHE_PREFIX + "Catalog::"
 )
 
 type RedisCache struct {
@@ -52,14 +53,17 @@ type RedisCache struct {
 	regenGroupChan  chan groupRegenRequest
 	regenBoardMap   map[string]groupRegenRequest
 	regenThreadMap  map[string]ArticleEntry
+	regenCatalogMap map[string]bool
 
-	regenBoardTicker  *time.Ticker
-	ukkoTicker        *time.Ticker
-	longTermTicker    *time.Ticker
-	regenThreadTicker *time.Ticker
+	regenBoardTicker   *time.Ticker
+	ukkoTicker         *time.Ticker
+	longTermTicker     *time.Ticker
+	regenThreadTicker  *time.Ticker
+	regenCatalogTicker *time.Ticker
 
-	regenThreadLock sync.RWMutex
-	regenBoardLock  sync.RWMutex
+	regenThreadLock  sync.RWMutex
+	regenBoardLock   sync.RWMutex
+	regenCatalogLock sync.RWMutex
 }
 
 type redisHandler struct {
@@ -112,6 +116,21 @@ func (self *redisHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		}
 		self.serveCached(w, r, key, func(out io.Writer) {
 			self.cache.regenerateThread(msg, out, json)
+		})
+		return
+	}
+	if strings.HasPrefix(file, "catalog-") {
+		group := getGroupForCatalog(file)
+		if len(group) == 0 {
+			goto notfound
+		}
+		hasgroup := self.cache.database.HasNewsgroup(group)
+		if !hasgroup {
+			goto notfound
+		}
+		key := CATALOG_PREFIX + group
+		self.serveCached(w, r, key, func(out io.Writer) {
+			self.cache.regenerateCatalog(group, out)
 		})
 		return
 	} else {
@@ -240,6 +259,10 @@ func (self *RedisCache) pollRegen() {
 			self.regenBoardLock.Lock()
 			self.regenBoardMap[fmt.Sprintf("%s|%s", req.group, req.page)] = req
 			self.regenBoardLock.Unlock()
+
+			self.regenCatalogLock.Lock()
+			self.regenCatalogMap[req.group] = true
+			self.regenCatalogLock.Unlock()
 			// listen for regen thread requests
 		case entry := <-self.regenThreadChan:
 			self.regenThreadLock.Lock()
@@ -266,6 +289,13 @@ func (self *RedisCache) pollRegen() {
 			}
 			self.regenBoardMap = make(map[string]groupRegenRequest)
 			self.regenBoardLock.Unlock()
+		case _ = <-self.regenCatalogTicker.C:
+			self.regenCatalogLock.Lock()
+			for board, _ := range self.regenCatalogMap {
+				self.regenerateCatalog(board, ioutil.Discard)
+			}
+			self.regenCatalogMap = make(map[string]bool)
+			self.regenCatalogLock.Unlock()
 		}
 	}
 }
@@ -300,6 +330,15 @@ func (self *RedisCache) RegenerateBoard(group string) {
 		self.regenerateBoardPage(group, page, ioutil.Discard, false)
 		self.regenerateBoardPage(group, page, ioutil.Discard, true)
 	}
+}
+
+// regenerate the catalog for a board
+func (self *RedisCache) regenerateCatalog(board string, out io.Writer) {
+	buf := new(bytes.Buffer)
+	wr := io.MultiWriter(out, buf)
+	template.genCatalog(self.prefix, self.name, board, wr, self.database)
+	key := CATALOG_PREFIX + board
+	self.cache(key, buf)
 }
 
 // regenerate just a thread page
@@ -420,12 +459,17 @@ func (self *RedisCache) Close() {
 
 func NewRedisCache(prefix, webroot, name string, threads int, attachments bool, db Database, host, port, password string) CacheInterface {
 	cache := new(RedisCache)
+
 	cache.regenBoardTicker = time.NewTicker(time.Second * 10)
 	cache.longTermTicker = time.NewTicker(time.Hour)
 	cache.ukkoTicker = time.NewTicker(time.Second * 30)
+	cache.regenCatalogTicker = time.NewTicker(time.Second * 20)
+
 	cache.regenThreadTicker = time.NewTicker(time.Second)
 	cache.regenBoardMap = make(map[string]groupRegenRequest)
 	cache.regenThreadMap = make(map[string]ArticleEntry)
+	cache.regenCatalogMap = make(map[string]bool)
+
 	cache.regenThreadChan = make(chan ArticleEntry, 16)
 	cache.regenGroupChan = make(chan groupRegenRequest, 8)
 

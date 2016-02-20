@@ -40,6 +40,12 @@ type CryptoConfig struct {
 	cert_dir     string
 }
 
+// pprof settings
+type ProfilingConfig struct {
+	bind   string
+	enable bool
+}
+
 type SRNdConfig struct {
 	daemon   map[string]string
 	crypto   *CryptoConfig
@@ -50,6 +56,7 @@ type SRNdConfig struct {
 	frontend map[string]string
 	system   map[string]string
 	worker   map[string]string
+	pprof    *ProfilingConfig
 }
 
 // check for config files
@@ -103,6 +110,11 @@ func GenSRNdConfig() error {
 	sect.Add("allow_attachments", "1")
 	sect.Add("require_tls", "1")
 
+	// profiling settings
+	sect = conf.NewSection("pprof")
+	sect.Add("enable", "0")
+	sect.Add("bind", "127.0.0.1:17000")
+
 	// crypto related section
 	sect = conf.NewSection("crypto")
 	sect.Add("tls-keyname", "overchan")
@@ -122,18 +134,17 @@ func GenSRNdConfig() error {
 
 	// database backend config
 	sect = conf.NewSection("database")
-
-	// change this to mysql to use with mariadb or mysql
-	sect.Add("type", "postgres")
-	// change this to infinity to use with infinity-next
-	sect.Add("schema", "srnd")
-	sect.Add("host", "/var/run/postgresql")
-	sect.Add("port", "5432")
-	sect.Add("user", "srnd")
-	sect.Add("password", "srnd")
+	// defaults to redis
+	sect.Add("type", "redis")
+	sect.Add("schema", "single")
+	sect.Add("host", "localhost")
+	sect.Add("port", "6379")
+	sect.Add("user", "")
+	sect.Add("password", "")
 
 	// cache backend config
 	sect = conf.NewSection("cache")
+	// defaults to file
 	sect.Add("type", "file")
 
 	// baked in static html frontend
@@ -173,6 +184,14 @@ func ReadConfig() *SRNdConfig {
 		return nil
 	}
 	var sconf SRNdConfig
+
+	s, err = conf.Section("pprof")
+	if err == nil {
+		opts := s.Options()
+		sconf.pprof = new(ProfilingConfig)
+		sconf.pprof.enable = opts["enable"] == "1"
+		sconf.pprof.bind = opts["bind"]
+	}
 
 	s, err = conf.Section("crypto")
 	if err == nil {

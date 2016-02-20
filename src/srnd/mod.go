@@ -128,7 +128,7 @@ func ParseModEvent(line string) ModEvent {
 // does not sign
 func wrapModMessage(mm ModMessage) NNTPMessage {
 	pathname := "nntpchan.censor"
-	nntp := nntpArticle{
+	nntp := &nntpArticle{
 		headers: make(ArticleHeaders),
 	}
 	nntp.headers.Set("Newsgroups", "ctl")
@@ -145,15 +145,14 @@ func wrapModMessage(mm ModMessage) NNTPMessage {
 	_ = mm.WriteTo(&buff, []byte{13, 10})
 	// create plaintext attachment, cut off last 2 bytes
 	str := buff.String()
+	buff.Reset()
 	nntp.message = createPlaintextAttachment(str[:len(str)-2])
 	return nntp
 }
 
 type ModEngine interface {
-	// chan to send the mod engine posts
-	// assumes ctl newsgroup only
-	MessageChan() chan NNTPMessage
-
+	// chan to send the mod engine posts given message_id
+	MessageChan() chan string
 	// delete post of a poster
 	DeletePost(msgid string, regen RegenFunc) error
 	// ban a cidr
@@ -162,15 +161,21 @@ type ModEngine interface {
 	AllowDelete(pubkey string) bool
 	// do we allow this public key to ban?
 	AllowBan(pubkey string) bool
+	// load a mod message
+	LoadMessage(msgid string) NNTPMessage
 }
 
 type modEngine struct {
 	database Database
 	store    ArticleStore
-	chnl     chan NNTPMessage
+	chnl     chan string
 }
 
-func (self modEngine) MessageChan() chan NNTPMessage {
+func (self modEngine) LoadMessage(msgid string) NNTPMessage {
+	return self.store.GetMessage(msgid)
+}
+
+func (self modEngine) MessageChan() chan string {
 	return self.chnl
 }
 
@@ -249,7 +254,12 @@ func RunModEngine(mod ModEngine, regen RegenFunc) {
 
 	chnl := mod.MessageChan()
 	for {
-		nntp := <-chnl
+		msgid := <-chnl
+		nntp := mod.LoadMessage(msgid)
+		if nntp == nil {
+			log.Println("failed to load mod message", msgid)
+			continue
+		}
 		// sanity check
 		if nntp.Newsgroup() == "ctl" {
 			inner_nntp := nntp.Signed()
@@ -282,7 +292,7 @@ func RunModEngine(mod ModEngine, regen RegenFunc) {
 									log.Println("failed to do literal ipv6 range ban on", target, err)
 								}
 							}
-							return
+							continue
 						}
 						parts := strings.Split(target, ":")
 						if len(parts) == 3 {
@@ -313,5 +323,7 @@ func RunModEngine(mod ModEngine, regen RegenFunc) {
 				}
 			}
 		}
+		// done with this one
+		nntp.Reset()
 	}
 }

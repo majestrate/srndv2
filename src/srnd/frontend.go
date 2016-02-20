@@ -5,14 +5,26 @@
 //
 package srnd
 
+// ( message-id, references, newsgroup )
+type frontendPost [3]string
+
+func (p frontendPost) MessageID() string {
+	return p[0]
+}
+
+func (p frontendPost) Reference() string {
+	return p[1]
+}
+
+func (p frontendPost) Newsgroup() string {
+	return p[2]
+}
+
 // frontend interface for any type of frontend
 type Frontend interface {
 
-	// channel that is for the nntpd to poll for new posts from this frontend
-	NewPostsChan() chan NNTPMessage
-
 	// channel that is for the frontend to pool for new posts from the nntpd
-	PostsChan() chan NNTPMessage
+	PostsChan() chan frontendPost
 
 	// run mainloop
 	Mainloop()

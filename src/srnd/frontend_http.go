@@ -63,8 +63,7 @@ type httpFrontend struct {
 	httpmux      *mux.Router
 	daemon       *NNTPDaemon
 	cache        CacheInterface
-	postchan     chan NNTPMessage
-	recvpostchan chan NNTPMessage
+	recvpostchan chan frontendPost
 	bindaddr     string
 	name         string
 
@@ -96,11 +95,7 @@ func (self httpFrontend) AllowNewsgroup(group string) bool {
 	return strings.HasPrefix(group, "overchan.") && newsgroupValidFormat(group) || group == "ctl" && group != "overchan."
 }
 
-func (self httpFrontend) NewPostsChan() chan NNTPMessage {
-	return self.postchan
-}
-
-func (self httpFrontend) PostsChan() chan NNTPMessage {
+func (self httpFrontend) PostsChan() chan frontendPost {
 	return self.recvpostchan
 }
 
@@ -139,7 +134,7 @@ func (self *httpFrontend) poll() {
 		select {
 		case nntp := <-modChnl:
 			// forward signed messages to daemon
-			self.postchan <- nntp
+			self.daemon.infeed <- nntp
 		case nntp := <-self.recvpostchan:
 			// get root post and tell frontend to regen that thread
 			msgid := nntp.MessageID()
@@ -384,7 +379,7 @@ func (self *httpFrontend) handle_postform(wr http.ResponseWriter, r *http.Reques
 // turn a post request into an nntp article write it to temp dir and tell daemon
 func (self *httpFrontend) handle_postRequest(pr *postRequest, b bannedFunc, e errorFunc, s successFunc, createGroup bool) {
 	var err error
-	var nntp nntpArticle
+	nntp := new(nntpArticle)
 	var banned bool
 	nntp.headers = make(ArticleHeaders)
 	address := pr.IpAddress
@@ -551,7 +546,7 @@ func (self *httpFrontend) handle_postRequest(pr *postRequest, b bannedFunc, e er
 
 	// add attachment
 	if self.attachments && len(att.Filedata) > 0 {
-		nntp = nntp.Attach(createAttachment(att.Filetype, att.Filename, strings.NewReader(att.Filedata))).(nntpArticle)
+		nntp.Attach(createAttachment(att.Filetype, att.Filename, strings.NewReader(att.Filedata)))
 	}
 	// pack it before sending so that the article is well formed
 	nntp.Pack()
@@ -808,8 +803,7 @@ func NewHTTPFrontend(daemon *NNTPDaemon, cache CacheInterface, config map[string
 		Path:   front.prefix,
 		MaxAge: 10000000, // big number
 	}
-	front.postchan = make(chan NNTPMessage, 16)
-	front.recvpostchan = make(chan NNTPMessage, 16)
+	front.recvpostchan = make(chan frontendPost, 16)
 	front.regenThreadChan = front.cache.GetThreadChan()
 	front.regenGroupChan = front.cache.GetGroupChan()
 	return front

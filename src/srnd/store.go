@@ -67,7 +67,7 @@ type articleStore struct {
 }
 
 func createArticleStore(config map[string]string, database Database) ArticleStore {
-	store := articleStore{
+	store := &articleStore{
 		directory:    config["store_dir"],
 		temp:         config["incoming_dir"],
 		attachments:  config["attachments_dir"],
@@ -81,12 +81,12 @@ func createArticleStore(config map[string]string, database Database) ArticleStor
 	return store
 }
 
-func (self articleStore) TempDir() string {
+func (self *articleStore) TempDir() string {
 	return self.temp
 }
 
 // initialize article store
-func (self articleStore) Init() {
+func (self *articleStore) Init() {
 	EnsureDir(self.directory)
 	EnsureDir(self.temp)
 	EnsureDir(self.attachments)
@@ -102,7 +102,7 @@ func (self articleStore) Init() {
 	}
 }
 
-func (self articleStore) isAudio(fname string) bool {
+func (self *articleStore) isAudio(fname string) bool {
 	for _, ext := range []string{".mp3", ".ogg", ".oga", ".opus", ".flac", ".m4a"} {
 		if strings.HasSuffix(strings.ToLower(fname), ext) {
 			return true
@@ -112,7 +112,7 @@ func (self articleStore) isAudio(fname string) bool {
 }
 
 // is this an image format we need convert for?
-func (self articleStore) isImage(fname string) bool {
+func (self *articleStore) isImage(fname string) bool {
 	for _, ext := range []string{".gif", ".ico", ".png", ".jpeg", ".jpg", ".png", ".webp"} {
 		if strings.HasSuffix(strings.ToLower(fname), ext) {
 			return true
@@ -122,7 +122,7 @@ func (self articleStore) isImage(fname string) bool {
 
 }
 
-func (self articleStore) GenerateThumbnail(fname string) error {
+func (self *articleStore) GenerateThumbnail(fname string) error {
 	outfname := self.ThumbnailFilepath(fname)
 	infname := self.AttachmentFilepath(fname)
 	var cmd *exec.Cmd
@@ -151,7 +151,7 @@ func (self articleStore) GenerateThumbnail(fname string) error {
 	return err
 }
 
-func (self articleStore) GetAllAttachments() (names []string, err error) {
+func (self *articleStore) GetAllAttachments() (names []string, err error) {
 	var f *os.File
 	f, err = os.Open(self.attachments)
 	if err == nil {
@@ -160,11 +160,11 @@ func (self articleStore) GetAllAttachments() (names []string, err error) {
 	return
 }
 
-func (self articleStore) ReadMessage(r io.Reader) (NNTPMessage, error) {
+func (self *articleStore) ReadMessage(r io.Reader) (NNTPMessage, error) {
 	return read_message(r)
 }
 
-func (self articleStore) StorePost(nntp NNTPMessage) (err error) {
+func (self *articleStore) StorePost(nntp NNTPMessage) (err error) {
 
 	f := self.CreateFile(nntp.MessageID())
 	if f != nil {
@@ -195,7 +195,7 @@ func (self articleStore) StorePost(nntp NNTPMessage) (err error) {
 }
 
 // save an attachment
-func (self articleStore) saveAttachment(att NNTPAttachment) {
+func (self *articleStore) saveAttachment(att NNTPAttachment) {
 	var err error
 	var f io.WriteCloser
 	fpath := att.Filepath()
@@ -235,17 +235,17 @@ func (self articleStore) saveAttachment(att NNTPAttachment) {
 }
 
 // eh this isn't really needed is it?
-func (self articleStore) WriteMessage(nntp NNTPMessage, wr io.Writer) (err error) {
+func (self *articleStore) WriteMessage(nntp NNTPMessage, wr io.Writer) (err error) {
 	return nntp.WriteTo(wr, "\n")
 }
 
 // get the filepath for an attachment
-func (self articleStore) AttachmentFilepath(fname string) string {
+func (self *articleStore) AttachmentFilepath(fname string) string {
 	return filepath.Join(self.attachments, fname)
 }
 
 // get the filepath for a thumbanil
-func (self articleStore) ThumbnailFilepath(fname string) string {
+func (self *articleStore) ThumbnailFilepath(fname string) string {
 	// all thumbnails are jpegs now
 	if strings.HasSuffix(fname, ".gif") {
 		return filepath.Join(self.thumbs, fname)
@@ -254,7 +254,7 @@ func (self articleStore) ThumbnailFilepath(fname string) string {
 }
 
 // create a file for this article
-func (self articleStore) CreateFile(messageID string) io.WriteCloser {
+func (self *articleStore) CreateFile(messageID string) io.WriteCloser {
 	fname := self.GetFilename(messageID)
 	file, err := os.Create(fname)
 	if err != nil {
@@ -265,7 +265,7 @@ func (self articleStore) CreateFile(messageID string) io.WriteCloser {
 }
 
 // create a temp file for inboud articles
-func (self articleStore) CreateTempFile(messageID string) io.WriteCloser {
+func (self *articleStore) CreateTempFile(messageID string) io.WriteCloser {
 	fname := self.GetTempFilename(messageID)
 	if CheckFile(fname) {
 		log.Println(fname, "already open")
@@ -280,12 +280,12 @@ func (self articleStore) CreateTempFile(messageID string) io.WriteCloser {
 }
 
 // return true if we have an article
-func (self articleStore) HasArticle(messageID string) bool {
+func (self *articleStore) HasArticle(messageID string) bool {
 	return CheckFile(self.GetFilename(messageID))
 }
 
 // get the filename for this article
-func (self articleStore) GetFilename(messageID string) string {
+func (self *articleStore) GetFilename(messageID string) string {
 	if !ValidMessageID(messageID) {
 		log.Println("!!! bug: tried to open invalid message", messageID, "!!!")
 		return ""
@@ -294,7 +294,7 @@ func (self articleStore) GetFilename(messageID string) string {
 }
 
 // get the filename for this article
-func (self articleStore) GetTempFilename(messageID string) string {
+func (self *articleStore) GetTempFilename(messageID string) string {
 	if !ValidMessageID(messageID) {
 		log.Println("!!! bug: tried to open invalid temp message", messageID, "!!!")
 		return ""
@@ -303,7 +303,7 @@ func (self articleStore) GetTempFilename(messageID string) string {
 }
 
 // loads temp message and deletes old article
-func (self articleStore) ReadTempMessage(messageID string) NNTPMessage {
+func (self *articleStore) ReadTempMessage(messageID string) NNTPMessage {
 	fname := self.GetTempFilename(messageID)
 	nntp := self.readfile(fname)
 	DelFile(fname)
@@ -311,7 +311,7 @@ func (self articleStore) ReadTempMessage(messageID string) NNTPMessage {
 }
 
 // read a file give filepath
-func (self articleStore) readfile(fname string) NNTPMessage {
+func (self *articleStore) readfile(fname string) NNTPMessage {
 
 	file, err := os.Open(fname)
 	if err != nil {
@@ -329,7 +329,7 @@ func (self articleStore) readfile(fname string) NNTPMessage {
 }
 
 // get the replies for a thread
-func (self articleStore) GetThreadReplies(messageID string, last int) []NNTPMessage {
+func (self *articleStore) GetThreadReplies(messageID string, last int) []NNTPMessage {
 	var repls []NNTPMessage
 	if self.database.ThreadHasReplies(messageID) {
 		rpls := self.database.GetThreadReplies(messageID, 0, last)
@@ -350,12 +350,12 @@ func (self articleStore) GetThreadReplies(messageID string, last int) []NNTPMess
 
 // load an article
 // return nil on failure
-func (self articleStore) GetMessage(messageID string) NNTPMessage {
+func (self *articleStore) GetMessage(messageID string) NNTPMessage {
 	return self.readfile(self.GetFilename(messageID))
 }
 
 // get article with headers only
-func (self articleStore) GetHeaders(messageID string) ArticleHeaders {
+func (self *articleStore) GetHeaders(messageID string) ArticleHeaders {
 	// TODO: don't load the entire body
 	nntp := self.readfile(self.GetFilename(messageID))
 	if nntp == nil {
@@ -367,7 +367,7 @@ func (self articleStore) GetHeaders(messageID string) ArticleHeaders {
 func read_message(r io.Reader) (NNTPMessage, error) {
 
 	msg, err := mail.ReadMessage(r)
-	var nntp nntpArticle
+	nntp := new(nntpArticle)
 
 	if err == nil {
 		nntp.headers = ArticleHeaders(msg.Header)
@@ -394,14 +394,13 @@ func read_message(r io.Reader) (NNTPMessage, error) {
 						if media_type == "text/plain" {
 							att := readAttachmentFromMimePart(part)
 							if att != nil {
-								nntp.message = att.(nntpAttachment)
-								nntp.message.header.Set("Content-Type", part_type)
+								nntp.message = att
 							}
 						} else {
 							// non plaintext gets added to attachments
 							att := readAttachmentFromMimePart(part)
 							if att != nil {
-								nntp = nntp.Attach(att).(nntpArticle)
+								nntp.Attach(att)
 							}
 						}
 					} else {
@@ -413,7 +412,6 @@ func read_message(r io.Reader) (NNTPMessage, error) {
 					return nil, err
 				}
 			}
-
 		} else if media_type == "message/rfc822" {
 			// tripcoded message
 			sig := nntp.headers.Get("X-Signature-Ed25519-Sha512", "")
@@ -425,34 +423,49 @@ func read_message(r io.Reader) (NNTPMessage, error) {
 			log.Printf("got signed message from %s", pk)
 			pk_bytes := unhex(pk)
 			sig_bytes := unhex(sig)
-			r := bufio.NewReader(msg.Body)
+			signed_body := new(bytes.Buffer)
+			nntp.signedPart = &nntpAttachment{
+				body: signed_body,
+			}
+			h := sha512.New()
+			var buff bytes.Buffer
+			mw := io.MultiWriter(signed_body, &buff)
+			_, err := io.Copy(mw, msg.Body)
+			if err != nil {
+				log.Println("error reading signed body", err)
+				return nil, err
+			}
+			r := bufio.NewReader(&buff)
 			crlf := []byte{13, 10}
+			line, err := r.ReadBytes('\n')
+			if err != nil {
+				return nil, err
+			}
+			h.Write(line[:len(line)-1])
 			for {
 				line, err := r.ReadBytes('\n')
 				if err == io.EOF {
 					break
 				}
-				nntp.signedPart.body.Write(line[:len(line)-1])
-				nntp.signedPart.body.Write(crlf)
+				h.Write(crlf)
+				h.Write(line[:len(line)-1])
 			}
-			if nntp.signedPart.body.Len() < 2 {
-				log.Println("signed body is too small")
+			buff.Reset()
+			hash := h.Sum(nil)
+			log.Printf("hash=%s", hexify(hash))
+			log.Printf("sig=%s", hexify(sig_bytes))
+			if nacl.CryptoVerifyFucky(hash, sig_bytes, pk_bytes) {
+				log.Println("signature is valid :^)")
+				return nntp, nil
 			} else {
-				body := nntp.signedPart.body.Bytes()[:nntp.signedPart.body.Len()-2]
-				body_hash := sha512.Sum512(body)
-				log.Printf("hash=%s", hexify(body_hash[:]))
-				if nacl.CryptoVerifyFucky(body_hash[:], sig_bytes, pk_bytes) {
-					log.Println("signature is valid :^)")
-					return nntp, nil
-				} else {
-					log.Println("!!!signature is invalid!!!")
-				}
+				log.Println("!!!signature is invalid!!!")
 			}
 		} else {
 			// plaintext attachment
 			var buff bytes.Buffer
 			_, err = io.Copy(&buff, msg.Body)
 			nntp.message = createPlaintextAttachment(buff.String())
+			buff.Reset()
 			return nntp, err
 		}
 	} else {

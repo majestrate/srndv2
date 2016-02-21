@@ -740,8 +740,7 @@ func (self *httpFrontend) Mainloop() {
 	var sec [32]byte
 	copy(sec[:], b)
 	// TODO: make configurable
-	csrf.HttpOnly(false)
-	CSRF := csrf.Protect(sec[:])
+	CSRF := csrf.Protect(sec[:], csrf.Secure(false))
 
 	m := mux.NewRouter()
 	// modui handlers

@@ -739,6 +739,8 @@ func (self *httpFrontend) Mainloop() {
 	b := []byte(self.secret)
 	var sec [32]byte
 	copy(sec[:], b)
+	// TODO: make configurable
+	csrf.Secure(false)
 	CSRF := csrf.Protect(sec[:])
 
 	m := mux.NewRouter()

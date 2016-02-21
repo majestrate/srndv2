@@ -209,7 +209,7 @@ func (self *templateEngine) obtainBoard(prefix, frontend, group string, update b
 	p := db.GetGroupPageCount(group)
 	pages := int(p)
 	// model is not up to date
-	if (!ok) || len(model) < pages {
+	if update || (!ok) || len(model) < pages {
 		perpage, _ := db.GetThreadsPerPage(group)
 		// reload all the pages
 		var newModel GroupModel
@@ -227,7 +227,7 @@ func (self *templateEngine) obtainBoard(prefix, frontend, group string, update b
 }
 
 func (self *templateEngine) genCatalog(prefix, frontend, group string, wr io.Writer, db Database) {
-	board := self.obtainBoard(prefix, frontend, group, true, db)
+	board := self.obtainBoard(prefix, frontend, group, false, db)
 	catalog := new(catalogModel)
 	catalog.prefix = prefix
 	catalog.frontend = frontend

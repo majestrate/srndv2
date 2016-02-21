@@ -8,7 +8,6 @@ package srnd
 import (
 	"encoding/json"
 	"fmt"
-	"io"
 	"path/filepath"
 	"strconv"
 	"strings"
@@ -40,12 +39,6 @@ func (self *catalogModel) Navbar() string {
 	param["prefix"] = self.prefix
 	param["links"] = links
 	return template.renderTemplate("navbar.mustache", param)
-}
-
-func (self *catalogModel) RenderTo(wr io.Writer) error {
-	data := template.renderTemplate("catalog.mustache", map[string]interface{}{"board": self})
-	io.WriteString(wr, data)
-	return nil
 }
 
 func (self *catalogModel) MarshalJSON() (b []byte, err error) {
@@ -186,14 +179,6 @@ func (self *boardModel) Threads() []ThreadModel {
 	return self.threads
 }
 
-func (self *boardModel) RenderTo(wr io.Writer) error {
-	param := make(map[string]interface{})
-	param["board"] = self
-	param["form"] = renderPostForm(self.Prefix(), self.board, "", self.allowFiles)
-	_, err := io.WriteString(wr, template.renderTemplate("board.mustache", param))
-	return err
-}
-
 // refetch all threads on this page
 func (self *boardModel) Update(db Database) {
 	// ignore error
@@ -249,11 +234,6 @@ func (self *attachment) MarshalJSON() (b []byte, err error) {
 
 func (self *attachment) Prefix() string {
 	return self.prefix
-}
-
-func (self *attachment) RenderTo(wr io.Writer) error {
-	// does nothing
-	return nil
 }
 
 func (self *attachment) Thumbnail() string {
@@ -387,11 +367,6 @@ func (self *post) IsTor() bool {
 	return len(self.addr) == 0
 }
 
-func (self *post) RenderTo(wr io.Writer) error {
-	_, err := io.WriteString(wr, self.RenderPost())
-	return err
-}
-
 func (self *post) RenderPost() string {
 	return template.renderTemplate("post.mustache", self)
 }
@@ -485,13 +460,6 @@ func (self *thread) BoardURL() string {
 // get our default template dir
 func defaultTemplateDir() string {
 	return filepath.Join("contrib", "templates", "default")
-}
-
-func (self *thread) RenderTo(wr io.Writer) error {
-	postform := renderPostForm(self.prefix, self.Board(), self.Posts[0].MessageID(), self.allowFiles)
-	data := template.renderTemplate("thread.mustache", map[string]interface{}{"thread": self, "form": postform})
-	io.WriteString(wr, data)
-	return nil
 }
 
 func (self *thread) OP() PostModel {

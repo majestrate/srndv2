@@ -11,6 +11,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/gorilla/csrf"
 	"github.com/gorilla/sessions"
 	"github.com/majestrate/nacl"
 	"io"
@@ -357,14 +358,15 @@ func (self httpModUI) checkSession(r *http.Request) bool {
 	return false
 }
 
-func (self httpModUI) writeTemplate(wr http.ResponseWriter, name string) {
-	self.writeTemplateParam(wr, name, nil)
+func (self httpModUI) writeTemplate(wr http.ResponseWriter, r *http.Request, name string) {
+	self.writeTemplateParam(wr, r, name, nil)
 }
 
-func (self httpModUI) writeTemplateParam(wr http.ResponseWriter, name string, param map[string]string) {
+func (self httpModUI) writeTemplateParam(wr http.ResponseWriter, r *http.Request, name string, param map[string]interface{}) {
 	if param == nil {
-		param = make(map[string]string)
+		param = make(map[string]interface{})
 	}
+	param[csrf.TemplateTag] = csrf.TemplateField(r)
 	param["prefix"] = self.prefix
 	param["mod_prefix"] = self.mod_prefix
 	io.WriteString(wr, template.renderTemplate(name, param))
@@ -373,6 +375,7 @@ func (self httpModUI) writeTemplateParam(wr http.ResponseWriter, name string, pa
 // do a function as authenticated
 // pass in the request path to the handler
 func (self httpModUI) asAuthed(handler func(string), wr http.ResponseWriter, r *http.Request) {
+	wr.Header().Set("X-CSRF-Token", csrf.Token(r))
 	if self.checkSession(r) {
 		handler(r.URL.Path)
 	} else {
@@ -586,24 +589,24 @@ func (self httpModUI) HandleLogin(wr http.ResponseWriter, r *http.Request) {
 			msg += "invalid key"
 		}
 	}
-	self.writeTemplateParam(wr, "modlogin_result.mustache", map[string]string{"message": msg})
+	self.writeTemplateParam(wr, r, "modlogin_result.mustache", map[string]interface{}{"message": msg, csrf.TemplateTag: csrf.TemplateField(r)})
 }
 
 func (self httpModUI) HandleKeyGen(wr http.ResponseWriter, r *http.Request) {
 	pk, sk := newSignKeypair()
 	tripcode := makeTripcode(pk)
-	self.writeTemplateParam(wr, "keygen.mustache", map[string]string{"public": pk, "secret": sk, "tripcode": tripcode})
+	self.writeTemplateParam(wr, r, "keygen.mustache", map[string]interface{}{"public": pk, "secret": sk, "tripcode": tripcode})
 }
 
 func (self httpModUI) ServeModPage(wr http.ResponseWriter, r *http.Request) {
 	if self.checkSession(r) {
 		// we are logged in
 		// serve mod page
-		self.writeTemplate(wr, "modpage.mustache")
+		self.writeTemplate(wr, r, "modpage.mustache")
 	} else {
 		// we are not logged in
 		// serve login page
-		self.writeTemplate(wr, "modlogin.mustache")
+		self.writeTemplate(wr, r, "modlogin.mustache")
 	}
 
 }

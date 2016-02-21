@@ -179,6 +179,12 @@ func (self *templateEngine) renderTemplate(name string, obj interface{}) string 
 	}
 }
 
+// write a template to an io.Writer
+func (self *templateEngine) writeTemplate(name string, obj interface{}, wr io.Writer) (err error) {
+	_, err = io.WriteString(wr, self.renderTemplate(name, obj))
+	return
+}
+
 // easy wrapper for json.NewEncoder
 func (self *templateEngine) renderJSON(wr io.Writer, obj interface{}) {
 	err := json.NewEncoder(wr).Encode(obj)
@@ -233,7 +239,7 @@ func (self *templateEngine) genCatalog(prefix, frontend, group string, wr io.Wri
 			catalog.threads = append(catalog.threads, &catalogItemModel{op: th.OP(), page: page, replycount: len(th.Replies())})
 		}
 	}
-	catalog.RenderTo(wr)
+	self.writeTemplate("catalog.mustache", map[string]interface{}{"board": catalog}, wr)
 }
 
 // generate a board page
@@ -246,14 +252,15 @@ func (self *templateEngine) genBoardPage(allowFiles bool, prefix, frontend, news
 		log.Println("board page should not exist", newsgroup, "page", page)
 		return
 	}
-	// render it
-	board[page].SetAllowFiles(allowFiles)
+	// update link cache
 	updateLinkCacheForBoard(board[page])
+	// render it
 	if json {
 		p := board[page]
 		self.renderJSON(wr, p)
 	} else {
-		board[page].RenderTo(wr)
+		form := renderPostForm(prefix, newsgroup, "", allowFiles)
+		self.writeTemplate("board.mustache", map[string]interface{}{"board": board[page], "page": page, "form": form}, wr)
 	}
 }
 
@@ -296,7 +303,7 @@ func (self *templateEngine) genUkko(prefix, frontend string, wr io.Writer, datab
 	if json {
 		self.renderJSON(wr, obj)
 	} else {
-		io.WriteString(wr, template.renderTemplate("ukko.mustache", obj))
+		self.writeTemplate("ukko.mustache", obj, wr)
 	}
 }
 
@@ -311,13 +318,14 @@ func (self *templateEngine) genThread(allowFiles bool, root ArticleEntry, prefix
 		if t != nil {
 			// update thread
 			t.Update(db)
-			// render thread
-			t.SetAllowFiles(allowFiles)
+			// update link cache
 			updateLinkCacheForThread(t)
+			// render it
 			if json {
 				self.renderJSON(wr, t)
 			} else {
-				t.RenderTo(wr)
+				form := renderPostForm(prefix, newsgroup, msgid, allowFiles)
+				self.writeTemplate("thread.mustache", map[string]interface{}{"thread": t, "board": pagemodel, "form": form}, wr)
 			}
 			return
 		}
@@ -332,12 +340,12 @@ func (self *templateEngine) genThread(allowFiles bool, root ArticleEntry, prefix
 		if t != nil {
 			// we found it
 			// render thread
-			t.SetAllowFiles(allowFiles)
 			updateLinkCacheForThread(t)
 			if json {
 				self.renderJSON(wr, t)
 			} else {
-				t.RenderTo(wr)
+				form := renderPostForm(prefix, newsgroup, msgid, allowFiles)
+				self.writeTemplate("thread.mustache", map[string]interface{}{"thread": t, "board": pagemodel, "form": form}, wr)
 			}
 			self.groups_mtx.Lock()
 			self.groups[newsgroup] = b

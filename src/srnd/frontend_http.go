@@ -11,6 +11,7 @@ import (
 	"errors"
 	"fmt"
 	"github.com/dchest/captcha"
+	"github.com/gorilla/csrf"
 	"github.com/gorilla/mux"
 	"github.com/gorilla/sessions"
 	"github.com/gorilla/websocket"
@@ -66,6 +67,8 @@ type httpFrontend struct {
 	recvpostchan chan frontendPost
 	bindaddr     string
 	name         string
+
+	secret string
 
 	webroot_dir  string
 	template_dir string
@@ -732,33 +735,37 @@ func (self *httpFrontend) Mainloop() {
 
 	cache_handler := self.cache.GetHandler()
 
+	// csrf protection
+	b := []byte(self.secret)
+	var sec [32]byte
+	copy(sec[:], b)
+	CSRF := csrf.Protect(sec[:])
+
+	m := mux.NewRouter()
 	// modui handlers
-	self.httpmux.Path("/mod/").HandlerFunc(self.modui.ServeModPage).Methods("GET")
-	self.httpmux.Path("/mod/keygen").HandlerFunc(self.modui.HandleKeyGen).Methods("GET")
-	self.httpmux.Path("/mod/login").HandlerFunc(self.modui.HandleLogin).Methods("POST")
-	self.httpmux.Path("/mod/del/{article_hash}").HandlerFunc(self.modui.HandleDeletePost).Methods("GET")
-	self.httpmux.Path("/mod/ban/{address}").HandlerFunc(self.modui.HandleBanAddress).Methods("GET")
-	self.httpmux.Path("/mod/unban/{address}").HandlerFunc(self.modui.HandleUnbanAddress).Methods("GET")
-	self.httpmux.Path("/mod/addkey/{pubkey}").HandlerFunc(self.modui.HandleAddPubkey).Methods("GET")
-	self.httpmux.Path("/mod/delkey/{pubkey}").HandlerFunc(self.modui.HandleDelPubkey).Methods("GET")
-	self.httpmux.Path("/mod/admin/{action}").HandlerFunc(self.modui.HandleAdminCommand).Methods("GET", "POST")
-	// webroot handler
-	self.httpmux.Path("/").Handler(cache_handler)
-	self.httpmux.Path("/thm/{f}").Handler(http.FileServer(http.Dir(self.webroot_dir)))
-	self.httpmux.Path("/img/{f}").Handler(http.FileServer(http.Dir(self.webroot_dir)))
-	self.httpmux.Path("/{f}.html").Handler(cache_handler)
-	self.httpmux.Path("/{f}.json").Handler(cache_handler)
-	self.httpmux.Path("/static/{f}").Handler(http.FileServer(http.Dir(self.static_dir)))
-	// post handler
-	self.httpmux.Path("/post/{f}").HandlerFunc(self.handle_poster).Methods("POST")
-	// captcha handlers
-	self.httpmux.Path("/captcha/img").HandlerFunc(self.new_captcha).Methods("GET")
-	self.httpmux.Path("/captcha/{f}").Handler(captcha.Server(350, 175)).Methods("GET")
-	self.httpmux.Path("/captcha/new.json").HandlerFunc(self.new_captcha_json).Methods("GET")
-	// helper handlers
-	self.httpmux.Path("/new/").HandlerFunc(self.handle_newboard).Methods("GET")
-	// api handler
-	self.httpmux.Path("/api/{meth}").HandlerFunc(self.handle_api).Methods("POST", "GET")
+	m.Path("/mod/").HandlerFunc(self.modui.ServeModPage).Methods("GET")
+	m.Path("/mod/keygen").HandlerFunc(self.modui.HandleKeyGen).Methods("GET")
+	m.Path("/mod/login").HandlerFunc(self.modui.HandleLogin).Methods("POST")
+	m.Path("/mod/del/{article_hash}").HandlerFunc(self.modui.HandleDeletePost).Methods("GET")
+	m.Path("/mod/ban/{address}").HandlerFunc(self.modui.HandleBanAddress).Methods("GET")
+	m.Path("/mod/unban/{address}").HandlerFunc(self.modui.HandleUnbanAddress).Methods("GET")
+	m.Path("/mod/addkey/{pubkey}").HandlerFunc(self.modui.HandleAddPubkey).Methods("GET")
+	m.Path("/mod/delkey/{pubkey}").HandlerFunc(self.modui.HandleDelPubkey).Methods("GET")
+	m.Path("/mod/admin/{action}").HandlerFunc(self.modui.HandleAdminCommand).Methods("GET", "POST")
+	self.httpmux.PathPrefix("/mod/").Handler(CSRF(m))
+	m = self.httpmux
+	m.Path("/").Handler(cache_handler)
+	m.Path("/thm/{f}").Handler(http.FileServer(http.Dir(self.webroot_dir)))
+	m.Path("/img/{f}").Handler(http.FileServer(http.Dir(self.webroot_dir)))
+	m.Path("/{f}.html").Handler(cache_handler)
+	m.Path("/{f}.json").Handler(cache_handler)
+	m.Path("/static/{f}").Handler(http.FileServer(http.Dir(self.static_dir)))
+	m.Path("/post/{f}").HandlerFunc(self.handle_poster).Methods("POST")
+	m.Path("/captcha/img").HandlerFunc(self.new_captcha).Methods("GET")
+	m.Path("/captcha/{f}").Handler(captcha.Server(350, 175)).Methods("GET")
+	m.Path("/captcha/new.json").HandlerFunc(self.new_captcha_json).Methods("GET")
+	m.Path("/new/").HandlerFunc(self.handle_newboard).Methods("GET")
+	m.Path("/api/{meth}").HandlerFunc(self.handle_api).Methods("POST", "GET")
 	var err error
 
 	// run daemon's mod engine with our frontend
@@ -797,7 +804,8 @@ func NewHTTPFrontend(daemon *NNTPDaemon, cache CacheInterface, config map[string
 		front.jsonPassword = config["json-api-password"]
 		front.enableJson = true
 	}
-	front.store = sessions.NewCookieStore([]byte(config["api-secret"]))
+	front.secret = config["api-secret"]
+	front.store = sessions.NewCookieStore([]byte(front.secret))
 	front.store.Options = &sessions.Options{
 		// TODO: detect http:// etc in prefix
 		Path:   front.prefix,

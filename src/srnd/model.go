@@ -5,7 +5,6 @@
 package srnd
 
 import (
-	"io"
 	"time"
 )
 
@@ -14,9 +13,6 @@ type BaseModel interface {
 
 	// site url prefix
 	Prefix() string
-
-	// render to a writer
-	RenderTo(wr io.Writer) error
 
 	// impelements json.Marshaller
 	MarshalJSON() ([]byte, error)
@@ -244,10 +240,6 @@ func (p postsGraphRow) OvercockGraph() (s string) {
 
 type postsGraph []postsGraphRow
 
-func (graph postsGraph) Render() string {
-	return template.renderTemplate("posts_graph.mustache", map[string]interface{}{"graph": graph})
-}
-
 func (self postsGraph) Len() int {
 	return len(self)
 }
@@ -279,7 +271,3 @@ func (self postsGraph) Scale() (graph postsGraph) {
 }
 
 type overviewModel []PostModel
-
-func (o overviewModel) Render() string {
-	return template.renderTemplate("overview.mustache", map[string]interface{}{"overview": o})
-}

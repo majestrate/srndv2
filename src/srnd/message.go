@@ -4,10 +4,7 @@
 package srnd
 
 import (
-	"bufio"
 	"bytes"
-	"encoding/base64"
-	"errors"
 	"fmt"
 	"github.com/majestrate/nacl"
 	"io"
@@ -74,7 +71,7 @@ type NNTPMessage interface {
 	// write out body
 	WriteBody(wr io.Writer, delim string) error
 	// attach a file
-	Attach(att NNTPAttachment) NNTPMessage
+	Attach(att NNTPAttachment)
 	// get the plaintext message if it exists
 	Message() string
 	// pack the whole message and prepare for write
@@ -85,6 +82,8 @@ type NNTPMessage interface {
 	Pubkey() string
 	// get the origin encrypted address, i2p destination or empty string for onion posters
 	Addr() string
+	// reset contents
+	Reset()
 }
 
 type MessageReader interface {
@@ -103,16 +102,34 @@ type nntpArticle struct {
 	// multipart boundary
 	boundary string
 	// the text part of the message
-	message nntpAttachment
+	message NNTPAttachment
 	// any attachments
 	attachments []NNTPAttachment
 	// the inner nntp message to be verified
-	signedPart nntpAttachment
+	signedPart *nntpAttachment
+}
+
+func (self *nntpArticle) Reset() {
+	self.headers = nil
+	self.boundary = ""
+	if self.message != nil {
+		self.message.Reset()
+		self.message = nil
+	}
+	for idx, _ := range self.attachments {
+		self.attachments[idx].Reset()
+		self.attachments[idx] = nil
+	}
+	self.attachments = []NNTPAttachment{}
+	if self.signedPart != nil {
+		self.signedPart.Reset()
+		self.signedPart = nil
+	}
 }
 
 // create a simple plaintext nntp message
 func newPlaintextArticle(message, email, subject, name, instance, message_id, newsgroup string) NNTPMessage {
-	nntp := nntpArticle{
+	nntp := &nntpArticle{
 		headers: make(ArticleHeaders),
 	}
 	nntp.headers.Set("From", fmt.Sprintf("%s <%s>", name, email))
@@ -131,7 +148,8 @@ func newPlaintextArticle(message, email, subject, name, instance, message_id, ne
 }
 
 // sign an article with a seed
-func signArticle(nntp NNTPMessage, seed []byte) (signed nntpArticle, err error) {
+func signArticle(nntp NNTPMessage, seed []byte) (signed *nntpArticle, err error) {
+	signed = new(nntpArticle)
 	signed.headers = make(ArticleHeaders)
 	h := nntp.Headers()
 	// copy headers
@@ -165,14 +183,17 @@ func signArticle(nntp NNTPMessage, seed []byte) (signed nntpArticle, err error) 
 		signed.headers.Set("X-Signature-Ed25519-SHA512", sig)
 		signed.headers.Set("X-PubKey-Ed25519", pk)
 	}
+	signed.signedPart = &nntpAttachment{
+		body: new(bytes.Buffer),
+	}
 	// copy sign buffer into signed part
-	_, err = io.Copy(&signed.signedPart.body, signbuff)
+	_, err = io.Copy(signed.signedPart, signbuff)
 	// add this so the writer writes the entire post
-	signed.signedPart.body.Write([]byte{13, 10})
+	signed.signedPart.Write([]byte{13, 10})
 	return
 }
 
-func (self nntpArticle) WriteTo(wr io.Writer, delim string) (err error) {
+func (self *nntpArticle) WriteTo(wr io.Writer, delim string) (err error) {
 	// write headers
 	for hdr, hdr_vals := range self.Headers() {
 		for _, hdr_val := range hdr_vals {
@@ -195,33 +216,36 @@ func (self nntpArticle) WriteTo(wr io.Writer, delim string) (err error) {
 	return
 }
 
-func (self nntpArticle) Pubkey() string {
+func (self *nntpArticle) Pubkey() string {
 	return self.headers.Get("X-PubKey-Ed25519", self.headers.Get("X-Pubkey-Ed25519", ""))
 }
 
-func (self nntpArticle) Signed() NNTPMessage {
-	if self.signedPart.body.Len() > 0 {
-		log.Println("loading signed message")
-		msg, err := read_message(&self.signedPart.body)
+func (self *nntpArticle) Signed() NNTPMessage {
+	if self.signedPart != nil {
+		buff := new(bytes.Buffer)
+		buff.Write(self.signedPart.body.Bytes())
+		msg, err := read_message(buff)
+		buff.Reset()
 		if err == nil {
 			return msg
 		}
-		log.Println("failed to load signed message", err)
+		log.Println("failed to load signed part", err)
 	}
 	return nil
 }
 
-func (self nntpArticle) MessageID() (msgid string) {
+func (self *nntpArticle) MessageID() (msgid string) {
 	for _, h := range []string{"Message-ID", "Messageid", "MessageID", "Message-Id"} {
-		msgid = self.headers.Get(h, "")
-		if msgid != "" {
+		mid := self.headers.Get(h, "")
+		if mid != "" {
+			msgid = string(mid)
 			return
 		}
 	}
 	return
 }
 
-func (self nntpArticle) Pack() {
+func (self *nntpArticle) Pack() {
 	if len(self.attachments) > 0 {
 		if len(self.boundary) == 0 {
 			// we have no boundry, set it
@@ -230,21 +254,20 @@ func (self nntpArticle) Pack() {
 			self.headers.Set("Mime-Version", "1.0")
 			self.headers.Set("Content-Type", fmt.Sprintf("multipart/mixed; boundary=%s", self.boundary))
 		}
-	} else if self.signedPart.body.Len() == 0 {
+	} else if self.signedPart == nil {
 		self.headers.Set("Content-Type", "text/plain; charset=utf-8")
 	}
-
 }
 
-func (self nntpArticle) Reference() string {
+func (self *nntpArticle) Reference() string {
 	return self.headers.Get("Reference", self.headers.Get("References", ""))
 }
 
-func (self nntpArticle) Newsgroup() string {
+func (self *nntpArticle) Newsgroup() string {
 	return self.headers.Get("Newsgroups", "")
 }
 
-func (self nntpArticle) Name() string {
+func (self *nntpArticle) Name() string {
 	from := self.headers.Get("From", "anonymous <a@no.n>")
 	idx := strings.Index(from, "<")
 	if idx > 1 {
@@ -253,7 +276,7 @@ func (self nntpArticle) Name() string {
 	return "[Invalid From header]"
 }
 
-func (self nntpArticle) Addr() (addr string) {
+func (self *nntpArticle) Addr() (addr string) {
 	addr = self.headers.Get("X-Encrypted-Ip", "")
 	if addr != "" {
 		return
@@ -276,7 +299,7 @@ func (self nntpArticle) Addr() (addr string) {
 	return
 }
 
-func (self nntpArticle) Email() string {
+func (self *nntpArticle) Email() string {
 	from := self.headers.Get("From", "anonymous <a@no.n>")
 	idx := strings.Index(from, "<")
 	if idx > 2 {
@@ -286,11 +309,11 @@ func (self nntpArticle) Email() string {
 
 }
 
-func (self nntpArticle) Subject() string {
+func (self *nntpArticle) Subject() string {
 	return self.headers.Get("Subject", "")
 }
 
-func (self nntpArticle) Posted() int64 {
+func (self *nntpArticle) Posted() int64 {
 	posted := self.headers.Get("Date", "")
 	t, err := time.Parse(time.RFC1123Z, posted)
 	if err == nil {
@@ -299,19 +322,19 @@ func (self nntpArticle) Posted() int64 {
 	return 0
 }
 
-func (self nntpArticle) Message() string {
-	return strings.Trim(self.message.body.String(), "\x00")
+func (self *nntpArticle) Message() string {
+	return strings.Trim(self.message.AsString(), "\x00")
 }
 
-func (self nntpArticle) Path() string {
+func (self *nntpArticle) Path() string {
 	return self.headers.Get("Path", "unspecified")
 }
 
-func (self nntpArticle) Headers() ArticleHeaders {
+func (self *nntpArticle) Headers() ArticleHeaders {
 	return self.headers
 }
 
-func (self nntpArticle) AppendPath(part string) NNTPMessage {
+func (self *nntpArticle) AppendPath(part string) NNTPMessage {
 	if self.headers.Has("Path") {
 		self.headers.Set("Path", part+"!"+self.Path())
 	} else {
@@ -319,65 +342,36 @@ func (self nntpArticle) AppendPath(part string) NNTPMessage {
 	}
 	return self
 }
-func (self nntpArticle) ContentType() string {
+func (self *nntpArticle) ContentType() string {
 	// assumes text/plain if unspecified
 	return self.headers.Get("Content-Type", "text/plain; charset=UTF-8")
 }
 
-func (self nntpArticle) Sage() bool {
+func (self *nntpArticle) Sage() bool {
 	return self.headers.Get("X-Sage", "") == "1"
 }
 
-func (self nntpArticle) OP() bool {
+func (self *nntpArticle) OP() bool {
 	return self.headers.Get("Reference", self.headers.Get("References", "")) == ""
 }
 
-func (self nntpArticle) Attachments() []NNTPAttachment {
+func (self *nntpArticle) Attachments() []NNTPAttachment {
 	return self.attachments
 }
 
-func (self nntpArticle) Attach(att NNTPAttachment) NNTPMessage {
+func (self *nntpArticle) Attach(att NNTPAttachment) {
 	self.attachments = append(self.attachments, att)
-	return self
 }
 
-func (self nntpArticle) WriteBody(wr io.Writer, delim string) (err error) {
+func (self *nntpArticle) WriteBody(wr io.Writer, delim string) (err error) {
 	// this is a signed message, don't treat it special
-	if self.signedPart.body.Len() > 0 {
-		if delim == "\r\n" {
-			// delimiter is \r\n
-			// for signing we copy verbatum
-			// TODO: do we cut off the last line ending?
-			_, err = io.Copy(wr, &self.signedPart.body)
-		} else if delim == "\n" {
-			// assumes signedpart is in \r\n
-			r := bufio.NewReader(&self.signedPart.body)
-			w := bufio.NewWriter(wr)
-			var line []byte
-			for {
-				// convert line endings :\
-				line, err = r.ReadBytes(10)
-				if err == nil {
-					if len(line) > 2 {
-						_, err = w.Write(line[:len(line)-2])
-					}
-					_, err = w.Write([]byte{10})
-					err = w.Flush() // flush it
-				} else if err == io.EOF {
-					return
-				} else {
-					log.Println("error while writing", err)
-					return
-				}
-			}
-		} else {
-			err = errors.New("unsupported delimiter")
-			return
-		}
+	if self.signedPart != nil {
+		_, err = io.WriteString(wr, self.signedPart.AsString())
+		return
 	}
 	if len(self.attachments) == 0 {
 		// write plaintext and be done
-		_, err = io.Copy(wr, &self.message.body)
+		_, err = io.WriteString(wr, self.message.AsString())
 		return
 	}
 	content_type := self.ContentType()
@@ -402,10 +396,7 @@ func (self nntpArticle) WriteBody(wr io.Writer, delim string) (err error) {
 				}
 				hdr.Set("Content-Transfer-Encoding", "base64")
 				part, err := w.CreatePart(hdr)
-				enc := base64.NewEncoder(base64.StdEncoding, part)
-				_, err = io.Copy(enc, att)
-				enc.Close()
-
+				_, err = io.WriteString(part, att.Filedata())
 				if err != nil {
 					break
 				}
@@ -416,7 +407,7 @@ func (self nntpArticle) WriteBody(wr io.Writer, delim string) (err error) {
 		}
 		err = w.Close()
 	} else {
-		_, err = self.message.body.WriteTo(wr)
+		_, err = io.WriteString(wr, self.message.AsString())
 	}
 	return err
 }

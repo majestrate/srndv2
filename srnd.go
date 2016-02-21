@@ -7,16 +7,10 @@ import (
 	"os"
 	"os/signal"
 	"syscall"
-	//   _ "net/http/pprof"
-	//  "net/http"
 )
 
 func main() {
 
-	// debugger
-	// go func() {
-	//   log.Println(http.ListenAndServe("[::]:6060", nil))
-	// }()
 	daemon := new(srnd.NNTPDaemon)
 	if len(os.Args) > 1 {
 		action := os.Args[1]

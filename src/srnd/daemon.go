@@ -9,6 +9,8 @@ import (
 	"fmt"
 	"log"
 	"net"
+	"net/http"
+	_ "net/http/pprof"
 	"net/textproto"
 	"os"
 	"strconv"
@@ -116,7 +118,7 @@ func (self *NNTPDaemon) dialOut(proxy_type, proxy_addr, remote_addr string) (con
 			log.Println("cannot connect to outfeed", remote_addr, err)
 			return
 		}
-	} else if proxy_type == "socks4a" {
+	} else if proxy_type == "socks4a" || proxy_type == "socks" {
 		// connect via socks4a
 		log.Println("dial out via proxy", proxy_addr)
 		conn, err = net.Dial("tcp", proxy_addr)
@@ -185,6 +187,8 @@ func (self *NNTPDaemon) dialOut(proxy_type, proxy_addr, remote_addr string) (con
 			err = errors.New("failed to connect via proxy")
 			return
 		}
+	} else {
+		err = errors.New("invalid proxy type: " + proxy_type)
 	}
 	return
 }
@@ -268,6 +272,17 @@ func (self *NNTPDaemon) Run() {
 	self.listener = listener
 	log.Printf("SRNd NNTPD bound at %s", listener.Addr())
 
+	if self.conf.pprof != nil && self.conf.pprof.enable {
+		addr := self.conf.pprof.bind
+		log.Println("pprof enabled, binding to", addr)
+		go func() {
+			err := http.ListenAndServe(addr, nil)
+			if err != nil {
+				log.Fatalf("error from pprof, RIP srndv2: %s", err.Error())
+			}
+		}()
+	}
+
 	self.register_outfeed = make(chan nntpConnection)
 	self.deregister_outfeed = make(chan nntpConnection)
 	self.infeed = make(chan NNTPMessage, 1024)
@@ -278,15 +293,10 @@ func (self *NNTPDaemon) Run() {
 
 	self.expire = createExpirationCore(self.database, self.store)
 	self.sync_on_start = self.conf.daemon["sync_on_start"] == "1"
-	self.debug = self.conf.daemon["log"] == "debug"
 	self.instance_name = self.conf.daemon["instance_name"]
 	self.allow_anon = self.conf.daemon["allow_anon"] == "1"
 	self.allow_anon_attachments = self.conf.daemon["allow_anon_attachments"] == "1"
 	self.allow_attachments = self.conf.daemon["allow_attachments"] == "1"
-
-	if self.debug {
-		log.Println("debug mode activated")
-	}
 
 	// do we enable the frontend?
 	if self.conf.frontend["enable"] == "1" {
@@ -298,12 +308,7 @@ func (self *NNTPDaemon) Run() {
 		cache_passwd := self.conf.cache["password"]
 		self.cache = NewCache(self.conf.cache["type"], cache_host, cache_port, cache_user, cache_passwd, self.conf.frontend, self.database, self.store)
 
-		http_frontend := NewHTTPFrontend(self, self.cache, self.conf.frontend, self.conf.worker["url"])
-		if self.conf.frontend["json-api"] == "1" {
-
-		}
-		nntp_frontend := NewNNTPFrontend(self, self.conf.frontend["nntp"])
-		self.frontend = MuxFrontends(http_frontend, nntp_frontend)
+		self.frontend = NewHTTPFrontend(self, self.cache, self.conf.frontend, self.conf.worker["url"])
 		go self.frontend.Mainloop()
 	}
 
@@ -384,25 +389,11 @@ func (self *NNTPDaemon) Run() {
 			}
 		}()
 	}
-
-	// if we have no frontend this does nothing
-	if self.frontend != nil {
-		go self.pollfrontend()
-	}
 	go self.pollinfeed()
 	go self.pollmessages()
 	self.polloutfeeds()
 }
 
-func (self *NNTPDaemon) pollfrontend() {
-	chnl := self.frontend.NewPostsChan()
-	for {
-		nntp := <-chnl
-		// new post from frontend
-		log.Println("frontend post", nntp.MessageID())
-		self.infeed <- nntp
-	}
-}
 func (self *NNTPDaemon) pollinfeed() {
 	for {
 		msgid := <-self.infeed_load
@@ -426,12 +417,14 @@ func (self *NNTPDaemon) polloutfeeds() {
 			log.Println("outfeed", outfeed.name, "de-registered")
 			delete(self.feeds, outfeed.name)
 		case nntp := <-self.send_all_feeds:
+			group := nntp.Newsgroup()
 			if self.Federate() {
 				feeds := self.feeds
 				for _, feed := range feeds {
-					if feed.policy.AllowsNewsgroup(nntp.Newsgroup()) {
+					if feed.policy.AllowsNewsgroup(group) {
 						if strings.HasSuffix(feed.name, "-stream") {
-							feed.stream <- nntpCHECK(nntp.MessageID())
+							msgid := nntp.MessageID()
+							feed.stream <- nntpCHECK(msgid)
 						}
 					}
 				}
@@ -451,11 +444,8 @@ func (self *NNTPDaemon) polloutfeeds() {
 }
 
 func (self *NNTPDaemon) pollmessages() {
-	var chnl chan NNTPMessage
+
 	modchnl := self.mod.MessageChan()
-	if self.frontend != nil {
-		chnl = self.frontend.PostsChan()
-	}
 	for {
 
 		nntp := <-self.infeed
@@ -463,11 +453,6 @@ func (self *NNTPDaemon) pollmessages() {
 		nntp.AppendPath(self.instance_name)
 		msgid := nntp.MessageID()
 		log.Println("daemon got", msgid)
-
-		// store article and attachments
-		// register with database
-		// this also generates thumbnails
-		self.store.StorePost(nntp)
 
 		ref := nntp.Reference()
 		if ref != "" && ValidMessageID(ref) && !self.database.HasArticleLocal(ref) {
@@ -489,21 +474,21 @@ func (self *NNTPDaemon) pollmessages() {
 			rollover = tpp * ppb
 		}
 
+		// store article and attachments
+		// register with database
+		// this also generates thumbnails
+		self.store.StorePost(nntp)
 		// roll over old content
 		self.expire.ExpireGroup(group, rollover)
-		// handle mod events
-		if group == "ctl" {
-			modchnl <- nntp
-		}
-
 		// queue to all outfeeds
-		// XXX: blocking ?
 		self.send_all_feeds <- ArticleEntry{msgid, group}
-		// tell frontend
-		// XXX: blocking ?
-		if chnl != nil {
+		// send to upper layers
+		if group == "ctl" {
+			modchnl <- msgid
+		}
+		if self.frontend != nil {
 			if self.frontend.AllowNewsgroup(group) {
-				chnl <- nntp
+				self.frontend.PostsChan() <- frontendPost{msgid, ref, group}
 			} else {
 				log.Println("frontend does not allow", group, "not sending")
 			}
@@ -617,6 +602,6 @@ func (self *NNTPDaemon) Setup() {
 	self.mod = modEngine{
 		store:    self.store,
 		database: self.database,
-		chnl:     make(chan NNTPMessage, 1024),
+		chnl:     make(chan string, 1024),
 	}
 }

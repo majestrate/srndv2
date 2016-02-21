@@ -128,7 +128,7 @@ func ParseModEvent(line string) ModEvent {
 // does not sign
 func wrapModMessage(mm ModMessage) NNTPMessage {
 	pathname := "nntpchan.censor"
-	nntp := nntpArticle{
+	nntp := &nntpArticle{
 		headers: make(ArticleHeaders),
 	}
 	nntp.headers.Set("Newsgroups", "ctl")
@@ -145,15 +145,14 @@ func wrapModMessage(mm ModMessage) NNTPMessage {
 	_ = mm.WriteTo(&buff, []byte{13, 10})
 	// create plaintext attachment, cut off last 2 bytes
 	str := buff.String()
+	buff.Reset()
 	nntp.message = createPlaintextAttachment(str[:len(str)-2])
 	return nntp
 }
 
 type ModEngine interface {
-	// chan to send the mod engine posts
-	// assumes ctl newsgroup only
-	MessageChan() chan NNTPMessage
-
+	// chan to send the mod engine posts given message_id
+	MessageChan() chan string
 	// delete post of a poster
 	DeletePost(msgid string, regen RegenFunc) error
 	// ban a cidr
@@ -162,15 +161,21 @@ type ModEngine interface {
 	AllowDelete(pubkey string) bool
 	// do we allow this public key to ban?
 	AllowBan(pubkey string) bool
+	// load a mod message
+	LoadMessage(msgid string) NNTPMessage
 }
 
 type modEngine struct {
 	database Database
 	store    ArticleStore
-	chnl     chan NNTPMessage
+	chnl     chan string
 }
 
-func (self modEngine) MessageChan() chan NNTPMessage {
+func (self modEngine) LoadMessage(msgid string) NNTPMessage {
+	return self.store.GetMessage(msgid)
+}
+
+func (self modEngine) MessageChan() chan string {
 	return self.chnl
 }
 
@@ -249,7 +254,12 @@ func RunModEngine(mod ModEngine, regen RegenFunc) {
 
 	chnl := mod.MessageChan()
 	for {
-		nntp := <-chnl
+		msgid := <-chnl
+		nntp := mod.LoadMessage(msgid)
+		if nntp == nil {
+			log.Println("failed to load mod message", msgid)
+			continue
+		}
 		// sanity check
 		if nntp.Newsgroup() == "ctl" {
 			inner_nntp := nntp.Signed()
@@ -274,8 +284,19 @@ func RunModEngine(mod ModEngine, regen RegenFunc) {
 					} else if action == "overchan-inet-ban" {
 						// ban action
 						target := ev.Target()
+						if target[0] == '[' {
+							// probably a literal ipv6 rangeban
+							if mod.AllowBan(pubkey) {
+								err := mod.BanAddress(target)
+								if err != nil {
+									log.Println("failed to do literal ipv6 range ban on", target, err)
+								}
+							}
+							continue
+						}
 						parts := strings.Split(target, ":")
 						if len(parts) == 3 {
+							// encrypted ip
 							encaddr, key := parts[0], parts[1]
 							cidr := decAddr(encaddr, key)
 							if cidr == "" {
@@ -283,7 +304,16 @@ func RunModEngine(mod ModEngine, regen RegenFunc) {
 							} else if mod.AllowBan(pubkey) {
 								err := mod.BanAddress(cidr)
 								if err != nil {
-									log.Println(cidr, err)
+									log.Println("failed to do range ban on", cidr, err)
+								}
+							}
+						} else if len(parts) == 1 {
+							// literal cidr
+							cidr := parts[0]
+							if mod.AllowBan(pubkey) {
+								err := mod.BanAddress(cidr)
+								if err != nil {
+									log.Println("failed to do literal range ban on", cidr, err)
 								}
 							}
 						} else {
@@ -293,5 +323,7 @@ func RunModEngine(mod ModEngine, regen RegenFunc) {
 				}
 			}
 		}
+		// done with this one
+		nntp.Reset()
 	}
 }

@@ -461,16 +461,15 @@ func (self *templateEngine) genFrontPage(top_count int, prefix, frontend_name st
 
 	param := make(map[string]interface{})
 
-	param["overview"] = overviewModel(models)
+	param["overview"] = self.renderTemplate("overview.mustache", map[string]interface{}{"overview": overviewModel(models)})
 
 	sort.Sort(posts_graph)
-	param["postsgraph"] = posts_graph
+	param["postsgraph"] = self.renderTemplate("posts_graph.mustache", map[string]interface{}{"graph": posts_graph})
 	sort.Sort(frontpage_graph)
-	if len(frontpage_graph) < top_count {
-		param["boardgraph"] = frontpage_graph
-	} else {
-		param["boardgraph"] = frontpage_graph[:top_count]
+	if len(frontpage_graph) > top_count {
+		frontpage_graph = frontpage_graph[:top_count]
 	}
+	param["boardgraph"] = frontpage_graph
 	param["frontend"] = frontend_name
 	param["totalposts"] = db.ArticleCount()
 	_, err := io.WriteString(wr, self.renderTemplate("frontpage.mustache", param))

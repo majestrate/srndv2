@@ -54,52 +54,10 @@ func EnsureDir(dirname string) {
 	}
 }
 
-// TODO make this work better
 func ValidMessageID(id string) bool {
-	id_len := len(id)
+	exp := regexp.MustCompilePOSIX(`^<[a-zA-Z0-9$.]{2,128}@[a-zA-Z0-9\-.]{2,63}>$`)
 
-	if id_len < 5 {
-		return false
-	}
-
-	at_idx := strings.Index(id, "@")
-	if at_idx < 3 {
-		return false
-	}
-
-	for idx, c := range id {
-		if idx == 0 {
-			if c == '<' {
-				continue
-			}
-		} else if idx == id_len-1 {
-			if c == '>' {
-				continue
-			}
-		} else {
-			if idx == at_idx {
-				continue
-			}
-			if c >= 'a' && c <= 'z' {
-				continue
-			}
-			if c >= 'A' && c <= 'Z' {
-				continue
-			}
-			if c >= '0' && c <= '9' {
-				continue
-			}
-			if c == '.' {
-				continue
-			}
-			if c == '$' {
-				continue
-			}
-		}
-		log.Printf("bad message ID: len=%d %s , invalid char at %d: %c", id_len, id, idx, c)
-		return false
-	}
-	return true
+	return exp.MatchString(id)
 }
 
 // message id hash
@@ -316,26 +274,9 @@ func decAddr(encaddr, key string) string {
 }
 
 func newsgroupValidFormat(newsgroup string) bool {
-	// too long newsgroup
-	if len(newsgroup) > 128 {
-		return false
-	}
-	for _, ch := range newsgroup {
-		if ch >= 'a' && ch <= 'z' {
-			continue
-		}
-		if ch >= '0' && ch <= '9' {
-			continue
-		}
-		if ch >= 'A' && ch <= 'Z' {
-			continue
-		}
-		if ch == '.' {
-			continue
-		}
-		return false
-	}
-	return true
+	exp := regexp.MustCompilePOSIX(`^[a-zA-Z0-9.]{1,128}$`)
+
+	return exp.MatchString(newsgroup)
 }
 
 // generate a new signing keypair

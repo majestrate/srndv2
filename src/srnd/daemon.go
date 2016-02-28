@@ -13,6 +13,7 @@ import (
 	_ "net/http/pprof"
 	"net/textproto"
 	"os"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"time"
@@ -575,6 +576,14 @@ func (self *NNTPDaemon) Setup() {
 	log.Println("configs are valid")
 
 	var err error
+
+	log.Println("Reading translation files")
+	translation_dir := self.conf.frontend["translations"]
+	if translation_dir == "" {
+		translation_dir = filepath.Join("contrib", "translations")
+	}
+	locale := self.conf.frontend["locale"]
+	InitI18n(locale, translation_dir)
 
 	db_host := self.conf.database["host"]
 	db_port := self.conf.database["port"]

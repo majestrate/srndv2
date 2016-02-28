@@ -304,7 +304,7 @@ func (self *post) OP() bool {
 }
 
 func (self *post) Date() string {
-	return time.Unix(self.Posted, 0).Format(time.ANSIC)
+	return time.Unix(self.Posted, 0).Format(i18nProvider.Format("full_date_format"))
 }
 
 func (self *post) DateRFC() string {
@@ -368,7 +368,9 @@ func (self *post) IsTor() bool {
 }
 
 func (self *post) RenderPost() string {
-	return template.renderTemplate("post.mustache", self)
+	param := make(map[string]interface{})
+	param["post"] = self
+	return template.renderTemplate("post.mustache", param)
 }
 
 func (self *post) Truncate() PostModel {

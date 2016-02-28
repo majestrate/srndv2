@@ -160,6 +160,8 @@ func GenSRNdConfig() error {
 	sect.Add("prefix", "/")
 	sect.Add("static_files", "contrib")
 	sect.Add("templates", "contrib/templates/default")
+	sect.Add("translations", "contrib/translations")
+	sect.Add("locale", "en")
 	sect.Add("domain", "localhost")
 	sect.Add("json-api", "0")
 	sect.Add("json-api-username", "fucking-change-this-value")

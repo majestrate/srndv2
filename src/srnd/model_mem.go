@@ -304,7 +304,7 @@ func (self *post) OP() bool {
 }
 
 func (self *post) Date() string {
-	return time.Unix(self.Posted, 0).Format(time.ANSIC)
+	return time.Unix(self.Posted, 0).Format(i18nProvider.Format("full_date_format"))
 }
 
 func (self *post) DateRFC() string {

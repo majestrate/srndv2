@@ -1,7 +1,3 @@
-//
-// templates.go
-// template model interfaces
-//
 package srnd
 
 import (
@@ -74,6 +70,10 @@ func InitI18n(locale, dir string) {
 
 func (self *i18n) Translate(key string) string {
 	return self.translations[key]
+}
+
+func (self *i18n) Format(key string) string {
+	return self.formats[key]
 }
 
 //this signature seems to be expected by mustache

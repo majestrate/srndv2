@@ -205,11 +205,11 @@ func (p *postsGraphRow) GraphRune(r string) (s string) {
 }
 
 func (p postsGraphRow) Date() (s string) {
-	return p.day.String()[:7]
+	return p.day.Format(i18nProvider.Format("month_date_format"))
 }
 
 func (p postsGraphRow) Day() (s string) {
-	return p.day.String()[5:11]
+	return p.day.Format(i18nProvider.Format("day_date_format"))
 }
 
 func (p postsGraphRow) RegularGraph() (s string) {

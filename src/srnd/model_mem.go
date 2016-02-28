@@ -368,7 +368,9 @@ func (self *post) IsTor() bool {
 }
 
 func (self *post) RenderPost() string {
-	return template.renderTemplate("post.mustache", self)
+	param := make(map[string]interface{})
+	param["post"] = self
+	return template.renderTemplate("post.mustache", param)
 }
 
 func (self *post) Truncate() PostModel {

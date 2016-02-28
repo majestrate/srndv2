@@ -169,8 +169,9 @@ func (self *templateEngine) getTemplate(name string) (t string) {
 }
 
 // render a template, self explanitory
-func (self *templateEngine) renderTemplate(name string, obj interface{}) string {
+func (self *templateEngine) renderTemplate(name string, obj map[string]interface{}) string {
 	t := self.getTemplate(name)
+	obj["i18n"] = i18nProvider
 	s, err := mustache.Render(t, obj)
 	if err == nil {
 		return s
@@ -180,7 +181,7 @@ func (self *templateEngine) renderTemplate(name string, obj interface{}) string 
 }
 
 // write a template to an io.Writer
-func (self *templateEngine) writeTemplate(name string, obj interface{}, wr io.Writer) (err error) {
+func (self *templateEngine) writeTemplate(name string, obj map[string]interface{}, wr io.Writer) (err error) {
 	_, err = io.WriteString(wr, self.renderTemplate(name, obj))
 	return
 }

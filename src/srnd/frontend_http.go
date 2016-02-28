@@ -176,7 +176,7 @@ func (self httpFrontend) new_captcha_json(wr http.ResponseWriter, r *http.Reques
 
 // handle newboard page
 func (self *httpFrontend) handle_newboard(wr http.ResponseWriter, r *http.Request) {
-	param := make(map[string]string)
+	param := make(map[string]interface{})
 	param["prefix"] = self.prefix
 	io.WriteString(wr, template.renderTemplate("newboard.mustache", param))
 }
@@ -299,7 +299,7 @@ func (self *httpFrontend) handle_postform(wr http.ResponseWriter, r *http.Reques
 	}
 
 	// make error template param
-	resp_map := make(map[string]string)
+	resp_map := make(map[string]interface{})
 	resp_map["prefix"] = self.prefix
 	// set redirect url
 	if len(url) > 0 {
@@ -322,7 +322,7 @@ func (self *httpFrontend) handle_postform(wr http.ResponseWriter, r *http.Reques
 	if captcha_retry {
 		// retry the post with a new captcha
 		wr.WriteHeader(200)
-		resp_map = make(map[string]string)
+		resp_map = make(map[string]interface{})
 		resp_map["subject"] = pr.Subject
 		resp_map["name"] = pr.Name
 		resp_map["message"] = pr.Message
@@ -374,7 +374,7 @@ func (self *httpFrontend) handle_postform(wr http.ResponseWriter, r *http.Reques
 		msg_id := nntp.Headers().Get("References", nntp.MessageID())
 		// render response as success
 		url := fmt.Sprintf("%sthread-%s.html", self.prefix, HashMessageID(msg_id))
-		io.WriteString(wr, template.renderTemplate("post_success.mustache", map[string]string{"prefix": self.prefix, "message_id": nntp.MessageID(), "redirect_url": url}))
+		io.WriteString(wr, template.renderTemplate("post_success.mustache", map[string]interface{}{"prefix": self.prefix, "message_id": nntp.MessageID(), "redirect_url": url}))
 	}
 	self.handle_postRequest(&pr, b, e, s, false)
 }

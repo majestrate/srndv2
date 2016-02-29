@@ -42,7 +42,7 @@ type postRequest struct {
 	Email        string            `json:"email"`
 	Subject      string            `json:"subject"`
 	Frontend     string            `json:"frontend"`
-	Attachment   postAttachment    `json:"file"`
+	Attachments  []postAttachment  `json:"files"`
 	Group        string            `json:"newsgroup"`
 	IpAddress    string            `json:"ip"`
 	Destination  string            `json:"i2p"`
@@ -89,6 +89,8 @@ type httpFrontend struct {
 	jsonUsername string
 	jsonPassword string
 	enableJson   bool
+
+	attachmentLimit int
 }
 
 // do we allow this newsgroup?
@@ -217,9 +219,6 @@ func (self *httpFrontend) handle_postform(wr http.ResponseWriter, r *http.Reques
 
 	var captcha_retry bool
 	var captcha_solution, captcha_id string
-	var att_filename, att_mime string
-	var att_buff bytes.Buffer
-	var att NNTPAttachment
 	var url string
 	url = fmt.Sprintf("%s-0.html", board)
 	var part_buff bytes.Buffer
@@ -228,11 +227,19 @@ func (self *httpFrontend) handle_postform(wr http.ResponseWriter, r *http.Reques
 		if err == nil {
 			// get the name of the part
 			partname := part.FormName()
-
 			// read part for attachment
-			if partname == "attachment" && self.attachments {
-				log.Println("attaching file...")
-				att = readAttachmentFromMimePart(part)
+			if strings.HasPrefix(partname, "attachment_") && self.attachments {
+				if len(pr.Attachments) < self.attachmentLimit {
+					att := readAttachmentFromMimePart(part)
+					if att != nil {
+						log.Println("attaching file...")
+						pr.Attachments = append(pr.Attachments, postAttachment{
+							Filedata: att.Filedata(),
+							Filename: att.Filename(),
+							Filetype: att.Mime(),
+						})
+					}
+				}
 				continue
 			}
 			io.Copy(&part_buff, part)
@@ -255,13 +262,6 @@ func (self *httpFrontend) handle_postform(wr http.ResponseWriter, r *http.Reques
 				captcha_id = part_buff.String()
 			} else if partname == "captcha" {
 				captcha_solution = part_buff.String()
-			} else if partname == "attachment_data" {
-				// repost of data
-				_, err = io.Copy(&att_buff, &part_buff)
-			} else if partname == "attachment_filename" {
-				att_filename = part_buff.String()
-			} else if partname == "attachment_mime" {
-				att_mime = part_buff.String()
 			} else if partname == "dubs" {
 				pr.Dubs = part_buff.String() == "on"
 			}
@@ -315,48 +315,17 @@ func (self *httpFrontend) handle_postform(wr http.ResponseWriter, r *http.Reques
 		}
 	}
 
-	if att_buff.Len() > 0 && len(att_filename) > 0 && len(att_mime) > 0 {
-		att = createAttachment(att_mime, att_filename, &att_buff)
-	}
-
 	if captcha_retry {
 		// retry the post with a new captcha
-		wr.WriteHeader(200)
 		resp_map = make(map[string]interface{})
-		resp_map["subject"] = pr.Subject
-		resp_map["name"] = pr.Name
-		resp_map["message"] = pr.Message
-		resp_map["reference"] = pr.Reference
-		if att == nil {
-			// no attachments
-		} else {
-			// 1 attachment
-			resp_map["attachment"] = att.Filedata()
-			resp_map["attachment_filename"] = att.Filename()
-			resp_map["attachment_type"] = att.Mime()
-		}
-		c := captcha.New()
-		resp_map["captcha_id"] = c
-		s, _ := self.store.Get(r, self.name)
-		s.Values["captcha_id"] = c
-		s.Save(r, wr)
-		resp_map["fail_message"] = "try posting again"
 		resp_map["prefix"] = self.prefix
-		io.WriteString(wr, template.renderTemplate("post_retry.mustache", resp_map))
+		io.WriteString(wr, template.renderTemplate("post_fail.mustache", resp_map))
 		return
-	}
-
-	if att != nil {
-		pr.Attachment = postAttachment{
-			Filename: att.Filename(),
-			Filetype: att.Mime(),
-			Filedata: att.Filedata(),
-		}
 	}
 
 	b := func() {
 		wr.WriteHeader(403)
-		io.WriteString(wr, "nigguh u banned")
+		io.WriteString(wr, "banned")
 	}
 
 	e := func(err error) {
@@ -382,6 +351,11 @@ func (self *httpFrontend) handle_postform(wr http.ResponseWriter, r *http.Reques
 // turn a post request into an nntp article write it to temp dir and tell daemon
 func (self *httpFrontend) handle_postRequest(pr *postRequest, b bannedFunc, e errorFunc, s successFunc, createGroup bool) {
 	var err error
+	if len(pr.Attachments) > self.attachmentLimit {
+		err = errors.New("too many attachments")
+		e(err)
+		return
+	}
 	nntp := new(nntpArticle)
 	var banned bool
 	nntp.headers = make(ArticleHeaders)
@@ -462,7 +436,7 @@ func (self *httpFrontend) handle_postRequest(pr *postRequest, b bannedFunc, e er
 	nntp.headers.Set("Newsgroups", pr.Group)
 
 	// check message size
-	if len(pr.Attachment.Filedata) == 0 && len(pr.Message) == 0 {
+	if len(pr.Attachments) == 0 && len(pr.Message) == 0 {
 		e(errors.New("no message"))
 		return
 	}
@@ -544,14 +518,15 @@ func (self *httpFrontend) handle_postRequest(pr *postRequest, b bannedFunc, e er
 			}
 		}
 	}
-
-	att := pr.Attachment
-
-	// add attachment
-	if self.attachments && len(att.Filedata) > 0 {
-		nntp.Attach(createAttachment(att.Filetype, att.Filename, strings.NewReader(att.Filedata)))
+	if self.attachments {
+		for _, att := range pr.Attachments {
+			// add attachment
+			if len(att.Filedata) > 0 {
+				nntp.Attach(createAttachment(att.Filetype, att.Filename, strings.NewReader(att.Filedata)))
+			}
+		}
+		// pack it before sending so that the article is well formed
 	}
-	// pack it before sending so that the article is well formed
 	nntp.Pack()
 
 	// sign if needed
@@ -805,6 +780,7 @@ func NewHTTPFrontend(daemon *NNTPDaemon, cache CacheInterface, config map[string
 		front.jsonPassword = config["json-api-password"]
 		front.enableJson = true
 	}
+	front.attachmentLimit = 5
 	front.secret = config["api-secret"]
 	front.store = sessions.NewCookieStore([]byte(front.secret))
 	front.store.Options = &sessions.Options{

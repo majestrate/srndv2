@@ -131,6 +131,7 @@ func GenSRNdConfig() error {
 	sect.Add("convert_bin", "/usr/bin/convert")
 	sect.Add("ffmpegthumbnailer_bin", "/usr/bin/ffmpeg")
 	sect.Add("sox_bin", "/usr/bin/sox")
+	sect.Add("compression", "0")
 
 	// database backend config
 	sect = conf.NewSection("database")

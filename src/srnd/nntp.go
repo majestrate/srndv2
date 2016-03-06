@@ -12,7 +12,6 @@ import (
 	"log"
 	"net"
 	"net/textproto"
-	"os"
 	"strconv"
 	"strings"
 	"sync"
@@ -214,17 +213,15 @@ func (self *nntpConnection) handleStreaming(daemon *NNTPDaemon, reader bool, con
 		if ValidMessageID(ev.MessageID()) {
 			cmd, msgid := ev.Command(), ev.MessageID()
 			if cmd == "TAKETHIS" {
-				fname := daemon.store.GetFilename(msgid)
-				if CheckFile(fname) {
-					f, err := os.Open(fname)
-					if err == nil {
-						err = conn.PrintfLine("%s", ev)
-						// time to send
-						dw := conn.DotWriter()
-						_, err = io.Copy(dw, f)
-						err = dw.Close()
-						f.Close()
-					}
+				// open message for reading
+				rc, err := daemon.store.OpenMessage(msgid)
+				if err == nil {
+					err = conn.PrintfLine("%s", ev)
+					// time to send
+					dw := conn.DotWriter()
+					_, err = io.Copy(dw, rc)
+					err = dw.Close()
+					rc.Close()
 				} else {
 					log.Println(self.name, "didn't send", msgid, "we don't have it locally")
 				}
@@ -546,7 +543,7 @@ func (self *nntpConnection) handleLine(daemon *NNTPDaemon, code int, line string
 				}
 				if ValidMessageID(msgid) && daemon.store.HasArticle(msgid) {
 					// we have it yeh
-					f, err := os.Open(daemon.store.GetFilename(msgid))
+					f, err := daemon.store.OpenMessage(msgid)
 					if err == nil {
 						conn.PrintfLine("220 %s", msgid)
 						dw := conn.DotWriter()

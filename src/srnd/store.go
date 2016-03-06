@@ -7,6 +7,7 @@ package srnd
 import (
 	"bufio"
 	"bytes"
+	"compress/gzip"
 	"crypto/sha512"
 	"errors"
 	"github.com/majestrate/nacl"
@@ -41,6 +42,9 @@ type ArticleStore interface {
 	GetTempFilename(msgid string) string
 	// Get a message given its messageid
 	GetMessage(msgid string) NNTPMessage
+	// open a message in the store for reading given its message-id
+	// return io.ReadCloser, error
+	OpenMessage(msgid string) (io.ReadCloser, error)
 	// get a temp message given its messageid
 	// temp message is deleted once read
 	ReadTempMessage(msgid string) NNTPMessage
@@ -54,6 +58,8 @@ type ArticleStore interface {
 	GetAllAttachments() ([]string, error)
 	// generate a thumbnail
 	GenerateThumbnail(fname string) error
+	// did we enable compression?
+	Compression() bool
 }
 type articleStore struct {
 	directory    string
@@ -64,6 +70,7 @@ type articleStore struct {
 	convert_path string
 	ffmpeg_path  string
 	sox_path     string
+	compression  bool
 }
 
 func createArticleStore(config map[string]string, database Database) ArticleStore {
@@ -76,9 +83,14 @@ func createArticleStore(config map[string]string, database Database) ArticleStor
 		ffmpeg_path:  config["ffmpegthumbnailer_bin"],
 		sox_path:     config["sox_bin"],
 		database:     database,
+		compression:  config["compression"] == "1",
 	}
 	store.Init()
 	return store
+}
+
+func (self *articleStore) Compression() bool {
+	return self.compression
 }
 
 func (self *articleStore) TempDir() string {
@@ -160,6 +172,17 @@ func (self *articleStore) GetAllAttachments() (names []string, err error) {
 	return
 }
 
+func (self *articleStore) OpenMessage(msgid string) (rc io.ReadCloser, err error) {
+	fname := self.GetFilename(msgid)
+	rc, err = os.Open(fname)
+	if err == nil {
+		if self.compression {
+			rc, err = gzip.NewReader(rc)
+		}
+	}
+	return
+}
+
 func (self *articleStore) ReadMessage(r io.Reader) (NNTPMessage, error) {
 	return read_message(r)
 }
@@ -168,8 +191,19 @@ func (self *articleStore) StorePost(nntp NNTPMessage) (err error) {
 
 	f := self.CreateFile(nntp.MessageID())
 	if f != nil {
-		err = self.WriteMessage(nntp, f)
-		f.Close()
+		if self.compression {
+			// compress original article with gzip
+			var cw *gzip.Writer
+			cw, err = gzip.NewWriterLevel(f, gzip.BestSpeed)
+			if err == nil {
+				err = self.WriteMessage(nntp, cw)
+				cw.Close()
+				f.Close()
+			}
+		} else {
+			err = self.WriteMessage(nntp, f)
+			f.Close()
+		}
 	}
 
 	nntp_inner := nntp.Signed()
@@ -312,18 +346,43 @@ func (self *articleStore) GetTempFilename(messageID string) string {
 // loads temp message and deletes old article
 func (self *articleStore) ReadTempMessage(messageID string) NNTPMessage {
 	fname := self.GetTempFilename(messageID)
-	nntp := self.readfile(fname)
+	nntp := self.readfile(fname, true)
 	DelFile(fname)
 	return nntp
 }
 
 // read a file give filepath
-func (self *articleStore) readfile(fname string) NNTPMessage {
+// parameters are filename and true if it's a temp file
+// otherwise parameters are filename and false
+func (self *articleStore) readfile(fname string, tmp bool) NNTPMessage {
 
 	file, err := os.Open(fname)
 	if err != nil {
-		log.Println("store cannot open file", fname)
+		log.Println("store cannot open file", fname, err)
 		return nil
+	}
+
+	if self.compression && !tmp {
+		// we enabled compression and this is not a temp file
+		// try compressed version first
+		// fall back to uncompressed if failed
+		cr, err := gzip.NewReader(file)
+		if err == nil {
+			// read the message
+			message, err := self.ReadMessage(cr)
+			// close the compression reader
+			cr.Close()
+			// close the file
+			if err == nil {
+				// success
+				file.Close()
+				return message
+			}
+		}
+		log.Println("store compression enabled but", fname, "doesn't look compressed")
+		// decompression failed
+		// seek back to the beginning of the file
+		file.Seek(0, 0)
 	}
 	message, err := self.ReadMessage(file)
 	file.Close()
@@ -331,40 +390,20 @@ func (self *articleStore) readfile(fname string) NNTPMessage {
 		return message
 	}
 
-	log.Println("failed to load file", fname)
+	log.Println("store failed to load file", fname, err)
 	return nil
-}
-
-// get the replies for a thread
-func (self *articleStore) GetThreadReplies(messageID string, last int) []NNTPMessage {
-	var repls []NNTPMessage
-	if self.database.ThreadHasReplies(messageID) {
-		rpls := self.database.GetThreadReplies(messageID, 0, last)
-		if rpls == nil {
-			return repls
-		}
-		for _, rpl := range rpls {
-			msg := self.GetMessage(rpl)
-			if msg == nil {
-				log.Println("cannot get message", rpl)
-			} else {
-				repls = append(repls, msg)
-			}
-		}
-	}
-	return repls
 }
 
 // load an article
 // return nil on failure
 func (self *articleStore) GetMessage(messageID string) NNTPMessage {
-	return self.readfile(self.GetFilename(messageID))
+	return self.readfile(self.GetFilename(messageID), false)
 }
 
 // get article with headers only
 func (self *articleStore) GetHeaders(messageID string) ArticleHeaders {
 	// TODO: don't load the entire body
-	nntp := self.readfile(self.GetFilename(messageID))
+	nntp := self.readfile(self.GetFilename(messageID), false)
 	if nntp == nil {
 		return nil
 	}

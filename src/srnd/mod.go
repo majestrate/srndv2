@@ -20,7 +20,7 @@ type RegenFunc func(newsgroup, msgid, root string, page int)
 
 // does an action for the administrator
 // takes in json
-type AdminFunc func(param map[string]interface{}) (string, error)
+type AdminFunc func(param map[string]interface{}) (interface{}, error)
 
 // interface for moderation ui
 type ModUI interface {

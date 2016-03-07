@@ -27,7 +27,7 @@ type httpModUI struct {
 	delete           func(string)
 	deleteBoardPages func(string)
 	modMessageChan   chan NNTPMessage
-	database         Database
+	daemon           *NNTPDaemon
 	articles         ArticleStore
 	store            *sessions.CookieStore
 	prefix           string
@@ -35,7 +35,7 @@ type httpModUI struct {
 }
 
 func createHttpModUI(frontend *httpFrontend) httpModUI {
-	return httpModUI{frontend.regenAll, frontend.Regen, frontend.regenerateBoard, frontend.deleteThreadMarkup, frontend.deleteBoardMarkup, make(chan NNTPMessage), frontend.daemon.database, frontend.daemon.store, frontend.store, frontend.prefix, frontend.prefix + "mod/"}
+	return httpModUI{frontend.regenAll, frontend.Regen, frontend.regenerateBoard, frontend.deleteThreadMarkup, frontend.deleteBoardMarkup, make(chan NNTPMessage), frontend.daemon, frontend.daemon.store, frontend.store, frontend.prefix, frontend.prefix + "mod/"}
 
 }
 
@@ -53,7 +53,7 @@ func extractParam(param map[string]interface{}, k string) string {
 
 func (self httpModUI) getAdminFunc(funcname string) AdminFunc {
 	if funcname == "template.reload" {
-		return func(param map[string]interface{}) (string, error) {
+		return func(param map[string]interface{}) (interface{}, error) {
 			tname, ok := param["template"]
 			if ok {
 				t := ""
@@ -70,10 +70,10 @@ func (self httpModUI) getAdminFunc(funcname string) AdminFunc {
 			return "reloaded all templates", nil
 		}
 	} else if funcname == "frontend.regen" {
-		return func(param map[string]interface{}) (string, error) {
+		return func(param map[string]interface{}) (interface{}, error) {
 			newsgroup := extractGroup(param)
 			if len(newsgroup) > 0 {
-				if self.database.HasNewsgroup(newsgroup) {
+				if self.daemon.database.HasNewsgroup(newsgroup) {
 					go self.regenGroup(newsgroup)
 				} else {
 					return "failed to regen group", errors.New("no such board")
@@ -84,7 +84,7 @@ func (self httpModUI) getAdminFunc(funcname string) AdminFunc {
 			return "started regeneration", nil
 		}
 	} else if funcname == "thumbnail.regen" {
-		return func(param map[string]interface{}) (string, error) {
+		return func(param map[string]interface{}) (interface{}, error) {
 			threads, ok := param["threads"]
 			t := 1
 			if ok {
@@ -103,34 +103,34 @@ func (self httpModUI) getAdminFunc(funcname string) AdminFunc {
 			return fmt.Sprintf("started rethumbnailing with %d threads", t), nil
 		}
 	} else if funcname == "frontend.add" {
-		return func(param map[string]interface{}) (string, error) {
+		return func(param map[string]interface{}) (interface{}, error) {
 			newsgroup := extractGroup(param)
 			if len(newsgroup) > 0 && newsgroupValidFormat(newsgroup) && strings.HasPrefix(newsgroup, "overchan.") && newsgroup != "overchan." {
-				if self.database.HasNewsgroup(newsgroup) {
+				if self.daemon.database.HasNewsgroup(newsgroup) {
 					// we already have this newsgroup
 					return "already have that newsgroup", nil
 				} else {
 					// we dont got this newsgroup
 					log.Println("adding newsgroup", newsgroup)
-					self.database.RegisterNewsgroup(newsgroup)
+					self.daemon.database.RegisterNewsgroup(newsgroup)
 					return "added " + newsgroup, nil
 				}
 			}
 			return "bad newsgroup", errors.New("invalid newsgroup name: " + newsgroup)
 		}
 	} else if funcname == "frontend.ban" {
-		return func(param map[string]interface{}) (string, error) {
+		return func(param map[string]interface{}) (interface{}, error) {
 			newsgroup := extractGroup(param)
 			if len(newsgroup) > 0 {
 				log.Println("banning", newsgroup)
 				// check ban
-				banned, err := self.database.NewsgroupBanned(newsgroup)
+				banned, err := self.daemon.database.NewsgroupBanned(newsgroup)
 				if banned {
 					// already banned
 					return "cannot ban newsgroup", errors.New("already banned " + newsgroup)
 				} else if err == nil {
 					// do the ban here
-					err = self.database.BanNewsgroup(newsgroup)
+					err = self.daemon.database.BanNewsgroup(newsgroup)
 					// check for error
 					if err == nil {
 						// all gud
@@ -149,11 +149,11 @@ func (self httpModUI) getAdminFunc(funcname string) AdminFunc {
 			}
 		}
 	} else if funcname == "frontend.unban" {
-		return func(param map[string]interface{}) (string, error) {
+		return func(param map[string]interface{}) (interface{}, error) {
 			newsgroup := extractGroup(param)
 			if len(newsgroup) > 0 {
 				log.Println("unbanning", newsgroup)
-				err := self.database.UnbanNewsgroup(newsgroup)
+				err := self.daemon.database.UnbanNewsgroup(newsgroup)
 				if err == nil {
 					return "unbanned " + newsgroup, nil
 				} else {
@@ -164,31 +164,31 @@ func (self httpModUI) getAdminFunc(funcname string) AdminFunc {
 			}
 		}
 	} else if funcname == "frontend.nuke" {
-		return func(param map[string]interface{}) (string, error) {
+		return func(param map[string]interface{}) (interface{}, error) {
 			newsgroup := extractGroup(param)
 			if len(newsgroup) > 0 {
 				log.Println("nuking", newsgroup)
 				// get every thread we have in this group
-				for _, entry := range self.database.GetLastBumpedThreads(newsgroup, 10000) {
+				for _, entry := range self.daemon.database.GetLastBumpedThreads(newsgroup, 10000) {
 					// delete their thread page
 					self.delete(entry.MessageID())
 				}
 				// delete every board page
 				self.deleteBoardPages(newsgroup)
-				go self.database.NukeNewsgroup(newsgroup, self.articles)
+				go self.daemon.database.NukeNewsgroup(newsgroup, self.articles)
 				return "nuke started", nil
 			} else {
 				return "cannot nuke", errors.New("invalid parameters")
 			}
 		}
 	} else if funcname == "pubkey.add" {
-		return func(param map[string]interface{}) (string, error) {
+		return func(param map[string]interface{}) (interface{}, error) {
 			pubkey := extractParam(param, "pubkey")
 			log.Println("pubkey.add", pubkey)
-			if self.database.CheckModPubkeyGlobal(pubkey) {
+			if self.daemon.database.CheckModPubkeyGlobal(pubkey) {
 				return "already added", nil
 			} else {
-				err := self.database.MarkModPubkeyGlobal(pubkey)
+				err := self.daemon.database.MarkModPubkeyGlobal(pubkey)
 				if err == nil {
 					return "added", nil
 				} else {
@@ -197,11 +197,11 @@ func (self httpModUI) getAdminFunc(funcname string) AdminFunc {
 			}
 		}
 	} else if funcname == "pubkey.del" {
-		return func(param map[string]interface{}) (string, error) {
+		return func(param map[string]interface{}) (interface{}, error) {
 			pubkey := extractParam(param, "pubkey")
 			log.Println("pubkey.del", pubkey)
-			if self.database.CheckModPubkeyGlobal(pubkey) {
-				err := self.database.UnMarkModPubkeyGlobal(pubkey)
+			if self.daemon.database.CheckModPubkeyGlobal(pubkey) {
+				err := self.daemon.database.UnMarkModPubkeyGlobal(pubkey)
 				if err == nil {
 					return "removed", nil
 				} else {
@@ -213,12 +213,12 @@ func (self httpModUI) getAdminFunc(funcname string) AdminFunc {
 		}
 
 	} else if funcname == "nntp.login.del" {
-		return func(param map[string]interface{}) (string, error) {
+		return func(param map[string]interface{}) (interface{}, error) {
 			username := extractParam(param, "username")
 			if len(username) > 0 {
-				exists, err := self.database.CheckNNTPUserExists(username)
+				exists, err := self.daemon.database.CheckNNTPUserExists(username)
 				if exists {
-					err = self.database.RemoveNNTPLogin(username)
+					err = self.daemon.database.RemoveNNTPLogin(username)
 					if err == nil {
 						return "removed user", nil
 					}
@@ -233,19 +233,19 @@ func (self httpModUI) getAdminFunc(funcname string) AdminFunc {
 			}
 		}
 	} else if funcname == "nntp.login.add" {
-		return func(param map[string]interface{}) (string, error) {
+		return func(param map[string]interface{}) (interface{}, error) {
 			username := extractParam(param, "username")
 			passwd := extractParam(param, "passwd")
 			if len(username) > 0 && len(passwd) > 0 {
 				log.Println("nntp.login.add", username)
 				// check if users is there
-				exists, err := self.database.CheckNNTPUserExists(username)
+				exists, err := self.daemon.database.CheckNNTPUserExists(username)
 				if exists {
 					// user is already there
 					return "user already exists", nil
 				} else if err == nil {
 					// now add the user
-					err = self.database.AddNNTPLogin(username, passwd)
+					err = self.daemon.database.AddNNTPLogin(username, passwd)
 					// success adding?
 					if err == nil {
 						// yeh
@@ -261,6 +261,37 @@ func (self httpModUI) getAdminFunc(funcname string) AdminFunc {
 				return "invalid username or password format", nil
 			}
 		}
+	} else if funcname == "feed.add" {
+		return func(param map[string]interface{}) (interface{}, error) {
+			host := extractParam(param, "host")
+			port := extractParam(param, "port")
+			name := extractParam(param, "name")
+			if len(host) == 0 || len(port) == 0 || len(name) == 0 {
+				// bad parameter
+				return "", errors.New("please specific host, port and name")
+			}
+			// make new config
+			conf := FeedConfig{
+				policy: FeedPolicy{
+					// default rules for default policy
+					rules: map[string]string{"overchan.*": "0", "ctl": "1"},
+				},
+				Addr:   host + ":" + port,
+				Name:   name,
+				quarks: make(map[string]string),
+			}
+			err := self.daemon.addFeed(conf)
+			if err == nil {
+				return "feed added", err
+			} else {
+				return "", err
+			}
+		}
+	} else if funcname == "feed.list" {
+		return func(_ map[string]interface{}) (interface{}, error) {
+			feeds := self.daemon.activeFeeds()
+			return feeds, nil
+		}
 	}
 	return nil
 }
@@ -274,15 +305,16 @@ func (self httpModUI) HandleAdminCommand(wr http.ResponseWriter, r *http.Request
 		if f == nil {
 			wr.WriteHeader(404)
 		} else {
-			var msg string
+			var result interface{}
 			var err error
 			req := make(map[string]interface{})
 			if r.Method == "POST" {
 				dec := json.NewDecoder(r.Body)
 				err = dec.Decode(&req)
+				r.Body.Close()
 			}
 			if err == nil {
-				msg, err = f(req)
+				result, err = f(req)
 			}
 			resp := make(map[string]interface{})
 			if err == nil {
@@ -290,7 +322,7 @@ func (self httpModUI) HandleAdminCommand(wr http.ResponseWriter, r *http.Request
 			} else {
 				resp["error"] = err.Error()
 			}
-			resp["result"] = msg
+			resp["result"] = result
 			enc := json.NewEncoder(wr)
 			enc.Encode(resp)
 		}
@@ -306,7 +338,7 @@ func (self httpModUI) CheckKey(privkey string) (bool, error) {
 		if kp != nil {
 			defer kp.Free()
 			pubkey := hex.EncodeToString(kp.Public())
-			if self.database.CheckModPubkeyGlobal(pubkey) {
+			if self.daemon.database.CheckModPubkeyGlobal(pubkey) {
 				// this user is an admin
 				return true, nil
 			} else {
@@ -391,7 +423,7 @@ func (self httpModUI) asAuthedWithMessage(handler func(ArticleEntry, *http.Reque
 			// TOOD: prefix detection
 			longhash := strings.Split(path, "/")[3]
 			// get the message id
-			msg, err := self.database.GetMessageIDByHash(longhash)
+			msg, err := self.daemon.database.GetMessageIDByHash(longhash)
 			resp := make(map[string]interface{})
 			if err == nil {
 				resp = handler(msg, req)
@@ -419,12 +451,12 @@ func (self httpModUI) HandleUnbanAddress(wr http.ResponseWriter, r *http.Request
 		if strings.Count(path, "/") > 2 {
 			addr := strings.Split(path, "/")[3]
 			resp := make(map[string]interface{})
-			banned, err := self.database.CheckIPBanned(addr)
+			banned, err := self.daemon.database.CheckIPBanned(addr)
 			if err != nil {
 				resp["error"] = fmt.Sprintf("cannot tell if %s is banned: %s", addr, err.Error())
 			} else if banned {
 				// TODO: rangebans
-				err = self.database.UnbanAddr(addr)
+				err = self.daemon.database.UnbanAddr(addr)
 				if err == nil {
 					resp["result"] = fmt.Sprintf("%s was unbanned", addr)
 				} else {
@@ -460,15 +492,15 @@ func (self httpModUI) handleBanAddress(msg ArticleEntry, r *http.Request) map[st
 			resp["error"] = fmt.Sprintf("%s has no IP, ban Tor instead", msgid)
 		} else {
 			// get the ip address if we have it
-			ip, err := self.database.GetIPAddress(encip)
+			ip, err := self.daemon.database.GetIPAddress(encip)
 			if len(ip) > 0 {
 				// we have it
 				// ban the address
-				err = self.database.BanAddr(ip)
+				err = self.daemon.database.BanAddr(ip)
 				// then we tell everyone about it
 				var key string
 				// TODO: we SHOULD have the key, but what if we do not?
-				key, err = self.database.GetEncKey(encip)
+				key, err = self.daemon.database.GetEncKey(encip)
 				// create mod message
 				// TODO: hardcoded ban period
 				mm := ModMessage{overchanInetBan(encip, key, -1)}
@@ -489,7 +521,7 @@ func (self httpModUI) handleBanAddress(msg ArticleEntry, r *http.Request) map[st
 			} else {
 				// we don't have it
 				// ban the encrypted version
-				err = self.database.BanEncAddr(encip)
+				err = self.daemon.database.BanEncAddr(encip)
 			}
 			if err == nil {
 				result_msg := fmt.Sprintf("We banned %s", encip)
@@ -521,7 +553,7 @@ func (self httpModUI) handleDeletePost(msg ArticleEntry, r *http.Request) map[st
 		// is it a root post?
 		if ref == "" {
 			// load replies
-			replies := self.database.GetThreadReplies(msgid, 0, 0)
+			replies := self.daemon.database.GetThreadReplies(msgid, 0, 0)
 			if replies != nil {
 				for _, repl := range replies {
 					// append mod line to mod message for reply
@@ -603,6 +635,9 @@ func (self httpModUI) ServeModPage(wr http.ResponseWriter, r *http.Request) {
 		// we are logged in
 		// serve mod page
 		self.writeTemplate(wr, r, "modpage.mustache")
+		if r.Body != nil {
+			r.Body.Close()
+		}
 	} else {
 		// we are not logged in
 		// serve login page

@@ -189,6 +189,9 @@ func (self *httpFrontend) handle_postform(wr http.ResponseWriter, r *http.Reques
 	// the post we will turn into an nntp article
 	var pr postRequest
 
+	// close request body when done
+	defer r.Body.Close()
+
 	mp_reader, err := r.MultipartReader()
 
 	if err != nil {
@@ -225,6 +228,7 @@ func (self *httpFrontend) handle_postform(wr http.ResponseWriter, r *http.Reques
 	for {
 		part, err := mp_reader.NextPart()
 		if err == nil {
+			defer part.Close()
 			// get the name of the part
 			partname := part.FormName()
 			// read part for attachment
@@ -634,6 +638,7 @@ func (self httpFrontend) handle_authed_api(wr http.ResponseWriter, r *http.Reque
 	if api == "post" {
 		var pr postRequest
 		err = dec.Decode(&pr)
+		r.Body.Close()
 		if err == nil {
 			// we parsed it
 			self.handle_postRequest(&pr, b, e, s, true)

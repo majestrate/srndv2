@@ -19,14 +19,14 @@ import (
 type FeedConfig struct {
 	policy           FeedPolicy
 	quarks           map[string]string
-	addr             string
+	Addr             string
 	sync             bool
 	proxy_type       string
 	proxy_addr       string
 	username         string
 	passwd           string
 	linkauth_keyfile string
-	name             string
+	Name             string
 	sync_interval    time.Duration
 }
 
@@ -180,18 +180,18 @@ func GenSRNdConfig() error {
 func SaveFeeds(feeds []FeedConfig) (err error) {
 	conf := configparser.NewConfiguration()
 	for _, feed := range feeds {
-		if len(feed.name) == 0 {
+		if len(feed.Name) == 0 {
 			// don't do feed with no name
 			continue
 		}
-		sect := conf.NewSection("feed-" + feed.name)
+		sect := conf.NewSection("feed-" + feed.Name)
 		if len(feed.proxy_type) > 0 {
 			sect.Add("proxy-type", feed.proxy_type)
 		}
 		phost, pport, _ := net.SplitHostPort(feed.proxy_addr)
 		sect.Add("proxy-host", phost)
 		sect.Add("proxy-port", pport)
-		host, port, _ := net.SplitHostPort(feed.addr)
+		host, port, _ := net.SplitHostPort(feed.Addr)
 		sect.Add("host", host)
 		sect.Add("port", port)
 		sync := "0"
@@ -203,7 +203,7 @@ func SaveFeeds(feeds []FeedConfig) (err error) {
 		sect.Add("sync-interval", fmt.Sprintf("%d", int(interval)))
 		sect.Add("username", feed.username)
 		sect.Add("password", feed.passwd)
-		sect = conf.NewSection(feed.name)
+		sect = conf.NewSection(feed.Name)
 		for k, v := range feed.policy.rules {
 			sect.Add(k, v)
 		}
@@ -364,13 +364,13 @@ func ReadConfig() *SRNdConfig {
 
 			// load feed polcies
 			sect_name := sect.Name()[5:]
-			fconf.name = sect_name
+			fconf.Name = sect_name
 			if len(host) > 0 && len(port) > 0 {
 				// host port specified
-				fconf.addr = host + ":" + port
+				fconf.Addr = host + ":" + port
 			} else {
 				// no host / port specified
-				fconf.addr = strings.Trim(sect_name, " ")
+				fconf.Addr = strings.Trim(sect_name, " ")
 			}
 			feed_sect, err := conf.Section(sect_name)
 			if err != nil {
@@ -395,7 +395,7 @@ func ReadConfig() *SRNdConfig {
 			sect_name := sect.Name()[7:]
 			// find the feed for this quark
 			for idx, fconf := range sconf.feeds {
-				if fconf.addr == sect_name {
+				if fconf.Addr == sect_name {
 					// yup this is the one
 					sconf.feeds[idx].quarks = sect.Options()
 				}

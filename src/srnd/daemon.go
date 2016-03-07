@@ -21,18 +21,18 @@ import (
 
 // the state of a feed that we are persisting
 type feedState struct {
-	config FeedConfig
-	paused bool
+	Config FeedConfig
+	Paused bool
 }
 
 // the status of a feed that we are persisting
 type feedStatus struct {
 	// does this feed exist?
-	exists bool
+	Exists bool
 	// the active connections this feed has open if it exists
-	conns []*nntpConnection
+	Conns []*nntpConnection
 	// the state of this feed if it exists
-	state *feedState
+	State *feedState
 }
 
 // an event for querying if a feed's status
@@ -257,7 +257,7 @@ func (self *NNTPDaemon) storeFeedsConfig() (err error) {
 	feeds := self.activeFeeds()
 	var feedconfigs []FeedConfig
 	for _, status := range feeds {
-		feedconfigs = append(feedconfigs, status.state.config)
+		feedconfigs = append(feedconfigs, status.State.Config)
 	}
 	err = SaveFeeds(feedconfigs)
 	return
@@ -295,7 +295,7 @@ func (self *NNTPDaemon) removeFeed(feedname string) (err error) {
 	self.deregister_feed <- feedname
 	// deregister all connections for this feed
 	status := self.getFeedStatus(feedname)
-	for _, nntp := range status.conns {
+	for _, nntp := range status.Conns {
 		go nntp.QuitAndWait()
 	}
 	return
@@ -332,19 +332,19 @@ func (self *NNTPDaemon) activeFeeds() (feeds []*feedStatus) {
 }
 
 func (self *NNTPDaemon) persistFeed(conf FeedConfig, mode string) {
-	log.Println(conf.name, "persisting in", mode, "mode")
+	log.Println(conf.Name, "persisting in", mode, "mode")
 	backoff := time.Second
 	for {
 		if self.running {
 			// get the status of this feed
-			status := self.getFeedStatus(conf.name)
-			if !status.exists {
+			status := self.getFeedStatus(conf.Name)
+			if !status.Exists {
 				// our feed was removed
 				// let's die
-				log.Println(conf.name, "ended", mode, "mode")
+				log.Println(conf.Name, "ended", mode, "mode")
 				return
 			}
-			if status.state.paused {
+			if status.State.Paused {
 				// we are paused
 				// sleep for a bit
 				time.Sleep(time.Second)
@@ -355,16 +355,16 @@ func (self *NNTPDaemon) persistFeed(conf FeedConfig, mode string) {
 
 			if mode == "sync" {
 				// yeh, do it
-				self.syncPull(conf.proxy_type, conf.proxy_addr, conf.addr)
+				self.syncPull(conf.proxy_type, conf.proxy_addr, conf.Addr)
 				// sleep for the sleep interval and continue
-				log.Println(conf.name, "waiting for", conf.sync_interval, "before next sync")
+				log.Println(conf.Name, "waiting for", conf.sync_interval, "before next sync")
 				time.Sleep(conf.sync_interval)
 				continue
 			}
-			conn, err := self.dialOut(conf.proxy_type, conf.proxy_addr, conf.addr)
+			conn, err := self.dialOut(conf.proxy_type, conf.proxy_addr, conf.Addr)
 			if err != nil {
-				log.Println(conf.name, "failed to dial out", err.Error())
-				log.Println(conf.name, "back off for", backoff, "seconds")
+				log.Println(conf.Name, "failed to dial out", err.Error())
+				log.Println(conf.Name, "back off for", backoff, "seconds")
 				time.Sleep(backoff)
 				// exponential backoff
 				if backoff < (10 * time.Minute) {
@@ -372,10 +372,10 @@ func (self *NNTPDaemon) persistFeed(conf FeedConfig, mode string) {
 				}
 				continue
 			}
-			nntp := createNNTPConnection(conf.addr)
+			nntp := createNNTPConnection(conf.Addr)
 			nntp.policy = conf.policy
-			nntp.feedname = conf.name
-			nntp.name = conf.name + "-" + mode
+			nntp.feedname = conf.Name
+			nntp.name = conf.Name + "-" + mode
 			stream, reader, use_tls, err := nntp.outboundHandshake(textproto.NewConn(conn), &conf)
 			if err == nil {
 				if mode == "reader" && !reader {
@@ -394,7 +394,7 @@ func (self *NNTPDaemon) persistFeed(conf FeedConfig, mode string) {
 				log.Println("error doing outbound hanshake", err)
 			}
 		}
-		log.Println(conf.name, "back off for", backoff, "seconds")
+		log.Println(conf.Name, "back off for", backoff, "seconds")
 		time.Sleep(backoff)
 		// exponential backoff
 		if backoff < (10 * time.Minute) {
@@ -598,13 +598,13 @@ func (self *NNTPDaemon) polloutfeeds() {
 					// caller wants to be informed
 					// create the reply
 					status := &feedStatus{
-						exists: true,
-						state:  feedstate,
+						Exists: true,
+						State:  feedstate,
 					}
 					// get the connections for this feed
 					for _, conn := range self.activeConnections {
 						if conn.feedname == name {
-							status.conns = append(status.conns, conn)
+							status.Conns = append(status.Conns, conn)
 						}
 					}
 					// tell caller
@@ -615,7 +615,7 @@ func (self *NNTPDaemon) polloutfeeds() {
 				if q.resultChnl != nil {
 					// tell caller
 					q.resultChnl <- &feedStatus{
-						exists: false,
+						Exists: false,
 					}
 				}
 			}
@@ -627,7 +627,7 @@ func (self *NNTPDaemon) polloutfeeds() {
 			if ok {
 				// yeh
 				// replace the policy
-				feedstate.config.policy = ev.policy
+				feedstate.Config.policy = ev.policy
 				if ev.resultChnl != nil {
 					// we need to inform the caller about the feed being changed successfully
 					ev.resultChnl <- &modifyFeedPolicyResult{
@@ -658,20 +658,20 @@ func (self *NNTPDaemon) polloutfeeds() {
 				}
 				// add feedStatus
 				feeds = append(feeds, &feedStatus{
-					exists: true,
-					conns:  conns,
-					state:  feedstate,
+					Exists: true,
+					Conns:  conns,
+					State:  feedstate,
 				})
 			}
 			// send response
 			chnl <- feeds
 		case feedconfig := <-self.register_feed:
-			self.loadedFeeds[feedconfig.name] = &feedState{
-				config: feedconfig,
+			self.loadedFeeds[feedconfig.Name] = &feedState{
+				Config: feedconfig,
 				// TODO: make starting paused configurable
-				paused: false,
+				Paused: false,
 			}
-			log.Println("daemon registered feed", feedconfig.name)
+			log.Println("daemon registered feed", feedconfig.Name)
 			// persist feeds
 			if feedconfig.sync {
 				go self.persistFeed(feedconfig, "sync")

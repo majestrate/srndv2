@@ -365,7 +365,7 @@ func (self *NNTPDaemon) persistFeed(conf FeedConfig, mode string) {
 			if err != nil {
 				log.Println(conf.name, "failed to dial out", err.Error())
 				log.Println(conf.name, "back off for", backoff, "seconds")
-				time.Sleep(backoff * time.Second)
+				time.Sleep(backoff)
 				// exponential backoff
 				if backoff < (10 * time.Minute) {
 					backoff *= 2
@@ -395,7 +395,7 @@ func (self *NNTPDaemon) persistFeed(conf FeedConfig, mode string) {
 			}
 		}
 		log.Println(conf.name, "back off for", backoff, "seconds")
-		time.Sleep(time.Second * backoff)
+		time.Sleep(backoff)
 		// exponential backoff
 		if backoff < (10 * time.Minute) {
 			backoff *= 2

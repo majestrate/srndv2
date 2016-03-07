@@ -174,10 +174,33 @@ func (self *articleStore) GetAllAttachments() (names []string, err error) {
 
 func (self *articleStore) OpenMessage(msgid string) (rc io.ReadCloser, err error) {
 	fname := self.GetFilename(msgid)
-	rc, err = os.Open(fname)
+	var f *os.File
+	f, err = os.Open(fname)
 	if err == nil {
 		if self.compression {
-			rc, err = gzip.NewReader(rc)
+			// read gzip header
+			var hdr [2]byte
+			_, err = f.Read(hdr[:])
+			// seek back to beginning
+			f.Seek(0, 0)
+			if err == nil {
+				if hdr[0] == 0x1f && hdr[1] == 0x8b {
+					// gzip header detected
+					rc, err = gzip.NewReader(f)
+				} else {
+					// fall back to uncompressed
+					rc = f
+				}
+			} else {
+				// error reading file
+				f.Close()
+				rc = nil
+			}
+			// will fall back to regular file if gzip header not found
+		} else {
+			// compression disabled
+			// assume uncompressed
+			rc = f
 		}
 	}
 	return

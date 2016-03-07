@@ -38,7 +38,9 @@ func nntpCHECK(msgid string) nntpStreamEvent {
 
 // nntp connection state
 type nntpConnection struct {
-	// the name of this feed
+	// the name of the feed this connection belongs to
+	feedname string
+	// the name of this connection
 	name string
 	// hostname used for tls
 	hostname string
@@ -62,6 +64,8 @@ type nntpConnection struct {
 	authenticated bool
 	// the username that is authenticated
 	username string
+	// send a channel down this channel to be informed when streaming/reader dies when commanded by QuitAndWait()
+	die chan chan bool
 }
 
 // write out a mime header to a writer
@@ -77,16 +81,29 @@ func writeMIMEHeader(wr io.Writer, hdr textproto.MIMEHeader) (err error) {
 	return
 }
 
-func createNNTPConnection(addr string) nntpConnection {
+func createNNTPConnection(addr string) *nntpConnection {
 	var host string
 	if len(addr) > 0 {
 		host, _, _ = net.SplitHostPort(addr)
 	}
-	return nntpConnection{
+	return &nntpConnection{
 		hostname: host,
-		article:  make(chan string, 32),
-		stream:   make(chan nntpStreamEvent, 64),
+		article:  make(chan string, 1024),
+		stream:   make(chan nntpStreamEvent, 1024),
 	}
+}
+
+// gracefully exit nntpconnection when all active transfers are done
+// returns when that is done
+func (self *nntpConnection) QuitAndWait() {
+	chnl := make(chan bool)
+	// tell feed to die
+	self.die <- chnl
+	// we are ded
+	<-chnl
+	// ded now
+	close(chnl)
+	return
 }
 
 // switch modes
@@ -205,31 +222,47 @@ func (self *nntpConnection) outboundHandshake(conn *textproto.Conn, conf *FeedCo
 	return
 }
 
-// handle streaming event
-// this function should send only
-func (self *nntpConnection) handleStreaming(daemon *NNTPDaemon, reader bool, conn *textproto.Conn) (err error) {
-	for err == nil {
-		ev := <-self.stream
-		if ValidMessageID(ev.MessageID()) {
-			cmd, msgid := ev.Command(), ev.MessageID()
-			if cmd == "TAKETHIS" {
-				// open message for reading
-				rc, err := daemon.store.OpenMessage(msgid)
-				if err == nil {
-					err = conn.PrintfLine("%s", ev)
-					// time to send
-					dw := conn.DotWriter()
-					_, err = io.Copy(dw, rc)
-					err = dw.Close()
-					rc.Close()
-				} else {
-					log.Println(self.name, "didn't send", msgid, "we don't have it locally")
-				}
-			} else if cmd == "CHECK" {
-				conn.PrintfLine("%s", ev)
+// handle sending 1 stream event
+func (self *nntpConnection) handleStreamEvent(ev nntpStreamEvent, daemon *NNTPDaemon, conn *textproto.Conn) (err error) {
+	if ValidMessageID(ev.MessageID()) {
+		cmd, msgid := ev.Command(), ev.MessageID()
+		if cmd == "TAKETHIS" {
+			// open message for reading
+			var rc io.ReadCloser
+			rc, err = daemon.store.OpenMessage(msgid)
+			if err == nil {
+				err = conn.PrintfLine("%s", ev)
+				// time to send
+				dw := conn.DotWriter()
+				_, err = io.Copy(dw, rc)
+				err = dw.Close()
+				rc.Close()
 			} else {
-				log.Println("invalid stream command", ev)
+				log.Println(self.name, "didn't send", msgid, err)
 			}
+		} else if cmd == "CHECK" {
+			conn.PrintfLine("%s", ev)
+		} else {
+			log.Println("invalid stream command", ev)
+		}
+	}
+	return
+}
+
+// handle streaming events
+// this function should send only
+func (self *nntpConnection) handleStreaming(daemon *NNTPDaemon, conn *textproto.Conn) (err error) {
+	for err == nil {
+		select {
+		case chnl := <-self.die:
+			// someone asked us to die
+			conn.PrintfLine("QUIT")
+			conn.Close()
+			chnl <- true
+			return
+		case ev := <-self.stream:
+			// handle streaming event
+			err = self.handleStreamEvent(ev, daemon, conn)
 		}
 	}
 	return
@@ -790,11 +823,15 @@ func (self *nntpConnection) handleLine(daemon *NNTPDaemon, code int, line string
 }
 
 func (self *nntpConnection) startStreaming(daemon *NNTPDaemon, reader bool, conn *textproto.Conn) {
-	var err error
-	for err == nil {
-		err = self.handleStreaming(daemon, reader, conn)
+	for {
+		err := self.handleStreaming(daemon, conn)
+		if err == nil {
+			log.Println(self.name, "done with streaming")
+			return
+		} else {
+			log.Println(self.name, "error while streaming:", err)
+		}
 	}
-	log.Println(self.name, "error while streaming:", err)
 }
 
 // scrape all posts in a newsgroup
@@ -1025,14 +1062,26 @@ func (self *nntpConnection) requestArticle(daemon *NNTPDaemon, conn *textproto.C
 
 func (self *nntpConnection) startReader(daemon *NNTPDaemon, conn *textproto.Conn) {
 	log.Println(self.name, "run reader mode")
-	var err error
-	for err == nil {
-		// next article to ask for
-		msgid := <-self.article
-		err = self.requestArticle(daemon, conn, msgid)
+	for {
+		var err error
+		select {
+		case chnl := <-self.die:
+			// we were asked to die
+			// send quit
+			conn.PrintfLine("QUIT")
+			chnl <- true
+			break
+		case msgid := <-self.article:
+			// next article to ask for
+			err = self.requestArticle(daemon, conn, msgid)
+			if err != nil {
+				log.Println(self.name, "error while in reader mode:", err)
+				close(self.die)
+				break
+			}
+		}
 	}
-	// report error and close connection
-	log.Println(self.name, "error while in reader mode:", err)
+	// close connection
 	conn.Close()
 }
 
@@ -1202,6 +1251,6 @@ func (self *nntpConnection) runConnection(daemon *NNTPDaemon, inbound, stream, r
 }
 
 func (self *nntpConnection) articleDefer(msgid string) {
-	time.Sleep(time.Second * 90)
+	time.Sleep(time.Second * 10)
 	self.stream <- nntpCHECK(msgid)
 }

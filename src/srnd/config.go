@@ -6,9 +6,11 @@ package srnd
 
 import (
 	"encoding/base32"
+	"fmt"
 	"github.com/majestrate/configparser"
 	"github.com/majestrate/nacl"
 	"log"
+	"net"
 	"path/filepath"
 	"strings"
 	"time"
@@ -172,6 +174,41 @@ func GenSRNdConfig() error {
 	sect.Add("api-secret", secret)
 
 	return configparser.Save(conf, "srnd.ini")
+}
+
+// save a list of feeds to overwrite feeds.ini
+func SaveFeeds(feeds []FeedConfig) (err error) {
+	conf := configparser.NewConfiguration()
+	for _, feed := range feeds {
+		if len(feed.name) == 0 {
+			// don't do feed with no name
+			continue
+		}
+		sect := conf.NewSection("feed-" + feed.name)
+		if len(feed.proxy_type) > 0 {
+			sect.Add("proxy-type", feed.proxy_type)
+		}
+		phost, pport, _ := net.SplitHostPort(feed.proxy_addr)
+		sect.Add("proxy-host", phost)
+		sect.Add("proxy-port", pport)
+		host, port, _ := net.SplitHostPort(feed.addr)
+		sect.Add("host", host)
+		sect.Add("port", port)
+		sync := "0"
+		if feed.sync {
+			sync = "1"
+		}
+		sect.Add("sync", sync)
+		interval := feed.sync_interval / time.Second
+		sect.Add("sync-interval", fmt.Sprintf("%d", int(interval)))
+		sect.Add("username", feed.username)
+		sect.Add("password", feed.passwd)
+		sect = conf.NewSection(feed.name)
+		for k, v := range feed.policy.rules {
+			sect.Add(k, v)
+		}
+	}
+	return configparser.Save(conf, "feeds.ini")
 }
 
 // read config files

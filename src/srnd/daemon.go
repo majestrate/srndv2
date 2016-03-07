@@ -19,6 +19,51 @@ import (
 	"time"
 )
 
+// the state of a feed that we are persisting
+type feedState struct {
+	config FeedConfig
+	paused bool
+}
+
+// the status of a feed that we are persisting
+type feedStatus struct {
+	// does this feed exist?
+	exists bool
+	// the active connections this feed has open if it exists
+	conns []*nntpConnection
+	// the state of this feed if it exists
+	state *feedState
+}
+
+// an event for querying if a feed's status
+type feedStatusQuery struct {
+	// name of feed
+	name string
+	// channel to send result down
+	resultChnl chan *feedStatus
+}
+
+// the result of modifying a feed
+type modifyFeedPolicyResult struct {
+	// error if one occured
+	// set to nil if no error occured
+	err error
+	// name of the feed that was changed
+	// XXX: is this needed?
+	name string
+}
+
+// describes how we want to change a feed's policy
+type modifyFeedPolicyEvent struct {
+	// name of feed
+	name string
+	// new policy
+	policy FeedPolicy
+	// channel to send result down
+	// if nil don't send result
+	resultChnl chan *modifyFeedPolicyResult
+}
+
 type NNTPDaemon struct {
 	instance_name string
 	bind_addr     string
@@ -44,11 +89,23 @@ type NNTPDaemon struct {
 	//cache driver
 	cache CacheInterface
 
-	// map of addr -> NNTPConnection
-	feeds map[string]nntpConnection
-	// for registering and deregistering outbound feeds
-	register_outfeed   chan nntpConnection
-	deregister_outfeed chan nntpConnection
+	// current feeds loaded from config
+	loadedFeeds map[string]*feedState
+	// for obtaining a list of loaded feeds from the daemon
+	get_feeds chan chan []*feedStatus
+	// for obtaining the status of a loaded feed
+	get_feed chan *feedStatusQuery
+	// for modifying feed's policies
+	modify_feed_policy chan *modifyFeedPolicyEvent
+	// for registering a new feed to persist
+	register_feed chan FeedConfig
+	// for degregistering an existing feed from persistance given name
+	deregister_feed chan string
+	// map of name -> NNTPConnection
+	activeConnections map[string]*nntpConnection
+	// for registering and deregistering outbound feed connections
+	register_connection   chan *nntpConnection
+	deregister_connection chan *nntpConnection
 	// infeed for articles
 	infeed chan NNTPMessage
 	// channel to load messages to infeed given their message id
@@ -194,32 +251,155 @@ func (self *NNTPDaemon) dialOut(proxy_type, proxy_addr, remote_addr string) (con
 	return
 }
 
+// save current feeds to feeds.ini, overwrites feeds.ini
+// returns error if one occurs while writing to feeds.ini
+func (self *NNTPDaemon) storeFeedsConfig() (err error) {
+	feeds := self.activeFeeds()
+	var feedconfigs []FeedConfig
+	for _, status := range feeds {
+		feedconfigs = append(feedconfigs, status.state.config)
+	}
+	err = SaveFeeds(feedconfigs)
+	return
+}
+
+// change a feed's policy given the feed's name
+// return error if one occurs while modifying feed's policy
+func (self *NNTPDaemon) modifyFeedPolicy(feedname string, policy FeedPolicy) (err error) {
+	// make event
+	chnl := make(chan *modifyFeedPolicyResult)
+	ev := &modifyFeedPolicyEvent{
+		resultChnl: chnl,
+		name:       feedname,
+		policy:     policy,
+	}
+	// fire event
+	self.modify_feed_policy <- ev
+	// recv result
+	result := <-chnl
+	if result == nil {
+		// XXX: why would this ever happen?
+		err = errors.New("no result from daemon after modifying feed")
+	} else {
+		err = result.err
+	}
+	// done with the event result channel
+	close(chnl)
+	return
+}
+
+// remove a persisted feed from the daemon
+// does not modify feeds.ini
+func (self *NNTPDaemon) removeFeed(feedname string) (err error) {
+	// deregister feed first so it doesn't reconnect immediately
+	self.deregister_feed <- feedname
+	// deregister all connections for this feed
+	status := self.getFeedStatus(feedname)
+	for _, nntp := range status.conns {
+		go nntp.QuitAndWait()
+	}
+	return
+}
+
+func (self *NNTPDaemon) getFeedStatus(feedname string) (status *feedStatus) {
+	chnl := make(chan *feedStatus)
+	self.get_feed <- &feedStatusQuery{
+		name:       feedname,
+		resultChnl: chnl,
+	}
+	status = <-chnl
+	close(chnl)
+	return
+}
+
+// add a feed to be persisted by the daemon
+// does not modify feeds.ini
+func (self *NNTPDaemon) addFeed(conf FeedConfig) (err error) {
+	self.register_feed <- conf
+	return
+}
+
+// get an immutable list of all active feeds
+func (self *NNTPDaemon) activeFeeds() (feeds []*feedStatus) {
+	chnl := make(chan []*feedStatus)
+	// query feeds
+	self.get_feeds <- chnl
+	// get reply
+	feeds = <-chnl
+	// got reply, close channel
+	close(chnl)
+	return
+}
+
 func (self *NNTPDaemon) persistFeed(conf FeedConfig, mode string) {
+	log.Println(conf.name, "persisting in", mode, "mode")
+	backoff := time.Duration(1)
 	for {
 		if self.running {
+			// get the status of this feed
+			status := self.getFeedStatus(conf.name)
+			if !status.exists {
+				// our feed was removed
+				// let's die
+				log.Println(conf.name, "ended", mode, "mode")
+				return
+			}
+			if status.state.paused {
+				// we are paused
+				// sleep for a bit
+				time.Sleep(time.Second)
+				// check status again
+				continue
+			}
+			// do we want to do a pull based sync?
+
+			if mode == "sync" {
+				// yeh, do it
+				self.syncPull(conf.proxy_type, conf.proxy_addr, conf.addr)
+				// sleep for the sleep interval and continue
+				log.Println(conf.name, "waiting for", conf.sync_interval, "before next sync")
+				time.Sleep(conf.sync_interval)
+				continue
+			}
 			conn, err := self.dialOut(conf.proxy_type, conf.proxy_addr, conf.addr)
 			if err != nil {
-				time.Sleep(time.Second * 5)
+				log.Println(conf.name, "failed to dial out", err.Error())
+				log.Println(conf.name, "back off for", backoff, "seconds")
+				time.Sleep(backoff * time.Second)
+				// exponential backoff
+				if backoff < (10 * time.Minute) {
+					backoff *= 2
+				}
 				continue
 			}
 			nntp := createNNTPConnection(conf.addr)
 			nntp.policy = conf.policy
+			nntp.feedname = conf.name
 			nntp.name = conf.name + "-" + mode
 			stream, reader, use_tls, err := nntp.outboundHandshake(textproto.NewConn(conn), &conf)
 			if err == nil {
 				if mode == "reader" && !reader {
 					log.Println(nntp.name, "we don't support reader on this feed, dropping")
-					return
+					conn.Close()
+				} else {
+					self.register_connection <- nntp
+					// success connecting, reset backoff
+					backoff = time.Duration(1)
+					// run connection
+					nntp.runConnection(self, false, stream, reader, use_tls, mode, conn, &conf)
+					// deregister connection
+					self.deregister_connection <- nntp
 				}
-				self.register_outfeed <- nntp
-				nntp.runConnection(self, false, stream, reader, use_tls, mode, conn, &conf)
-				self.deregister_outfeed <- nntp
-
 			} else {
 				log.Println("error doing outbound hanshake", err)
 			}
 		}
-		time.Sleep(1 * time.Second)
+		log.Println(conf.name, "back off for", backoff, "seconds")
+		time.Sleep(time.Second * backoff)
+		// exponential backoff
+		if backoff < (10 * time.Minute) {
+			backoff *= 2
+		}
 	}
 }
 
@@ -284,12 +464,18 @@ func (self *NNTPDaemon) Run() {
 		}()
 	}
 
-	self.register_outfeed = make(chan nntpConnection)
-	self.deregister_outfeed = make(chan nntpConnection)
+	self.register_connection = make(chan *nntpConnection)
+	self.deregister_connection = make(chan *nntpConnection)
 	self.infeed = make(chan NNTPMessage, 1024)
 	self.infeed_load = make(chan string, 1024)
 	self.send_all_feeds = make(chan ArticleEntry, 1024)
-	self.feeds = make(map[string]nntpConnection)
+	self.activeConnections = make(map[string]*nntpConnection)
+	self.loadedFeeds = make(map[string]*feedState)
+	self.register_feed = make(chan FeedConfig)
+	self.deregister_feed = make(chan string)
+	self.get_feeds = make(chan chan []*feedStatus)
+	self.get_feed = make(chan *feedStatusQuery)
+	self.modify_feed_policy = make(chan *modifyFeedPolicyEvent)
 	self.ask_for_article = make(chan ArticleEntry, 1024)
 
 	self.expire = createExpirationCore(self.database, self.store)
@@ -331,21 +517,6 @@ func (self *NNTPDaemon) Run() {
 	go self.expire.Mainloop()
 	// we are now running
 	self.running = true
-	// persist outfeeds
-	for idx := range self.conf.feeds {
-		f := self.conf.feeds[idx]
-		go self.persistFeed(f, "reader")
-		go self.persistFeed(f, "stream")
-		if f.sync {
-			// this feed wants to sync
-			go func(fc FeedConfig) {
-				for {
-					self.syncPull(f.proxy_type, f.proxy_addr, f.addr)
-					time.Sleep(f.sync_interval)
-				}
-			}(f)
-		}
-	}
 	// start accepting incoming connections
 	go self.acceptloop()
 
@@ -380,7 +551,14 @@ func (self *NNTPDaemon) Run() {
 		}
 
 	}()
-
+	go self.polloutfeeds()
+	go self.pollmessages()
+	// register feeds from config
+	log.Println("registering feeds")
+	for _, f := range self.conf.feeds {
+		self.register_feed <- f
+	}
+	// if we want to sync on start do it now
 	if self.sync_on_start {
 		go func() {
 			// wait 10 seconds for feeds to establish
@@ -390,9 +568,7 @@ func (self *NNTPDaemon) Run() {
 			}
 		}()
 	}
-	go self.pollinfeed()
-	go self.pollmessages()
-	self.polloutfeeds()
+	self.pollinfeed()
 }
 
 func (self *NNTPDaemon) pollinfeed() {
@@ -411,16 +587,113 @@ func (self *NNTPDaemon) polloutfeeds() {
 	for {
 		select {
 
-		case outfeed := <-self.register_outfeed:
-			log.Println("outfeed", outfeed.name, "registered")
-			self.feeds[outfeed.name] = outfeed
-		case outfeed := <-self.deregister_outfeed:
-			log.Println("outfeed", outfeed.name, "de-registered")
-			delete(self.feeds, outfeed.name)
+		case q := <-self.get_feed:
+			// someone asked for the status of a certain feed
+			name := q.name
+			// find feed
+			feedstate, ok := self.loadedFeeds[name]
+			if ok {
+				// it exists
+				if q.resultChnl != nil {
+					// caller wants to be informed
+					// create the reply
+					status := &feedStatus{
+						exists: true,
+						state:  feedstate,
+					}
+					// get the connections for this feed
+					for _, conn := range self.activeConnections {
+						if conn.feedname == name {
+							status.conns = append(status.conns, conn)
+						}
+					}
+					// tell caller
+					q.resultChnl <- status
+				}
+			} else {
+				// does not exist
+				if q.resultChnl != nil {
+					// tell caller
+					q.resultChnl <- &feedStatus{
+						exists: false,
+					}
+				}
+			}
+		case ev := <-self.modify_feed_policy:
+			// we want to modify a feed policy
+			name := ev.name
+			// does this feed exist?
+			feedstate, ok := self.loadedFeeds[name]
+			if ok {
+				// yeh
+				// replace the policy
+				feedstate.config.policy = ev.policy
+				if ev.resultChnl != nil {
+					// we need to inform the caller about the feed being changed successfully
+					ev.resultChnl <- &modifyFeedPolicyResult{
+						err:  nil,
+						name: name,
+					}
+				}
+			} else {
+				// nah
+				if ev.resultChnl != nil {
+					// we need to inform the caller about the feed not existing
+					ev.resultChnl <- &modifyFeedPolicyResult{
+						err:  errors.New("no such feed"),
+						name: name,
+					}
+				}
+			}
+		case chnl := <-self.get_feeds:
+			// we got a request for viewing the status of the feeds
+			var feeds []*feedStatus
+			for feedname, feedstate := range self.loadedFeeds {
+				var conns []*nntpConnection
+				// get connections for this feed
+				for _, conn := range self.activeConnections {
+					if conn.feedname == feedname {
+						conns = append(conns, conn)
+					}
+				}
+				// add feedStatus
+				feeds = append(feeds, &feedStatus{
+					exists: true,
+					conns:  conns,
+					state:  feedstate,
+				})
+			}
+			// send response
+			chnl <- feeds
+		case feedconfig := <-self.register_feed:
+			self.loadedFeeds[feedconfig.name] = &feedState{
+				config: feedconfig,
+				// TODO: make starting paused configurable
+				paused: false,
+			}
+			log.Println("daemon registered feed", feedconfig.name)
+			// persist feeds
+			if feedconfig.sync {
+				go self.persistFeed(feedconfig, "sync")
+			}
+			go self.persistFeed(feedconfig, "stream")
+			go self.persistFeed(feedconfig, "reader")
+		case feedname := <-self.deregister_feed:
+			_, ok := self.loadedFeeds[feedname]
+			if ok {
+				delete(self.loadedFeeds, feedname)
+				log.Println("daemon deregistered feed", feedname)
+			} else {
+				log.Println("daemon does not have registered feed", feedname)
+			}
+		case outfeed := <-self.register_connection:
+			self.activeConnections[outfeed.name] = outfeed
+		case outfeed := <-self.deregister_connection:
+			delete(self.activeConnections, outfeed.name)
 		case nntp := <-self.send_all_feeds:
 			group := nntp.Newsgroup()
 			if self.Federate() {
-				feeds := self.feeds
+				feeds := self.activeConnections
 				for _, feed := range feeds {
 					if feed.policy.AllowsNewsgroup(group) {
 						if strings.HasSuffix(feed.name, "-stream") {
@@ -431,11 +704,11 @@ func (self *NNTPDaemon) polloutfeeds() {
 				}
 			}
 		case nntp := <-self.ask_for_article:
-			feeds := self.feeds
+			feeds := self.activeConnections
 			for _, feed := range feeds {
 				if feed.policy.AllowsNewsgroup(nntp.Newsgroup()) {
 					if strings.HasSuffix(feed.name, "-reader") {
-						log.Println("asking", feed.name, "for", nntp.MessageID(), "mode", feed.mode)
+						log.Println("asking", feed.name, "for", nntp.MessageID())
 						feed.article <- nntp.MessageID()
 					}
 				}

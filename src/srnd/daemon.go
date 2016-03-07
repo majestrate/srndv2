@@ -333,7 +333,7 @@ func (self *NNTPDaemon) activeFeeds() (feeds []*feedStatus) {
 
 func (self *NNTPDaemon) persistFeed(conf FeedConfig, mode string) {
 	log.Println(conf.name, "persisting in", mode, "mode")
-	backoff := time.Duration(1)
+	backoff := time.Second
 	for {
 		if self.running {
 			// get the status of this feed
@@ -384,7 +384,7 @@ func (self *NNTPDaemon) persistFeed(conf FeedConfig, mode string) {
 				} else {
 					self.register_connection <- nntp
 					// success connecting, reset backoff
-					backoff = time.Duration(1)
+					backoff = time.Second
 					// run connection
 					nntp.runConnection(self, false, stream, reader, use_tls, mode, conn, &conf)
 					// deregister connection

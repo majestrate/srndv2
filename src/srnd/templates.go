@@ -304,6 +304,14 @@ func (self *templateEngine) genUkko(prefix, frontend string, wr io.Writer, datab
 	if json {
 		self.renderJSON(wr, obj)
 	} else {
+		// render ukko navbar
+		navbar := make(map[string]interface{})
+		navbar["name"] = "Overboard"
+		navbar["frontend"] = frontend
+		navbar["prefix"] = prefix
+		// inject navbar
+		obj["navbar"] = self.renderTemplate("navbar.mustache", navbar)
+		// render
 		self.writeTemplate("ukko.mustache", obj, wr)
 	}
 }

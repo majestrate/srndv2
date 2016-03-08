@@ -481,6 +481,10 @@ func (self *templateEngine) genFrontPage(top_count int, prefix, frontend_name st
 	param["boardgraph"] = frontpage_graph
 	param["frontend"] = frontend_name
 	param["totalposts"] = db.ArticleCount()
+
+	// render and inject navbar
+	param["navbar"] = self.renderTemplate("navbar.mustache", map[string]interface{}{"name": "Front Page", "frontend": frontend_name, "prefix": prefix})
+
 	_, err := io.WriteString(wr, self.renderTemplate("frontpage.mustache", param))
 	if err != nil {
 		log.Println("error writing front page", err)

@@ -300,7 +300,6 @@ func (self httpModUI) getAdminFunc(funcname string) AdminFunc {
 func (self httpModUI) HandleAdminCommand(wr http.ResponseWriter, r *http.Request) {
 	self.asAuthed(func(url string) {
 		action := strings.Split(url, "/admin/")[1]
-		log.Println("try admin action", action)
 		f := self.getAdminFunc(action)
 		if f == nil {
 			wr.WriteHeader(404)

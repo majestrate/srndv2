@@ -238,7 +238,7 @@ func NewDatabase(db_type, schema, host, port, user, password string) Database {
 			return NewPostgresDatabase(host, port, user, password)
 		}
 	}
-	if db_type == "redis" {
+	if db_type == "redis" && RedisEnabled() {
 		if schema == "single" {
 			return NewRedisDatabase(host, port, password)
 		}

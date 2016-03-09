@@ -1077,3 +1077,7 @@ func processHashResult(hash []string) (mapRes map[string]string) {
 	}
 	return
 }
+
+func RedisEnabled() bool {
+	return true
+}

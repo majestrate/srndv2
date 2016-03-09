@@ -1,3 +1,5 @@
+// +build !disable_redis
+
 package srnd
 
 import (

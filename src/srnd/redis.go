@@ -1,3 +1,5 @@
+// +build !disable_redis
+
 /*
 The MIT License (MIT)
 

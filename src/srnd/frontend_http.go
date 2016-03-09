@@ -323,6 +323,8 @@ func (self *httpFrontend) handle_postform(wr http.ResponseWriter, r *http.Reques
 		// retry the post with a new captcha
 		resp_map = make(map[string]interface{})
 		resp_map["prefix"] = self.prefix
+		resp_map["redirect_url"] = self.prefix + url
+		resp_map["reason"] = "captcha incorrect"
 		io.WriteString(wr, template.renderTemplate("post_fail.mustache", resp_map))
 		return
 	}

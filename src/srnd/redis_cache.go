@@ -161,7 +161,8 @@ func (self *redisHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 
 notfound:
-	http.NotFound(w, r)
+	// TODO: cache 404 page?
+	template.renderNotFound(w, r, self.cache.prefix, self.cache.name)
 }
 
 func (self *redisHandler) serveCached(w http.ResponseWriter, r *http.Request, key string, handler recacheRedis) {

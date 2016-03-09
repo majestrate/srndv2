@@ -100,7 +100,7 @@ func (self *nullHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 
 notfound:
-	http.NotFound(w, r)
+	template.renderNotFound(w, r, self.cache.prefix, self.cache.name)
 }
 
 func (self *NullCache) DeleteBoardMarkup(group string) {

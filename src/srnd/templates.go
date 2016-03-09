@@ -10,6 +10,7 @@ import (
 	"io"
 	"io/ioutil"
 	"log"
+	"net/http"
 	"path/filepath"
 	"sort"
 	"strings"
@@ -371,6 +372,22 @@ func (self *templateEngine) changeTemplateDir(dirname string) {
 	log.Println("change template directory to", dirname)
 	self.template_dir = dirname
 	self.reloadAllTemplates()
+}
+
+func (self *templateEngine) createNotFoundHandler(prefix, frontend string) (h http.Handler) {
+	h = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		self.renderNotFound(w, r, prefix, frontend)
+	})
+	return
+}
+
+// default renderer of 404 pages
+func (self *templateEngine) renderNotFound(wr http.ResponseWriter, r *http.Request, prefix, frontend string) {
+	wr.WriteHeader(404)
+	opts := make(map[string]interface{})
+	opts["prefix"] = prefix
+	opts["frontend"] = frontend
+	self.writeTemplate("404.mustache", opts, wr)
 }
 
 func newTemplateEngine(dir string) *templateEngine {

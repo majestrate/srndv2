@@ -710,6 +710,8 @@ func (self *httpFrontend) Mainloop() {
 	// set up handler mux
 	self.httpmux = mux.NewRouter()
 
+	self.httpmux.NotFoundHandler = template.createNotFoundHandler(self.prefix, self.name)
+
 	// create mod ui
 	self.modui = createHttpModUI(self)
 

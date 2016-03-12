@@ -591,7 +591,7 @@ func (self *NNTPDaemon) pollinfeed() {
 func (self *NNTPDaemon) syncAllMessages() {
 	log.Println("syncing all messages to all feeds")
 	for _, article := range self.database.GetAllArticles() {
-		self.send_all_feeds <- article
+		self.sendAllFeeds(article)
 	}
 	log.Println("sync all messages queue flushed")
 }
@@ -736,6 +736,11 @@ func (self *NNTPDaemon) polloutfeeds() {
 	}
 }
 
+func (self *NNTPDaemon) askForArticle(e ArticleEntry) {
+	log.Println("daemon asking for", e.MessageID())
+	self.ask_for_article <- e
+}
+
 func (self *NNTPDaemon) pollmessages() {
 
 	modchnl := self.mod.MessageChan()
@@ -773,7 +778,7 @@ func (self *NNTPDaemon) pollmessages() {
 		// roll over old content
 		self.expire.ExpireGroup(group, rollover)
 		// queue to all outfeeds
-		self.send_all_feeds <- ArticleEntry{msgid, group}
+		self.sendAllFeeds(ArticleEntry{msgid, group})
 		// send to upper layers
 		if group == "ctl" {
 			modchnl <- msgid
@@ -786,6 +791,10 @@ func (self *NNTPDaemon) pollmessages() {
 			}
 		}
 	}
+}
+
+func (self *NNTPDaemon) sendAllFeeds(e ArticleEntry) {
+	self.send_all_feeds <- e
 }
 
 func (self *NNTPDaemon) acceptloop() {

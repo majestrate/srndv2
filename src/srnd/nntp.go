@@ -628,7 +628,7 @@ func (self *nntpConnection) handleLine(daemon *NNTPDaemon, code int, line string
 						newsgroup := hdr.Get("Newsgroups")
 						if reference != "" && ValidMessageID(reference) && !daemon.store.HasArticle(reference) && !daemon.database.IsExpired(reference) {
 							log.Println(self.name, "got reply to", reference, "but we don't have it")
-							daemon.ask_for_article <- ArticleEntry{reference, newsgroup}
+							daemon.askForArticle(ArticleEntry{reference, newsgroup})
 						}
 						var f io.WriteCloser
 						if self.mode == "STREAM" {
@@ -728,7 +728,7 @@ func (self *nntpConnection) handleLine(daemon *NNTPDaemon, code int, line string
 								newsgroup := hdr.Get("Newsgroups")
 								if reference != "" && ValidMessageID(reference) && !daemon.store.HasArticle(reference) && !daemon.database.IsExpired(reference) {
 									log.Println(self.name, "got reply to", reference, "but we don't have it")
-									daemon.ask_for_article <- ArticleEntry{reference, newsgroup}
+									daemon.askForArticle(ArticleEntry{reference, newsgroup})
 								}
 								f := daemon.store.CreateTempFile(msgid)
 								if f == nil {
@@ -879,7 +879,7 @@ func (self *nntpConnection) handleLine(daemon *NNTPDaemon, code int, line string
 							if reference != "" && ValidMessageID(reference) {
 								if !daemon.store.HasArticle(reference) && !daemon.database.IsExpired(reference) {
 									log.Println(self.name, "got reply to", reference, "but we don't have it")
-									daemon.ask_for_article <- ArticleEntry{reference, newsgroup}
+									daemon.askForArticle(ArticleEntry{reference, newsgroup})
 								}
 							} else if reference != "" {
 								// bad message id

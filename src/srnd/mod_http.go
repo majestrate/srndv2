@@ -293,9 +293,14 @@ func (self httpModUI) getAdminFunc(funcname string) AdminFunc {
 			return feeds, nil
 		}
 	} else if funcname == "feed.sync" {
-		return func(param map[string]interface{}) (interface{}, error) {
+		return func(_ map[string]interface{}) (interface{}, error) {
 			go self.daemon.syncAllMessages()
 			return "sync started", nil
+		}
+	} else if funcname == "store.expire" {
+		return func(_ map[string]interface{}) (interface{}, error) {
+			go self.daemon.expire.ExpireOrphans()
+			return "expiration started", nil
 		}
 	}
 	return nil

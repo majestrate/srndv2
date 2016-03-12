@@ -430,7 +430,9 @@ func (self *articleStore) GetHeaders(messageID string) ArticleHeaders {
 	if nntp == nil {
 		return nil
 	}
-	return nntp.Headers()
+	hdr := nntp.Headers()
+	nntp.Reset()
+	return hdr
 }
 
 func read_message(r io.Reader) (NNTPMessage, error) {

@@ -16,6 +16,8 @@ type ExpirationCore interface {
 	ExpireGroup(newsgroup string, keep int)
 	// Delete a single post and all children
 	ExpirePost(messageID string)
+	// expire all orphaned articles
+	ExpireOrphans()
 	// run our mainloop
 	Mainloop()
 }
@@ -77,6 +79,38 @@ func (self expire) ExpireThread(rootMsgid string) {
 	self.database.DeleteThread(rootMsgid)
 }
 
+// expire all orphaned articles
+func (self expire) ExpireOrphans() {
+	// get all articles in database
+	articles := self.database.GetAllArticles()
+	if articles != nil {
+		log.Println("expire all orphan posts")
+		// for each article
+		for _, article := range articles {
+			// load headers
+			hdr := self.store.GetHeaders(article.MessageID())
+			if hdr == nil {
+				// article does not exist?
+			} else {
+				// check if we are a reply
+				rootMsgid := hdr.Get("References", "")
+				if len(rootMsgid) == 0 {
+					// root post
+				} else {
+					// reply
+					// do we have this root post?
+					if self.store.HasArticle(rootMsgid) {
+						// yes, do nothing
+					} else {
+						// no, expire post
+						self.ExpirePost(article.MessageID())
+					}
+				}
+			}
+		}
+	}
+}
+
 func (self expire) Mainloop() {
 	for {
 		ev := <-self.delChan
@@ -93,7 +127,11 @@ func (self expire) Mainloop() {
 		}
 		// remove article
 		os.Remove(ev.Path())
-		err := self.database.DeleteArticle(ev.MessageID())
+		err := self.database.BanArticle(ev.MessageID(), "expired")
+		if err != nil {
+			log.Println("failed to ban for expiration", err)
+		}
+		err = self.database.DeleteArticle(ev.MessageID())
 		if err != nil {
 			log.Println("failed to delete article", err)
 		}

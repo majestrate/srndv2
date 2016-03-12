@@ -1121,7 +1121,6 @@ func (self *nntpConnection) scrapeServer(daemon *NNTPDaemon, conn *textproto.Con
 // ask for an article from the remote server
 // feed it to the daemon if we get it
 func (self *nntpConnection) requestArticle(daemon *NNTPDaemon, conn *textproto.Conn, msgid string) (err error) {
-	log.Println(self.name, "asking for", msgid)
 	// send command
 	err = conn.PrintfLine("ARTICLE %s", msgid)
 	// read response
@@ -1192,6 +1191,7 @@ func (self *nntpConnection) startReader(daemon *NNTPDaemon, conn *textproto.Conn
 			break
 		case msgid := <-self.article:
 			// next article to ask for
+			log.Println(self.name, "obtaining", msgid)
 			self.messageSetPendingState(msgid, "article")
 			err = self.requestArticle(daemon, conn, msgid)
 			self.messageSetProcessed(msgid)

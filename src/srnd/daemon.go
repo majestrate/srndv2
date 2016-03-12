@@ -525,7 +525,11 @@ func (self *NNTPDaemon) Run() {
 	go self.acceptloop()
 	// start polling feeds
 	go self.polloutfeeds()
-	go self.pollmessages()
+	threads := 8
+	for threads > 0 {
+		go self.pollmessages()
+		threads--
+	}
 	go self.pollinfeed()
 	go func() {
 		// if we have no initial posts create one

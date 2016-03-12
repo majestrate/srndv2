@@ -6,6 +6,7 @@ package srnd
 import (
 	"bufio"
 	"crypto/tls"
+	"encoding/json"
 	"fmt"
 	"io"
 	"io/ioutil"
@@ -55,8 +56,16 @@ type nntpConnection struct {
 
 	// ARTICLE <message-id>
 	article chan string
-	// TAKETHIS/CHECK <message-id>
-	stream chan nntpStreamEvent
+	// CHECK <message-id>
+	check chan string
+	// TAKETHIS <message-id>
+	takethis chan string
+	// queue for streaming <message-id>
+	stream chan string
+	// map of message-id -> stream state
+	pending map[string]string
+	// lock for accessing self.pending map
+	pending_access sync.Mutex
 
 	tls_state tls.ConnectionState
 
@@ -66,6 +75,23 @@ type nntpConnection struct {
 	username string
 	// send a channel down this channel to be informed when streaming/reader dies when commanded by QuitAndWait()
 	die chan chan bool
+}
+
+func (self *nntpConnection) MarshalJSON() (data []byte, err error) {
+	jmap := make(map[string]interface{})
+	pending := make(map[string]string)
+	self.pending_access.Lock()
+	for k, v := range self.pending {
+		pending[k] = v
+	}
+	self.pending_access.Unlock()
+	jmap["pending"] = pending
+	jmap["mode"] = self.mode
+	jmap["name"] = self.name
+	jmap["authed"] = self.authenticated
+	jmap["group"] = self.group
+	data, err = json.Marshal(jmap)
+	return
 }
 
 // write out a mime header to a writer
@@ -89,7 +115,9 @@ func createNNTPConnection(addr string) *nntpConnection {
 	return &nntpConnection{
 		hostname: host,
 		article:  make(chan string, 1024),
-		stream:   make(chan nntpStreamEvent, 1024),
+		takethis: make(chan string, 128),
+		check:    make(chan string, 128),
+		pending:  make(map[string]string),
 	}
 }
 
@@ -222,6 +250,16 @@ func (self *nntpConnection) outboundHandshake(conn *textproto.Conn, conf *FeedCo
 	return
 }
 
+// offer up a article to sync via this connection
+func (self *nntpConnection) offerStream(msgid string) {
+	if self.messageIsQueued(msgid) {
+		// already queued for send
+	} else {
+		self.messageSetPendingState(msgid, "queued")
+		self.check <- msgid
+	}
+}
+
 // handle sending 1 stream event
 func (self *nntpConnection) handleStreamEvent(ev nntpStreamEvent, daemon *NNTPDaemon, conn *textproto.Conn) (err error) {
 	if ValidMessageID(ev.MessageID()) {
@@ -237,8 +275,12 @@ func (self *nntpConnection) handleStreamEvent(ev nntpStreamEvent, daemon *NNTPDa
 				_, err = io.Copy(dw, rc)
 				err = dw.Close()
 				rc.Close()
+				self.messageSetPendingState(msgid, "sent")
 			} else {
 				log.Println(self.name, "didn't send", msgid, err)
+				self.messageSetProcessed(msgid)
+				// ignore this error
+				err = nil
 			}
 		} else if cmd == "CHECK" {
 			conn.PrintfLine("%s", ev)
@@ -247,6 +289,40 @@ func (self *nntpConnection) handleStreamEvent(ev nntpStreamEvent, daemon *NNTPDa
 		}
 	}
 	return
+}
+
+// get all articles give their streaming state
+func (self *nntpConnection) getArticlesInState(state string) (articles []string) {
+	self.pending_access.Lock()
+	for st, msgid := range self.pending {
+		if state == st {
+			articles = append(articles, msgid)
+		}
+	}
+	self.pending_access.Unlock()
+	return
+}
+
+func (self *nntpConnection) messageIsQueued(msgid string) (queued bool) {
+	self.pending_access.Lock()
+	_, queued = self.pending[msgid]
+	self.pending_access.Unlock()
+	return
+}
+
+func (self *nntpConnection) messageSetPendingState(msgid, state string) {
+	self.pending_access.Lock()
+	self.pending[msgid] = state
+	self.pending_access.Unlock()
+}
+
+func (self *nntpConnection) messageSetProcessed(msgid string) {
+	self.pending_access.Lock()
+	_, ok := self.pending[msgid]
+	if ok {
+		delete(self.pending, msgid)
+	}
+	self.pending_access.Unlock()
 }
 
 // handle streaming events
@@ -260,9 +336,12 @@ func (self *nntpConnection) handleStreaming(daemon *NNTPDaemon, conn *textproto.
 			conn.Close()
 			chnl <- true
 			return
-		case ev := <-self.stream:
-			// handle streaming event
-			err = self.handleStreamEvent(ev, daemon, conn)
+		case msgid := <-self.check:
+			err = self.handleStreamEvent(nntpCHECK(msgid), daemon, conn)
+			self.messageSetPendingState(msgid, "check")
+		case msgid := <-self.takethis:
+			self.messageSetPendingState(msgid, "takethis")
+			err = self.handleStreamEvent(nntpTAKETHIS(msgid), daemon, conn)
 		}
 	}
 	return
@@ -410,25 +489,32 @@ func (self *nntpConnection) handleLine(daemon *NNTPDaemon, code int, line string
 	}
 	if code == 238 {
 		if ValidMessageID(msgid) {
-			self.stream <- nntpTAKETHIS(msgid)
+			self.messageSetPendingState(msgid, "takethis")
+			// they want this article
+			self.takethis <- msgid
 		}
 		return
 	} else if code == 239 {
 		// successful TAKETHIS
 		log.Println(msgid, "sent via", self.name)
+		self.messageSetProcessed(msgid)
 		return
 		// TODO: remember success
 	} else if code == 431 {
 		// CHECK said we would like this article later
-		log.Println("defer sending", msgid, "to", self.name)
-		go self.articleDefer(msgid)
+		// XXX: disable this for now
+		// log.Println("defer sending", msgid, "to", self.name)
+		// go self.articleDefer(msgid)
+		self.messageSetProcessed(msgid)
 	} else if code == 439 {
 		// TAKETHIS failed
 		log.Println(msgid, "was not sent to", self.name, "denied:", line)
+		self.messageSetProcessed(msgid)
 		// TODO: remember denial
 	} else if code == 438 {
 		// they don't want the article
 		// TODO: remeber rejection
+		self.messageSetProcessed(msgid)
 	} else {
 		// handle command
 		parts := strings.Split(line, " ")
@@ -1273,5 +1359,5 @@ func (self *nntpConnection) runConnection(daemon *NNTPDaemon, inbound, stream, r
 
 func (self *nntpConnection) articleDefer(msgid string) {
 	time.Sleep(time.Second * 10)
-	self.stream <- nntpCHECK(msgid)
+	self.check <- msgid
 }

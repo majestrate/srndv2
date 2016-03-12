@@ -576,6 +576,7 @@ func (self *NNTPDaemon) Run() {
 			self.syncAllMessages()
 		}()
 	}
+	go self.pollSendMessages()
 	<-self.done
 }
 
@@ -713,25 +714,43 @@ func (self *NNTPDaemon) polloutfeeds() {
 			self.activeConnections[outfeed.name] = outfeed
 		case outfeed := <-self.deregister_connection:
 			delete(self.activeConnections, outfeed.name)
+
+		}
+	}
+}
+
+func (self *NNTPDaemon) pollSendMessages() {
+	for {
+		select {
 		case nntp := <-self.send_all_feeds:
 			group := nntp.Newsgroup()
 			if self.Federate() {
-				feeds := self.activeConnections
-				for _, feed := range feeds {
-					if feed.policy.AllowsNewsgroup(group) {
-						if strings.HasSuffix(feed.name, "-stream") {
-							msgid := nntp.MessageID()
-							feed.offerStream(msgid)
+				feeds := self.activeFeeds()
+				if feeds == nil {
+					continue
+				}
+				for _, f := range feeds {
+					for _, feed := range f.Conns {
+						if feed.policy.AllowsNewsgroup(group) {
+							if strings.HasSuffix(feed.name, "-stream") {
+								msgid := nntp.MessageID()
+								feed.offerStream(msgid)
+							}
 						}
 					}
 				}
 			}
 		case nntp := <-self.ask_for_article:
-			feeds := self.activeConnections
-			for _, feed := range feeds {
-				if feed.policy.AllowsNewsgroup(nntp.Newsgroup()) {
-					if strings.HasSuffix(feed.name, "-reader") {
-						feed.askForArticle(nntp.MessageID())
+			feeds := self.activeFeeds()
+			if feeds == nil {
+				continue
+			}
+			for _, f := range feeds {
+				for _, feed := range f.Conns {
+					if feed.policy.AllowsNewsgroup(nntp.Newsgroup()) {
+						if strings.HasSuffix(feed.name, "-reader") {
+							feed.askForArticle(nntp.MessageID())
+						}
 					}
 				}
 			}

@@ -345,11 +345,13 @@ func (self *nntpConnection) checkMIMEHeaderNoAuth(daemon *NNTPDaemon, hdr textpr
 					} else {
 						// no attachments permitted
 						reason = "no attachments allowed"
+						ban = true
 						return
 					}
 				} else {
 					// we don't take signed messages or attachments posted anonymously
 					reason = "no anon signed posts or attachments"
+					ban = true
 					return
 				}
 			} else {
@@ -359,6 +361,7 @@ func (self *nntpConnection) checkMIMEHeaderNoAuth(daemon *NNTPDaemon, hdr textpr
 		} else {
 			// we don't allow anon posts of any kind
 			reason = "no anon posts allowed"
+			ban = true
 			return
 		}
 	} else {

@@ -728,8 +728,7 @@ func (self *NNTPDaemon) polloutfeeds() {
 			for _, feed := range feeds {
 				if feed.policy.AllowsNewsgroup(nntp.Newsgroup()) {
 					if strings.HasSuffix(feed.name, "-reader") {
-						log.Println("asking", feed.name, "for", nntp.MessageID())
-						feed.article <- nntp.MessageID()
+						feed.askForArticle(nntp.MessageID())
 					}
 				}
 			}

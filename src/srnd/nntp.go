@@ -1034,6 +1034,17 @@ func (self *nntpConnection) scrapeGroup(daemon *NNTPDaemon, conn *textproto.Conn
 	return
 }
 
+// ask for an article from the remote server
+func (self *nntpConnection) askForArticle(msgid string) {
+	if self.messageIsQueued(msgid) {
+		// already queued
+	} else {
+		log.Println(self.name, "asking for", msgid)
+		self.messageSetPendingState(msgid, "queued")
+		self.article <- msgid
+	}
+}
+
 // grab every post from the remote server, assumes outbound connection
 func (self *nntpConnection) scrapeServer(daemon *NNTPDaemon, conn *textproto.Conn) (err error) {
 	log.Println(self.name, "scrape remote server")
@@ -1181,7 +1192,9 @@ func (self *nntpConnection) startReader(daemon *NNTPDaemon, conn *textproto.Conn
 			break
 		case msgid := <-self.article:
 			// next article to ask for
+			self.messageSetPendingState(msgid, "article")
 			err = self.requestArticle(daemon, conn, msgid)
+			self.messageSetProcessed(msgid)
 			if err != nil {
 				log.Println(self.name, "error while in reader mode:", err)
 				break

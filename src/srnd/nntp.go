@@ -270,17 +270,17 @@ func (self *nntpConnection) handleStreaming(daemon *NNTPDaemon, conn *textproto.
 
 // check if we want the article given its mime header
 // returns empty string if it's okay otherwise an error message
-func (self *nntpConnection) checkMIMEHeader(daemon *NNTPDaemon, hdr textproto.MIMEHeader) (reason string, err error) {
+func (self *nntpConnection) checkMIMEHeader(daemon *NNTPDaemon, hdr textproto.MIMEHeader) (reason string, allow bool, err error) {
 
 	if !self.authenticated {
 		reason = "not authenticated"
 		return
 	}
-	reason, err = self.checkMIMEHeaderNoAuth(daemon, hdr)
+	reason, allow, err = self.checkMIMEHeaderNoAuth(daemon, hdr)
 	return
 }
 
-func (self *nntpConnection) checkMIMEHeaderNoAuth(daemon *NNTPDaemon, hdr textproto.MIMEHeader) (reason string, err error) {
+func (self *nntpConnection) checkMIMEHeaderNoAuth(daemon *NNTPDaemon, hdr textproto.MIMEHeader) (reason string, ban bool, err error) {
 	newsgroup := hdr.Get("Newsgroups")
 	reference := hdr.Get("References")
 	msgid := hdr.Get("Message-Id")
@@ -301,25 +301,34 @@ func (self *nntpConnection) checkMIMEHeaderNoAuth(daemon *NNTPDaemon, hdr textpr
 	if !newsgroupValidFormat(newsgroup) {
 		// invalid newsgroup format
 		reason = "invalid newsgroup"
+		ban = true
 		return
 	} else if banned, _ := daemon.database.NewsgroupBanned(newsgroup); banned {
 		reason = "newsgroup banned"
+		ban = true
 		return
 	} else if !(ValidMessageID(msgid) || (reference != "" && !ValidMessageID(reference))) {
 		// invalid message id or reference
 		reason = "invalid reference or message id is '" + msgid + "' reference is '" + reference + "'"
+		ban = true
 		return
 	} else if daemon.database.ArticleBanned(msgid) {
 		reason = "article banned"
+		ban = true
+		return
 	} else if reference != "" && daemon.database.ArticleBanned(reference) {
 		reason = "thread banned"
+		ban = true
+		return
 	} else if daemon.database.HasArticleLocal(msgid) {
 		// we already have this article locally
 		reason = "have this article locally"
+		// don't ban
 		return
 	} else if daemon.database.HasArticle(msgid) {
 		// we have already seen this article
 		reason = "already seen"
+		// don't ban
 		return
 	} else if is_ctl {
 		// we always allow control messages
@@ -354,11 +363,10 @@ func (self *nntpConnection) checkMIMEHeaderNoAuth(daemon *NNTPDaemon, hdr textpr
 		}
 	} else {
 		// check for banned address
-		var banned bool
 		if encaddr != "" {
-			banned, err = daemon.database.CheckEncIPBanned(encaddr)
+			ban, err = daemon.database.CheckEncIPBanned(encaddr)
 			if err == nil {
-				if banned {
+				if ban {
 					// this address is banned
 					reason = "address banned"
 					return
@@ -379,9 +387,11 @@ func (self *nntpConnection) checkMIMEHeaderNoAuth(daemon *NNTPDaemon, hdr textpr
 		} else if is_signed {
 			// may have an attachment, reject
 			reason = "disallow signed posts because no attachments allowed"
+			ban = true
 		} else if has_attachment {
 			// we have an attachment, reject
 			reason = "attachments of any kind not allowed"
+			ban = true
 		}
 	}
 	return
@@ -508,18 +518,21 @@ func (self *nntpConnection) handleLine(daemon *NNTPDaemon, code int, line string
 				// handle takethis command
 				var hdr textproto.MIMEHeader
 				var reason string
+				var ban bool
 				// read the article header
 				hdr, err = conn.ReadMIMEHeader()
 				if err == nil {
 					// check the header
-					reason, err = self.checkMIMEHeader(daemon, hdr)
+					reason, ban, err = self.checkMIMEHeader(daemon, hdr)
 					dr := conn.DotReader()
 					if len(reason) > 0 {
 						// discard, we do not want
 						code = 439
 						log.Println(self.name, "rejected", msgid, reason)
 						_, err = io.Copy(ioutil.Discard, dr)
-						err = daemon.database.BanArticle(msgid, reason)
+						if ban {
+							err = daemon.database.BanArticle(msgid, reason)
+						}
 					} else if err == nil {
 						// check if we don't have the rootpost
 						reference := hdr.Get("References")
@@ -557,7 +570,9 @@ func (self *nntpConnection) handleLine(daemon *NNTPDaemon, code int, line string
 						code = 439
 						log.Println(self.name, "rejected", msgid, reason)
 						_, err = io.Copy(ioutil.Discard, dr)
-						err = daemon.database.BanArticle(msgid, reason)
+						if ban {
+							err = daemon.database.BanArticle(msgid, reason)
+						}
 					}
 				} else {
 					log.Println(self.name, "error reading mime header:", err)
@@ -607,14 +622,16 @@ func (self *nntpConnection) handleLine(daemon *NNTPDaemon, code int, line string
 						if err == nil {
 							// check the header
 							var reason string
-							reason, err = self.checkMIMEHeader(daemon, hdr)
+							var ban bool
+							reason, ban, err = self.checkMIMEHeader(daemon, hdr)
 							dr := conn.DotReader()
 							if len(reason) > 0 {
 								// discard, we do not want
 								log.Println(self.name, "rejected", msgid, reason)
 								_, err = io.Copy(ioutil.Discard, dr)
-								// ignore this
-								_ = daemon.database.BanArticle(msgid, reason)
+								if ban {
+									_ = daemon.database.BanArticle(msgid, reason)
+								}
 								conn.PrintfLine("437 Rejected do not send again bro")
 							} else {
 								// check if we don't have the rootpost
@@ -764,7 +781,7 @@ func (self *nntpConnection) handleLine(daemon *NNTPDaemon, code int, line string
 						}
 						msgid = hdr.Get("Message-ID")
 						hdr.Set("Date", timeNowStr())
-						reason, err = self.checkMIMEHeader(daemon, hdr)
+						reason, _, err = self.checkMIMEHeader(daemon, hdr)
 						success = reason == "" && err == nil
 						if success {
 							dr := conn.DotReader()
@@ -1018,13 +1035,15 @@ func (self *nntpConnection) requestArticle(daemon *NNTPDaemon, conn *textproto.C
 			// prepare to read body
 			dr := conn.DotReader()
 			// check header and decide if we want this
-			reason, err := self.checkMIMEHeaderNoAuth(daemon, hdr)
+			reason, ban, err := self.checkMIMEHeaderNoAuth(daemon, hdr)
 			if err == nil {
 				if len(reason) > 0 {
 					log.Println(self.name, "discarding", msgid, reason)
 					// we don't want it, discard
 					io.Copy(ioutil.Discard, dr)
-					daemon.database.BanArticle(msgid, reason)
+					if ban {
+						daemon.database.BanArticle(msgid, reason)
+					}
 				} else {
 					// yeh we want it open up a file to store it in
 					f := daemon.store.CreateTempFile(msgid)

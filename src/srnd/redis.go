@@ -443,6 +443,10 @@ func (self RedisDB) GetPostsInGroup(newsgroup string) (models []PostModel, err e
 }
 
 func (self RedisDB) GetPostModel(prefix, messageID string) PostModel {
+	if !self.HasArticle(messageID) {
+		// we don't have it
+		return nil
+	}
 	model := new(post)
 	cmd := self.client.HGetAll(ARTICLE_POST_PREFIX + messageID)
 	hashres, err := cmd.Result()

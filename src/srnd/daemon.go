@@ -115,6 +115,8 @@ type NNTPDaemon struct {
 	send_all_feeds chan ArticleEntry
 	// channel for broadcasting an ARTICLE command to all feeds in reader mode
 	ask_for_article chan ArticleEntry
+	// operation of daemon done after sending bool down this channel
+	done chan bool
 
 	tls_config *tls.Config
 }
@@ -129,6 +131,7 @@ func (self NNTPDaemon) End() {
 	if self.cache != nil {
 		self.cache.Close()
 	}
+	self.done <- true
 }
 
 func (self *NNTPDaemon) GetDatabase() Database {
@@ -520,7 +523,10 @@ func (self *NNTPDaemon) Run() {
 	self.running = true
 	// start accepting incoming connections
 	go self.acceptloop()
-
+	// start polling feeds
+	go self.polloutfeeds()
+	go self.pollmessages()
+	go self.pollinfeed()
 	go func() {
 		// if we have no initial posts create one
 		if self.database.ArticleCount() == 0 {
@@ -553,7 +559,6 @@ func (self *NNTPDaemon) Run() {
 		}
 
 	}()
-	go self.polloutfeeds()
 	// register feeds from config
 	log.Println("registering feeds")
 	for _, f := range self.conf.feeds {
@@ -567,13 +572,7 @@ func (self *NNTPDaemon) Run() {
 			self.syncAllMessages()
 		}()
 	}
-	// 8 infeed load threads
-	threads := 8
-	for threads > 0 {
-		go self.pollinfeed()
-		threads--
-	}
-	self.pollmessages()
+	<-self.done
 }
 
 func (self *NNTPDaemon) pollinfeed() {

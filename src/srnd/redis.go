@@ -444,7 +444,8 @@ func (self RedisDB) GetPostsInGroup(newsgroup string) (models []PostModel, err e
 
 func (self RedisDB) GetPostModel(prefix, messageID string) PostModel {
 	model := new(post)
-	hashres, err := self.client.HGetAll(ARTICLE_POST_PREFIX + messageID).Result()
+	cmd := self.client.HGetAll(ARTICLE_POST_PREFIX + messageID)
+	hashres, err := cmd.Result()
 	if err == nil {
 		mapRes := processHashResult(hashres)
 		model.prefix = prefix

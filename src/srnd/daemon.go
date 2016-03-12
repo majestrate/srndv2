@@ -563,12 +563,17 @@ func (self *NNTPDaemon) Run() {
 		go func() {
 			// wait 10 seconds for feeds to establish
 			time.Sleep(10 * time.Second)
-			for _, article := range self.database.GetAllArticles() {
-				self.send_all_feeds <- article
-			}
+			self.syncAllMessages()
 		}()
 	}
 	self.pollinfeed()
+}
+
+func (self *NNTPDaemon) syncAllMessages() {
+	log.Println("syncing all messages to all feeds")
+	for _, article := range self.database.GetAllArticles() {
+		self.send_all_feeds <- article
+	}
 }
 
 func (self *NNTPDaemon) pollinfeed() {

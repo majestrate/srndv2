@@ -15,7 +15,7 @@ type ExpirationCore interface {
 	// do expiration for a group
 	ExpireGroup(newsgroup string, keep int)
 	// Delete a single post and all children
-	DeletePost(messageID string)
+	ExpirePost(messageID string)
 	// run our mainloop
 	Mainloop()
 }
@@ -41,7 +41,7 @@ type expire struct {
 	delChan chan deleteEvent
 }
 
-func (self expire) DeletePost(messageID string) {
+func (self expire) ExpirePost(messageID string) {
 	// get article headers
 	headers := self.store.GetHeaders(messageID)
 	if headers == nil {
@@ -51,27 +51,30 @@ func (self expire) DeletePost(messageID string) {
 	// is this a root post ?
 	ref := headers.Get("References", "")
 	if ref == "" {
-		// ya, get all replies
-		replies := self.database.GetThreadReplies(ref, 0, 0)
-		if replies != nil {
-			for _, repl := range replies {
-				// scehedule delete of the reply
-				self.delChan <- deleteEvent(self.store.GetFilename(repl))
-			}
-		} else {
-			log.Println("failed to get replies for", messageID)
-		}
-		self.database.DeleteThread(messageID)
+		// ya, expire the entire thread
+		self.ExpireThread(messageID)
+	} else {
+		// nah, just expire this post
+		self.delChan <- deleteEvent(self.store.GetFilename(messageID))
 	}
-	self.delChan <- deleteEvent(self.store.GetFilename(messageID))
 }
 
 func (self expire) ExpireGroup(newsgroup string, keep int) {
 	log.Println("Expire group", newsgroup, keep)
 	threads := self.database.GetRootPostsForExpiration(newsgroup, keep)
 	for _, root := range threads {
-		self.DeletePost(root)
+		self.ExpireThread(root)
 	}
+}
+
+func (self expire) ExpireThread(rootMsgid string) {
+	replies, err := self.database.GetMessageIDByHeader("References", rootMsgid)
+	if err == nil {
+		for _, reply := range replies {
+			self.delChan <- deleteEvent(self.store.GetFilename(reply))
+		}
+	}
+	self.database.DeleteThread(rootMsgid)
 }
 
 func (self expire) Mainloop() {

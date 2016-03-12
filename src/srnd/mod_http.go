@@ -292,6 +292,11 @@ func (self httpModUI) getAdminFunc(funcname string) AdminFunc {
 			feeds := self.daemon.activeFeeds()
 			return feeds, nil
 		}
+	} else if funcname == "feed.sync" {
+		return func(param map[string]interface{}) (interface{}, error) {
+			go self.daemon.syncAllMessages()
+			return "sync started", nil
+		}
 	}
 	return nil
 }

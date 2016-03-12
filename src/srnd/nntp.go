@@ -1098,7 +1098,6 @@ func (self *nntpConnection) startReader(daemon *NNTPDaemon, conn *textproto.Conn
 			err = self.requestArticle(daemon, conn, msgid)
 			if err != nil {
 				log.Println(self.name, "error while in reader mode:", err)
-				close(self.die)
 				break
 			}
 		}

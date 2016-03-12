@@ -106,7 +106,8 @@ type NNTPDaemon struct {
 	// for registering and deregistering outbound feed connections
 	register_connection   chan *nntpConnection
 	deregister_connection chan *nntpConnection
-	// infeed for articles
+
+	// for direct feeding of articles to daemon
 	infeed chan NNTPMessage
 	// channel to load messages to infeed given their message id
 	infeed_load chan string
@@ -466,7 +467,7 @@ func (self *NNTPDaemon) Run() {
 
 	self.register_connection = make(chan *nntpConnection)
 	self.deregister_connection = make(chan *nntpConnection)
-	self.infeed = make(chan NNTPMessage, 10)
+	self.infeed = make(chan NNTPMessage, 128)
 	self.infeed_load = make(chan string, 10)
 	self.send_all_feeds = make(chan ArticleEntry, 10)
 	self.activeConnections = make(map[string]*nntpConnection)
@@ -530,7 +531,8 @@ func (self *NNTPDaemon) Run() {
 				err := self.store.WriteMessage(nntp, file)
 				file.Close()
 				if err == nil {
-					self.infeed <- nntp
+					self.loadFromInfeed(nntp.MessageID())
+					nntp.Reset()
 				} else {
 					log.Println("failed to create startup messge?", err)
 				}
@@ -545,14 +547,13 @@ func (self *NNTPDaemon) Run() {
 			names, err := f.Readdirnames(0)
 			if err == nil {
 				for _, name := range names {
-					self.infeed_load <- name
+					self.loadFromInfeed(name)
 				}
 			}
 		}
 
 	}()
 	go self.polloutfeeds()
-	go self.pollmessages()
 	// register feeds from config
 	log.Println("registering feeds")
 	for _, f := range self.conf.feeds {
@@ -566,7 +567,25 @@ func (self *NNTPDaemon) Run() {
 			self.syncAllMessages()
 		}()
 	}
-	self.pollinfeed()
+	// 8 infeed load threads
+	threads := 8
+	for threads > 0 {
+		go self.pollinfeed()
+		threads--
+	}
+	self.pollmessages()
+}
+
+func (self *NNTPDaemon) pollinfeed() {
+	for {
+		msgid := <-self.infeed_load
+		msg := self.store.ReadTempMessage(msgid)
+		if msg == nil {
+			log.Println("did not load", msgid)
+			continue
+		}
+		self.infeed <- msg
+	}
 }
 
 func (self *NNTPDaemon) syncAllMessages() {
@@ -577,15 +596,10 @@ func (self *NNTPDaemon) syncAllMessages() {
 	log.Println("sync all messages queue flushed")
 }
 
-func (self *NNTPDaemon) pollinfeed() {
-	for {
-		msgid := <-self.infeed_load
-		log.Println("load from infeed", msgid)
-		msg := self.store.ReadTempMessage(msgid)
-		if msg != nil {
-			self.infeed <- msg
-		}
-	}
+// load a message from the infeed directory
+func (self *NNTPDaemon) loadFromInfeed(msgid string) {
+	log.Println("load from infeed", msgid)
+	self.infeed_load <- msgid
 }
 
 func (self *NNTPDaemon) polloutfeeds() {
@@ -727,7 +741,6 @@ func (self *NNTPDaemon) pollmessages() {
 
 	modchnl := self.mod.MessageChan()
 	for {
-
 		nntp := <-self.infeed
 		// ammend path
 		nntp.AppendPath(self.instance_name)

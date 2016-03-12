@@ -552,7 +552,7 @@ func (self *httpFrontend) handle_postRequest(pr *postRequest, b bannedFunc, e er
 		nntp.WriteTo(f, "\n")
 		f.Close()
 		// tell daemon
-		self.daemon.infeed_load <- nntp.MessageID()
+		self.daemon.loadFromInfeed(nntp.MessageID())
 	}
 }
 

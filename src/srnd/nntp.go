@@ -646,7 +646,7 @@ func (self *nntpConnection) handleLine(daemon *NNTPDaemon, code int, line string
 							if err == nil || err == io.EOF {
 								f.Close()
 								// we gud, tell daemon
-								daemon.infeed_load <- msgid
+								daemon.loadFromInfeed(msgid)
 							} else {
 								log.Println(self.name, "error reading message", err)
 							}
@@ -743,7 +743,7 @@ func (self *nntpConnection) handleLine(daemon *NNTPDaemon, code int, line string
 									if err == nil || err == io.EOF {
 										f.Close()
 										// we gud, tell daemon
-										daemon.infeed_load <- msgid
+										daemon.loadFromInfeed(msgid)
 									} else {
 										log.Println(self.name, "error reading message", err)
 									}
@@ -900,7 +900,7 @@ func (self *nntpConnection) handleLine(daemon *NNTPDaemon, code int, line string
 									if err == nil || err == io.EOF {
 										f.Close()
 										// we gud, tell daemon
-										daemon.infeed_load <- msgid
+										daemon.loadFromInfeed(msgid)
 										gotten = true
 									} else {
 										log.Println(self.name, "error reading message", err)
@@ -1147,7 +1147,7 @@ func (self *nntpConnection) requestArticle(daemon *NNTPDaemon, conn *textproto.C
 						f.Close()
 						log.Println(msgid, "obtained via reader from", self.name)
 						// tell daemon to load article via infeed
-						daemon.infeed_load <- msgid
+						daemon.loadFromInfeed(msgid)
 					}
 				}
 			} else {

@@ -477,7 +477,7 @@ func (self *NNTPDaemon) Run() {
 	self.get_feeds = make(chan chan []*feedStatus)
 	self.get_feed = make(chan *feedStatusQuery)
 	self.modify_feed_policy = make(chan *modifyFeedPolicyEvent)
-	self.ask_for_article = make(chan ArticleEntry, 10)
+	self.ask_for_article = make(chan ArticleEntry, 1024)
 
 	self.expire = createExpirationCore(self.database, self.store)
 	self.sync_on_start = self.conf.daemon["sync_on_start"] == "1"

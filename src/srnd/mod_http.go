@@ -297,6 +297,12 @@ func (self httpModUI) getAdminFunc(funcname string) AdminFunc {
 			go self.daemon.syncAllMessages()
 			return "sync started", nil
 		}
+	} else if funcname == "feed.del" {
+		return func(param map[string]interface{}) (interface{}, error) {
+			name := extractParam(param, "name")
+			self.daemon.removeFeed(name)
+			return "okay", nil
+		}
 	} else if funcname == "store.expire" {
 		return func(_ map[string]interface{}) (interface{}, error) {
 			go self.daemon.expire.ExpireOrphans()
@@ -642,15 +648,20 @@ func (self httpModUI) HandleKeyGen(wr http.ResponseWriter, r *http.Request) {
 func (self httpModUI) ServeModPage(wr http.ResponseWriter, r *http.Request) {
 	if self.checkSession(r) {
 		// we are logged in
-		// serve mod page
-		self.writeTemplate(wr, r, "modpage.mustache")
-		if r.Body != nil {
-			r.Body.Close()
+		url := r.URL.String()
+		if strings.HasSuffix(url, "/mod/feeds") {
+			// serve feeds page
+			self.writeTemplate(wr, r, "modfeed.mustache")
+		} else {
+			// serve mod page
+			self.writeTemplate(wr, r, "modpage.mustache")
 		}
 	} else {
 		// we are not logged in
 		// serve login page
 		self.writeTemplate(wr, r, "modlogin.mustache")
 	}
-
+	if r.Body != nil {
+		r.Body.Close()
+	}
 }

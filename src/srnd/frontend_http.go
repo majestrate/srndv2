@@ -729,6 +729,7 @@ func (self *httpFrontend) Mainloop() {
 	m := mux.NewRouter()
 	// modui handlers
 	m.Path("/mod/").HandlerFunc(self.modui.ServeModPage).Methods("GET")
+	m.Path("/mod/feeds").HandlerFunc(self.modui.ServeModPage).Methods("GET")
 	m.Path("/mod/keygen").HandlerFunc(self.modui.HandleKeyGen).Methods("GET")
 	m.Path("/mod/login").HandlerFunc(self.modui.HandleLogin).Methods("POST")
 	m.Path("/mod/del/{article_hash}").HandlerFunc(self.modui.HandleDeletePost).Methods("GET")

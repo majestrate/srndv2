@@ -65,8 +65,19 @@ type SRNdConfig struct {
 // generate defaults on demand
 func CheckConfig() {
 	if !CheckFile("srnd.ini") {
-		log.Println("no srnd.ini, creating...")
-		err := GenSRNdConfig()
+		var conf *configparser.Configuration
+		if !InstallerEnabled() {
+			log.Println("no srnd.ini, creating...")
+			conf = GenSRNdConfig()
+		} else {
+			res := make(chan *configparser.Configuration)
+			installer := NewInstaller(res)
+			go installer.Start()
+			conf=<-res
+			installer.Stop()
+			close(res)
+		}
+		err := configparser.Save(conf, "srnd.ini")
 		if err != nil {
 			log.Fatal("cannot generate srnd.ini", err)
 		}
@@ -99,7 +110,7 @@ func GenFeedsConfig() error {
 }
 
 // generate default srnd.ini
-func GenSRNdConfig() error {
+func GenSRNdConfig() *configparser.Configuration {
 	conf := configparser.NewConfiguration()
 
 	// nntp related section
@@ -183,7 +194,7 @@ func GenSRNdConfig() error {
 	secret := base32.StdEncoding.EncodeToString(secret_bytes)
 	sect.Add("api-secret", secret)
 
-	return configparser.Save(conf, "srnd.ini")
+	return conf
 }
 
 // save a list of feeds to overwrite feeds.ini

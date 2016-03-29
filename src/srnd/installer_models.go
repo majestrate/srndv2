@@ -97,3 +97,51 @@ func (self *BinaryModel) FFmpeg() string {
 func (self *BinaryModel) Sox() string {
 	return self.sox
 }
+
+type FrontendModel struct {
+	ErrorModel
+	StepModel
+
+	name   string
+	locale string
+}
+
+func (self *FrontendModel) Name() string {
+	return self.name
+}
+
+func (self *FrontendModel) Locale() string {
+	return self.locale
+}
+
+type APIModel struct {
+	ErrorModel
+	StepModel
+
+	name   string
+	secret string
+}
+
+func (self *APIModel) User() string {
+	return self.name
+}
+
+func (self *APIModel) Secret() string {
+	return self.secret
+}
+
+type KeyModel struct {
+	ErrorModel
+	StepModel
+
+	public string
+	secret string
+}
+
+func (self *KeyModel) Public() string {
+	return self.public
+}
+
+func (self *KeyModel) Secret() string {
+	return self.secret
+}

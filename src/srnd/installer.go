@@ -234,17 +234,20 @@ func handleBinPost(self *dialogNode, form url.Values, conf *configparser.Configu
 }
 
 func handleCacheTypePost(self *dialogNode, form url.Values, conf *configparser.Configuration) (*dialogNode, error) {
+	if form.Get("back") == "true" {
+		return self.parent, nil
+	}
 	sect, _ := conf.Section("cache")
 
 	cache := form.Get("cache")
 	log.Println("Cache chosen: ", cache)
+	sect.Add("type", cache)
 	if cache == "redis" {
 		return self.children["redis"], nil
 	}
 	if cache == "file" || cache == "null" {
 		return self.children["next"], nil
 	}
-	sect.Add("type", cache)
 
 	return self, nil
 }
@@ -276,6 +279,94 @@ func prepareRedisCacheModel(self *dialogNode, err error, conf *configparser.Conf
 	host := sect.ValueOf("host")
 	port := sect.ValueOf("port")
 	param["dialog"] = &DBModel{ErrorModel{err}, StepModel{self}, "", host, port}
+	return param
+}
+
+func prepareFrontendModel(self *dialogNode, err error, conf *configparser.Configuration) templateModel {
+	param := make(map[string]interface{})
+	sect, _ := conf.Section("frontend")
+	name := sect.ValueOf("name")
+	locale := sect.ValueOf("locale")
+	param["dialog"] = &FrontendModel{ErrorModel{err}, StepModel{self}, name, locale}
+	return param
+}
+
+func handleFrontendPost(self *dialogNode, form url.Values, conf *configparser.Configuration) (*dialogNode, error) {
+	if form.Get("back") == "true" {
+		return self.parent, nil
+	}
+	var next *dialogNode
+
+	sect, _ := conf.Section("frontend")
+	name := form.Get("name")
+	locale := form.Get("locale")
+
+	allow_files := form.Get("allow_files")
+	if allow_files != "1" {
+		allow_files = "0"
+	}
+
+	json_api := form.Get("json")
+	if json_api != "1" {
+		json_api = "0"
+		next = self.children["next"]
+	} else {
+		next = self.children["json"]
+	}
+
+	sect.Add("name", name)
+	sect.Add("locale", locale)
+	sect.Add("allow_files", allow_files)
+	sect.Add("json-api", json_api)
+
+	err := checkLocale(locale)
+	if err != nil {
+		return self, err
+	}
+
+	return next, nil
+}
+
+func handleAPIPost(self *dialogNode, form url.Values, conf *configparser.Configuration) (*dialogNode, error) {
+	if form.Get("back") == "true" {
+		return self.parent, nil
+	}
+	sect, _ := conf.Section("frontend")
+	user := form.Get("user")
+	pass := form.Get("pass")
+	secret := form.Get("secret")
+
+	sect.Add("json-api-username", user)
+	sect.Add("json-api-password", pass)
+	sect.Add("api-secret", secret)
+
+	return self.children["next"], nil
+}
+
+func prepareAPIModel(self *dialogNode, err error, conf *configparser.Configuration) templateModel {
+	param := make(map[string]interface{})
+	sect, _ := conf.Section("frontend")
+	user := sect.ValueOf("json-api-username")
+	secret := sect.ValueOf("api-secret")
+	param["dialog"] = &APIModel{ErrorModel{err}, StepModel{self}, user, secret}
+	return param
+}
+
+func handleKeyPost(self *dialogNode, form url.Values, conf *configparser.Configuration) (*dialogNode, error) {
+	if form.Get("back") == "true" {
+		return self.parent, nil
+	}
+	sect, _ := conf.Section("frontend")
+	public := form.Get("public")
+
+	sect.Add("admin_key", public)
+	return self.children["next"], nil
+}
+
+func prepareKeyModel(self *dialogNode, err error, conf *configparser.Configuration) templateModel {
+	param := make(map[string]interface{})
+	public, secret := newSignKeypair()
+	param["dialog"] = &KeyModel{ErrorModel{err}, StepModel{self}, public, secret}
 	return param
 }
 
@@ -400,13 +491,42 @@ func initInstallerTree() *dialogNode {
 	bins.children["next"] = cache
 
 	redisCache := &dialogNode{
-		parent:       root,
+		parent:       cache,
 		children:     make(map[string]*dialogNode),
 		post:         handleRedisCachePost,
 		model:        prepareRedisCacheModel,
 		templateName: "inst_redis_cache.mustache",
 	}
 	cache.children["redis"] = redisCache
+
+	frontend := &dialogNode{
+		parent:       cache,
+		children:     make(map[string]*dialogNode),
+		post:         handleFrontendPost,
+		model:        prepareFrontendModel,
+		templateName: "inst_frontend.mustache",
+	}
+	cache.children["next"] = frontend
+	redisCache.children["next"] = frontend
+
+	api := &dialogNode{
+		parent:       frontend,
+		children:     make(map[string]*dialogNode),
+		post:         handleAPIPost,
+		model:        prepareAPIModel,
+		templateName: "inst_api.mustache",
+	}
+	frontend.children["json"] = api
+
+	key := &dialogNode{
+		parent:       frontend,
+		children:     make(map[string]*dialogNode),
+		post:         handleKeyPost,
+		model:        prepareKeyModel,
+		templateName: "inst_key.mustache",
+	}
+	frontend.children["next"] = key
+	api.children["next"] = key
 
 	return root
 }
@@ -445,6 +565,11 @@ func checkPostgresConnection(host, port, user, password string) error {
 		_, err = conn.Exec("SELECT datname FROM pg_database")
 	}
 
+	return err
+}
+
+func checkLocale(locale string) error {
+	_, err := language.Parse(locale)
 	return err
 }
 

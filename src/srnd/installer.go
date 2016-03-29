@@ -13,6 +13,7 @@ import (
 	"net"
 	"net/http"
 	"net/url"
+	"os"
 	"path/filepath"
 	"time"
 )
@@ -90,6 +91,16 @@ func prepareRedisDBModel(self *dialogNode, err error, conf *configparser.Configu
 	return param
 }
 
+func preparePostgresDBModel(self *dialogNode, err error, conf *configparser.Configuration) templateModel {
+	param := make(map[string]interface{})
+	sect, _ := conf.Section("database")
+	host := sect.ValueOf("host")
+	port := sect.ValueOf("port")
+	user := sect.ValueOf("user")
+	param["dialog"] = &DBModel{ErrorModel{err}, StepModel{self}, user, host, port}
+	return param
+}
+
 func handlePostgresDBPost(self *dialogNode, form url.Values, conf *configparser.Configuration) (*dialogNode, error) {
 	if form.Get("back") == "true" {
 		return self.parent, nil
@@ -114,13 +125,157 @@ func handlePostgresDBPost(self *dialogNode, form url.Values, conf *configparser.
 	return self.children["next"], nil
 }
 
-func preparePostgresDBModel(self *dialogNode, err error, conf *configparser.Configuration) templateModel {
+func prepareNNTPModel(self *dialogNode, err error, conf *configparser.Configuration) templateModel {
 	param := make(map[string]interface{})
-	sect, _ := conf.Section("database")
+	sect, _ := conf.Section("nntp")
+	name := sect.ValueOf("instance_name")
+	param["dialog"] = &NameModel{ErrorModel{err}, StepModel{self}, name}
+	return param
+}
+
+func handleNNTPPost(self *dialogNode, form url.Values, conf *configparser.Configuration) (*dialogNode, error) {
+	if form.Get("back") == "true" {
+		return self.parent, nil
+	}
+	sect, _ := conf.Section("nntp")
+	name := form.Get("nntp_name")
+
+	allow_attachments := form.Get("allow_attachments")
+	if allow_attachments != "1" {
+		allow_attachments = "0"
+	}
+
+	allow_anon := form.Get("allow_anon")
+	if allow_anon != "1" {
+		allow_anon = "0"
+	}
+
+	allow_anon_attachments := form.Get("allow_anon_attachments")
+	if allow_anon_attachments != "1" {
+		allow_anon_attachments = "0"
+	}
+
+	require_tls := form.Get("require_tls")
+	if require_tls != "1" {
+		require_tls = "0"
+	}
+
+	sect.Add("instance_name", name)
+	sect.Add("allow_attachments", allow_attachments)
+	sect.Add("allow_anon", allow_anon)
+	sect.Add("require_tls", require_tls)
+
+	return self.children["next"], nil
+}
+
+func handleCryptoPost(self *dialogNode, form url.Values, conf *configparser.Configuration) (*dialogNode, error) {
+	if form.Get("back") == "true" {
+		return self.parent, nil
+	}
+	sect, _ := conf.Section("crypto")
+	host := form.Get("host")
+	key := form.Get("key")
+
+	err := checkHost(host)
+	if err != nil {
+		return self, err
+	}
+	sect.Add("tls-hostname", host)
+	sect.Add("tls-keyname", key)
+
+	return self.children["next"], nil
+}
+
+func prepareCryptoModel(self *dialogNode, err error, conf *configparser.Configuration) templateModel {
+	param := make(map[string]interface{})
+	sect, _ := conf.Section("crypto")
+	host := sect.ValueOf("tls-hostname")
+	key := sect.ValueOf("tls-keyname")
+	param["dialog"] = &CryptoModel{ErrorModel{err}, StepModel{self}, host, key}
+	return param
+}
+
+func prepareBinModel(self *dialogNode, err error, conf *configparser.Configuration) templateModel {
+	param := make(map[string]interface{})
+	sect, _ := conf.Section("articles")
+	convert := sect.ValueOf("convert_bin")
+	ffmpeg := sect.ValueOf("ffmpegthumbnailer_bin")
+	sox := sect.ValueOf("sox_bin")
+	param["dialog"] = &BinaryModel{ErrorModel{err}, StepModel{self}, convert, ffmpeg, sox}
+	return param
+}
+
+func handleBinPost(self *dialogNode, form url.Values, conf *configparser.Configuration) (*dialogNode, error) {
+	if form.Get("back") == "true" {
+		return self.parent, nil
+	}
+	sect, _ := conf.Section("articles")
+	convert := form.Get("convert")
+	ffmpeg := form.Get("ffmpeg")
+	sox := form.Get("sox")
+
+	err := checkFile(convert)
+	if err == nil {
+		err = checkFile(ffmpeg)
+		if err == nil {
+			err = checkFile(sox)
+		}
+	}
+
+	sect.Add("convert_bin", convert)
+	sect.Add("ffmpegthumbnailer_bin", ffmpeg)
+	sect.Add("sox_bin", sox)
+
+	if err != nil {
+		return self, err
+	}
+
+	return self.children["next"], nil
+}
+
+func handleCacheTypePost(self *dialogNode, form url.Values, conf *configparser.Configuration) (*dialogNode, error) {
+	sect, _ := conf.Section("cache")
+
+	cache := form.Get("cache")
+	log.Println("Cache chosen: ", cache)
+	if cache == "redis" {
+		return self.children["redis"], nil
+	}
+	if cache == "file" || cache == "null" {
+		return self.children["next"], nil
+	}
+	sect.Add("type", cache)
+
+	return self, nil
+}
+
+func handleRedisCachePost(self *dialogNode, form url.Values, conf *configparser.Configuration) (*dialogNode, error) {
+	if form.Get("back") == "true" {
+		return self.parent, nil
+	}
+	sect, _ := conf.Section("cache")
+	host := form.Get("host")
+	port := form.Get("port")
+	passwd := form.Get("password")
+
+	err := checkRedisConnection(host, port, passwd)
+	if err != nil {
+		return self, err
+	}
+	sect.Add("type", "redis")
+	sect.Add("host", host)
+	sect.Add("port", port)
+	sect.Add("password", passwd)
+
+	return self.children["next"], nil
+}
+
+func prepareRedisCacheModel(self *dialogNode, err error, conf *configparser.Configuration) templateModel {
+	param := make(map[string]interface{})
+	sect, _ := conf.Section("cache")
 	host := sect.ValueOf("host")
 	port := sect.ValueOf("port")
-	user := sect.ValueOf("user")
-	param["dialog"] = &DBModel{ErrorModel{err}, StepModel{self}, user, host, port}
+	param["dialog"] = &DBModel{ErrorModel{err}, StepModel{self}, "", host, port}
 	return param
 }
 
@@ -207,6 +362,52 @@ func initInstallerTree() *dialogNode {
 	}
 	root.children["postgres"] = postgresDB
 
+	nntp := &dialogNode{
+		parent:       root,
+		children:     make(map[string]*dialogNode),
+		post:         handleNNTPPost,
+		model:        prepareNNTPModel,
+		templateName: "inst_nntp.mustache",
+	}
+	redisDB.children["next"] = nntp
+	postgresDB.children["next"] = nntp
+
+	crypto := &dialogNode{
+		parent:       nntp,
+		children:     make(map[string]*dialogNode),
+		post:         handleCryptoPost,
+		model:        prepareCryptoModel,
+		templateName: "inst_crypto.mustache",
+	}
+	nntp.children["next"] = crypto
+
+	bins := &dialogNode{
+		parent:       crypto,
+		children:     make(map[string]*dialogNode),
+		post:         handleBinPost,
+		model:        prepareBinModel,
+		templateName: "inst_bins.mustache",
+	}
+	crypto.children["next"] = bins
+
+	cache := &dialogNode{
+		parent:       bins,
+		children:     make(map[string]*dialogNode),
+		post:         handleCacheTypePost,
+		model:        prepareDefaultModel,
+		templateName: "inst_cache.mustache",
+	}
+	bins.children["next"] = cache
+
+	redisCache := &dialogNode{
+		parent:       root,
+		children:     make(map[string]*dialogNode),
+		post:         handleRedisCachePost,
+		model:        prepareRedisCacheModel,
+		templateName: "inst_redis_cache.mustache",
+	}
+	cache.children["redis"] = redisCache
+
 	return root
 }
 
@@ -244,6 +445,16 @@ func checkPostgresConnection(host, port, user, password string) error {
 		_, err = conn.Exec("SELECT datname FROM pg_database")
 	}
 
+	return err
+}
+
+func checkFile(path string) error {
+	_, err := os.Stat(path)
+	return err
+}
+
+func checkHost(host string) error {
+	_, err := net.LookupHost(host)
 	return err
 }
 

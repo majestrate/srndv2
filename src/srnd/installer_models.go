@@ -28,3 +28,24 @@ type BaseDialogModel struct {
 	ErrorModel
 	StepModel
 }
+
+type DBModel struct {
+	ErrorModel
+	StepModel
+
+	username string
+	host     string
+	port     string
+}
+
+func (self *DBModel) Username() string {
+	return self.username
+}
+
+func (self *DBModel) Host() string {
+	return self.host
+}
+
+func (self *DBModel) Port() string {
+	return self.port
+}

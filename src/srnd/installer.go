@@ -584,6 +584,7 @@ func checkHost(host string) error {
 }
 
 func (self *Installer) Start() {
+	log.Println("starting installer on", self.srv.Server.Addr)
 	self.srv.ListenAndServe()
 }
 

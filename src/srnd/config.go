@@ -73,7 +73,7 @@ func CheckConfig() {
 			res := make(chan *configparser.Configuration)
 			installer := NewInstaller(res)
 			go installer.Start()
-			conf=<-res
+			conf = <-res
 			installer.Stop()
 			close(res)
 		}

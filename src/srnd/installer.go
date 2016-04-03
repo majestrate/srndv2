@@ -585,6 +585,7 @@ func checkHost(host string) error {
 
 func (self *Installer) Start() {
 	log.Println("starting installer on", self.srv.Server.Addr)
+	log.Println("open up http://127.0.0.1:18000 to do initial configuration")
 	self.srv.ListenAndServe()
 }
 

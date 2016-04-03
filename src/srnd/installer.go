@@ -380,8 +380,12 @@ func (self *Installer) HandleInstallerGet(wr http.ResponseWriter, r *http.Reques
 		InitI18n(locale, filepath.Join("contrib", "translations"))
 		self.hasTranslations = true
 	}
-	m := self.currentNode.model(self.currentNode, self.currentErr, self.config)
-	template.writeTemplate(self.currentNode.templateName, m, wr)
+	if self.currentNode == nil {
+		wr.WriteHeader(404)
+	} else {
+		m := self.currentNode.model(self.currentNode, self.currentErr, self.config)
+		template.writeTemplate(self.currentNode.templateName, m, wr)
+	}
 }
 
 func (self *Installer) HandleInstallerPost(wr http.ResponseWriter, r *http.Request) {

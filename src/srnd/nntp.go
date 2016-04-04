@@ -402,7 +402,7 @@ func (self *nntpConnection) checkMIMEHeaderNoAuth(daemon *NNTPDaemon, hdr textpr
 	} else if daemon.database.HasArticleLocal(msgid) {
 		// we already have this article locally
 		reason = "have this article locally"
-		// don't ban
+		ban = true
 		return
 	} else if daemon.database.HasArticle(msgid) {
 		// we have already seen this article

@@ -149,7 +149,9 @@ func (self *articleStore) GenerateThumbnail(fname string) error {
 			cmd = exec.Command(self.sox_path, tmpfname, "-n", "spectrogram", "-a", "-d", "0:30", "-r", "-p", "6", "-x", "200", "-y", "150", "-o", outfname)
 			exec_out, err = cmd.CombinedOutput()
 		}
-		if err != nil {
+		if err == nil {
+			log.Println("generated audio thumbnail to", outfname)
+		} else {
 			log.Println("error generating audio thumbnail", err, string(exec_out))
 		}
 		return err
@@ -157,7 +159,9 @@ func (self *articleStore) GenerateThumbnail(fname string) error {
 		cmd = exec.Command(self.ffmpeg_path, "-i", infname, "-vf", "scale=300:200", "-vframes", "1", outfname)
 	}
 	exec_out, err := cmd.CombinedOutput()
-	if err != nil {
+	if err == nil {
+		log.Println("made thumbnail for", infname)
+	} else {
 		log.Println("error generating thumbnail", string(exec_out))
 	}
 	return err

@@ -510,7 +510,7 @@ func (self RedisDB) DeleteArticle(msgid string) (err error) {
 			self.client.Del(HASH_MESSAGEID_PREFIX + hash)
 		}
 
-		self.client.Del(ARTICLE_PREFIX+msgid, ARTICLE_POST_PREFIX+msgid, ARTICLE_KEY_PREFIX+msgid)
+		//self.client.Del(ARTICLE_PREFIX+msgid, ARTICLE_POST_PREFIX+msgid, ARTICLE_KEY_PREFIX+msgid)
 		self.client.ZRem(GROUP_ARTICLE_POSTTIME_WKR_PREFIX+p.Board(), msgid)
 		self.client.ZRem(ARTICLE_WKR, msgid)
 

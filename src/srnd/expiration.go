@@ -125,8 +125,6 @@ func (self expire) Mainloop() {
 				os.Remove(thm)
 			}
 		}
-		// remove article
-		os.Remove(ev.Path())
 		err := self.database.BanArticle(ev.MessageID(), "expired")
 		if err != nil {
 			log.Println("failed to ban for expiration", err)
@@ -135,5 +133,7 @@ func (self expire) Mainloop() {
 		if err != nil {
 			log.Println("failed to delete article", err)
 		}
+		// remove article
+		os.Remove(ev.Path())
 	}
 }

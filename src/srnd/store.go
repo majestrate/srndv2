@@ -530,6 +530,7 @@ func read_message(r io.Reader) (NNTPMessage, error) {
 				return nntp, nil
 			} else {
 				log.Println("!!!signature is invalid!!!")
+				return nil, errors.New("invalid signature")
 			}
 		} else {
 			// plaintext attachment

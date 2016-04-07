@@ -144,7 +144,7 @@ func (self *articleStore) GenerateThumbnail(fname string) error {
 		tmpfname := infname + ".wav"
 		cmd = exec.Command(self.ffmpeg_path, "-i", infname, tmpfname)
 		exec_out, err := cmd.CombinedOutput()
-		defer DelFile(tmpfname)
+
 		if err == nil {
 			cmd = exec.Command(self.sox_path, tmpfname, "-n", "spectrogram", "-a", "-d", "0:30", "-r", "-p", "6", "-x", "200", "-y", "150", "-o", outfname)
 			exec_out, err = cmd.CombinedOutput()
@@ -154,6 +154,7 @@ func (self *articleStore) GenerateThumbnail(fname string) error {
 		} else {
 			log.Println("error generating audio thumbnail", err, string(exec_out))
 		}
+		DelFile(tmpfname)
 		return err
 	} else {
 		cmd = exec.Command(self.ffmpeg_path, "-i", infname, "-vf", "scale=300:200", "-vframes", "1", outfname)

@@ -75,6 +75,8 @@ type nntpConnection struct {
 	username string
 	// send a channel down this channel to be informed when streaming/reader dies when commanded by QuitAndWait()
 	die chan chan bool
+	// remote address of this connections
+	addr net.Addr
 }
 
 func (self *nntpConnection) MarshalJSON() (data []byte, err error) {
@@ -870,6 +872,14 @@ func (self *nntpConnection) handleLine(daemon *NNTPDaemon, code int, line string
 						}
 						msgid = hdr.Get("Message-ID")
 						hdr.Set("Date", timeNowStr())
+						ipaddr, _, _ := net.SplitHostPort(self.addr.String())
+						if len(ipaddr) > 0 {
+							// inject encrypted ip for poster
+							encaddr, err := daemon.database.GetEncAddress(ipaddr)
+							if err == nil {
+								hdr.Set("X-Encrypted-Ip", encaddr)
+							}
+						}
 						reason, _, err = self.checkMIMEHeader(daemon, hdr)
 						success = reason == "" && err == nil
 						if success {
@@ -1210,6 +1220,7 @@ func (self *nntpConnection) startReader(daemon *NNTPDaemon, conn *textproto.Conn
 // reader if true means they support reader mode
 func (self *nntpConnection) runConnection(daemon *NNTPDaemon, inbound, stream, reader, use_tls bool, preferMode string, nconn net.Conn, conf *FeedConfig) {
 
+	self.addr = nconn.RemoteAddr()
 	var err error
 	var line string
 	var success bool

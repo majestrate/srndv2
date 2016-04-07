@@ -49,6 +49,8 @@ type nntpConnection struct {
 	mode string
 	// what newsgroup is currently selected or empty string if none is selected
 	group string
+	// what article is currently selected
+	selected_article string
 	// the policy for federation
 	policy FeedPolicy
 	// lock help when expecting non pipelined activity
@@ -97,7 +99,7 @@ func (self *nntpConnection) MarshalJSON() (data []byte, err error) {
 }
 
 // write out a mime header to a writer
-func writeMIMEHeader(wr io.Writer, hdr textproto.MIMEHeader) (err error) {
+func writeMIMEHeader(wr io.Writer, hdr map[string][]string) (err error) {
 	// write headers
 	for k, vals := range hdr {
 		for _, val := range vals {
@@ -796,6 +798,74 @@ func (self *nntpConnection) handleLine(daemon *NNTPDaemon, code int, line string
 					} else {
 						log.Println(self.name, "error when getting posts in", self.group, err)
 						conn.PrintfLine("500 error, %s", err.Error())
+					}
+				}
+			} else if cmd == "HEAD" {
+				if len(self.group) == 0 {
+					// no group selected
+					conn.PrintfLine("412 No newsgroup slected")
+				} else {
+					// newsgroup is selected
+					// handle HEAD command
+					if len(parts) == 0 {
+						// we have no parameters
+						if len(self.selected_article) > 0 {
+							// we have a selected article
+						} else {
+							// no selected article
+							conn.PrintfLine("420 current article number is invalid")
+						}
+					} else {
+						// head command has 1 or more paramters
+						var n int64
+						var msgid string
+						var has bool
+						var code int
+						n, err = strconv.ParseInt(parts[1], 10, 64)
+						if err == nil {
+							// is a number
+							msgid, err = daemon.database.GetMessageIDForNNTPID(self.group, n)
+							if err == nil && len(msgid) > 0 {
+								has = daemon.database.HasArticleLocal(msgid)
+							}
+							if !has {
+								code = 423
+							}
+						} else if ValidMessageID(parts[1]) {
+							msgid = parts[1]
+							has = daemon.database.HasArticleLocal(msgid)
+							if has {
+								n, err = daemon.database.GetNNTPIDForMessageID(self.group, parts[1])
+							} else {
+								code = 430
+							}
+						}
+						if err == nil {
+							if has {
+								// we has
+								hdrs := daemon.store.GetHeaders(msgid)
+								if hdrs == nil {
+									// wtf can't load?
+									conn.PrintfLine("500 cannot load headers")
+								} else {
+									// headers loaded, send them
+									conn.PrintfLine("221 %d %s", n, msgid)
+									dw := conn.DotWriter()
+									err = writeMIMEHeader(dw, hdrs)
+									dw.Close()
+									hdrs = nil
+								}
+							} else if code > 0 {
+								// don't has
+								conn.PrintfLine("%d don't have article", code)
+							} else {
+								// invalid state
+								conn.PrintfLine("500 invalid state in HEAD, should have article but we don't")
+							}
+						} else {
+							// error occured
+							conn.PrintfLine("500 error in HEAD: %s", err.Error())
+						}
 					}
 				}
 			} else if cmd == "GROUP" {

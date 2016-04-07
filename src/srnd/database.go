@@ -204,6 +204,9 @@ type Database interface {
 	// get a message id give a newsgroup and the nntp id
 	GetMessageIDForNNTPID(group string, id int64) (string, error)
 
+	// get nntp id for a given message-id
+	GetNNTPIDForMessageID(group, msgid string) (int64, error)
+
 	// get the last N days post count in decending order
 	GetLastDaysPosts(n int64) []PostEntry
 

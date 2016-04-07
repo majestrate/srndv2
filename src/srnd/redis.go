@@ -910,12 +910,18 @@ func (self RedisDB) GetLastAndFirstForGroup(group string) (last, first int64, er
 
 func (self RedisDB) GetMessageIDForNNTPID(group string, id int64) (msgid string, err error) {
 	var posts []string
-	if id == 0 {
-		id = 1
-	}
-	posts, err = self.client.ZRange(GROUP_ARTICLE_POSTTIME_WKR_PREFIX+group, id-1, id-1).Result()
+	posts, err = self.client.ZRange(GROUP_ARTICLE_POSTTIME_WKR_PREFIX+group, id, id).Result()
 	if err == nil && len(posts) > 0 {
 		msgid = posts[0]
+	}
+	return
+}
+
+func (self RedisDB) GetNNTPIDForMessageID(group, msgid string) (id int64, err error) {
+	var score float64
+	score, err = self.client.ZScore(GROUP_ARTICLE_POSTTIME_WKR_PREFIX+group, msgid).Result()
+	if score != 0 {
+		id = int64(score)
 	}
 	return
 }

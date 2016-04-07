@@ -82,6 +82,8 @@ func (self PostgresDatabase) CreateTables() {
 			self.upgrade2to3()
 		} else if version == 3 {
 			// we are up to date
+			self.upgrade3to4()
+		} else if version == 4 {
 			log.Println("we are up to date at version", version)
 			return
 		}
@@ -146,6 +148,57 @@ func (self PostgresDatabase) upgrade2to3() {
 		checkError(err)
 	}
 	self.setDBVersion(3)
+}
+
+func (self PostgresDatabase) upgrade3to4() {
+	log.Println("migrating... 3 -> 4")
+	tables := make(map[string]string)
+	tables["ArticleNumbers"] = `(
+                                newsgroup VARCHAR(255) NOT NULL,
+                                message_id VARCHAR(255) NOT NULL,
+                                message_no BIGINT NOT NULL,
+                                FOREIGN KEY (newsgroup) REFERENCES Newsgroups(name),
+                                FOREIGN KEY (message_id) REFERENCES ArticlePosts(message_id)
+                              )`
+	table_order := []string{"ArticleNumbers"}
+	cmds := []string{"CREATE INDEX ON ArticleNumbers(message_no)"}
+	for _, table := range table_order {
+		_, err := self.conn.Exec(fmt.Sprintf("CREATE TABLE IF NOT EXISTS %s%s", table, tables[table]))
+		if err != nil {
+			log.Fatalf("cannot create table %s: %s", table, err.Error())
+		}
+	}
+
+	for _, cmd := range cmds {
+		_, err := self.conn.Exec(cmd)
+		if err != nil {
+			log.Fatalf("failed to execute query: %s, %s", cmd, err.Error())
+		}
+	}
+
+	log.Println("migrating post numbers, this can take a bit DO NOT INTERRUPT")
+	rows, err := self.conn.Query("SELECT message_id, newsgroup FROM ArticlePosts ORDER BY time_posted DESC")
+	if err != nil {
+		log.Fatalf("could not query ArticlePosts table: %s", err.Error())
+	}
+	counter := int64(0)
+	for rows.Next() {
+		counter++
+		var msgid, group string
+		err = rows.Scan(&msgid, &group)
+		if err != nil {
+			log.Fatalf("could not scan row: %s", err.Error())
+		}
+		err = self.registerNNTPNumber(group, msgid)
+		if err != nil {
+			log.Fatalf("could not migrate article %s in %s, %s", msgid, group, err.Error())
+		}
+		if counter%100 == 0 {
+			log.Println("migrated ", counter)
+		}
+	}
+	log.Println("total migrated posts: ", counter)
+	self.setDBVersion(4)
 }
 
 func (self PostgresDatabase) upgrade0to1() {
@@ -569,6 +622,12 @@ func (self PostgresDatabase) GetRootPostsForExpiration(newsgroup string, threadc
 	return
 }
 
+// register an article in a newsgroup with the ArticleNumbers table
+func (self PostgresDatabase) registerNNTPNumber(group, msgid string) (err error) {
+	_, err = self.conn.Exec("WITH x(msg_no) AS ( SELECT MAX(message_no) AS msg_no FROM ArticleNumbers WHERE newsgroup = $1 ) INSERT INTO ArticleNumbers(newsgroup, message_id, message_no) VALUES($1, $2, (SELECT CASE WHEN msg_no IS NULL THEN 0 ELSE msg_no END FROM x) + 1 )", group, msgid)
+	return
+}
+
 func (self PostgresDatabase) GetAllNewsgroups() (groups []string) {
 
 	rows, err := self.conn.Query("SELECT name FROM Newsgroups")
@@ -963,7 +1022,11 @@ func (self PostgresDatabase) RegisterArticle(message NNTPMessage) {
 			}
 		}
 	}
-
+	err = self.registerNNTPNumber(group, msgid)
+	if err != nil {
+		log.Println("failed to register nntp number for", msgid, err)
+		return
+	}
 	// register all attachments
 	atts := message.Attachments()
 	if atts == nil {
@@ -1074,22 +1137,27 @@ func (self PostgresDatabase) BanEncAddr(encaddr string) (err error) {
 }
 
 func (self PostgresDatabase) GetLastAndFirstForGroup(group string) (last, first int64, err error) {
-	err = self.conn.QueryRow("SELECT COUNT(message_id) FROM ArticlePosts WHERE newsgroup = $1", group).Scan(&last)
-	if last == 0 {
-		last = 0
-		first = 1
-	} else {
-		last += 1
-		first = 1
+	var rows *sql.Rows
+	rows, err = self.conn.Query("WITH x(min_no, max_no) AS ( SELECT MIN(message_no) AS min_no, MAX(message_no) AS max_no FROM ArticleNumbers WHERE newsgroup = $1) SELECT CASE WHEN min_no IS NULL THEN 0 ELSE min_no END AS mn FROM x UNION SELECT CASE WHEN max_no IS NULL THEN 1 ELSE max_no END AS max_no FROM x", group)
+	if rows.Next() {
+		err = rows.Scan(&first)
+		if err == nil {
+			if rows.Next() {
+				err = rows.Scan(&last)
+			}
+		}
 	}
+	rows.Close()
 	return
 }
 
 func (self PostgresDatabase) GetMessageIDForNNTPID(group string, id int64) (msgid string, err error) {
-	if id == 0 {
-		id = 1
-	}
-	err = self.conn.QueryRow("SELECT message_id FROM ArticlePosts WHERE newsgroup = $1 ORDER BY time_posted LIMIT 1 OFFSET $2", group, id-1).Scan(&msgid)
+	err = self.conn.QueryRow("SELECT message_id FROM ArticleNumbers WHERE newsgroup = $1 AND message_no = $2 LIMIT 1", group, id).Scan(&msgid)
+	return
+}
+
+func (self PostgresDatabase) GetNNTPIDForMessageID(group, msgid string) (id int64, err error) {
+	err = self.conn.QueryRow("SELECT message_no FROM ArticleNumbers WHERE newsgroup = $1 AND message_id = $2 LIMIT 1", group, msgid).Scan(&id)
 	return
 }
 

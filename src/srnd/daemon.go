@@ -538,7 +538,7 @@ func (self *NNTPDaemon) Run() {
 			nntp.Pack()
 			file := self.store.CreateTempFile(nntp.MessageID())
 			if file != nil {
-				err := self.store.WriteMessage(nntp, file)
+				err = nntp.WriteTo(file, "\n")
 				file.Close()
 				if err == nil {
 					self.loadFromInfeed(nntp.MessageID())
@@ -589,6 +589,7 @@ func (self *NNTPDaemon) pollinfeed() {
 			continue
 		}
 		self.infeed <- msg
+		msg = nil
 	}
 }
 
@@ -766,8 +767,9 @@ func (self *NNTPDaemon) askForArticle(e ArticleEntry) {
 func (self *NNTPDaemon) pollmessages() {
 
 	modchnl := self.mod.MessageChan()
+	var nntp NNTPMessage
 	for {
-		nntp := <-self.infeed
+		nntp = <-self.infeed
 		// ammend path
 		nntp.AppendPath(self.instance_name)
 		msgid := nntp.MessageID()
@@ -796,7 +798,8 @@ func (self *NNTPDaemon) pollmessages() {
 		// store article and attachments
 		// register with database
 		// this also generates thumbnails
-		self.store.StorePost(nntp)
+		go self.store.StorePost(nntp)
+		nntp = nil
 		// roll over old content
 		self.expire.ExpireGroup(group, rollover)
 		// queue to all outfeeds

@@ -54,10 +54,10 @@ func EnsureDir(dirname string) {
 	}
 }
 
-func ValidMessageID(id string) bool {
-	exp := regexp.MustCompilePOSIX(`^<[a-zA-Z0-9$.]{2,128}@[a-zA-Z0-9\-.]{2,63}>$`)
+var exp_valid_message_id = regexp.MustCompilePOSIX(`^<[a-zA-Z0-9$.]{2,128}@[a-zA-Z0-9\-.]{2,63}>$`)
 
-	return exp.MatchString(id)
+func ValidMessageID(id string) bool {
+	return exp_valid_message_id.MatchString(id)
 }
 
 // message id hash
@@ -273,10 +273,10 @@ func decAddr(encaddr, key string) string {
 	return strings.Trim(res, " ")
 }
 
-func newsgroupValidFormat(newsgroup string) bool {
-	exp := regexp.MustCompilePOSIX(`^[a-zA-Z0-9.]{1,128}$`)
+var exp_valid_newsgroup = regexp.MustCompilePOSIX(`^[a-zA-Z0-9.]{1,128}$`)
 
-	return exp.MatchString(newsgroup)
+func newsgroupValidFormat(newsgroup string) bool {
+	return exp_valid_newsgroup.MatchString(newsgroup)
 }
 
 // generate a new signing keypair

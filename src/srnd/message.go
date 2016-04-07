@@ -116,11 +116,13 @@ func (self *nntpArticle) Reset() {
 		self.message.Reset()
 		self.message = nil
 	}
-	for idx, _ := range self.attachments {
-		self.attachments[idx].Reset()
-		self.attachments[idx] = nil
+	if self.attachments != nil {
+		for idx, _ := range self.attachments {
+			self.attachments[idx].Reset()
+			self.attachments[idx] = nil
+		}
 	}
-	self.attachments = []NNTPAttachment{}
+	self.attachments = nil
 	if self.signedPart != nil {
 		self.signedPart.Reset()
 		self.signedPart = nil
@@ -183,9 +185,7 @@ func signArticle(nntp NNTPMessage, seed []byte) (signed *nntpArticle, err error)
 		signed.headers.Set("X-Signature-Ed25519-SHA512", sig)
 		signed.headers.Set("X-PubKey-Ed25519", pk)
 	}
-	signed.signedPart = &nntpAttachment{
-		body: new(bytes.Buffer),
-	}
+	signed.signedPart = &nntpAttachment{}
 	// copy sign buffer into signed part
 	_, err = io.Copy(signed.signedPart, signbuff)
 	// add this so the writer writes the entire post
@@ -195,9 +195,13 @@ func signArticle(nntp NNTPMessage, seed []byte) (signed *nntpArticle, err error)
 
 func (self *nntpArticle) WriteTo(wr io.Writer, delim string) (err error) {
 	// write headers
-	for hdr, hdr_vals := range self.Headers() {
+	hdrs := self.headers
+	for hdr, hdr_vals := range hdrs {
 		for _, hdr_val := range hdr_vals {
-			_, err = io.WriteString(wr, fmt.Sprintf("%s: %s%s", hdr, hdr_val, delim))
+			wr.Write([]byte(hdr))
+			wr.Write([]byte(": "))
+			wr.Write([]byte(hdr_val))
+			_, err = wr.Write([]byte(delim))
 			if err != nil {
 				log.Println("error while writing headers", err)
 				return
@@ -205,7 +209,7 @@ func (self *nntpArticle) WriteTo(wr io.Writer, delim string) (err error) {
 		}
 	}
 	// done headers
-	_, err = io.WriteString(wr, delim)
+	_, err = wr.Write([]byte(delim))
 	if err != nil {
 		log.Println("error while writing body", err)
 		return
@@ -223,7 +227,7 @@ func (self *nntpArticle) Pubkey() string {
 func (self *nntpArticle) Signed() NNTPMessage {
 	if self.signedPart != nil {
 		buff := new(bytes.Buffer)
-		buff.Write(self.signedPart.body.Bytes())
+		buff.Write(self.signedPart.body)
 		msg, err := read_message(buff)
 		buff.Reset()
 		if err == nil {
@@ -366,12 +370,12 @@ func (self *nntpArticle) Attach(att NNTPAttachment) {
 func (self *nntpArticle) WriteBody(wr io.Writer, delim string) (err error) {
 	// this is a signed message, don't treat it special
 	if self.signedPart != nil {
-		_, err = io.WriteString(wr, self.signedPart.AsString())
+		_, err = self.signedPart.WriteTo(wr)
 		return
 	}
 	if len(self.attachments) == 0 {
 		// write plaintext and be done
-		_, err = io.WriteString(wr, self.message.AsString())
+		_, err = self.message.WriteTo(wr)
 		return
 	}
 	content_type := self.ContentType()
@@ -396,18 +400,25 @@ func (self *nntpArticle) WriteBody(wr io.Writer, delim string) (err error) {
 				}
 				hdr.Set("Content-Transfer-Encoding", "base64")
 				part, err := w.CreatePart(hdr)
-				_, err = io.WriteString(part, att.Filedata())
+				str := att.Filedata()
+				att = nil
+				dat := []byte(str)
+				_, err = part.Write(dat)
+				str = ""
+				dat = nil
 				if err != nil {
 					break
 				}
+				part = nil
 			}
 		}
 		if err != nil {
 			log.Println("error writing part", err)
 		}
 		err = w.Close()
+		w = nil
 	} else {
-		_, err = io.WriteString(wr, self.message.AsString())
+		_, err = self.message.WriteTo(wr)
 	}
 	return err
 }

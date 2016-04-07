@@ -6,7 +6,6 @@ package srnd
 
 import (
 	"bufio"
-	"bytes"
 	"compress/gzip"
 	"crypto/sha512"
 	"errors"
@@ -24,7 +23,6 @@ import (
 
 type ArticleStore interface {
 	MessageReader
-	MessageWriter
 
 	// get the filepath for an attachment
 	AttachmentFilepath(fname string) string
@@ -71,6 +69,7 @@ type articleStore struct {
 	ffmpeg_path  string
 	sox_path     string
 	compression  bool
+	compWriter   *gzip.Writer
 }
 
 func createArticleStore(config map[string]string, database Database) ArticleStore {
@@ -216,21 +215,25 @@ func (self *articleStore) ReadMessage(r io.Reader) (NNTPMessage, error) {
 }
 
 func (self *articleStore) StorePost(nntp NNTPMessage) (err error) {
-
-	f := self.CreateFile(nntp.MessageID())
+	var f io.WriteCloser
+	f = self.CreateFile(nntp.MessageID())
 	if f != nil {
 		if self.compression {
 			// compress original article with gzip
 			var cw *gzip.Writer
 			cw, err = gzip.NewWriterLevel(f, gzip.BestSpeed)
 			if err == nil {
-				err = self.WriteMessage(nntp, cw)
+				err = nntp.WriteTo(cw, "\n")
 				cw.Close()
+				cw.Reset(nil)
 				f.Close()
+				cw = nil
+				f = nil
 			}
 		} else {
-			err = self.WriteMessage(nntp, f)
+			err = nntp.WriteTo(f, "\n")
 			f.Close()
+			f = nil
 		}
 	}
 
@@ -239,31 +242,30 @@ func (self *articleStore) StorePost(nntp NNTPMessage) (err error) {
 		// no inner article
 		// store the data in the article
 		self.database.RegisterArticle(nntp)
-		go func() {
-			for _, att := range nntp.Attachments() {
-				// save attachments
-				self.saveAttachment(att)
-			}
-			nntp.Reset()
-		}()
+		for _, att := range nntp.Attachments() {
+			// save attachments
+			self.saveAttachment(att)
+			att.Reset()
+		}
 	} else {
 		// we have inner data
 		// store the signed data
 		self.database.RegisterArticle(nntp_inner)
 		// record a tripcode
 		self.database.RegisterSigned(nntp.MessageID(), nntp.Pubkey())
-		go func() {
-			for _, att := range nntp_inner.Attachments() {
-				self.saveAttachment(att)
-			}
-			nntp.Reset()
-		}()
+		for _, att := range nntp.Attachments() {
+			self.saveAttachment(att)
+			att.Reset()
+		}
+		nntp_inner.Reset()
 	}
+	nntp.Reset()
 	return
 }
 
 // save an attachment
 func (self *articleStore) saveAttachment(att NNTPAttachment) {
+	defer att.Reset()
 	var err error
 	var f io.WriteCloser
 	fpath := att.Filepath()
@@ -284,7 +286,7 @@ func (self *articleStore) saveAttachment(att NNTPAttachment) {
 	log.Println("save attachment", att.Filename(), "to", upload)
 	f, err = os.Create(upload)
 	if err == nil {
-		_, err = io.Copy(f, att)
+		_, err = att.WriteTo(f)
 		f.Close()
 
 	}
@@ -301,11 +303,6 @@ func (self *articleStore) saveAttachment(att NNTPAttachment) {
 			log.Println("failed to generate thumbnail", err)
 		}
 	}
-}
-
-// eh this isn't really needed is it?
-func (self *articleStore) WriteMessage(nntp NNTPMessage, wr io.Writer) (err error) {
-	return nntp.WriteTo(wr, "\n")
 }
 
 // get the filepath for an attachment
@@ -437,6 +434,7 @@ func (self *articleStore) GetHeaders(messageID string) ArticleHeaders {
 	}
 	hdr := nntp.Headers()
 	nntp.Reset()
+	nntp = nil
 	return hdr
 }
 
@@ -446,19 +444,24 @@ func read_message(r io.Reader) (NNTPMessage, error) {
 	nntp := new(nntpArticle)
 
 	if err == nil {
-		nntp.headers = ArticleHeaders(msg.Header)
+		body := msg.Body
+		hdr := msg.Header
+		nntp.headers = ArticleHeaders(hdr)
 		content_type := nntp.ContentType()
 		media_type, params, err := mime.ParseMediaType(content_type)
 		if err != nil {
 			log.Println("failed to parse media type", err, "for mime", content_type)
+			msg = nil
 			return nil, err
 		}
 		boundary, ok := params["boundary"]
 		if ok {
-			partReader := multipart.NewReader(msg.Body, boundary)
+			partReader := multipart.NewReader(body, boundary)
+			msg = nil
 			for {
 				part, err := partReader.NextPart()
 				if err == io.EOF {
+					msg = nil
 					return nntp, nil
 				} else if err == nil {
 					hdr := part.Header
@@ -483,8 +486,10 @@ func read_message(r io.Reader) (NNTPMessage, error) {
 						log.Println("part has no content type", err)
 					}
 					part.Close()
+					part = nil
 				} else {
 					log.Println("failed to load part! ", err)
+					msg = nil
 					return nil, err
 				}
 			}
@@ -494,60 +499,72 @@ func read_message(r io.Reader) (NNTPMessage, error) {
 			pk := nntp.Pubkey()
 			if pk == "" || sig == "" {
 				log.Println("invalid sig or pubkey", sig, pk)
+				msg = nil
 				return nil, errors.New("invalid headers")
 			}
 			log.Printf("got signed message from %s", pk)
 			pk_bytes := unhex(pk)
 			sig_bytes := unhex(sig)
-			signed_body := new(bytes.Buffer)
-			nntp.signedPart = &nntpAttachment{
-				body: signed_body,
-			}
+			nntp.signedPart = &nntpAttachment{}
 			h := sha512.New()
-			var buff bytes.Buffer
-			mw := io.MultiWriter(signed_body, &buff)
-			_, err := io.Copy(mw, msg.Body)
-			if err != nil {
-				log.Println("error reading signed body", err)
-				return nil, err
-			}
-			r := bufio.NewReader(&buff)
+			r := bufio.NewReader(body)
 			crlf := []byte{13, 10}
 			line, err := r.ReadBytes('\n')
 			if err != nil {
+				r.Reset(nil)
 				return nil, err
 			}
+			nntp.signedPart.Write(line)
 			h.Write(line[:len(line)-1])
 			for {
 				line, err := r.ReadBytes('\n')
 				if err == io.EOF {
 					break
 				}
-				h.Write(crlf)
-				h.Write(line[:len(line)-1])
+				if len(line) > 0 {
+					h.Write(crlf)
+					h.Write(line[:len(line)-1])
+					nntp.signedPart.Write(line)
+				}
 			}
-			buff.Reset()
+			r.Reset(nil)
 			hash := h.Sum(nil)
 			log.Printf("hash=%s", hexify(hash))
 			log.Printf("sig=%s", hexify(sig_bytes))
 			if nacl.CryptoVerifyFucky(hash, sig_bytes, pk_bytes) {
 				log.Println("signature is valid :^)")
+				msg = nil
 				return nntp, nil
 			} else {
 				log.Println("!!!signature is invalid!!!")
+				msg = nil
+				nntp.Reset()
 				return nil, errors.New("invalid signature")
 			}
 		} else {
 			// plaintext attachment
-			var buff bytes.Buffer
-			_, err = io.Copy(&buff, msg.Body)
-			nntp.message = createPlaintextAttachment(buff.String())
-			buff.Reset()
+			var buff [1024]byte
+			str := ""
+			for {
+				var n int
+				n, err = body.Read(buff[:])
+				if err != nil {
+					if err == io.EOF {
+						err = nil
+					}
+					break
+				}
+				str += string(buff[:n])
+			}
+			nntp.message = createPlaintextAttachment(str)
+			msg = nil
 			return nntp, err
 		}
 	} else {
 		log.Println("failed to read message", err)
+		msg = nil
 		return nil, err
 	}
+	msg = nil
 	return nntp, err
 }

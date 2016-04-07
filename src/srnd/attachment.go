@@ -5,7 +5,6 @@
 package srnd
 
 import (
-	"bytes"
 	"crypto/sha512"
 	"encoding/base32"
 	"encoding/base64"
@@ -18,7 +17,6 @@ import (
 )
 
 type NNTPAttachment interface {
-	io.Reader
 	io.WriterTo
 	io.Writer
 
@@ -53,14 +51,11 @@ type nntpAttachment struct {
 	filepath string
 	hash     []byte
 	header   textproto.MIMEHeader
-	body     *bytes.Buffer
+	body     []byte
 }
 
 func (self *nntpAttachment) Reset() {
-	if self.body != nil {
-		self.body.Reset()
-		self.body = nil
-	}
+	self.body = nil
 	self.header = nil
 	self.hash = nil
 	self.filepath = ""
@@ -78,16 +73,22 @@ func (self *nntpAttachment) ToModel(prefix string) AttachmentModel {
 }
 
 func (self *nntpAttachment) Write(b []byte) (int, error) {
-	return self.body.Write(b)
+	self.body = append(self.body, b...)
+	return len(b), nil
 }
 
 func (self *nntpAttachment) AsString() string {
-	return self.body.String()
+	if self.body == nil {
+		return ""
+	}
+	return string(self.body)
 }
 
 func (self *nntpAttachment) Filedata() string {
 	e := base64.StdEncoding
-	return e.EncodeToString(self.body.Bytes())
+	str := e.EncodeToString(self.body)
+	e = nil
+	return str
 }
 
 func (self *nntpAttachment) Filename() string {
@@ -107,13 +108,14 @@ func (self *nntpAttachment) Extension() string {
 }
 
 func (self *nntpAttachment) WriteTo(wr io.Writer) (int64, error) {
-	return self.body.WriteTo(wr)
+	w, err := wr.Write(self.body)
+	return int64(w), err
 }
 
 func (self *nntpAttachment) Hash() []byte {
 	// hash it if we haven't already
 	if self.hash == nil || len(self.hash) == 0 {
-		h := sha512.Sum512(self.body.Bytes())
+		h := sha512.Sum512(self.body)
 		self.hash = h[:]
 	}
 	return self.hash
@@ -133,10 +135,6 @@ func (self *nntpAttachment) Header() textproto.MIMEHeader {
 	return self.header
 }
 
-func (self *nntpAttachment) Read(d []byte) (n int, err error) {
-	return self.body.Read(d)
-}
-
 type AttachmentSaver interface {
 	// save an attachment given its original filename
 	// pass in a reader that reads the content of the attachment
@@ -145,15 +143,13 @@ type AttachmentSaver interface {
 
 // create a plaintext attachment
 func createPlaintextAttachment(msg string) NNTPAttachment {
-	buff := new(bytes.Buffer)
-	_, _ = io.WriteString(buff, msg)
 	header := make(textproto.MIMEHeader)
 	mime := "text/plain; charset=UTF-8"
 	header.Set("Content-Type", mime)
 	return &nntpAttachment{
 		mime:   mime,
 		ext:    ".txt",
-		body:   buff,
+		body:   []byte(msg),
 		header: header,
 	}
 }
@@ -164,9 +160,19 @@ func createAttachment(content_type, fname string, body io.Reader) NNTPAttachment
 	media_type, _, err := mime.ParseMediaType(content_type)
 	if err == nil {
 		a := new(nntpAttachment)
-		a.body = new(bytes.Buffer)
-		enc := base64.NewDecoder(base64.StdEncoding, body)
-		_, err = io.Copy(a.body, enc)
+		dec := base64.NewDecoder(base64.StdEncoding, body)
+		var b [1024]byte
+		for {
+			var n int
+			n, err = dec.Read(b[:])
+			if err != nil {
+				if err == io.EOF {
+					err = nil
+				}
+				break
+			}
+			a.body = append(a.body, b[:n]...)
+		}
 		if err == nil {
 			a.header = make(textproto.MIMEHeader)
 			a.mime = media_type + "; charset=UTF-8"
@@ -178,7 +184,7 @@ func createAttachment(content_type, fname string, body io.Reader) NNTPAttachment
 			a.header.Set("Content-Disposition", `form-data; filename="`+fname+`"; name="attachment"`)
 			a.header.Set("Content-Type", a.mime)
 			a.header.Set("Content-Transfer-Encoding", "base64")
-			h := sha512.Sum512(a.body.Bytes())
+			h := sha512.Sum512(a.body)
 			hashstr := base32.StdEncoding.EncodeToString(h[:])
 			a.hash = h[:]
 			a.filepath = hashstr + a.ext
@@ -191,10 +197,9 @@ func createAttachment(content_type, fname string, body io.Reader) NNTPAttachment
 
 func readAttachmentFromMimePart(part *multipart.Part) NNTPAttachment {
 	hdr := part.Header
-
+	var body []byte
 	content_type := hdr.Get("Content-Type")
 	media_type, _, err := mime.ParseMediaType(content_type)
-	buff := new(bytes.Buffer)
 	fname := part.FileName()
 	idx := strings.LastIndex(fname, ".")
 	ext := ".txt"
@@ -203,28 +208,37 @@ func readAttachmentFromMimePart(part *multipart.Part) NNTPAttachment {
 	}
 
 	transfer_encoding := hdr.Get("Content-Transfer-Encoding")
-
+	var r io.Reader
 	if transfer_encoding == "base64" {
 		// decode
-		dec := base64.NewDecoder(base64.StdEncoding, part)
-		_, err = io.Copy(buff, dec)
-		dec = nil
-		part = nil
+		r = base64.NewDecoder(base64.StdEncoding, part)
 	} else {
-		_, err = io.Copy(buff, part)
-		// clear reference
-		part = nil
+		r = part
 	}
+	var buff [1024]byte
+	for {
+		var n int
+		n, err = r.Read(buff[:])
+		if err != nil {
+			if err == io.EOF {
+				err = nil
+			}
+			break
+		}
+		body = append(body, buff[:n]...)
+	}
+	// clear reference
+	part = nil
 	if err != nil {
 		log.Println("failed to read attachment from mimepart", err)
 		return nil
 	}
-	sha := sha512.Sum512(buff.Bytes())
+	sha := sha512.Sum512(body)
 	enc := base32.StdEncoding
 	hashstr := enc.EncodeToString(sha[:])
 	fpath := hashstr + ext
 	return &nntpAttachment{
-		body:     buff,
+		body:     body,
 		header:   hdr,
 		mime:     media_type,
 		filename: fname,

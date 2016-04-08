@@ -141,7 +141,7 @@ func (self *httpFrontend) poll() {
 			// forward signed messages to daemon
 			f := self.daemon.store.CreateTempFile(nntp.MessageID())
 			if f != nil {
-				err := nntp.WriteTo(f, "\n")
+				err := nntp.WriteTo(f)
 				if err != nil {
 					log.Println("failed to write mod message")
 				}
@@ -557,7 +557,7 @@ func (self *httpFrontend) handle_postRequest(pr *postRequest, b bannedFunc, e er
 	// store in temp
 	f := self.daemon.store.CreateTempFile(nntp.MessageID())
 	if f != nil {
-		nntp.WriteTo(f, "\n")
+		nntp.WriteTo(f)
 		f.Close()
 		// tell daemon
 		self.daemon.loadFromInfeed(nntp.MessageID())

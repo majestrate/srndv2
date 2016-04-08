@@ -358,12 +358,9 @@ func getSignPubkey(sk []byte) string {
 
 // sign data with secret key the fucky srnd way
 // return signature as base32
-func cryptoSign(data, sk []byte) string {
-	// hash
-	hash := sha512.Sum512(data)
-	log.Printf("hash=%s len=%s", hexify(hash[:]), len(data))
+func cryptoSign(h, sk []byte) string {
 	// sign
-	sig := nacl.CryptoSignFucky(hash[:], sk)
+	sig := nacl.CryptoSignFucky(h, sk)
 	return hexify(sig)
 }
 

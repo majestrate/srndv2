@@ -5,6 +5,7 @@ package srnd
 
 import (
 	"bytes"
+	"crypto/sha512"
 	"fmt"
 	"github.com/majestrate/nacl"
 	"io"
@@ -67,9 +68,9 @@ type NNTPMessage interface {
 	// all headers
 	Headers() ArticleHeaders
 	// write out everything
-	WriteTo(wr io.Writer, delim string) error
+	WriteTo(wr io.Writer) error
 	// write out body
-	WriteBody(wr io.Writer, delim string) error
+	WriteBody(wr io.Writer) error
 	// attach a file
 	Attach(att NNTPAttachment)
 	// get the plaintext message if it exists
@@ -164,9 +165,11 @@ func signArticle(nntp NNTPMessage, seed []byte) (signed *nntpArticle, err error)
 			signed.headers.Set(k, v)
 		}
 	}
-	signbuff := new(bytes.Buffer)
+	sha := sha512.New()
+	signed.signedPart = &nntpAttachment{}
 	// write body to sign buffer
-	err = nntp.WriteTo(signbuff, "\r\n")
+	mw := io.MultiWriter(sha, signed.signedPart)
+	err = nntp.WriteTo(mw)
 	if err == nil {
 		// build keypair
 		kp := nacl.LoadSignKey(seed)
@@ -178,22 +181,17 @@ func signArticle(nntp NNTPMessage, seed []byte) (signed *nntpArticle, err error)
 		sk := kp.Secret()
 		pk := getSignPubkey(sk)
 		// sign it nigguh
-		data := signbuff.Bytes()
-		sig := cryptoSign(data, sk)
+		digest := sha.Sum(nil)
+		sig := cryptoSign(digest, sk)
 		// log that we signed it
-		log.Printf("signed %s pubkey=%s sig=%s", nntp.MessageID(), pk, sig)
+		log.Printf("signed %s pubkey=%s sig=%s hash=%s", nntp.MessageID(), pk, sig, hexify(digest))
 		signed.headers.Set("X-Signature-Ed25519-SHA512", sig)
 		signed.headers.Set("X-PubKey-Ed25519", pk)
 	}
-	signed.signedPart = &nntpAttachment{}
-	// copy sign buffer into signed part
-	_, err = io.Copy(signed.signedPart, signbuff)
-	// add this so the writer writes the entire post
-	signed.signedPart.Write([]byte{13, 10})
 	return
 }
 
-func (self *nntpArticle) WriteTo(wr io.Writer, delim string) (err error) {
+func (self *nntpArticle) WriteTo(wr io.Writer) (err error) {
 	// write headers
 	hdrs := self.headers
 	for hdr, hdr_vals := range hdrs {
@@ -201,7 +199,7 @@ func (self *nntpArticle) WriteTo(wr io.Writer, delim string) (err error) {
 			wr.Write([]byte(hdr))
 			wr.Write([]byte(": "))
 			wr.Write([]byte(hdr_val))
-			_, err = wr.Write([]byte(delim))
+			_, err = wr.Write([]byte{10})
 			if err != nil {
 				log.Println("error while writing headers", err)
 				return
@@ -209,14 +207,14 @@ func (self *nntpArticle) WriteTo(wr io.Writer, delim string) (err error) {
 		}
 	}
 	// done headers
-	_, err = wr.Write([]byte(delim))
+	_, err = wr.Write([]byte{10})
 	if err != nil {
 		log.Println("error while writing body", err)
 		return
 	}
 
 	// write body
-	err = self.WriteBody(wr, delim)
+	err = self.WriteBody(wr)
 	return
 }
 
@@ -367,7 +365,7 @@ func (self *nntpArticle) Attach(att NNTPAttachment) {
 	self.attachments = append(self.attachments, att)
 }
 
-func (self *nntpArticle) WriteBody(wr io.Writer, delim string) (err error) {
+func (self *nntpArticle) WriteBody(wr io.Writer) (err error) {
 	// this is a signed message, don't treat it special
 	if self.signedPart != nil {
 		_, err = self.signedPart.WriteTo(wr)

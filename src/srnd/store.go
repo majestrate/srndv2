@@ -5,7 +5,6 @@
 package srnd
 
 import (
-	"bufio"
 	"compress/gzip"
 	"crypto/sha512"
 	"errors"
@@ -223,7 +222,7 @@ func (self *articleStore) StorePost(nntp NNTPMessage) (err error) {
 			var cw *gzip.Writer
 			cw, err = gzip.NewWriterLevel(f, gzip.BestSpeed)
 			if err == nil {
-				err = nntp.WriteTo(cw, "\n")
+				err = nntp.WriteTo(cw)
 				cw.Close()
 				cw.Reset(nil)
 				f.Close()
@@ -231,7 +230,7 @@ func (self *articleStore) StorePost(nntp NNTPMessage) (err error) {
 				f = nil
 			}
 		} else {
-			err = nntp.WriteTo(f, "\n")
+			err = nntp.WriteTo(f)
 			f.Close()
 			f = nil
 		}
@@ -507,27 +506,8 @@ func read_message(r io.Reader) (NNTPMessage, error) {
 			sig_bytes := unhex(sig)
 			nntp.signedPart = &nntpAttachment{}
 			h := sha512.New()
-			r := bufio.NewReader(body)
-			crlf := []byte{13, 10}
-			line, err := r.ReadBytes('\n')
-			if err != nil {
-				r.Reset(nil)
-				return nil, err
-			}
-			nntp.signedPart.Write(line)
-			h.Write(line[:len(line)-1])
-			for {
-				line, err := r.ReadBytes('\n')
-				if err == io.EOF {
-					break
-				}
-				if len(line) > 0 {
-					h.Write(crlf)
-					h.Write(line[:len(line)-1])
-					nntp.signedPart.Write(line)
-				}
-			}
-			r.Reset(nil)
+			mw := io.MultiWriter(h, nntp.signedPart)
+			io.Copy(mw, body)
 			hash := h.Sum(nil)
 			log.Printf("hash=%s", hexify(hash))
 			log.Printf("sig=%s", hexify(sig_bytes))

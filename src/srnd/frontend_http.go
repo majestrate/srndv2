@@ -146,7 +146,7 @@ func (self *httpFrontend) poll() {
 					log.Println("failed to write mod message")
 				}
 				f.Close()
-				self.daemon.loadFromInfeed(self.daemon.store.GetTempFilename(nntp.MessageID()))
+				self.daemon.loadFromInfeed(nntp.MessageID())
 			}
 		case nntp := <-self.recvpostchan:
 			// get root post and tell frontend to regen that thread

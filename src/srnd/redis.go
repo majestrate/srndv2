@@ -178,6 +178,7 @@ func (self RedisDB) NukeNewsgroup(group string, store ArticleStore) {
 	self.client.Del(GROUP_MOD_KEY_REVERSE_KR_PREFIX + group)
 	self.client.Del(GROUP_ARTICLE_POSTTIME_WKR_PREFIX+group, GROUP_THREAD_POSTTIME_WKR_PREFIX+group, GROUP_THREAD_BUMPTIME_WKR_PREFIX+group) //these should be empty at this point anyway
 	self.client.ZRem(GROUP_POSTTIME_WKR, group)
+	self.client.ZRem(ARTICLE_NUMBERS_PREFIX+"last", group)
 
 	log.Println("nuke of", group, "done")
 }
@@ -749,9 +750,8 @@ func (self RedisDB) RegisterArticle(message NNTPMessage) {
 		}
 	}
 	// add nntp message numbers
-	_ = self.client.ZIncrBy(ARTICLE_NUMBERS_PREFIX+"last", float64(1), group)
-	last, _, _ := self.GetLastAndFirstForGroup(group)
-	pipe.ZAddNX(ARTICLE_NUMBERS_PREFIX+"group::"+group, redis.Z{Score: float64(last + 1), Member: msgid})
+	number, _ := self.client.ZIncrBy(ARTICLE_NUMBERS_PREFIX+"last", float64(1), group).Result()
+	pipe.ZAddNX(ARTICLE_NUMBERS_PREFIX+"group::"+group, redis.Z{Score: number, Member: msgid})
 
 	// register all attachments
 	atts := message.Attachments()
@@ -902,22 +902,31 @@ func (self RedisDB) BanEncAddr(encaddr string) (err error) {
 }
 
 func (self RedisDB) GetLastAndFirstForGroup(group string) (last, first int64, err error) {
-	var result float64
-	result, err = self.client.ZScore(ARTICLE_NUMBERS_PREFIX+"last", group).Result()
-	if err == nil {
-		last = int64(result)
-		var count int64
-		count, err = self.client.ZCard(ARTICLE_NUMBERS_PREFIX + "group::" + group).Result()
-		if err == nil {
-			first = last - count
-		}
+	var minres, maxres []redis.Z
+	minres, err = self.client.ZRangeWithScores(ARTICLE_NUMBERS_PREFIX+"group::"+group, 0, 0).Result()
+	if err != nil {
+		return
 	}
+	maxres, err = self.client.ZRangeWithScores(ARTICLE_NUMBERS_PREFIX+"group::"+group, -1, -1).Result()
+	if err != nil || len(minres) < 1 || len(maxres) < 1 {
+		return
+	}
+	first = int64(minres[0].Score)
+	last = int64(maxres[0].Score)
+
 	return
 }
 
 func (self RedisDB) GetMessageIDForNNTPID(group string, id int64) (msgid string, err error) {
 	var msgs []string
-	msgs, err = self.client.ZRange(ARTICLE_NUMBERS_PREFIX+"group::"+group, id, id).Result()
+
+	// widen the range a bit just to be sure with float precision
+	min := float64(id) - 0.0001
+	max := float64(id) + 0.0001
+	mins := fmt.Sprintf("%f", min)
+	maxs := fmt.Sprintf("%f", max)
+
+	msgs, err = self.client.ZRangeByScore(ARTICLE_NUMBERS_PREFIX+"group::"+group, redis.ZRangeByScore{Min: mins, Max: maxs}).Result()
 	if err == nil && len(msgs) > 0 {
 		msgid = msgs[0]
 	}
@@ -925,7 +934,9 @@ func (self RedisDB) GetMessageIDForNNTPID(group string, id int64) (msgid string,
 }
 
 func (self RedisDB) GetNNTPIDForMessageID(group, msgid string) (id int64, err error) {
-	id, err = self.client.ZRank(ARTICLE_NUMBERS_PREFIX+"group::"+group, msgid).Result()
+	var res float64
+	res, err = self.client.ZScore(ARTICLE_NUMBERS_PREFIX+"group::"+group, msgid).Result()
+	id = int64(res)
 	return
 }
 

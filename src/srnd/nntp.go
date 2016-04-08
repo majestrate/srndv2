@@ -118,9 +118,9 @@ func createNNTPConnection(addr string) *nntpConnection {
 	}
 	return &nntpConnection{
 		hostname: host,
-		article:  make(chan string, 1024),
-		takethis: make(chan string, 128),
-		check:    make(chan string, 128),
+		article:  make(chan string),
+		takethis: make(chan string),
+		check:    make(chan string),
 		pending:  make(map[string]string),
 	}
 }

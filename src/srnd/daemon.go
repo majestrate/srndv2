@@ -107,8 +107,6 @@ type NNTPDaemon struct {
 	register_connection   chan *nntpConnection
 	deregister_connection chan *nntpConnection
 
-	// for direct feeding of articles to daemon
-	infeed chan NNTPMessage
 	// channel to load messages to infeed given their message id
 	infeed_load chan string
 	// channel for broadcasting a message to all feeds given their newsgroup, message_id
@@ -470,9 +468,8 @@ func (self *NNTPDaemon) Run() {
 
 	self.register_connection = make(chan *nntpConnection)
 	self.deregister_connection = make(chan *nntpConnection)
-	self.infeed = make(chan NNTPMessage, 128)
-	self.infeed_load = make(chan string, 10)
-	self.send_all_feeds = make(chan ArticleEntry, 10)
+	self.infeed_load = make(chan string)
+	self.send_all_feeds = make(chan ArticleEntry)
 	self.activeConnections = make(map[string]*nntpConnection)
 	self.loadedFeeds = make(map[string]*feedState)
 	self.register_feed = make(chan FeedConfig)
@@ -480,7 +477,7 @@ func (self *NNTPDaemon) Run() {
 	self.get_feeds = make(chan chan []*feedStatus)
 	self.get_feed = make(chan *feedStatusQuery)
 	self.modify_feed_policy = make(chan *modifyFeedPolicyEvent)
-	self.ask_for_article = make(chan ArticleEntry, 1024)
+	self.ask_for_article = make(chan ArticleEntry)
 
 	self.expire = createExpirationCore(self.database, self.store)
 	self.sync_on_start = self.conf.daemon["sync_on_start"] == "1"
@@ -521,16 +518,9 @@ func (self *NNTPDaemon) Run() {
 	go self.expire.Mainloop()
 	// we are now running
 	self.running = true
-	// start accepting incoming connections
-	go self.acceptloop()
 	// start polling feeds
-	go self.polloutfeeds()
+	go self.pollfeeds()
 	threads := 8
-	for threads > 0 {
-		go self.pollmessages()
-		threads--
-	}
-	go self.pollinfeed()
 	go func() {
 		// if we have no initial posts create one
 		if self.database.ArticleCount() == 0 {
@@ -576,21 +566,16 @@ func (self *NNTPDaemon) Run() {
 			self.syncAllMessages()
 		}()
 	}
-	go self.pollSendMessages()
-	<-self.done
-}
 
-func (self *NNTPDaemon) pollinfeed() {
-	for {
-		msgid := <-self.infeed_load
-		msg := self.store.ReadTempMessage(msgid)
-		if msg == nil {
-			log.Println("did not load", msgid)
-			continue
-		}
-		self.infeed <- msg
-		msg = nil
+	for threads > 0 {
+		// fork off N go routines for handling messages
+		go self.poll(threads)
+		log.Println("started worker", threads)
+		threads--
 	}
+	// start accepting incoming connections
+	self.acceptloop()
+	<-self.done
 }
 
 func (self *NNTPDaemon) syncAllMessages() {
@@ -607,7 +592,7 @@ func (self *NNTPDaemon) loadFromInfeed(msgid string) {
 	self.infeed_load <- msgid
 }
 
-func (self *NNTPDaemon) polloutfeeds() {
+func (self *NNTPDaemon) pollfeeds() {
 
 	for {
 		select {
@@ -720,22 +705,60 @@ func (self *NNTPDaemon) polloutfeeds() {
 	}
 }
 
-func (self *NNTPDaemon) pollSendMessages() {
+func (self *NNTPDaemon) poll(worker int) {
+	modchnl := self.mod.MessageChan()
 	for {
 		select {
+		case msgid := <-self.infeed_load:
+			log.Println("load", msgid)
+			nntp := self.store.ReadTempMessage(msgid)
+			if nntp == nil {
+				log.Println("worker", worker, "failed to load", msgid)
+			} else {
+				nntp.AppendPath(self.instance_name)
+				msgid := nntp.MessageID()
+				log.Println("worker", worker, "got", msgid)
+				rollover := 100
+				group := nntp.Newsgroup()
+				ref := nntp.Reference()
+				tpp, err := self.database.GetThreadsPerPage(group)
+				ppb, err := self.database.GetPagesPerBoard(group)
+				if err == nil {
+					rollover = tpp * ppb
+				}
+				// store article
+				self.store.StorePost(nntp)
+				// we are done with this article
+				// reset memory
+				nntp.Reset()
+				nntp = nil
+				// expire posts
+				self.expire.ExpireGroup(group, rollover)
+				// send to mod panel
+				if group == "ctl" {
+					modchnl <- msgid
+				}
+				// send to frontend
+				if self.frontend != nil {
+					if self.frontend.AllowNewsgroup(group) {
+						self.frontend.PostsChan() <- frontendPost{msgid, ref, group}
+					}
+				}
+				// federate
+				self.sendAllFeeds(ArticleEntry{msgid, group})
+			}
 		case nntp := <-self.send_all_feeds:
 			group := nntp.Newsgroup()
 			if self.Federate() {
 				feeds := self.activeFeeds()
-				if feeds == nil {
-					continue
-				}
-				for _, f := range feeds {
-					for _, feed := range f.Conns {
-						if feed.policy.AllowsNewsgroup(group) {
-							if strings.HasSuffix(feed.name, "-stream") {
-								msgid := nntp.MessageID()
-								feed.offerStream(msgid)
+				if feeds != nil {
+					for _, f := range feeds {
+						for _, feed := range f.Conns {
+							if feed.policy.AllowsNewsgroup(group) {
+								if strings.HasSuffix(feed.name, "-stream") {
+									msgid := nntp.MessageID()
+									feed.offerStream(msgid)
+								}
 							}
 						}
 					}
@@ -743,79 +766,25 @@ func (self *NNTPDaemon) pollSendMessages() {
 			}
 		case nntp := <-self.ask_for_article:
 			feeds := self.activeFeeds()
-			if feeds == nil {
-				continue
-			}
-			for _, f := range feeds {
-				for _, feed := range f.Conns {
-					if feed.policy.AllowsNewsgroup(nntp.Newsgroup()) {
-						if strings.HasSuffix(feed.name, "-reader") {
-							feed.askForArticle(nntp.MessageID())
+			if feeds != nil {
+				for _, f := range feeds {
+					for _, feed := range f.Conns {
+						if feed.policy.AllowsNewsgroup(nntp.Newsgroup()) {
+							if strings.HasSuffix(feed.name, "-reader") {
+								feed.askForArticle(nntp.MessageID())
+							}
 						}
 					}
 				}
 			}
 		}
 	}
+	log.Println("worker", worker, "done")
 }
 
 func (self *NNTPDaemon) askForArticle(e ArticleEntry) {
 	log.Println("daemon asking for", e.MessageID())
 	self.ask_for_article <- e
-}
-
-func (self *NNTPDaemon) pollmessages() {
-
-	modchnl := self.mod.MessageChan()
-	var nntp NNTPMessage
-	for {
-		nntp = <-self.infeed
-		// ammend path
-		nntp.AppendPath(self.instance_name)
-		msgid := nntp.MessageID()
-		log.Println("daemon got", msgid)
-
-		ref := nntp.Reference()
-		if ref != "" && ValidMessageID(ref) && !self.database.HasArticleLocal(ref) {
-			// we don't have the root post
-			// generate it
-			//log.Println("creating temp root post for", ref , "in", nntp.Newsgroup())
-			//root := newPlaintextArticle("temporary placeholder", "lol@lol", "root post "+ref+" not found", "system", "temp", ref, nntp.Newsgroup())
-			//self.store.StorePost(root)
-		}
-
-		// prepare for content rollover
-		// fallback rollover
-		rollover := 100
-
-		group := nntp.Newsgroup()
-		tpp, err := self.database.GetThreadsPerPage(group)
-		ppb, err := self.database.GetPagesPerBoard(group)
-		if err == nil {
-			rollover = tpp * ppb
-		}
-
-		// store article and attachments
-		// register with database
-		// this also generates thumbnails
-		go self.store.StorePost(nntp)
-		nntp = nil
-		// roll over old content
-		self.expire.ExpireGroup(group, rollover)
-		// queue to all outfeeds
-		self.sendAllFeeds(ArticleEntry{msgid, group})
-		// send to upper layers
-		if group == "ctl" {
-			modchnl <- msgid
-		}
-		if self.frontend != nil {
-			if self.frontend.AllowNewsgroup(group) {
-				self.frontend.PostsChan() <- frontendPost{msgid, ref, group}
-			} else {
-				log.Println("frontend does not allow", group, "not sending")
-			}
-		}
-	}
 }
 
 func (self *NNTPDaemon) sendAllFeeds(e ArticleEntry) {
@@ -936,6 +905,6 @@ func (self *NNTPDaemon) Setup() {
 	self.mod = modEngine{
 		store:    self.store,
 		database: self.database,
-		chnl:     make(chan string, 1024),
+		chnl:     make(chan string),
 	}
 }

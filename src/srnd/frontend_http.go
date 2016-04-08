@@ -139,7 +139,15 @@ func (self *httpFrontend) poll() {
 		select {
 		case nntp := <-modChnl:
 			// forward signed messages to daemon
-			self.daemon.infeed <- nntp
+			f := self.daemon.store.CreateTempFile(nntp.MessageID())
+			if f != nil {
+				err := nntp.WriteTo(f, "\n")
+				if err != nil {
+					log.Println("failed to write mod message")
+				}
+				f.Close()
+				self.daemon.loadFromInfeed(self.daemon.store.GetTempFilename(nntp.MessageID()))
+			}
 		case nntp := <-self.recvpostchan:
 			// get root post and tell frontend to regen that thread
 			msgid := nntp.MessageID()
@@ -798,7 +806,7 @@ func NewHTTPFrontend(daemon *NNTPDaemon, cache CacheInterface, config map[string
 		Path:   front.prefix,
 		MaxAge: 10000000, // big number
 	}
-	front.recvpostchan = make(chan frontendPost, 16)
+	front.recvpostchan = make(chan frontendPost)
 	front.regenThreadChan = front.cache.GetThreadChan()
 	front.regenGroupChan = front.cache.GetGroupChan()
 	return front

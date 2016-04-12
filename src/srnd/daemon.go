@@ -468,8 +468,8 @@ func (self *NNTPDaemon) Run() {
 
 	self.register_connection = make(chan *nntpConnection)
 	self.deregister_connection = make(chan *nntpConnection)
-	self.infeed_load = make(chan string)
-	self.send_all_feeds = make(chan ArticleEntry)
+	self.infeed_load = make(chan string, 1024)
+	self.send_all_feeds = make(chan ArticleEntry, 1024)
 	self.activeConnections = make(map[string]*nntpConnection)
 	self.loadedFeeds = make(map[string]*feedState)
 	self.register_feed = make(chan FeedConfig)
@@ -477,7 +477,7 @@ func (self *NNTPDaemon) Run() {
 	self.get_feeds = make(chan chan []*feedStatus)
 	self.get_feed = make(chan *feedStatusQuery)
 	self.modify_feed_policy = make(chan *modifyFeedPolicyEvent)
-	self.ask_for_article = make(chan ArticleEntry)
+	self.ask_for_article = make(chan ArticleEntry, 1024)
 
 	self.expire = createExpirationCore(self.database, self.store)
 	self.sync_on_start = self.conf.daemon["sync_on_start"] == "1"

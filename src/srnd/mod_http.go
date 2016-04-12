@@ -422,7 +422,6 @@ func (self httpModUI) writeTemplateParam(wr http.ResponseWriter, r *http.Request
 // do a function as authenticated
 // pass in the request path to the handler
 func (self httpModUI) asAuthed(handler func(string), wr http.ResponseWriter, r *http.Request) {
-	wr.Header().Set("X-CSRF-Token", csrf.Token(r))
 	if self.checkSession(r) {
 		handler(r.URL.Path)
 	} else {
@@ -647,6 +646,7 @@ func (self httpModUI) HandleKeyGen(wr http.ResponseWriter, r *http.Request) {
 
 func (self httpModUI) ServeModPage(wr http.ResponseWriter, r *http.Request) {
 	if self.checkSession(r) {
+		wr.Header().Set("X-CSRF-Token", csrf.Token(r))
 		// we are logged in
 		url := r.URL.String()
 		if strings.HasSuffix(url, "/mod/feeds") {

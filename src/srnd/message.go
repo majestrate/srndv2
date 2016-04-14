@@ -385,7 +385,7 @@ func (self *nntpArticle) WriteBody(wr io.Writer) (err error) {
 
 	boundary, ok := params["boundary"]
 	if ok {
-		w := multipart.NewWriter(wr)
+		w := multipart.NewWriter(NewLineWriter(wr))
 
 		err = w.SetBoundary(boundary)
 		if err == nil {
@@ -398,6 +398,9 @@ func (self *nntpArticle) WriteBody(wr io.Writer) (err error) {
 				}
 				hdr.Set("Content-Transfer-Encoding", "base64")
 				part, err := w.CreatePart(hdr)
+				if err != nil {
+					log.Println("failed to create part?", err)
+				}
 				str := att.Filedata()
 				att = nil
 				dat := []byte(str)

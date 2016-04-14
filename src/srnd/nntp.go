@@ -103,7 +103,10 @@ func writeMIMEHeader(wr io.Writer, hdr map[string][]string) (err error) {
 	// write headers
 	for k, vals := range hdr {
 		for _, val := range vals {
-			_, err = io.WriteString(wr, fmt.Sprintf("%s: %s\n", k, val))
+			wr.Write([]byte(k))
+			wr.Write([]byte(": "))
+			wr.Write([]byte(val))
+			_, err = wr.Write([]byte{10})
 		}
 	}
 	// end of headers

@@ -93,22 +93,6 @@ func ShorterHashMessageID(msgid string) string {
 	return strings.ToLower(HashMessageID(msgid)[:10])
 }
 
-type lineWriter struct {
-	io.Writer
-	wr    io.Writer
-	delim []byte
-}
-
-func NewLineWriter(wr io.Writer, delim string) io.Writer {
-	return lineWriter{wr, wr, []byte(delim)}
-}
-
-func (self lineWriter) Write(data []byte) (n int, err error) {
-	n, err = self.wr.Write(data)
-	self.wr.Write(self.delim)
-	return n, err
-}
-
 func OpenFileWriter(fname string) (io.WriteCloser, error) {
 	return os.Create(fname)
 }

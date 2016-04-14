@@ -252,7 +252,7 @@ func (self *articleStore) StorePost(nntp NNTPMessage) (err error) {
 		self.database.RegisterArticle(nntp_inner)
 		// record a tripcode
 		self.database.RegisterSigned(nntp.MessageID(), nntp.Pubkey())
-		for _, att := range nntp.Attachments() {
+		for _, att := range nntp_inner.Attachments() {
 			self.saveAttachment(att)
 			att.Reset()
 		}

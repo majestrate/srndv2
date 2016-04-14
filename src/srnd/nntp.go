@@ -909,6 +909,62 @@ func (self *nntpConnection) handleLine(daemon *NNTPDaemon, code int, line string
 					}
 				}
 				dw.Close()
+			} else if cmd == "STAT" {
+				if len(self.group) == 0 {
+					if len(parts) == 2 {
+						// parameter given
+						msgid := parts[2]
+						// check for article
+						if ValidMessageID(msgid) && daemon.database.HasArticleLocal(msgid) {
+							// valid message id
+							var n int64
+							n, err = daemon.database.GetNNTPIDForMessageID(self.group, msgid)
+							if err == nil {
+								// exists
+								conn.PrintfLine("223 %d %s", n, msgid)
+							} else {
+								// error
+								conn.PrintfLine("500 error fetching article number %s", err.Error())
+							}
+						} else {
+							conn.PrintfLine("430 No article with that message-id")
+						}
+					} else {
+						conn.PrintfLine("412 No newsgroup selected")
+					}
+				} else if daemon.database.HasNewsgroup(self.group) {
+					// group specified
+					if len(parts) == 2 {
+						// parameter specified
+						var msgid string
+						var n int64
+						n, err = strconv.ParseInt(parts[1], 10, 64)
+						if err == nil {
+							msgid, err = daemon.database.GetMessageIDForNNTPID(self.group, n)
+							if err != nil {
+								// error getting id
+								conn.PrintfLine("500 error getting nntp article id: %s", err.Error())
+								return
+							}
+						} else {
+							// message id
+							msgid = parts[1]
+						}
+						if ValidMessageID(msgid) && daemon.database.HasArticleLocal(msgid) {
+							conn.PrintfLine("223 %d %s", n, msgid)
+						} else if n == 0 {
+							// was a message id
+							conn.PrintfLine("430 no such article")
+						} else {
+							// was an article number
+							conn.PrintfLine("423 no article with that number")
+						}
+					} else {
+						conn.PrintfLine("420 Current article number is invalid")
+					}
+				} else {
+					conn.PrintfLine("500 invalid daemon state, got STAT with group set but we don't have that group now?")
+				}
 			} else {
 				log.Println(self.name, "invalid command recv'd", cmd)
 				conn.PrintfLine("500 Invalid command: %s", cmd)

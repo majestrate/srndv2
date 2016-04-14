@@ -913,7 +913,7 @@ func (self *nntpConnection) handleLine(daemon *NNTPDaemon, code int, line string
 				if len(self.group) == 0 {
 					if len(parts) == 2 {
 						// parameter given
-						msgid := parts[2]
+						msgid := parts[1]
 						// check for article
 						if ValidMessageID(msgid) && daemon.database.HasArticleLocal(msgid) {
 							// valid message id

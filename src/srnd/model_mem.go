@@ -499,17 +499,7 @@ func (self *thread) Truncate() ThreadModel {
 
 func (self *thread) Update(db Database) {
 	root := self.Posts[0].MessageID()
-	reply_count := db.CountThreadReplies(root)
-	i_reply_count := int(reply_count)
-	if len(self.Posts) > 1 && i_reply_count > len(self.Posts[1:]) {
-		// was from a new post(s)
-		diff := i_reply_count - len(self.Posts[1:])
-		newposts := db.GetThreadReplyPostModels(self.prefix, root, i_reply_count-diff, diff)
-		self.Posts = append(self.Posts, newposts...)
-	} else {
-		// mod event
-		self.Posts = append([]PostModel{self.Posts[0]}, db.GetThreadReplyPostModels(self.prefix, root, 0, 0)...)
-	}
+	self.Posts = append([]PostModel{self.Posts[0]}, db.GetThreadReplyPostModels(self.prefix, root, 0, 0)...)
 	self.dirty = false
 }
 

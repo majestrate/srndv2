@@ -122,6 +122,7 @@ func GenSRNdConfig() *configparser.Configuration {
 	sect.Add("allow_anon_attachments", "0")
 	sect.Add("allow_attachments", "1")
 	sect.Add("require_tls", "1")
+	sect.Add("anon_nntp", "0")
 
 	// profiling settings
 	sect = conf.NewSection("pprof")

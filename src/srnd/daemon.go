@@ -804,6 +804,9 @@ func (self *NNTPDaemon) acceptloop() {
 			hostname = self.conf.crypto.hostname
 		}
 		nntp := createNNTPConnection(hostname)
+		if self.conf.daemon["anon_nntp"] == "1" {
+			nntp.authenticated = true
+		}
 		addr := conn.RemoteAddr()
 		nntp.name = fmt.Sprintf("%s-inbound-feed", addr.String())
 		c := textproto.NewConn(conn)

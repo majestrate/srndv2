@@ -30,15 +30,19 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
+	"github.com/mcuadros/go-version"
 	"gopkg.in/redis.v3"
 	"log"
 	"math"
 	"net"
 	"os"
+	"regexp"
 	"strconv"
 	"strings"
 	"time"
 )
+
+const MIN_REDIS_VERSION = "3.0"
 
 // Constants for redis key prefixes
 // since redis might be shared among many programs, these are used to avoid conflicts.
@@ -90,9 +94,12 @@ type RedisDB struct {
 	client *redis.Client
 }
 
+var redis_version_extractor = regexp.MustCompilePOSIX(`redis_version:([^\r\n]*)`)
+
 func NewRedisDatabase(host, port, password string) Database {
 	var client RedisDB
 	var err error
+	var info string
 
 	log.Println("Connecting to redis...")
 
@@ -107,6 +114,22 @@ func NewRedisDatabase(host, port, password string) Database {
 	_, err = client.client.Ping().Result() //check for successful connection
 	if err != nil {
 		log.Fatalf("cannot open connection to redis: %s", err)
+	}
+
+	info, err = client.client.Info("server").Result()
+	if err != nil {
+		log.Fatalf("cannot open connection to redis: %s", err)
+	}
+
+	res := redis_version_extractor.FindStringSubmatch(info)
+
+	if len(res) != 2 {
+		log.Fatalf("cannot determin redis version")
+	}
+	cur_version := res[1]
+
+	if version.Compare(cur_version, MIN_REDIS_VERSION, "<") {
+		log.Fatalf("Please upgrade redis. Need version %s. Have version %s.", MIN_REDIS_VERSION, cur_version)
 	}
 
 	return client

@@ -919,13 +919,9 @@ func (self *nntpConnection) handleLine(daemon *NNTPDaemon, code int, line string
 							// valid message id
 							var n int64
 							n, err = daemon.database.GetNNTPIDForMessageID(self.group, msgid)
-							if err == nil {
-								// exists
-								conn.PrintfLine("223 %d %s", n, msgid)
-							} else {
-								// error
-								conn.PrintfLine("500 error fetching article number %s", err.Error())
-							}
+							// exists
+							conn.PrintfLine("223 %d %s", n, msgid)
+							err = nil
 						} else {
 							conn.PrintfLine("430 No article with that message-id")
 						}

@@ -292,6 +292,7 @@ func (self *templateEngine) genUkko(prefix, frontend string, wr io.Writer, datab
 		if len(board) > 0 {
 			th := board[0].GetThread(msgid)
 			if th != nil {
+				th.Update(database)
 				threads = append(threads, th)
 			}
 		}

@@ -16,6 +16,7 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 )
 
@@ -117,6 +118,13 @@ type NNTPDaemon struct {
 	done chan bool
 
 	tls_config *tls.Config
+
+	send_articles_mtx sync.RWMutex
+	send_articles     []ArticleEntry
+	ask_articles_mtx  sync.RWMutex
+	ask_articles      []ArticleEntry
+
+	pump_ticker *time.Ticker
 }
 
 func (self NNTPDaemon) End() {
@@ -468,8 +476,8 @@ func (self *NNTPDaemon) Run() {
 
 	self.register_connection = make(chan *nntpConnection)
 	self.deregister_connection = make(chan *nntpConnection)
-	self.infeed_load = make(chan string, 1024)
-	self.send_all_feeds = make(chan ArticleEntry, 1024)
+	self.infeed_load = make(chan string)
+	self.send_all_feeds = make(chan ArticleEntry)
 	self.activeConnections = make(map[string]*nntpConnection)
 	self.loadedFeeds = make(map[string]*feedState)
 	self.register_feed = make(chan FeedConfig)
@@ -477,7 +485,9 @@ func (self *NNTPDaemon) Run() {
 	self.get_feeds = make(chan chan []*feedStatus)
 	self.get_feed = make(chan *feedStatusQuery)
 	self.modify_feed_policy = make(chan *modifyFeedPolicyEvent)
-	self.ask_for_article = make(chan ArticleEntry, 1024)
+	self.ask_for_article = make(chan ArticleEntry)
+
+	self.pump_ticker = time.NewTicker(time.Millisecond * 100)
 
 	self.expire = createExpirationCore(self.database, self.store)
 	self.sync_on_start = self.conf.daemon["sync_on_start"] == "1"
@@ -557,14 +567,6 @@ func (self *NNTPDaemon) Run() {
 	log.Println("registering feeds")
 	for _, f := range self.conf.feeds {
 		self.register_feed <- f
-	}
-	// if we want to sync on start do it now
-	if self.sync_on_start {
-		go func() {
-			// wait 10 seconds for feeds to establish
-			time.Sleep(10 * time.Second)
-			self.syncAllMessages()
-		}()
 	}
 
 	for threads > 0 {
@@ -700,8 +702,28 @@ func (self *NNTPDaemon) pollfeeds() {
 			self.activeConnections[outfeed.name] = outfeed
 		case outfeed := <-self.deregister_connection:
 			delete(self.activeConnections, outfeed.name)
-
+		case <-self.pump_ticker.C:
+			go self.pump_article_requests()
 		}
+	}
+}
+
+func (self *NNTPDaemon) pump_article_requests() {
+	var articles []ArticleEntry
+	self.send_articles_mtx.Lock()
+	articles = append(articles, self.send_articles...)
+	self.send_articles = nil
+	self.send_articles_mtx.Unlock()
+	for _, entry := range articles {
+		self.send_all_feeds <- entry
+	}
+	articles = nil
+	self.ask_articles_mtx.Lock()
+	articles = append(articles, self.ask_articles...)
+	self.ask_articles = nil
+	self.ask_articles_mtx.Unlock()
+	for _, entry := range articles {
+		self.ask_for_article <- entry
 	}
 }
 
@@ -783,12 +805,15 @@ func (self *NNTPDaemon) poll(worker int) {
 }
 
 func (self *NNTPDaemon) askForArticle(e ArticleEntry) {
-	log.Println("daemon asking for", e.MessageID())
-	self.ask_for_article <- e
+	self.ask_articles_mtx.Lock()
+	self.ask_articles = append(self.ask_articles, e)
+	self.ask_articles_mtx.Unlock()
 }
 
 func (self *NNTPDaemon) sendAllFeeds(e ArticleEntry) {
-	self.send_all_feeds <- e
+	self.send_articles_mtx.Lock()
+	self.send_articles = append(self.send_articles, e)
+	self.send_articles_mtx.Unlock()
 }
 
 func (self *NNTPDaemon) acceptloop() {

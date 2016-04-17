@@ -470,14 +470,16 @@ func readMIMEHeader(r *bufio.Reader) (hdr textproto.MIMEHeader, err error) {
 			hdr = nil
 			return
 		}
-		str = strings.Trim(str, "\r")
-		if str == "\n" {
+		str = strings.Trim(str, "\r\n")
+		if str == "" {
 			break
 		}
 		idx := strings.Index(str, ": ")
-		hdrname := strings.Trim(str[:idx], " ")
-		hdrval := strings.Trim(str[idx+2:len(str)-1], "\n")
-		hdr.Add(hdrname, hdrval)
+		if idx > 0 {
+			hdrname := strings.Trim(str[:idx], " ")
+			hdrval := strings.Trim(str[idx+2:], "\r\n")
+			hdr.Add(hdrname, hdrval)
+		}
 	}
 	return
 }

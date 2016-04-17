@@ -737,6 +737,8 @@ func (self *NNTPDaemon) poll(worker int) {
 			nntp := self.store.ReadTempMessage(msgid)
 			if nntp == nil {
 				log.Println("worker", worker, "failed to load", msgid)
+				// ban it as it is probably invalid
+				self.database.BanArticle(msgid, "already seen")
 			} else {
 				nntp.AppendPath(self.instance_name)
 				msgid := nntp.MessageID()

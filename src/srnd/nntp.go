@@ -386,7 +386,7 @@ func (self *nntpConnection) checkMIMEHeaderNoAuth(daemon *NNTPDaemon, hdr textpr
 
 	if !newsgroupValidFormat(newsgroup) {
 		// invalid newsgroup format
-		reason = "invalid newsgroup: " + newsgroup
+		reason = fmt.Sprintf("invalid newsgroup: %s", newsgroup)
 		ban = true
 		return
 	} else if banned, _ := daemon.database.NewsgroupBanned(newsgroup); banned {

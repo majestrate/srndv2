@@ -506,6 +506,7 @@ func read_message(r io.Reader) (NNTPMessage, error) {
 			if pk == "" || sig == "" {
 				log.Println("invalid sig or pubkey", sig, pk)
 				nntp.Reset()
+				nntp = nil
 				msg = nil
 				return nil, errors.New("invalid headers")
 			}
@@ -515,8 +516,27 @@ func read_message(r io.Reader) (NNTPMessage, error) {
 			nntp.signedPart = &nntpAttachment{}
 			h := sha512.New()
 			mw := io.MultiWriter(h, nntp.signedPart)
-			io.Copy(mw, body)
+			for {
+				var n int
+				var b [1024]byte
+				n, err = body.Read(b[:])
+				if err == nil {
+					mw.Write(b[:n])
+				} else if err == io.EOF {
+					err = nil
+					break
+				} else {
+					log.Println("failed to read signed body", err)
+					nntp.signedPart.body = nil
+					nntp.Reset()
+					nntp = nil
+					mw = nil
+					return nil, err
+				}
+			}
+			mw = nil
 			hash := h.Sum(nil)
+			h = nil
 			log.Printf("hash=%s", hexify(hash))
 			log.Printf("sig=%s", hexify(sig_bytes))
 			if nacl.CryptoVerifyFucky(hash, sig_bytes, pk_bytes) {
@@ -527,6 +547,8 @@ func read_message(r io.Reader) (NNTPMessage, error) {
 				log.Println("!!!signature is invalid!!!")
 				msg = nil
 				nntp.Reset()
+				log.Println(nntp.signedPart)
+				nntp = nil
 				return nil, errors.New("invalid signature")
 			}
 		} else {

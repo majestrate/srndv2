@@ -725,6 +725,7 @@ func (self *NNTPDaemon) pump_article_requests() {
 	for _, entry := range articles {
 		self.ask_for_article <- entry
 	}
+	articles = nil
 }
 
 func (self *NNTPDaemon) poll(worker int) {

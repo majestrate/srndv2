@@ -73,8 +73,16 @@ func (self *nntpAttachment) ToModel(prefix string) AttachmentModel {
 }
 
 func (self *nntpAttachment) Write(b []byte) (int, error) {
-	self.body = append(self.body, b...)
-	return len(b), nil
+	l := len(b)
+	total := l + len(self.body)
+	if total > cap(self.body) {
+		newSize := total*3/2 + 1
+		newSlice := make([]byte, total, newSize)
+		copy(newSlice, self.body)
+		self.body = newSlice
+	}
+	copy(self.body[l:], b)
+	return l, nil
 }
 
 func (self *nntpAttachment) AsString() string {

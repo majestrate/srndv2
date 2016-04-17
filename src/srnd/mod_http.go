@@ -99,6 +99,16 @@ func (self httpModUI) getAdminFunc(funcname string) AdminFunc {
 				}
 			}
 			log.Println("regenerating all thumbnails with", t, "threads")
+			msgid := extractParam(param, "message-id")
+			if ValidMessageID(msgid) {
+				a := self.daemon.database.GetPostAttachments(msgid)
+				go func(atts []string) {
+					for _, att := range atts {
+						self.articles.GenerateThumbnail(att)
+					}
+				}(a)
+				return fmt.Sprintf("regenerating %d thumbnails for %s", len(a), msgid), nil
+			}
 			go reThumbnail(t, self.articles)
 			return fmt.Sprintf("started rethumbnailing with %d threads", t), nil
 		}

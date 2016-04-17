@@ -5,6 +5,7 @@
 package srnd
 
 import (
+	"bufio"
 	"crypto/sha1"
 	"crypto/sha512"
 	"encoding/base64"
@@ -14,6 +15,7 @@ import (
 	"io"
 	"log"
 	"net"
+	"net/textproto"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -456,5 +458,26 @@ func getGroupForCatalog(file string) (group string) {
 		return ""
 	}
 	group = matches[1]
+	return
+}
+
+func readMIMEHeader(r *bufio.Reader) (hdr textproto.MIMEHeader, err error) {
+	hdr = make(textproto.MIMEHeader)
+	for {
+		var str string
+		str, err = r.ReadString(10)
+		if err != nil {
+			hdr = nil
+			return
+		}
+		str = strings.Trim(str, "\r")
+		if str == "\n" {
+			break
+		}
+		idx := strings.Index(str, ": ")
+		hdrname := strings.Trim(str[:idx], " ")
+		hdrval := strings.Trim(str[idx+2:], "\n")
+		hdr.Add(hdrname, hdrval)
+	}
 	return
 }

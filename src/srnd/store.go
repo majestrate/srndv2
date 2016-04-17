@@ -5,6 +5,7 @@
 package srnd
 
 import (
+	"bufio"
 	"compress/gzip"
 	"crypto/sha512"
 	"errors"
@@ -14,6 +15,7 @@ import (
 	"mime"
 	"mime/multipart"
 	"net/mail"
+	"net/textproto"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -141,16 +143,16 @@ func (self *articleStore) GenerateThumbnail(fname string) error {
 	} else if self.isAudio(fname) {
 		tmpfname := infname + ".wav"
 		cmd = exec.Command(self.ffmpeg_path, "-i", infname, tmpfname)
-		exec_out, err := cmd.CombinedOutput()
+		out, err := cmd.CombinedOutput()
 
 		if err == nil {
-			cmd = exec.Command(self.sox_path, tmpfname, "-n", "spectrogram", "-a", "-d", "0:30", "-r", "-p", "6", "-x", "200", "-y", "150", "-o", outfname)
-			exec_out, err = cmd.CombinedOutput()
+			cmd = exec.Command(self.sox_path, tmpfname, "-n", "spectrogram", "-a", "-d", "0:10", "-r", "-p", "6", "-x", "200", "-y", "150", "-o", outfname)
+			out, err = cmd.CombinedOutput()
 		}
 		if err == nil {
 			log.Println("generated audio thumbnail to", outfname)
 		} else {
-			log.Println("error generating audio thumbnail", err, string(exec_out))
+			log.Println("error generating audio thumbnail", err, string(out))
 		}
 		DelFile(tmpfname)
 		return err
@@ -242,9 +244,8 @@ func (self *articleStore) StorePost(nntp NNTPMessage) (err error) {
 		// store the data in the article
 		self.database.RegisterArticle(nntp)
 		for _, att := range nntp.Attachments() {
-			// save attachments
+			// save attachment
 			self.saveAttachment(att)
-			att.Reset()
 		}
 	} else {
 		// we have inner data
@@ -254,7 +255,6 @@ func (self *articleStore) StorePost(nntp NNTPMessage) (err error) {
 		self.database.RegisterSigned(nntp.MessageID(), nntp.Pubkey())
 		for _, att := range nntp_inner.Attachments() {
 			self.saveAttachment(att)
-			att.Reset()
 		}
 		nntp_inner.Reset()
 	}
@@ -262,44 +262,32 @@ func (self *articleStore) StorePost(nntp NNTPMessage) (err error) {
 	return
 }
 
-// save an attachment
 func (self *articleStore) saveAttachment(att NNTPAttachment) {
-	defer att.Reset()
-	var err error
-	var f io.WriteCloser
 	fpath := att.Filepath()
 	upload := self.AttachmentFilepath(fpath)
-	thumb := self.ThumbnailFilepath(fpath)
-	if CheckFile(upload) {
-		log.Println("already have file", fpath)
-		if !CheckFile(thumb) && att.NeedsThumbnail() {
-			log.Println("create thumbnail for", fpath)
-			err = self.GenerateThumbnail(fpath)
-			if err != nil {
-				log.Println("failed to generate thumbnail", err)
-			}
+	if !CheckFile(upload) {
+		// attachment does not exist on disk
+		f, err := os.Open(upload)
+		if f != nil {
+			_, err = att.WriteTo(f)
+			f.Close()
 		}
-		return
+		if err != nil {
+			log.Println("failed to save attachemnt", fpath, err)
+		}
 	}
-	// save attachment
-	log.Println("save attachment", att.Filename(), "to", upload)
-	f, err = os.Create(upload)
-	if err == nil {
-		_, err = att.WriteTo(f)
-		f.Close()
+	att.Reset()
+	self.thumbnailAttachment(fpath)
+}
 
-	}
-	if err != nil {
-		log.Println("did not save attachment", err)
-		return
-	}
-
-	// generate thumbanils
-	if att.NeedsThumbnail() {
-		log.Println("create thumbnail for", fpath)
+// generate attachment thumbnail
+func (self *articleStore) thumbnailAttachment(fpath string) {
+	var err error
+	thumb := self.ThumbnailFilepath(fpath)
+	if !CheckFile(thumb) {
 		err = self.GenerateThumbnail(fpath)
 		if err != nil {
-			log.Println("failed to generate thumbnail", err)
+			log.Println("failed to generate thumbnail for", fpath, err)
 		}
 	}
 }
@@ -424,16 +412,33 @@ func (self *articleStore) GetMessage(messageID string) NNTPMessage {
 	return self.readfile(self.GetFilename(messageID), false)
 }
 
-// get article with headers only
-func (self *articleStore) GetHeaders(messageID string) ArticleHeaders {
-	// TODO: don't load the entire body
-	nntp := self.readfile(self.GetFilename(messageID), false)
-	if nntp == nil {
-		return nil
+func (self *articleStore) GetHeaders(messageID string) (hdr ArticleHeaders) {
+	txthdr := self.getMIMEHeader(messageID)
+	if txthdr != nil {
+		hdr = make(ArticleHeaders)
+		for k, val := range txthdr {
+			for _, v := range val {
+				hdr.Add(k, v)
+			}
+		}
 	}
-	hdr := nntp.Headers()
-	nntp.Reset()
-	nntp = nil
+	return
+}
+
+// get article with headers only
+func (self *articleStore) getMIMEHeader(messageID string) (hdr textproto.MIMEHeader) {
+	if ValidMessageID(messageID) {
+		fname := self.GetFilename(messageID)
+		f, err := os.Open(fname)
+		if f != nil {
+			r := bufio.NewReader(f)
+			hdr, err = readMIMEHeader(r)
+			f.Close()
+		}
+		if err != nil {
+			log.Println("failed to load article headers for", messageID, err)
+		}
+	}
 	return hdr
 }
 

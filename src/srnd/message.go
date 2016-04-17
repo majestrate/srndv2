@@ -28,10 +28,22 @@ func (self ArticleHeaders) Set(key, val string) {
 	self[key] = []string{val}
 }
 
+func (self ArticleHeaders) Add(key, val string) {
+	if self.Has(key) {
+		self[key] = append(self[key], val)
+	} else {
+		self.Set(key, val)
+	}
+}
+
 func (self ArticleHeaders) Get(key, fallback string) string {
 	val, ok := self[key]
 	if ok {
-		return val[0]
+		str := ""
+		for _, k := range val {
+			str += k + ", "
+		}
+		return str[:len(str)-2]
 	} else {
 		return fallback
 	}

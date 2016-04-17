@@ -616,7 +616,7 @@ func (self *nntpConnection) handleLine(daemon *NNTPDaemon, code int, line string
 				var reason string
 				var ban bool
 				// read the article header
-				hdr, err = conn.ReadMIMEHeader()
+				hdr, err = readMIMEHeader(conn.R)
 				if err == nil {
 					// check the header
 					reason, ban, err = self.checkMIMEHeader(daemon, hdr)
@@ -714,7 +714,7 @@ func (self *nntpConnection) handleLine(daemon *NNTPDaemon, code int, line string
 					} else {
 						// gib we want
 						conn.PrintfLine("335 Send it plz")
-						hdr, err := conn.ReadMIMEHeader()
+						hdr, err := readMIMEHeader(conn.R)
 						if err == nil {
 							// check the header
 							var reason string
@@ -988,7 +988,7 @@ func (self *nntpConnection) handleLine(daemon *NNTPDaemon, code int, line string
 					// handle POST command
 					conn.PrintfLine("340 Post it nigguh; end with <CR-LF>.<CR-LF>")
 					var hdr textproto.MIMEHeader
-					hdr, err = conn.ReadMIMEHeader()
+					hdr, err = readMIMEHeader(conn.R)
 					var success, gotten bool
 					var reason string
 					if err == nil {
@@ -1264,7 +1264,7 @@ func (self *nntpConnection) requestArticle(daemon *NNTPDaemon, conn *textproto.C
 		// awwww yeh we got it
 		var hdr textproto.MIMEHeader
 		// read header
-		hdr, err = conn.ReadMIMEHeader()
+		hdr, err = readMIMEHeader(conn.R)
 		if err == nil {
 			// prepare to read body
 			dr := conn.DotReader()

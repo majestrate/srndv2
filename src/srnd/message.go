@@ -338,6 +338,9 @@ func (self *nntpArticle) Posted() int64 {
 }
 
 func (self *nntpArticle) Message() string {
+	if self.message == nil {
+		return ""
+	}
 	return strings.Trim(self.message.AsString(), "\x00")
 }
 

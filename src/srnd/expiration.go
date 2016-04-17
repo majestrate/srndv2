@@ -46,19 +46,17 @@ type expire struct {
 func (self expire) ExpirePost(messageID string) {
 	// get article headers
 	headers := self.store.GetHeaders(messageID)
-	if headers == nil {
-		log.Println("failed to load headers for", messageID)
-		return
+	if headers != nil {
+		// is this a root post ?
+		ref := headers.Get("References", "")
+		if ref == "" || ref == messageID {
+			// ya, expire the entire thread
+			self.ExpireThread(messageID)
+		}
 	}
-	// is this a root post ?
-	ref := headers.Get("References", "")
-	if ref == "" {
-		// ya, expire the entire thread
-		self.ExpireThread(messageID)
-	} else {
-		// nah, just expire this post
-		self.delChan <- deleteEvent(self.store.GetFilename(messageID))
-	}
+
+	self.delChan <- deleteEvent(self.store.GetFilename(messageID))
+
 }
 
 func (self expire) ExpireGroup(newsgroup string, keep int) {
@@ -91,6 +89,8 @@ func (self expire) ExpireOrphans() {
 			hdr := self.store.GetHeaders(article.MessageID())
 			if hdr == nil {
 				// article does not exist?
+				// ensure it's deleted
+				self.ExpirePost(article.MessageID())
 			} else {
 				// check if we are a reply
 				rootMsgid := hdr.Get("References", "")

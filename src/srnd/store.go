@@ -456,6 +456,7 @@ func read_message(r io.Reader) (NNTPMessage, error) {
 		if err != nil {
 			log.Println("failed to parse media type", err, "for mime", content_type)
 			msg = nil
+			nntp.Reset()
 			return nil, err
 		}
 		boundary, ok := params["boundary"]
@@ -494,6 +495,7 @@ func read_message(r io.Reader) (NNTPMessage, error) {
 				} else {
 					log.Println("failed to load part! ", err)
 					msg = nil
+					nntp.Reset()
 					return nil, err
 				}
 			}
@@ -503,6 +505,7 @@ func read_message(r io.Reader) (NNTPMessage, error) {
 			pk := nntp.Pubkey()
 			if pk == "" || sig == "" {
 				log.Println("invalid sig or pubkey", sig, pk)
+				nntp.Reset()
 				msg = nil
 				return nil, errors.New("invalid headers")
 			}
@@ -548,6 +551,7 @@ func read_message(r io.Reader) (NNTPMessage, error) {
 	} else {
 		log.Println("failed to read message", err)
 		msg = nil
+		nntp.Reset()
 		return nil, err
 	}
 	msg = nil

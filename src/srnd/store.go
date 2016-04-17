@@ -267,7 +267,7 @@ func (self *articleStore) saveAttachment(att NNTPAttachment) {
 	upload := self.AttachmentFilepath(fpath)
 	if !CheckFile(upload) {
 		// attachment does not exist on disk
-		f, err := os.Open(upload)
+		f, err := os.Create(upload)
 		if f != nil {
 			_, err = att.WriteTo(f)
 			f.Close()

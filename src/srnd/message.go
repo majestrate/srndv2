@@ -182,6 +182,7 @@ func signArticle(nntp NNTPMessage, seed []byte) (signed *nntpArticle, err error)
 	// write body to sign buffer
 	mw := io.MultiWriter(sha, signed.signedPart)
 	err = nntp.WriteTo(mw)
+	mw.Write([]byte{10})
 	if err == nil {
 		// build keypair
 		kp := nacl.LoadSignKey(seed)

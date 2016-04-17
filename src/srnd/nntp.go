@@ -386,7 +386,7 @@ func (self *nntpConnection) checkMIMEHeaderNoAuth(daemon *NNTPDaemon, hdr textpr
 
 	if !newsgroupValidFormat(newsgroup) {
 		// invalid newsgroup format
-		reason = "invalid newsgroup"
+		reason = "invalid newsgroup: " + newsgroup
 		ban = true
 		return
 	} else if banned, _ := daemon.database.NewsgroupBanned(newsgroup); banned {
@@ -1305,7 +1305,6 @@ func (self *nntpConnection) requestArticle(daemon *NNTPDaemon, conn *textproto.C
 		}
 	} else if code == 430 {
 		// they don't know it D:
-		log.Println(msgid, "not known by", self.name)
 	} else {
 		// invalid response
 		log.Println(self.name, "invald response to ARTICLE:", code, line)

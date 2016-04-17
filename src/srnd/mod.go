@@ -144,9 +144,8 @@ func wrapModMessage(mm ModMessage) NNTPMessage {
 	// crlf delimited
 	_ = mm.WriteTo(&buff, []byte{10})
 	// create plaintext attachment, cut off last 2 bytes
-	str := buff.String()
+	nntp.message = createPlaintextAttachment(buff.Bytes())
 	buff.Reset()
-	nntp.message = createPlaintextAttachment(str)
 	return nntp
 }
 

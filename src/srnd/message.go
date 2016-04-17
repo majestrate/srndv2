@@ -157,7 +157,7 @@ func newPlaintextArticle(message, email, subject, name, instance, message_id, ne
 	// posted now
 	nntp.headers.Set("Date", timeNowStr())
 	nntp.headers.Set("Newsgroups", newsgroup)
-	nntp.message = createPlaintextAttachment(message)
+	nntp.message = createPlaintextAttachment([]byte(message))
 	nntp.Pack()
 	return nntp
 }
@@ -238,7 +238,7 @@ func (self *nntpArticle) Pubkey() string {
 func (self *nntpArticle) Signed() NNTPMessage {
 	if self.signedPart != nil {
 		buff := new(bytes.Buffer)
-		buff.Write(self.signedPart.body)
+		buff.Write(self.signedPart.Bytes())
 		msg, err := read_message(buff)
 		buff.Reset()
 		if err == nil {
@@ -384,12 +384,12 @@ func (self *nntpArticle) Attach(att NNTPAttachment) {
 func (self *nntpArticle) WriteBody(wr io.Writer) (err error) {
 	// this is a signed message, don't treat it special
 	if self.signedPart != nil {
-		_, err = self.signedPart.WriteTo(wr)
+		_, err = wr.Write(self.signedPart.Bytes())
 		return
 	}
 	if len(self.attachments) == 0 {
 		// write plaintext and be done
-		_, err = self.message.WriteTo(wr)
+		_, err = wr.Write(self.message.Bytes())
 		return
 	}
 	content_type := self.ContentType()
@@ -418,7 +418,6 @@ func (self *nntpArticle) WriteBody(wr io.Writer) (err error) {
 					log.Println("failed to create part?", err)
 				}
 				str := att.Filedata()
-				att = nil
 				dat := []byte(str)
 				_, err = part.Write(dat)
 				str = ""
@@ -435,7 +434,7 @@ func (self *nntpArticle) WriteBody(wr io.Writer) (err error) {
 		err = w.Close()
 		w = nil
 	} else {
-		_, err = self.message.WriteTo(wr)
+		_, err = wr.Write(self.message.Bytes())
 	}
 	return err
 }

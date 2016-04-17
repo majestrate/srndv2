@@ -527,7 +527,6 @@ func read_message(r io.Reader) (NNTPMessage, error) {
 					break
 				} else {
 					log.Println("failed to read signed body", err)
-					nntp.signedPart.body = nil
 					nntp.Reset()
 					nntp = nil
 					mw = nil
@@ -553,7 +552,7 @@ func read_message(r io.Reader) (NNTPMessage, error) {
 		} else {
 			// plaintext attachment
 			var buff [1024]byte
-			str := ""
+			var str []byte
 			for {
 				var n int
 				n, err = body.Read(buff[:])
@@ -563,7 +562,7 @@ func read_message(r io.Reader) (NNTPMessage, error) {
 					}
 					break
 				}
-				str += string(buff[:n])
+				str = append(str, buff[:n]...)
 			}
 			nntp.message = createPlaintextAttachment(str)
 			msg = nil

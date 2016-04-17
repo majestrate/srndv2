@@ -387,7 +387,7 @@ func (self *nntpArticle) WriteBody(wr io.Writer) (err error) {
 		_, err = wr.Write(self.signedPart.Bytes())
 		return
 	}
-	if len(self.attachments) == 0 {
+	if len(self.attachments) == 0 && self.message != nil {
 		// write plaintext and be done
 		_, err = wr.Write(self.message.Bytes())
 		return
@@ -408,6 +408,9 @@ func (self *nntpArticle) WriteBody(wr io.Writer) (err error) {
 			attachments := []NNTPAttachment{self.message}
 			attachments = append(attachments, self.attachments...)
 			for _, att := range attachments {
+				if att == nil {
+					continue
+				}
 				hdr := att.Header()
 				if hdr == nil {
 					hdr = make(textproto.MIMEHeader)

@@ -547,7 +547,6 @@ func read_message(r io.Reader) (NNTPMessage, error) {
 				log.Println("!!!signature is invalid!!!")
 				msg = nil
 				nntp.Reset()
-				log.Println(nntp.signedPart)
 				nntp = nil
 				return nil, errors.New("invalid signature")
 			}

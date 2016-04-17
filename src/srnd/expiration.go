@@ -23,7 +23,7 @@ type ExpirationCore interface {
 }
 
 func createExpirationCore(database Database, store ArticleStore) ExpirationCore {
-	return expire{database, store, make(chan deleteEvent)}
+	return expire{database, store, make(chan deleteEvent, 1024)}
 }
 
 type deleteEvent string

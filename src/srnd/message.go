@@ -12,7 +12,6 @@ import (
 	"log"
 	"mime"
 	"mime/multipart"
-	"net/textproto"
 	"strings"
 	"time"
 )
@@ -412,10 +411,6 @@ func (self *nntpArticle) WriteBody(wr io.Writer) (err error) {
 					continue
 				}
 				hdr := att.Header()
-				if hdr == nil {
-					hdr = make(textproto.MIMEHeader)
-				}
-				hdr.Set("Content-Transfer-Encoding", "base64")
 				part, err := w.CreatePart(hdr)
 				if err != nil {
 					log.Println("failed to create part?", err)

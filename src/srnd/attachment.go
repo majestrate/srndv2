@@ -167,6 +167,7 @@ func createPlaintextAttachment(msg []byte) NNTPAttachment {
 	header := make(textproto.MIMEHeader)
 	mime := "text/plain; charset=UTF-8"
 	header.Set("Content-Type", mime)
+	header.Set("Content-Transfer-Encoding", "base64")
 	att := &nntpAttachment{
 		mime:   mime,
 		ext:    ".txt",
@@ -220,6 +221,7 @@ func createAttachment(content_type, fname string, body io.Reader) NNTPAttachment
 func readAttachmentFromMimePart(part *multipart.Part) NNTPAttachment {
 	hdr := part.Header
 	att := &nntpAttachment{}
+	att.header = hdr
 	content_type := hdr.Get("Content-Type")
 	var err error
 	att.mime, _, err = mime.ParseMediaType(content_type)

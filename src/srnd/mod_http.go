@@ -569,9 +569,7 @@ func (self httpModUI) handleDeletePost(msg ArticleEntry, r *http.Request) map[st
 	delmsgs := []string{}
 	// get headers
 	hdr := self.articles.GetHeaders(msgid)
-	if hdr == nil {
-		resp["error"] = fmt.Sprintf("message %s is not on the filesystem? wtf!", msgid)
-	} else {
+	if hdr != nil {
 		ref := hdr.Get("References", hdr.Get("Reference", ""))
 		ref = strings.Trim(ref, "\t ")
 		// is it a root post?
@@ -586,32 +584,33 @@ func (self httpModUI) handleDeletePost(msg ArticleEntry, r *http.Request) map[st
 					delmsgs = append(delmsgs, repl)
 				}
 			}
-		}
-		delmsgs = append(delmsgs, msgid)
-		// append mod line to mod message
-		mm = append(mm, overchanDelete(msgid))
-
-		resp["deleted"] = delmsgs
-		// only regen threads when we delete a non root port
-		if ref != "" {
+		} else {
+			// only regen threads when we delete a non root port
 			group := hdr.Get("Newsgroups", "")
 			self.regen(ArticleEntry{
 				ref, group,
 			})
 		}
-		privkey_bytes := self.getSessionPrivkeyBytes(r)
-		if privkey_bytes == nil {
-			// crap this should never happen
-			log.Println("failed to get private keys from session, not federating")
+	}
+	delmsgs = append(delmsgs, msgid)
+	// append mod line to mod message
+	mm = append(mm, overchanDelete(msgid))
+
+	resp["deleted"] = delmsgs
+	// only regen threads when we delete a non root port
+
+	privkey_bytes := self.getSessionPrivkeyBytes(r)
+	if privkey_bytes == nil {
+		// crap this should never happen
+		log.Println("failed to get private keys from session, not federating")
+	} else {
+		// wrap and sign mod message
+		nntp, err := signArticle(wrapModMessage(mm), privkey_bytes)
+		if err == nil {
+			// send it off to federate
+			self.modMessageChan <- nntp
 		} else {
-			// wrap and sign mod message
-			nntp, err := signArticle(wrapModMessage(mm), privkey_bytes)
-			if err == nil {
-				// send it off to federate
-				self.modMessageChan <- nntp
-			} else {
-				resp["error"] = fmt.Sprintf("signing error: %s", err.Error())
-			}
+			resp["error"] = fmt.Sprintf("signing error: %s", err.Error())
 		}
 	}
 	return resp

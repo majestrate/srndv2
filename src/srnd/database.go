@@ -233,6 +233,9 @@ type Database interface {
 
 	// get the message ids of an article that has this header with the given value
 	GetMessageIDByHeader(name, value string) ([]string, error)
+
+	// get the headers for a message given its message-id
+	GetHeadersForMessage(msgid string) (ArticleHeaders, error)
 }
 
 func NewDatabase(db_type, schema, host, port, user, password string) Database {

@@ -1117,6 +1117,25 @@ func (self RedisDB) clearIPRange(start, end string) {
 	}
 }
 
+func (self RedisDB) GetHeadersForMessage(msgid string) (hdr ArticleHeaders, err error) {
+	var members []string
+	members, err = self.client.SMembers(MESSAGEID_HEADER_KR_PREFIX + msgid).Result()
+	if err == nil {
+		hdr = make(ArticleHeaders)
+		for _, member := range members {
+			k := member[6:]
+			idx := strings.Index(k, "::Value::")
+			if idx < 0 {
+				continue
+			}
+			v := k[idx+9:]
+			k = k[:idx]
+			hdr.Add(k, v)
+		}
+	}
+	return
+}
+
 func processHashResult(hash []string) (mapRes map[string]string) {
 	mapRes = make(map[string]string)
 	max := len(hash)

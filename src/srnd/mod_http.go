@@ -502,10 +502,10 @@ func (self httpModUI) handleBanAddress(msg ArticleEntry, r *http.Request) map[st
 	// get the article headers
 	resp := make(map[string]interface{})
 	msgid := msg.MessageID()
-	hdr := self.articles.GetHeaders(msgid)
+	hdr, err := self.daemon.database.GetHeadersForMessage(msgid)
 	if hdr == nil {
 		// we don't got it?!
-		resp["error"] = fmt.Sprintf("message %s not on the filesystem wtf?", msgid)
+		resp["error"] = fmt.Sprintf("could not load headers for %s: %s", msgid, err.Error())
 	} else {
 		// get the associated encrypted ip
 		encip := hdr.Get("X-Encrypted-Ip", hdr.Get("X-Encrypted-IP", ""))

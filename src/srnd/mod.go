@@ -6,7 +6,6 @@ package srnd
 
 import (
 	"bytes"
-	"errors"
 	"fmt"
 	"io"
 	"log"
@@ -183,14 +182,15 @@ func (self modEngine) BanAddress(cidr string) (err error) {
 }
 
 func (self modEngine) DeletePost(msgid string, regen RegenFunc) (err error) {
-	hdr := self.store.GetHeaders(msgid)
+	hdr, err := self.database.GetHeadersForMessage(msgid)
+	var delposts []string
+	var page int64
+	var ref, group string
 	if hdr == nil {
-		return errors.New("no such message on filesystem: " + msgid)
+		log.Println("failed to get headers for article", msgid, err)
 	} else {
-		ref := hdr.Get("References", "")
-		group := hdr.Get("Newsgroups", "")
-		var delposts []string
-		var page int64
+		ref = hdr.Get("References", "")
+		group = hdr.Get("Newsgroups", "")
 		if ref == "" {
 			// is root post
 			// delete replies too
@@ -208,33 +208,33 @@ func (self modEngine) DeletePost(msgid string, regen RegenFunc) (err error) {
 		} else {
 			_, page, err = self.database.GetPageForRootMessage(ref)
 		}
-		delposts = append(delposts, msgid)
-		// get list of files to delete
-		var delfiles []string
-		for _, delmsg := range delposts {
-			article := self.store.GetFilename(delmsg)
-			delfiles = append(delfiles, article)
-			// get attachments for post
-			atts := self.database.GetPostAttachments(delmsg)
-			if atts != nil {
-				for _, att := range atts {
-					img := self.store.AttachmentFilepath(att)
-					thm := self.store.ThumbnailFilepath(att)
-					delfiles = append(delfiles, img, thm)
-				}
-			}
-			// delete article from post database
-			self.database.DeleteArticle(delmsg)
-			// ban article
-			self.database.BanArticle(delmsg, "deleted by moderator")
-		}
-		// delete all files
-		for _, f := range delfiles {
-			log.Printf("delete file: %s", f)
-			os.Remove(f)
-		}
-		regen(group, msgid, ref, int(page))
 	}
+	delposts = append(delposts, msgid)
+	// get list of files to delete
+	var delfiles []string
+	for _, delmsg := range delposts {
+		article := self.store.GetFilename(delmsg)
+		delfiles = append(delfiles, article)
+		// get attachments for post
+		atts := self.database.GetPostAttachments(delmsg)
+		if atts != nil {
+			for _, att := range atts {
+				img := self.store.AttachmentFilepath(att)
+				thm := self.store.ThumbnailFilepath(att)
+				delfiles = append(delfiles, img, thm)
+			}
+		}
+		// delete article from post database
+		self.database.DeleteArticle(delmsg)
+		// ban article
+		self.database.BanArticle(delmsg, "deleted by moderator")
+	}
+	// delete all files
+	for _, f := range delfiles {
+		log.Printf("delete file: %s", f)
+		os.Remove(f)
+	}
+	regen(group, msgid, ref, int(page))
 	return nil
 }
 

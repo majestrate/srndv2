@@ -1309,3 +1309,17 @@ func (self PostgresDatabase) CheckNNTPUserExists(username string) (exists bool, 
 	exists = count > 0
 	return
 }
+
+func (self PostgresDatabase) GetHeadersForMessage(msgid string) (hdr ArticleHeaders, err error) {
+	var rows *sql.Rows
+	rows, err = self.conn.Query("SELECT header_name, header_value FROM NNTPHeaders WHERE header_article_message_id = $1", msgid)
+	if err == nil {
+		hdr = make(ArticleHeaders)
+		for rows.Next() {
+			var k, v string
+			rows.Scan(&k, &v)
+			hdr.Add(k, v)
+		}
+	}
+	return
+}

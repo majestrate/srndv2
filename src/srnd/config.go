@@ -431,7 +431,7 @@ func ReadConfig() *SRNdConfig {
 // fatals on failed validation
 func (self *SRNdConfig) Validate() {
 	// check for daemon section entries
-	daemon_param := []string{"bind", "instance_name", "allow_anon", "allow_anon_attachments"}
+	daemon_param := []string{"bind", "instance_name", "allow_anon", "allow_anon_attachments", "secretkey"}
 	for _, p := range daemon_param {
 		_, ok := self.daemon[p]
 		if !ok {

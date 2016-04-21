@@ -261,11 +261,11 @@ func RunModEngine(mod ModEngine, regen RegenFunc) {
 		}
 		// sanity check
 		if nntp.Newsgroup() == "ctl" {
-			inner_nntp := nntp.Signed()
+			inner_nntp := nntp.SignedPart()
 			if inner_nntp != nil {
 				// okay this message should be good
 				pubkey := nntp.Pubkey()
-				for _, line := range strings.Split(inner_nntp.Message(), "\n") {
+				for _, line := range strings.Split(inner_nntp.AsString(), "\n") {
 					line = strings.Trim(line, "\r\t\n")
 					ev := ParseModEvent(line)
 					action := ev.Action()

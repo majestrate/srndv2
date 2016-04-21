@@ -139,14 +139,19 @@ func (self *httpFrontend) poll() {
 		select {
 		case nntp := <-modChnl:
 			// forward signed messages to daemon
-			f := self.daemon.store.CreateTempFile(nntp.MessageID())
-			if f != nil {
-				err := nntp.WriteTo(f)
-				if err != nil {
-					log.Println("failed to write mod message")
+			err := self.daemon.store.RegisterPost(nntp)
+			if err == nil {
+				f := self.daemon.store.CreateFile(nntp.MessageID())
+				if f != nil {
+					err := nntp.WriteTo(f)
+					if err != nil {
+						log.Println("failed to write mod message", err)
+					}
+					f.Close()
+					self.daemon.loadFromInfeed(nntp.MessageID())
 				}
-				f.Close()
-				self.daemon.loadFromInfeed(nntp.MessageID())
+			} else {
+				log.Println("failed to register mod message", err)
 			}
 		case nntp := <-self.recvpostchan:
 			// get root post and tell frontend to regen that thread
@@ -242,7 +247,8 @@ func (self *httpFrontend) handle_postform(wr http.ResponseWriter, r *http.Reques
 			// read part for attachment
 			if strings.HasPrefix(partname, "attachment_") && self.attachments {
 				if len(pr.Attachments) < self.attachmentLimit {
-					att := readAttachmentFromMimePart(part)
+					// TODO: we could just write to disk the attachment so we're not filling ram up with crap
+					att := readAttachmentFromMimePartAndStore(part, nil)
 					if att != nil {
 						log.Println("attaching file...")
 						pr.Attachments = append(pr.Attachments, postAttachment{
@@ -533,11 +539,32 @@ func (self *httpFrontend) handle_postRequest(pr *postRequest, b bannedFunc, e er
 		}
 	}
 	if self.attachments {
+		var delfiles []string
 		for _, att := range pr.Attachments {
 			// add attachment
 			if len(att.Filedata) > 0 {
-				nntp.Attach(createAttachment(att.Filetype, att.Filename, strings.NewReader(att.Filedata)))
+				a := createAttachment(att.Filetype, att.Filename, strings.NewReader(att.Filedata))
+				nntp.Attach(a)
+				err = a.Save(self.daemon.store.AttachmentDir())
+				if err == nil {
+					delfiles = append(delfiles, a.Filepath())
+					err = self.daemon.store.GenerateThumbnail(a.Filepath())
+					if err == nil {
+						delfiles = append(delfiles, self.daemon.store.ThumbnailFilepath(a.Filepath()))
+					}
+				}
+				if err != nil {
+					break
+				}
 			}
+		}
+		if err != nil {
+			// nuke files that
+			for _, fname := range delfiles {
+				DelFile(fname)
+			}
+			e(err)
+			return
 		}
 		// pack it before sending so that the article is well formed
 	}
@@ -552,15 +579,28 @@ func (self *httpFrontend) handle_postRequest(pr *postRequest, b bannedFunc, e er
 			return
 		}
 	}
-	// success
-	s(nntp)
-	// store in temp
-	f := self.daemon.store.CreateTempFile(nntp.MessageID())
-	if f != nil {
-		nntp.WriteTo(f)
+	// have daemon sign message
+	// DON'T Wrap sign yet
+	// wrapped := self.daemon.WrapSign(nntp)
+	// save it
+	f := self.daemon.store.CreateFile(nntp.MessageID())
+	if f == nil {
+		e(errors.New("failed to store article"))
+		return
+	} else {
+		err = nntp.WriteTo(f)
 		f.Close()
-		// tell daemon
-		self.daemon.loadFromInfeed(nntp.MessageID())
+		if err == nil {
+			err = self.daemon.store.RegisterPost(nntp)
+			if err == nil {
+				self.daemon.loadFromInfeed(nntp.MessageID())
+				s(nntp)
+				return
+			}
+		}
+		// clean up
+		DelFile(self.daemon.store.GetFilename(nntp.MessageID()))
+		e(err)
 	}
 }
 

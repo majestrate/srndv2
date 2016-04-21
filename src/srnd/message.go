@@ -4,7 +4,6 @@
 package srnd
 
 import (
-	"bytes"
 	"crypto/sha512"
 	"fmt"
 	"github.com/majestrate/nacl"
@@ -65,6 +64,8 @@ type NNTPMessage interface {
 	Posted() int64
 	// the path header
 	Path() string
+	// get signed part
+	SignedPart() NNTPAttachment
 	// append something to path
 	// return message with new path
 	AppendPath(part string) NNTPMessage
@@ -88,8 +89,6 @@ type NNTPMessage interface {
 	Message() string
 	// pack the whole message and prepare for write
 	Pack()
-	// get the inner nntp article that is signed and valid, returns nil if not present or invalid
-	Signed() NNTPMessage
 	// get the pubkey for this message if it was signed, otherwise empty string
 	Pubkey() string
 	// get the origin encrypted address, i2p destination or empty string for onion posters
@@ -141,6 +140,10 @@ func (self *nntpArticle) Reset() {
 	}
 }
 
+func (self *nntpArticle) SignedPart() NNTPAttachment {
+	return self.signedPart
+}
+
 // create a simple plaintext nntp message
 func newPlaintextArticle(message, email, subject, name, instance, message_id, newsgroup string) NNTPMessage {
 	nntp := &nntpArticle{
@@ -169,7 +172,9 @@ func signArticle(nntp NNTPMessage, seed []byte) (signed *nntpArticle, err error)
 	// copy headers
 	// copy into signed part
 	for k := range h {
-		if k == "Content-Type" {
+		if k == "X-PubKey-Ed25519" || k == "X-Signature-Ed25519-SHA512" {
+			// don't set signature or pubkey header
+		} else if k == "Content-Type" {
 			signed.headers.Set(k, "message/rfc822; charset=UTF-8")
 		} else {
 			v := h[k][0]
@@ -232,20 +237,6 @@ func (self *nntpArticle) WriteTo(wr io.Writer) (err error) {
 
 func (self *nntpArticle) Pubkey() string {
 	return self.headers.Get("X-PubKey-Ed25519", self.headers.Get("X-Pubkey-Ed25519", ""))
-}
-
-func (self *nntpArticle) Signed() NNTPMessage {
-	if self.signedPart != nil {
-		buff := new(bytes.Buffer)
-		buff.Write(self.signedPart.Bytes())
-		msg, err := read_message(buff)
-		buff.Reset()
-		if err == nil {
-			return msg
-		}
-		log.Println("failed to load signed part", err)
-	}
-	return nil
 }
 
 func (self *nntpArticle) MessageID() (msgid string) {

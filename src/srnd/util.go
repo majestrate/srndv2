@@ -461,6 +461,27 @@ func getGroupForCatalog(file string) (group string) {
 	return
 }
 
+// get a message id from a mime header
+// checks many values
+func getMessageID(hdr textproto.MIMEHeader) (msgid string) {
+	msgid = hdr.Get("Message-Id")
+	if msgid == "" {
+		msgid = hdr.Get("Message-ID")
+	}
+	if msgid == "" {
+		msgid = hdr.Get("message-id")
+	}
+	if msgid == "" {
+		msgid = hdr.Get("MESSAGE-ID")
+	}
+	return
+}
+
+func getMessageIDFromArticleHeaders(hdr ArticleHeaders) (msgid string) {
+	msgid = hdr.Get("Message-Id", hdr.Get("Message-ID", hdr.Get("message-id", hdr.Get("MESSAGE-ID", ""))))
+	return
+}
+
 func readMIMEHeader(r *bufio.Reader) (hdr textproto.MIMEHeader, err error) {
 	hdr = make(textproto.MIMEHeader)
 	for {
@@ -470,7 +491,8 @@ func readMIMEHeader(r *bufio.Reader) (hdr textproto.MIMEHeader, err error) {
 			hdr = nil
 			return
 		}
-		str = strings.Trim(str, "\r\n")
+		str = strings.Trim(str, "\r")
+		str = strings.Trim(str, "\n")
 		if str == "" {
 			break
 		}
@@ -479,7 +501,41 @@ func readMIMEHeader(r *bufio.Reader) (hdr textproto.MIMEHeader, err error) {
 			hdrname := strings.Trim(str[:idx], " ")
 			hdrval := strings.Trim(str[idx+2:], "\r\n")
 			hdr.Add(hdrname, hdrval)
+		} else {
+			log.Println("invalid header", str)
 		}
 	}
 	return
 }
+
+// write out a mime header to a writer
+func writeMIMEHeader(wr io.Writer, hdr map[string][]string) (err error) {
+	// write headers
+	for k, vals := range hdr {
+		for _, val := range vals {
+			wr.Write([]byte(k))
+			wr.Write([]byte(": "))
+			wr.Write([]byte(val))
+			_, err = wr.Write([]byte{10})
+		}
+	}
+	// end of headers
+	_, err = wr.Write([]byte{10})
+	return
+}
+
+// like ioutil.Discard but an io.WriteCloser
+type discardCloser struct {
+}
+
+func (*discardCloser) Write(data []byte) (n int, err error) {
+	n = len(data)
+	return
+}
+
+func (*discardCloser) Close() (err error) {
+	return
+}
+
+// like ioutil.Discard but an io.WriteCloser
+var Discard = new(discardCloser)

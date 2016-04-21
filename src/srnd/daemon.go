@@ -144,6 +144,23 @@ func (self *NNTPDaemon) GetDatabase() Database {
 	return self.database
 }
 
+// sign an article as coming from our daemon
+func (self *NNTPDaemon) WrapSign(nntp NNTPMessage) NNTPMessage {
+	sk, ok := self.conf.daemon["secretkey"]
+	if !ok {
+		log.Println("!!! sending", nntp.MessageID(), "unsigned, set secretkey in nntp section of srnd.ini !!!")
+		return nntp
+	}
+	sk_bytes := parseTripcodeSecret(sk)
+	new_nntp, err := signArticle(nntp, sk_bytes)
+	if err == nil {
+		nntp = new_nntp
+	} else {
+		log.Println("!!! failed to signed", nntp.MessageID(), err)
+	}
+	return nntp
+}
+
 // for srnd tool
 func (self *NNTPDaemon) DelNNTPLogin(username string) {
 	exists, err := self.database.CheckNNTPUserExists(username)
@@ -536,7 +553,7 @@ func (self *NNTPDaemon) Run() {
 		if self.database.ArticleCount() == 0 {
 			nntp := newPlaintextArticle("welcome to nntpchan, this post was inserted on startup automatically", "system@"+self.instance_name, "Welcome to NNTPChan", "system", self.instance_name, genMessageID(self.instance_name), "overchan.test")
 			nntp.Pack()
-			file := self.store.CreateTempFile(nntp.MessageID())
+			file := self.store.CreateFile(nntp.MessageID())
 			if file != nil {
 				err = nntp.WriteTo(file)
 				file.Close()
@@ -734,29 +751,20 @@ func (self *NNTPDaemon) poll(worker int) {
 		select {
 		case msgid := <-self.infeed_load:
 			log.Println("load", msgid)
-			nntp := self.store.ReadTempMessage(msgid)
-			if nntp == nil {
+			hdr := self.store.GetHeaders(msgid)
+			if hdr == nil {
 				log.Println("worker", worker, "failed to load", msgid)
-				// ban it as it is probably invalid
-				self.database.BanArticle(msgid, "already seen")
 			} else {
-				nntp.AppendPath(self.instance_name)
-				msgid := nntp.MessageID()
+				msgid := getMessageIDFromArticleHeaders(hdr)
 				log.Println("worker", worker, "got", msgid)
 				rollover := 100
-				group := nntp.Newsgroup()
-				ref := nntp.Reference()
+				group := hdr.Get("Newsgroups", "")
+				ref := hdr.Get("References", "")
 				tpp, err := self.database.GetThreadsPerPage(group)
 				ppb, err := self.database.GetPagesPerBoard(group)
 				if err == nil {
 					rollover = tpp * ppb
 				}
-				// store article
-				self.store.StorePost(nntp)
-				// we are done with this article
-				// reset memory
-				nntp.Reset()
-				nntp = nil
 				// expire posts
 				self.expire.ExpireGroup(group, rollover)
 				// send to mod panel
@@ -769,6 +777,8 @@ func (self *NNTPDaemon) poll(worker int) {
 						self.frontend.PostsChan() <- frontendPost{msgid, ref, group}
 					}
 				}
+				// generate thumbnails as needed
+				self.store.ThumbnailMessage(msgid)
 				// federate
 				self.sendAllFeeds(ArticleEntry{msgid, group})
 			}

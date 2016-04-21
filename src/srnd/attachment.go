@@ -5,14 +5,18 @@
 package srnd
 
 import (
+	"bytes"
 	"crypto/sha512"
 	"encoding/base32"
 	"encoding/base64"
+	"errors"
 	"io"
 	"log"
 	"mime"
 	"mime/multipart"
 	"net/textproto"
+	"os"
+	"path/filepath"
 	"strings"
 )
 
@@ -44,6 +48,8 @@ type NNTPAttachment interface {
 	Reset()
 	// get bytes
 	Bytes() []byte
+	// save to directory, filename is decided by the attachment
+	Save(dir string) error
 }
 
 type nntpAttachment struct {
@@ -53,13 +59,11 @@ type nntpAttachment struct {
 	filepath string
 	hash     []byte
 	header   textproto.MIMEHeader
-	body     []byte
-	bodylen  int
+	body     *bytes.Buffer
 }
 
 func (self *nntpAttachment) Reset() {
 	self.body = nil
-	self.bodylen = 0
 	self.header = nil
 	self.hash = nil
 	self.filepath = ""
@@ -77,25 +81,36 @@ func (self *nntpAttachment) ToModel(prefix string) AttachmentModel {
 }
 
 func (self *nntpAttachment) Bytes() []byte {
-	return self.body[:self.bodylen]
+	if self.body == nil {
+		return nil
+	}
+	return self.body.Bytes()
+}
+
+func (self *nntpAttachment) Save(dir string) (err error) {
+	if self.body == nil {
+		// no body wat
+		err = errors.New("no attachment body")
+	} else {
+		fpath := filepath.Join(dir, self.filepath)
+		if !CheckFile(fpath) {
+			var f io.WriteCloser
+			// does not exist so will will write it
+			f, err = os.Create(fpath)
+			if err == nil {
+				_, err = io.Copy(f, self.body)
+				f.Close()
+			}
+		}
+	}
+	return
 }
 
 func (self *nntpAttachment) Write(b []byte) (int, error) {
 	if self.body == nil {
-		self.body = make([]byte, 128)
-		self.bodylen = 0
+		self.body = new(bytes.Buffer)
 	}
-	l := len(b)
-	total := l + cap(self.body)
-	if total > cap(self.body) {
-		newSize := total + 1024
-		newSlice := make([]byte, total, newSize)
-		copy(newSlice, self.body)
-		self.body = newSlice
-	}
-	copy(self.body[self.bodylen:], b)
-	self.bodylen += l
-	return l, nil
+	return self.body.Write(b)
 }
 
 func (self *nntpAttachment) AsString() string {
@@ -156,12 +171,6 @@ func (self *nntpAttachment) Header() textproto.MIMEHeader {
 	return self.header
 }
 
-type AttachmentSaver interface {
-	// save an attachment given its original filename
-	// pass in a reader that reads the content of the attachment
-	Save(filename string, r io.Reader) error
-}
-
 // create a plaintext attachment
 func createPlaintextAttachment(msg []byte) NNTPAttachment {
 	header := make(textproto.MIMEHeader)
@@ -184,18 +193,7 @@ func createAttachment(content_type, fname string, body io.Reader) NNTPAttachment
 	if err == nil {
 		a := new(nntpAttachment)
 		dec := base64.NewDecoder(base64.StdEncoding, body)
-		var b [1024]byte
-		for {
-			var n int
-			n, err = dec.Read(b[:])
-			if err != nil {
-				if err == io.EOF {
-					err = nil
-				}
-				break
-			}
-			a.Write(b[:n])
-		}
+		_, err = io.Copy(a, dec)
 		if err == nil {
 			a.header = make(textproto.MIMEHeader)
 			a.mime = media_type + "; charset=UTF-8"
@@ -218,7 +216,7 @@ func createAttachment(content_type, fname string, body io.Reader) NNTPAttachment
 	return nil
 }
 
-func readAttachmentFromMimePart(part *multipart.Part) NNTPAttachment {
+func readAttachmentFromMimePartAndStore(part *multipart.Part, store ArticleStore) NNTPAttachment {
 	hdr := part.Header
 	att := &nntpAttachment{}
 	att.header = hdr
@@ -231,7 +229,7 @@ func readAttachmentFromMimePart(part *multipart.Part) NNTPAttachment {
 	if idx > 0 {
 		att.ext = att.filename[idx:]
 	}
-
+	h := sha512.New()
 	transfer_encoding := hdr.Get("Content-Transfer-Encoding")
 	var r io.Reader
 	if transfer_encoding == "base64" {
@@ -240,28 +238,52 @@ func readAttachmentFromMimePart(part *multipart.Part) NNTPAttachment {
 	} else {
 		r = part
 	}
-	var buff [1024]byte
-	for {
-		var n int
-		n, err = r.Read(buff[:])
+	var fpath string
+	var mw io.Writer
+	if store == nil {
+		mw = io.MultiWriter(att, h)
+	} else {
+		fname := randStr(10) + ".temp"
+		fpath = filepath.Join(store.AttachmentDir(), fname)
+		f, err := os.Create(fpath)
 		if err != nil {
-			if err == io.EOF {
-				err = nil
-			}
-			break
+			log.Println("!!! failed to store attachment: ", err, "!!!")
+			return nil
 		}
-		att.Write(buff[:n])
+		defer f.Close()
+		if strings.ToLower(att.mime) == "text/plain" {
+			mw = io.MultiWriter(f, h, att)
+		} else {
+			mw = io.MultiWriter(f, h)
+		}
 	}
-	// clear reference
-	part = nil
+	_, err = io.Copy(mw, r)
 	if err != nil {
 		log.Println("failed to read attachment from mimepart", err)
+		if fpath != "" {
+			DelFile(fpath)
+		}
 		return nil
 	}
-	h := att.Hash()
-	att.hash = h[:]
+	hsh := h.Sum(nil)
+	att.hash = hsh[:]
 	enc := base32.StdEncoding
 	hashstr := enc.EncodeToString(att.hash[:])
 	att.filepath = hashstr + att.ext
+	// we are good just return it
+	if store == nil {
+		return att
+	}
+	att_fpath := filepath.Join(store.AttachmentDir(), att.filepath)
+	if !CheckFile(att_fpath) {
+		// attachment isn't there
+		// move it into it
+		err = os.Rename(fpath, filepath.Join(store.AttachmentDir(), att.filepath))
+	}
+	if err != nil {
+		// wtf?
+		log.Println("!!! failed to store attachment", err, "!!!")
+		DelFile(fpath)
+	}
 	return att
 }

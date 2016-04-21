@@ -16,7 +16,6 @@ import (
 	"strconv"
 	"strings"
 	"sync"
-	"time"
 )
 
 type nntpStreamEvent string
@@ -95,22 +94,6 @@ func (self *nntpConnection) MarshalJSON() (data []byte, err error) {
 	jmap["authed"] = self.authenticated
 	jmap["group"] = self.group
 	data, err = json.Marshal(jmap)
-	return
-}
-
-// write out a mime header to a writer
-func writeMIMEHeader(wr io.Writer, hdr map[string][]string) (err error) {
-	// write headers
-	for k, vals := range hdr {
-		for _, val := range vals {
-			wr.Write([]byte(k))
-			wr.Write([]byte(": "))
-			wr.Write([]byte(val))
-			_, err = wr.Write([]byte{10})
-		}
-	}
-	// end of headers
-	_, err = io.WriteString(wr, "\n")
 	return
 }
 
@@ -369,10 +352,7 @@ func (self *nntpConnection) checkMIMEHeader(daemon *NNTPDaemon, hdr textproto.MI
 func (self *nntpConnection) checkMIMEHeaderNoAuth(daemon *NNTPDaemon, hdr textproto.MIMEHeader) (reason string, ban bool, err error) {
 	newsgroup := hdr.Get("Newsgroups")
 	reference := hdr.Get("References")
-	msgid := hdr.Get("Message-Id")
-	if msgid == "" {
-		msgid = hdr.Get("Message-ID")
-	}
+	msgid := getMessageID(hdr)
 	encaddr := hdr.Get("X-Encrypted-Ip")
 	torposter := hdr.Get("X-Tor-Poster")
 	i2paddr := hdr.Get("X-I2p-Desthash")
@@ -486,6 +466,51 @@ func (self *nntpConnection) checkMIMEHeaderNoAuth(daemon *NNTPDaemon, hdr textpr
 	return
 }
 
+// store message, unpack attachments, register with daemon, send to daemon for federation
+// in that order
+func (self *nntpConnection) storeMessage(daemon *NNTPDaemon, hdr textproto.MIMEHeader, body io.Reader) (err error) {
+	var f io.WriteCloser
+	msgid := getMessageID(hdr)
+	if msgid == "" {
+		// drop, invalid header
+		log.Println(self.name, "dropping message with invalid mime header, no message-id")
+		_, err = io.Copy(Discard, body)
+		return
+	} else if ValidMessageID(msgid) {
+		f = daemon.store.CreateFile(msgid)
+	} else {
+		// invalid message-id
+		log.Println(self.name, "dropping message with invalid message-id", msgid)
+		_, err = io.Copy(Discard, body)
+		return
+	}
+	if f == nil {
+		// could not open file, probably already storing it from another connection
+		log.Println(self.name, "discarding duplicate message")
+		_, err = io.Copy(Discard, body)
+		return
+	}
+	path := hdr.Get("Path")
+	hdr.Set("Path", daemon.instance_name+"!"+path)
+	// now store attachments and article
+	err = writeMIMEHeader(f, hdr)
+	if err == nil {
+		err = daemon.store.ProcessMessageBody(f, hdr, body)
+		if err == nil {
+			// tell daemon
+			daemon.loadFromInfeed(msgid)
+		}
+	}
+	f.Close()
+	if err != nil {
+		// clean up
+		if ValidMessageID(msgid) {
+			DelFile(daemon.store.GetFilename(msgid))
+		}
+	}
+	return
+}
+
 func (self *nntpConnection) handleLine(daemon *NNTPDaemon, code int, line string, conn *textproto.Conn) (err error) {
 	parts := strings.Split(line, " ")
 	var msgid string
@@ -509,9 +534,6 @@ func (self *nntpConnection) handleLine(daemon *NNTPDaemon, code int, line string
 		// TODO: remember success
 	} else if code == 431 {
 		// CHECK said we would like this article later
-		// XXX: disable this for now
-		// log.Println("defer sending", msgid, "to", self.name)
-		// go self.articleDefer(msgid)
 		self.messageSetProcessed(msgid)
 	} else if code == 439 {
 		// TAKETHIS failed
@@ -616,16 +638,16 @@ func (self *nntpConnection) handleLine(daemon *NNTPDaemon, code int, line string
 				var reason string
 				var ban bool
 				// read the article header
-				hdr, err = readMIMEHeader(conn.R)
+				r := bufio.NewReader(conn.DotReader())
+				hdr, err = readMIMEHeader(r)
 				if err == nil {
 					// check the header
 					reason, ban, err = self.checkMIMEHeader(daemon, hdr)
-					dr := conn.DotReader()
 					if len(reason) > 0 {
 						// discard, we do not want
 						code = 439
 						log.Println(self.name, "rejected", msgid, reason)
-						_, err = io.Copy(ioutil.Discard, dr)
+						_, err = io.Copy(ioutil.Discard, r)
 						if ban {
 							err = daemon.database.BanArticle(msgid, reason)
 						}
@@ -637,35 +659,21 @@ func (self *nntpConnection) handleLine(daemon *NNTPDaemon, code int, line string
 							log.Println(self.name, "got reply to", reference, "but we don't have it")
 							go daemon.askForArticle(ArticleEntry{reference, newsgroup})
 						}
-						var f io.WriteCloser
-						if self.mode == "STREAM" {
-							f = daemon.store.CreateTempFile(msgid)
-						}
-						if f == nil {
-							log.Println(self.name, "discarding", msgid)
-							// discard
-							io.Copy(ioutil.Discard, dr)
+						// store message
+						err = self.storeMessage(daemon, hdr, r)
+						if err == nil {
+							code = 239
+							reason = "gotten"
 						} else {
-							// write header
-							err = writeMIMEHeader(f, hdr)
-							// write body
-							_, err = io.Copy(f, dr)
-							if err == nil || err == io.EOF {
-								f.Close()
-								// we gud, tell daemon
-								daemon.loadFromInfeed(msgid)
-							} else {
-								log.Println(self.name, "error reading message", err)
-							}
+							code = 439
+							reason = err.Error()
 						}
-						code = 239
-						reason = "gotten"
 					} else {
 						// error?
 						// discard, we do not want
 						code = 439
 						log.Println(self.name, "rejected", msgid, reason)
-						_, err = io.Copy(ioutil.Discard, dr)
+						_, err = io.Copy(ioutil.Discard, r)
 						if ban {
 							err = daemon.database.BanArticle(msgid, reason)
 						}
@@ -714,17 +722,17 @@ func (self *nntpConnection) handleLine(daemon *NNTPDaemon, code int, line string
 					} else {
 						// gib we want
 						conn.PrintfLine("335 Send it plz")
-						hdr, err := readMIMEHeader(conn.R)
+						r := bufio.NewReader(conn.DotReader())
+						hdr, err := readMIMEHeader(r)
 						if err == nil {
 							// check the header
 							var reason string
 							var ban bool
 							reason, ban, err = self.checkMIMEHeader(daemon, hdr)
-							dr := conn.DotReader()
 							if len(reason) > 0 {
 								// discard, we do not want
 								log.Println(self.name, "rejected", msgid, reason)
-								_, err = io.Copy(ioutil.Discard, dr)
+								_, err = io.Copy(ioutil.Discard, r)
 								if ban {
 									_ = daemon.database.BanArticle(msgid, reason)
 								}
@@ -737,25 +745,12 @@ func (self *nntpConnection) handleLine(daemon *NNTPDaemon, code int, line string
 									log.Println(self.name, "got reply to", reference, "but we don't have it")
 									go daemon.askForArticle(ArticleEntry{reference, newsgroup})
 								}
-								f := daemon.store.CreateTempFile(msgid)
-								if f == nil {
-									log.Println(self.name, "discarding", msgid, "we are already loading it")
-									// discard
-									io.Copy(ioutil.Discard, dr)
+								err = self.storeMessage(daemon, hdr, r)
+								if err == nil {
+									conn.PrintfLine("235 We got it")
 								} else {
-									// write header
-									err = writeMIMEHeader(f, hdr)
-									// write body
-									_, err = io.Copy(f, dr)
-									if err == nil || err == io.EOF {
-										f.Close()
-										// we gud, tell daemon
-										daemon.loadFromInfeed(msgid)
-									} else {
-										log.Println(self.name, "error reading message", err)
-									}
+									conn.PrintfLine("437 Transfer Failed %s", err.Error())
 								}
-								conn.PrintfLine("235 We got it")
 							}
 						} else {
 							// error here
@@ -986,16 +981,16 @@ func (self *nntpConnection) handleLine(daemon *NNTPDaemon, code int, line string
 					conn.PrintfLine("440 Posting Not Allowed")
 				} else {
 					// handle POST command
-					conn.PrintfLine("340 Post it nigguh; end with <CR-LF>.<CR-LF>")
+					conn.PrintfLine("340 Yeeeh postit yo; end with <CR-LF>.<CR-LF>")
 					var hdr textproto.MIMEHeader
 					hdr, err = readMIMEHeader(conn.R)
 					var success, gotten bool
 					var reason string
 					if err == nil {
-						if hdr.Get("Message-ID") == "" {
+						if getMessageID(hdr) == "" {
 							hdr.Set("Message-ID", genMessageID(daemon.instance_name))
 						}
-						msgid = hdr.Get("Message-ID")
+						msgid = getMessageID(hdr)
 						hdr.Set("Date", timeNowStr())
 						ipaddr, _, _ := net.SplitHostPort(self.addr.String())
 						if len(ipaddr) > 0 {
@@ -1008,7 +1003,7 @@ func (self *nntpConnection) handleLine(daemon *NNTPDaemon, code int, line string
 						reason, _, err = self.checkMIMEHeader(daemon, hdr)
 						success = reason == "" && err == nil
 						if success {
-							dr := conn.DotReader()
+							r := bufio.NewReader(conn.DotReader())
 							reference := hdr.Get("References")
 							newsgroup := hdr.Get("Newsgroups")
 							if reference != "" && ValidMessageID(reference) {
@@ -1022,25 +1017,7 @@ func (self *nntpConnection) handleLine(daemon *NNTPDaemon, code int, line string
 								success = false
 							}
 							if success && daemon.database.HasNewsgroup(newsgroup) {
-								f := daemon.store.CreateTempFile(msgid)
-								if f == nil {
-									log.Println(self.name, "discarding", msgid, "we are already loading it")
-									// discard
-									io.Copy(ioutil.Discard, dr)
-								} else {
-									// write header
-									err = writeMIMEHeader(f, hdr)
-									// write body
-									_, err = io.Copy(f, dr)
-									if err == nil || err == io.EOF {
-										f.Close()
-										// we gud, tell daemon
-										daemon.loadFromInfeed(msgid)
-										gotten = true
-									} else {
-										log.Println(self.name, "error reading message", err)
-									}
-								}
+								err = self.storeMessage(daemon, hdr, r)
 							}
 						}
 					}
@@ -1280,19 +1257,9 @@ func (self *nntpConnection) requestArticle(daemon *NNTPDaemon, conn *textproto.C
 					}
 				} else {
 					// yeh we want it open up a file to store it in
-					f := daemon.store.CreateTempFile(msgid)
-					if f == nil {
-						// already being loaded elsewhere
-					} else {
-						// write header to file
-						writeMIMEHeader(f, hdr)
-						// write article body to file
-						_, _ = io.Copy(f, dr)
-						// close file
-						f.Close()
-						log.Println(msgid, "obtained via reader from", self.name)
-						// tell daemon to load article via infeed
-						daemon.loadFromInfeed(msgid)
+					err = self.storeMessage(daemon, hdr, dr)
+					if err != nil {
+						log.Println(self.name, "failed to obtain article", err)
 					}
 				}
 			} else {
@@ -1503,9 +1470,4 @@ func (self *nntpConnection) runConnection(daemon *NNTPDaemon, inbound, stream, r
 		}
 	}
 	nconn.Close()
-}
-
-func (self *nntpConnection) articleDefer(msgid string) {
-	time.Sleep(time.Second * 10)
-	self.check <- msgid
 }

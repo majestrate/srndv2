@@ -578,6 +578,16 @@ func (self *httpFrontend) handle_postRequest(pr *postRequest, b bannedFunc, e er
 			e(err)
 			return
 		}
+		err = self.daemon.store.RegisterPost(nntp)
+		if err == nil {
+			err = self.daemon.store.RegisterSigned(nntp.MessageID(), nntp.Pubkey())
+		}
+	} else {
+		err = self.daemon.store.RegisterPost(nntp)
+	}
+	if err != nil {
+		e(err)
+		return
 	}
 	// have daemon sign message
 	// DON'T Wrap sign yet
@@ -591,12 +601,9 @@ func (self *httpFrontend) handle_postRequest(pr *postRequest, b bannedFunc, e er
 		err = nntp.WriteTo(f)
 		f.Close()
 		if err == nil {
-			err = self.daemon.store.RegisterPost(nntp)
-			if err == nil {
-				self.daemon.loadFromInfeed(nntp.MessageID())
-				s(nntp)
-				return
-			}
+			self.daemon.loadFromInfeed(nntp.MessageID())
+			s(nntp)
+			return
 		}
 		// clean up
 		DelFile(self.daemon.store.GetFilename(nntp.MessageID()))

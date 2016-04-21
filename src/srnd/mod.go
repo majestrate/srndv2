@@ -261,68 +261,62 @@ func RunModEngine(mod ModEngine, regen RegenFunc) {
 		}
 		// sanity check
 		if nntp.Newsgroup() == "ctl" {
-			inner_nntp := nntp.SignedPart()
-			if inner_nntp != nil {
-				// okay this message should be good
-				pubkey := nntp.Pubkey()
-				for _, line := range strings.Split(inner_nntp.AsString(), "\n") {
-					line = strings.Trim(line, "\r\t\n")
-					ev := ParseModEvent(line)
-					action := ev.Action()
-					if action == "delete" {
-						msgid := ev.Target()
-						// this is a delete action
-						if mod.AllowDelete(pubkey) {
-							err := mod.DeletePost(msgid, regen)
+			pubkey := nntp.Pubkey()
+			for _, line := range strings.Split(nntp.Message(), "\n") {
+				line = strings.Trim(line, "\r\t\n")
+				ev := ParseModEvent(line)
+				action := ev.Action()
+				if action == "delete" {
+					msgid := ev.Target()
+					// this is a delete action
+					if mod.AllowDelete(pubkey) {
+						err := mod.DeletePost(msgid, regen)
+						if err != nil {
+							log.Println(msgid, err)
+						}
+					} else {
+						log.Printf("pubkey=%s will not delete %s not trusted", pubkey, msgid)
+					}
+				} else if action == "overchan-inet-ban" {
+					// ban action
+					target := ev.Target()
+					if target[0] == '[' {
+						// probably a literal ipv6 rangeban
+						if mod.AllowBan(pubkey) {
+							err := mod.BanAddress(target)
 							if err != nil {
-								log.Println(msgid, err)
+								log.Println("failed to do literal ipv6 range ban on", target, err)
 							}
-						} else {
-							log.Printf("pubkey=%s will not delete %s not trusted", pubkey, msgid)
 						}
-					} else if action == "overchan-inet-ban" {
-						// ban action
-						target := ev.Target()
-						if target[0] == '[' {
-							// probably a literal ipv6 rangeban
-							if mod.AllowBan(pubkey) {
-								err := mod.BanAddress(target)
-								if err != nil {
-									log.Println("failed to do literal ipv6 range ban on", target, err)
-								}
+						continue
+					}
+					parts := strings.Split(target, ":")
+					if len(parts) == 3 {
+						// encrypted ip
+						encaddr, key := parts[0], parts[1]
+						cidr := decAddr(encaddr, key)
+						if cidr == "" {
+							log.Println("failed to decrypt inet ban")
+						} else if mod.AllowBan(pubkey) {
+							err := mod.BanAddress(cidr)
+							if err != nil {
+								log.Println("failed to do range ban on", cidr, err)
 							}
-							continue
 						}
-						parts := strings.Split(target, ":")
-						if len(parts) == 3 {
-							// encrypted ip
-							encaddr, key := parts[0], parts[1]
-							cidr := decAddr(encaddr, key)
-							if cidr == "" {
-								log.Println("failed to decrypt inet ban")
-							} else if mod.AllowBan(pubkey) {
-								err := mod.BanAddress(cidr)
-								if err != nil {
-									log.Println("failed to do range ban on", cidr, err)
-								}
+					} else if len(parts) == 1 {
+						// literal cidr
+						cidr := parts[0]
+						if mod.AllowBan(pubkey) {
+							err := mod.BanAddress(cidr)
+							if err != nil {
+								log.Println("failed to do literal range ban on", cidr, err)
 							}
-						} else if len(parts) == 1 {
-							// literal cidr
-							cidr := parts[0]
-							if mod.AllowBan(pubkey) {
-								err := mod.BanAddress(cidr)
-								if err != nil {
-									log.Println("failed to do literal range ban on", cidr, err)
-								}
-							}
-						} else {
-							log.Printf("invalid overchan-inet-ban: target=%s", target)
 						}
+					} else {
+						log.Printf("invalid overchan-inet-ban: target=%s", target)
 					}
 				}
 			}
 		}
-		// done with this one
-		nntp.Reset()
 	}
 }

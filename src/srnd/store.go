@@ -401,6 +401,13 @@ func (self *articleStore) ProcessMessageBody(wr io.Writer, hdr textproto.MIMEHea
 	nntp, err = read_message_body(body, hdr, self, wr, false)
 	if err == nil {
 		err = self.RegisterPost(nntp)
+		if err == nil {
+			pk := hdr.Get("X-PubKey-Ed25519")
+			if len(pk) > 0 {
+				// signed and valid
+				err = self.RegisterSigned(getMessageID(hdr), pk)
+			}
+		}
 	}
 	return
 }
@@ -488,22 +495,7 @@ func read_message_body(body io.Reader, hdr textproto.MIMEHeader, store ArticleSt
 		buff := new(bytes.Buffer)
 		h := sha512.New()
 		mw := io.MultiWriter(h, buff)
-		for {
-			var n int
-			var b [1024]byte
-			n, err = body.Read(b[:])
-			if err == nil {
-				mw.Write(b[:n])
-			} else if err == io.EOF {
-				err = nil
-				break
-			} else {
-				log.Println("failed to read signed body", err)
-				nntp.Reset()
-				return nil, err
-			}
-		}
-		mw = nil
+		_, err = io.Copy(mw, body)
 		hash := h.Sum(nil)
 		h = nil
 		log.Printf("hash=%s", hexify(hash))
@@ -517,7 +509,11 @@ func read_message_body(body io.Reader, hdr textproto.MIMEHeader, store ArticleSt
 					// open inner message
 					// this will recurse until we get an unsigned message
 					log.Println("reading inner message...")
-					return read_message_body(br, hdr, store, Discard, false)
+					nntp, err := read_message_body(br, hdr, store, Discard, false)
+					if err == nil {
+						nntp.Headers().Set("X-PubKey-Ed25519", pk)
+					}
+					return nntp, err
 				}
 			}
 			return nil, err

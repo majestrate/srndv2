@@ -95,6 +95,8 @@ type NNTPMessage interface {
 	Addr() string
 	// reset contents
 	Reset()
+	// get inner signed message
+	Signed() NNTPMessage
 }
 
 type MessageReader interface {
@@ -142,6 +144,17 @@ func (self *nntpArticle) Reset() {
 
 func (self *nntpArticle) SignedPart() NNTPAttachment {
 	return self.signedPart
+}
+
+func (self *nntpArticle) Signed() NNTPMessage {
+	if self.signedPart == nil || self.signedPart.body == nil {
+		return nil
+	}
+	nntp, err := read_message(self.signedPart.body)
+	if err == nil {
+		return nntp
+	}
+	return nil
 }
 
 // create a simple plaintext nntp message

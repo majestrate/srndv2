@@ -98,7 +98,7 @@ func (self *nntpAttachment) Save(dir string) (err error) {
 			// does not exist so will will write it
 			f, err = os.Create(fpath)
 			if err == nil {
-				_, err = io.Copy(f, self.body)
+				_, err = f.Write(self.Bytes())
 				f.Close()
 			}
 		}
@@ -176,7 +176,6 @@ func createPlaintextAttachment(msg []byte) NNTPAttachment {
 	header := make(textproto.MIMEHeader)
 	mime := "text/plain; charset=UTF-8"
 	header.Set("Content-Type", mime)
-	header.Set("Content-Transfer-Encoding", "base64")
 	att := &nntpAttachment{
 		mime:   mime,
 		ext:    ".txt",

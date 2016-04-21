@@ -572,13 +572,17 @@ func (self *httpFrontend) handle_postRequest(pr *postRequest, b bannedFunc, e er
 
 	// sign if needed
 	if len(tripcode_privkey) == nacl.CryptoSignSeedLen() {
+		err = self.daemon.store.RegisterPost(nntp)
+		if err != nil {
+			e(err)
+			return
+		}
 		nntp, err = signArticle(nntp, tripcode_privkey)
 		if err != nil {
 			// error signing
 			e(err)
 			return
 		}
-		err = self.daemon.store.RegisterPost(nntp)
 		if err == nil {
 			err = self.daemon.store.RegisterSigned(nntp.MessageID(), nntp.Pubkey())
 		}

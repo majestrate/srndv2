@@ -176,6 +176,7 @@ func createPlaintextAttachment(msg []byte) NNTPAttachment {
 	header := make(textproto.MIMEHeader)
 	mime := "text/plain; charset=UTF-8"
 	header.Set("Content-Type", mime)
+	header.Set("Content-Transfer-Encoding", "base64")
 	att := &nntpAttachment{
 		mime:   mime,
 		ext:    ".txt",

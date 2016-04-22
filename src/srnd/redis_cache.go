@@ -4,7 +4,6 @@ package srnd
 
 import (
 	"bytes"
-	"fmt"
 	"gopkg.in/redis.v3"
 	"io"
 	"io/ioutil"
@@ -53,18 +52,12 @@ type RedisCache struct {
 	prefix          string
 	regenThreadChan chan ArticleEntry
 	regenGroupChan  chan groupRegenRequest
-	regenBoardMap   map[string]groupRegenRequest
-	regenThreadMap  map[string]ArticleEntry
 	regenCatalogMap map[string]bool
 
-	regenBoardTicker   *time.Ticker
 	ukkoTicker         *time.Ticker
 	longTermTicker     *time.Ticker
-	regenThreadTicker  *time.Ticker
 	regenCatalogTicker *time.Ticker
 
-	regenThreadLock  sync.RWMutex
-	regenBoardLock   sync.RWMutex
 	regenCatalogLock sync.RWMutex
 }
 
@@ -259,39 +252,17 @@ func (self *RedisCache) pollRegen() {
 		select {
 		// listen for regen board requests
 		case req := <-self.regenGroupChan:
-			self.regenBoardLock.Lock()
-			self.regenBoardMap[fmt.Sprintf("%s|%s", req.group, req.page)] = req
-			self.regenBoardLock.Unlock()
-
-			self.regenCatalogLock.Lock()
-			self.regenCatalogMap[req.group] = true
-			self.regenCatalogLock.Unlock()
+			self.regenerateBoardPage(req.group, req.page, ioutil.Discard, false)
+			self.regenerateBoardPage(req.group, req.page, ioutil.Discard, true)
 			// listen for regen thread requests
 		case entry := <-self.regenThreadChan:
-			self.regenThreadLock.Lock()
-			self.regenThreadMap[fmt.Sprintf("%s|%s", entry[0], entry[1])] = entry
-			self.regenThreadLock.Unlock()
+			self.regenerateThread(entry, ioutil.Discard, false)
+			self.regenerateThread(entry, ioutil.Discard, true)
 			// regen ukko
 		case _ = <-self.ukkoTicker.C:
 			self.regenUkkoMarkup(ioutil.Discard)
 			self.regenUkkoJSON(ioutil.Discard)
 			self.regenFrontPageLocal(ioutil.Discard, ioutil.Discard)
-		case _ = <-self.regenThreadTicker.C:
-			self.regenThreadLock.Lock()
-			for _, entry := range self.regenThreadMap {
-				self.regenerateThread(entry, ioutil.Discard, false)
-				self.regenerateThread(entry, ioutil.Discard, true)
-			}
-			self.regenThreadMap = make(map[string]ArticleEntry)
-			self.regenThreadLock.Unlock()
-		case _ = <-self.regenBoardTicker.C:
-			self.regenBoardLock.Lock()
-			for _, v := range self.regenBoardMap {
-				self.regenerateBoardPage(v.group, v.page, ioutil.Discard, false)
-				self.regenerateBoardPage(v.group, v.page, ioutil.Discard, true)
-			}
-			self.regenBoardMap = make(map[string]groupRegenRequest)
-			self.regenBoardLock.Unlock()
 		case _ = <-self.regenCatalogTicker.C:
 			self.regenCatalogLock.Lock()
 			for board, _ := range self.regenCatalogMap {
@@ -463,16 +434,11 @@ func (self *RedisCache) Close() {
 func NewRedisCache(prefix, webroot, name string, threads int, attachments bool, db Database, host, port, password string) CacheInterface {
 	cache := new(RedisCache)
 
-	cache.regenBoardTicker = time.NewTicker(time.Second * 10)
 	cache.longTermTicker = time.NewTicker(time.Hour)
-	cache.ukkoTicker = time.NewTicker(time.Second * 30)
+	cache.ukkoTicker = time.NewTicker(time.Second * 10)
 	cache.regenCatalogTicker = time.NewTicker(time.Second * 20)
 
-	cache.regenThreadTicker = time.NewTicker(time.Second)
-	cache.regenBoardMap = make(map[string]groupRegenRequest)
-	cache.regenThreadMap = make(map[string]ArticleEntry)
 	cache.regenCatalogMap = make(map[string]bool)
-
 	cache.regenThreadChan = make(chan ArticleEntry, 16)
 	cache.regenGroupChan = make(chan groupRegenRequest, 8)
 

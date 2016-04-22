@@ -284,22 +284,16 @@ func (self *templateEngine) genUkko(prefix, frontend string, wr io.Writer, datab
 	// get the last 15 bumped threads globally, for each...
 	for _, article := range database.GetLastBumpedThreads("", 15) {
 		// get the newsgroup and root post id
-		newsgroup, msgid := article[1], article[0]
-		// obtain board model
-		// don't update model so we go fast
-		board := self.obtainBoard(prefix, frontend, newsgroup, false, database)
-		// grab the root post in question
-		if len(board) > 0 {
-			th := board[0].GetThread(msgid)
-			if th != nil {
-				th.Update(database)
-				threads = append(threads, th)
+		newsgroup := article[1]
+		// get first thread
+		page := database.GetGroupForPage(prefix, frontend, newsgroup, 0, 10)
+		for _, t := range page.Threads() {
+			if t.OP().MessageID() == article[0] {
+				t.Update(database)
+				threads = append(threads, t)
+				break
 			}
 		}
-		// save board model
-		self.groups_mtx.Lock()
-		self.groups[newsgroup] = board
-		self.groups_mtx.Unlock()
 	}
 	updateLinkCache()
 	obj := map[string]interface{}{"prefix": prefix, "threads": threads}

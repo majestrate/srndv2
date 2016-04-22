@@ -488,9 +488,10 @@ func (self *templateEngine) genFrontPage(top_count int, prefix, frontend_name st
 	param["postsgraph"] = self.renderTemplate("posts_graph.mustache", map[string]interface{}{"graph": posts_graph})
 	sort.Sort(frontpage_graph)
 	if len(frontpage_graph) > top_count {
-		frontpage_graph = frontpage_graph[:top_count]
+		param["boardgraph"] = frontpage_graph[:top_count]
+	} else {
+		param["boardgraph"] = frontpage_graph
 	}
-	param["boardgraph"] = frontpage_graph
 	param["frontend"] = frontend_name
 	param["totalposts"] = db.ArticleCount()
 

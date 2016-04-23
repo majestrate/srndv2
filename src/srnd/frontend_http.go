@@ -377,6 +377,7 @@ func (self *httpFrontend) handle_postRequest(pr *postRequest, b bannedFunc, e er
 		return
 	}
 	nntp := new(nntpArticle)
+	defer nntp.Reset()
 	var banned bool
 	nntp.headers = make(ArticleHeaders)
 	address := pr.IpAddress
@@ -569,7 +570,6 @@ func (self *httpFrontend) handle_postRequest(pr *postRequest, b bannedFunc, e er
 		// pack it before sending so that the article is well formed
 	}
 	nntp.Pack()
-
 	// sign if needed
 	if len(tripcode_privkey) == nacl.CryptoSignSeedLen() {
 		err = self.daemon.store.RegisterPost(nntp)

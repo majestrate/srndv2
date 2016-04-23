@@ -568,7 +568,7 @@ func (self httpModUI) handleDeletePost(msg ArticleEntry, r *http.Request) map[st
 	msgid := msg.MessageID()
 	delmsgs := []string{}
 	// get headers
-	hdr := self.articles.GetHeaders(msgid)
+	hdr, _ := self.daemon.database.GetHeadersForMessage(msgid)
 	if hdr != nil {
 		ref := hdr.Get("References", hdr.Get("Reference", ""))
 		ref = strings.Trim(ref, "\t ")

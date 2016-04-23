@@ -800,6 +800,11 @@ func (self *httpFrontend) Mainloop() {
 	self.httpmux.PathPrefix("/mod/").Handler(CSRF(m))
 	m = self.httpmux
 	m.Path("/").Handler(cache_handler)
+	// robots.txt handler
+	m.Path("/robots.txt").HandlerFunc(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		io.WriteString(w, "User-Agent: *\nDisallow: /\n")
+	})).Methods("GET")
+
 	m.Path("/thm/{f}").Handler(http.FileServer(http.Dir(self.webroot_dir)))
 	m.Path("/img/{f}").Handler(http.FileServer(http.Dir(self.webroot_dir)))
 	m.Path("/{f}.html").Handler(cache_handler).Methods("GET", "HEAD")

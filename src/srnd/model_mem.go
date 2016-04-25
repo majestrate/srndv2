@@ -208,6 +208,13 @@ type post struct {
 	sage             bool
 	Key              string
 	Files            []AttachmentModel
+	HashLong         string
+	HashShort        string
+	URL              string
+	Tripcode         string
+	BodyMarkup       string
+	PostMarkup       string
+	PostPrefix       string
 }
 
 func (self *post) RepresentativeThumb() string {
@@ -219,6 +226,17 @@ func (self *post) RepresentativeThumb() string {
 }
 
 func (self *post) MarshalJSON() (b []byte, err error) {
+	// compute on fly
+	// TODO: don't do this
+	self.HashLong = self.PostHash()
+	self.HashShort = self.ShortHash()
+	self.URL = self.PostURL()
+	if len(self.Key) > 0 {
+		self.Tripcode = makeTripcode(self.Key)
+	}
+	self.BodyMarkup = self.RenderBody()
+	self.PostMarkup = self.RenderPost()
+	self.PostPrefix = self.Prefix()
 	return json.Marshal(*self)
 }
 

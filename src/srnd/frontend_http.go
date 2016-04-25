@@ -59,6 +59,19 @@ type groupRegenRequest struct {
 	page int
 }
 
+type liveChan struct {
+	postchnl   chan PostModel
+	uuid       string
+	resultchnl chan *liveChan
+}
+
+// inform this livechan that we got a new post
+func (lc *liveChan) Inform(post PostModel) {
+	if lc.postchnl != nil {
+		lc.postchnl <- post
+	}
+}
+
 type httpFrontend struct {
 	modui        ModUI
 	httpmux      *mux.Router
@@ -91,6 +104,14 @@ type httpFrontend struct {
 	enableJson   bool
 
 	attachmentLimit int
+
+	liveui_chnl       chan PostModel
+	liveui_register   chan *liveChan
+	liveui_deregister chan *liveChan
+	end_liveui        chan bool
+	// all liveui users
+	// maps uuid -> liveChan
+	liveui_chans map[string]*liveChan
 }
 
 // do we allow this newsgroup?
@@ -122,6 +143,71 @@ func (self httpFrontend) deleteThreadMarkup(root_post_id string) {
 
 func (self httpFrontend) deleteBoardMarkup(group string) {
 	self.cache.DeleteBoardMarkup(group)
+}
+
+// load post model and inform live ui
+func (self *httpFrontend) informLiveUI(msgid, group string) {
+	model := self.daemon.database.GetPostModel(self.prefix, msgid)
+	if model != nil && self.liveui_chnl != nil {
+		self.liveui_chnl <- model
+	}
+}
+
+// poll live ui events
+func (self *httpFrontend) poll_liveui() {
+	for {
+		select {
+		case live, ok := <-self.liveui_deregister:
+			// deregister existing user event
+			if ok {
+				if self.liveui_chans != nil {
+					delete(self.liveui_chans, live.uuid)
+				}
+				close(live.postchnl)
+				live.postchnl = nil
+			}
+		case live, ok := <-self.liveui_register:
+			// register new user event
+			if ok {
+				if self.liveui_chans != nil {
+					live.uuid = randStr(10)
+					live.postchnl = make(chan PostModel, 8)
+					self.liveui_chans[live.uuid] = live
+				}
+				if live.resultchnl != nil {
+					live.resultchnl <- live
+				}
+			}
+		case model, ok := <-self.liveui_chnl:
+			if ok {
+				// inform global
+				if ok {
+					for _, livechan := range self.liveui_chans {
+						livechan.Inform(model)
+					}
+				}
+			}
+		case <-self.end_liveui:
+			livechnl := self.liveui_chnl
+			self.liveui_chnl = nil
+			close(livechnl)
+			chnl := self.liveui_register
+			self.liveui_register = nil
+			close(chnl)
+			chnl = self.liveui_deregister
+			self.liveui_deregister = nil
+			close(chnl)
+			// remove all
+			for _, livechan := range self.liveui_chans {
+				if livechan.postchnl != nil {
+					close(livechan.postchnl)
+					livechan.postchnl = nil
+				}
+			}
+			self.liveui_chans = nil
+			return
+		}
+	}
 }
 
 func (self *httpFrontend) poll() {
@@ -157,10 +243,13 @@ func (self *httpFrontend) poll() {
 			// get root post and tell frontend to regen that thread
 			msgid := nntp.MessageID()
 			group := nntp.Newsgroup()
+			self.informLiveUI(msgid, group)
 			if len(nntp.Reference()) > 0 {
 				msgid = nntp.Reference()
 			}
-			self.regenThreadChan <- ArticleEntry{msgid, group}
+			entry := ArticleEntry{msgid, group}
+			// regnerate thread
+			self.regenThreadChan <- entry
 			// regen the newsgroup we're in
 			// TODO: regen only what we need to
 			pages := self.daemon.database.GetGroupPageCount(group)
@@ -714,6 +803,34 @@ func (self httpFrontend) handle_authed_api(wr http.ResponseWriter, r *http.Reque
 	}
 }
 
+// handle find post api command
+func (self *httpFrontend) handle_api_find(wr http.ResponseWriter, r *http.Request) {
+	q := r.URL.Query()
+	h := q.Get("hash")
+	msgid := q.Get("id")
+	if len(h) > 0 {
+		e, err := self.daemon.database.GetMessageIDByHash(h)
+		if err == nil {
+			msgid = e.MessageID()
+		}
+	}
+	if len(msgid) > 0 {
+		// found it (probaly)
+		model := self.daemon.database.GetPostModel(self.prefix, msgid)
+		if model == nil {
+			// no model
+			wr.WriteHeader(404)
+		} else {
+			// we found it
+			wr.Header().Add("Content-Type", "text/json; encoding=UTF-8")
+			json.NewEncoder(wr).Encode(model)
+		}
+	} else {
+		// not found
+		wr.WriteHeader(404)
+	}
+}
+
 // handle un authenticated part of api
 func (self *httpFrontend) handle_unauthed_api(wr http.ResponseWriter, r *http.Request, api string) {
 	var err error
@@ -733,31 +850,76 @@ func (self *httpFrontend) handle_unauthed_api(wr http.ResponseWriter, r *http.Re
 		wr.Header().Add("Content-Type", "text/json; encoding=UTF-8")
 		groups := self.daemon.database.GetAllNewsgroups()
 		json.NewEncoder(wr).Encode(groups)
+	} else if api == "find" {
+		self.handle_api_find(wr, r)
 	}
 }
 
 func (self *httpFrontend) handle_api(wr http.ResponseWriter, r *http.Request) {
-	if self.enableJson {
-		vars := mux.Vars(r)
-		meth := vars["meth"]
-		if r.Method == "POST" {
-			u, p, ok := r.BasicAuth()
-			if ok && u == self.jsonUsername && p == self.jsonPassword {
-				// authenticated
-				self.handle_authed_api(wr, r, meth)
-			} else {
-				// invalid auth
-				wr.WriteHeader(401)
-			}
-		} else if r.Method == "GET" {
-			self.handle_unauthed_api(wr, r, meth)
+
+	vars := mux.Vars(r)
+	meth := vars["meth"]
+	if r.Method == "POST" && self.enableJson {
+		u, p, ok := r.BasicAuth()
+		if ok && u == self.jsonUsername && p == self.jsonPassword {
+			// authenticated
+			self.handle_authed_api(wr, r, meth)
 		} else {
-			// wtf?
-			wr.WriteHeader(405)
+			// invalid auth
+			wr.WriteHeader(401)
 		}
+	} else if r.Method == "GET" {
+		self.handle_unauthed_api(wr, r, meth)
 	} else {
-		// not enabled, gone
-		wr.WriteHeader(410)
+		wr.WriteHeader(404)
+	}
+}
+
+// upgrade to web sockets and subscribe to all new posts
+// XXX: firehose?
+func (self *httpFrontend) handle_liveui(w http.ResponseWriter, r *http.Request) {
+	conn, err := self.upgrader.Upgrade(w, r, nil)
+	if err != nil {
+		// problem
+		w.WriteHeader(500)
+		io.WriteString(w, err.Error())
+		return
+	}
+	// obtain a new channel for reading post models
+	livechnl := self.subscribeAll()
+	if livechnl == nil {
+		// shutting down
+		conn.Close()
+		return
+	}
+	// okay we got a channel
+	live := <-livechnl
+	close(livechnl)
+	for err == nil {
+		model, ok := <-live.postchnl
+		if ok && model != nil {
+			err = conn.WriteJSON(model)
+		} else {
+			// channel closed
+			break
+		}
+	}
+	conn.Close()
+	// deregister connection
+	if self.liveui_deregister != nil {
+		self.liveui_deregister <- live
+	}
+}
+
+// get a chan that is subscribed to all new posts
+func (self *httpFrontend) subscribeAll() chan *liveChan {
+	if self.liveui_register == nil {
+		return nil
+	} else {
+		live := new(liveChan)
+		live.resultchnl = make(chan *liveChan)
+		self.liveui_register <- live
+		return live.resultchnl
 	}
 }
 
@@ -816,6 +978,7 @@ func (self *httpFrontend) Mainloop() {
 	m.Path("/captcha/new.json").HandlerFunc(self.new_captcha_json).Methods("GET")
 	m.Path("/new/").HandlerFunc(self.handle_newboard).Methods("GET")
 	m.Path("/api/{meth}").HandlerFunc(self.handle_api).Methods("POST", "GET")
+	m.Path("/live").HandlerFunc(self.handle_liveui).Methods("GET")
 	var err error
 
 	// run daemon's mod engine with our frontend
@@ -826,6 +989,9 @@ func (self *httpFrontend) Mainloop() {
 	// poll channels
 	go self.poll()
 
+	// poll liveui
+	go self.poll_liveui()
+
 	// start webserver here
 	log.Printf("frontend %s binding to %s", self.name, self.bindaddr)
 
@@ -833,6 +999,15 @@ func (self *httpFrontend) Mainloop() {
 	err = http.ListenAndServe(self.bindaddr, self.httpmux)
 	if err != nil {
 		log.Fatalf("failed to bind frontend %s %s", self.name, err)
+	}
+}
+
+func (self *httpFrontend) endLiveUI() {
+	// end live ui
+	if self.end_liveui != nil {
+		self.end_liveui <- true
+		close(self.end_liveui)
+		self.end_liveui = nil
 	}
 }
 
@@ -865,5 +1040,12 @@ func NewHTTPFrontend(daemon *NNTPDaemon, cache CacheInterface, config map[string
 	front.recvpostchan = make(chan frontendPost)
 	front.regenThreadChan = front.cache.GetThreadChan()
 	front.regenGroupChan = front.cache.GetGroupChan()
+
+	// liveui related members
+	front.liveui_chnl = make(chan PostModel, 128)
+	front.liveui_register = make(chan *liveChan)
+	front.liveui_deregister = make(chan *liveChan)
+	front.liveui_chans = make(map[string]*liveChan)
+	front.end_liveui = make(chan bool)
 	return front
 }

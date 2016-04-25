@@ -28,7 +28,7 @@ func backlink(word string) (markup string) {
 				return "<span class='memearrows'>&gt;&gt;" + link + "</span>"
 			}
 			// backlink exists
-			return `<a class='backlink' href="` + url + `">&gt;&gt;` + link + "</a>"
+			return `<a class='backlink' backlinkhash="` + link + `" href="` + url + `">&gt;&gt;` + link + "</a>"
 		} else {
 			return html.EscapeString(word)
 		}

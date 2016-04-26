@@ -260,15 +260,15 @@ func (self *RedisCache) invalidateThreadPage(entry ArticleEntry) {
 }
 
 func (self *RedisCache) invalidateUkko() {
-	self.client.Del(UKKO, JSON_UKKO)
+	self.client.Del(UKKO, JSON_UKKO, UKKO+"::Time", JSON_UKKO+"::Time")
 }
 
 func (self *RedisCache) invalidateFrontPage() {
-	self.client.Del(INDEX)
+	self.client.Del(INDEX, INDEX+"::Time")
 }
 
 func (self *RedisCache) invalidateCatalog(group string) {
-	self.client.Del(CATALOG_PREFIX + group)
+	self.client.Del(CATALOG_PREFIX+group, CATALOG_PREFIX+group+"::Time")
 }
 
 func (self *RedisCache) pollRegen() {

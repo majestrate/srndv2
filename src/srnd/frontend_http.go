@@ -22,6 +22,7 @@ import (
 	"net"
 	"net/http"
 	"strings"
+	"time"
 )
 
 type bannedFunc func()
@@ -243,6 +244,7 @@ func (self *httpFrontend) poll() {
 			// get root post and tell frontend to regen that thread
 			msgid := nntp.MessageID()
 			group := nntp.Newsgroup()
+			updateLinkCache()
 			self.informLiveUI(msgid, group)
 			if len(nntp.Reference()) > 0 {
 				msgid = nntp.Reference()
@@ -895,13 +897,28 @@ func (self *httpFrontend) handle_liveui(w http.ResponseWriter, r *http.Request) 
 	// okay we got a channel
 	live := <-livechnl
 	close(livechnl)
+	go func() {
+		// read loop
+		for {
+			_, _, err := conn.ReadMessage()
+			if err != nil {
+				conn.Close()
+				return
+			}
+		}
+	}()
+	ticker := time.NewTicker(time.Second * 5)
 	for err == nil {
-		model, ok := <-live.postchnl
-		if ok && model != nil {
-			err = conn.WriteJSON(model)
-		} else {
-			// channel closed
-			break
+		select {
+		case model, ok := <-live.postchnl:
+			if ok && model != nil {
+				err = conn.WriteJSON(model)
+			} else {
+				// channel closed
+				break
+			}
+		case <-ticker.C:
+			conn.WriteMessage(websocket.PingMessage, []byte{})
 		}
 	}
 	conn.Close()
@@ -978,7 +995,12 @@ func (self *httpFrontend) Mainloop() {
 	m.Path("/captcha/new.json").HandlerFunc(self.new_captcha_json).Methods("GET")
 	m.Path("/new/").HandlerFunc(self.handle_newboard).Methods("GET")
 	m.Path("/api/{meth}").HandlerFunc(self.handle_api).Methods("POST", "GET")
+	// live ui websocket
 	m.Path("/live").HandlerFunc(self.handle_liveui).Methods("GET")
+	// live ui page
+	m.Path("/livechan/").HandlerFunc(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		template.writeTemplate("live.mustache", map[string]interface{}{"prefix": self.prefix}, w)
+	})).Methods("GET", "HEAD")
 	var err error
 
 	// run daemon's mod engine with our frontend

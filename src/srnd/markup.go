@@ -28,7 +28,12 @@ func backlink(word string) (markup string) {
 				return "<span class='memearrows'>&gt;&gt;" + link + "</span>"
 			}
 			// backlink exists
-			return `<a class='backlink' backlinkhash="` + link + `" href="` + url + `">&gt;&gt;` + link + "</a>"
+			parts := strings.Split(url, "#")
+			longhash := ""
+			if len(parts) > 1 {
+				longhash = parts[1]
+			}
+			return `<a class='backlink' backlinkhash="` + longhash + `" href="` + url + `">&gt;&gt;` + link + "</a>"
 		} else {
 			return html.EscapeString(word)
 		}

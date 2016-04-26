@@ -199,7 +199,7 @@ func (self *RedisCache) DeleteBoardMarkup(group string) {
 	for page := 0; page < pages; page++ {
 		key := GROUP_PREFIX + group + "::Page::" + strconv.Itoa(page)
 		keys = append(keys, key, key+"::Time")
-		key = JSON_GROUP_PREFIX + group + "::PAGE::" + strconv.Itoa(page)
+		key = JSON_GROUP_PREFIX + group + "::Page::" + strconv.Itoa(page)
 		keys = append(keys, key, key+"::Time")
 	}
 	self.client.Del(keys...)
@@ -247,26 +247,47 @@ func (self *RedisCache) pollLongTerm() {
 	}
 }
 
+func (self *RedisCache) invalidateBoardPage(group string, pageno int) {
+	key := group + "::Page::" + strconv.Itoa(pageno)
+	self.client.Del(JSON_GROUP_PREFIX+key, GROUP_PREFIX+key)
+	self.client.Del(JSON_GROUP_PREFIX+key+"::Time", GROUP_PREFIX+key+"::Time")
+}
+
+func (self *RedisCache) invalidateThreadPage(entry ArticleEntry) {
+	key := HashMessageID(entry.MessageID())
+	self.client.Del(JSON_THREAD_PREFIX+key, THREAD_PREFIX+key)
+	self.client.Del(JSON_THREAD_PREFIX+key+"::Time", THREAD_PREFIX+key+"::Time")
+}
+
+func (self *RedisCache) invalidateUkko() {
+	self.client.Del(UKKO, JSON_UKKO)
+}
+
+func (self *RedisCache) invalidateFrontPage() {
+	self.client.Del(INDEX)
+}
+
+func (self *RedisCache) invalidateCatalog(group string) {
+	self.client.Del(CATALOG_PREFIX + group)
+}
+
 func (self *RedisCache) pollRegen() {
 	for {
 		select {
 		// listen for regen board requests
 		case req := <-self.regenGroupChan:
-			self.regenerateBoardPage(req.group, req.page, ioutil.Discard, false)
-			self.regenerateBoardPage(req.group, req.page, ioutil.Discard, true)
+			self.invalidateBoardPage(req.group, req.page)
 			// listen for regen thread requests
 		case entry := <-self.regenThreadChan:
-			self.regenerateThread(entry, ioutil.Discard, false)
-			self.regenerateThread(entry, ioutil.Discard, true)
+			self.invalidateThreadPage(entry)
 			// regen ukko
 		case _ = <-self.ukkoTicker.C:
-			self.regenUkkoMarkup(ioutil.Discard)
-			self.regenUkkoJSON(ioutil.Discard)
-			self.regenFrontPageLocal(ioutil.Discard, ioutil.Discard)
+			self.invalidateUkko()
+			self.invalidateFrontPage()
 		case _ = <-self.regenCatalogTicker.C:
 			self.regenCatalogLock.Lock()
 			for board, _ := range self.regenCatalogMap {
-				self.regenerateCatalog(board, ioutil.Discard)
+				self.invalidateCatalog(board)
 			}
 			self.regenCatalogMap = make(map[string]bool)
 			self.regenCatalogLock.Unlock()

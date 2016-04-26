@@ -290,6 +290,7 @@ func (self *templateEngine) genUkko(prefix, frontend string, wr io.Writer, datab
 		for _, t := range page.Threads() {
 			if t.OP().MessageID() == article[0] {
 				t.Update(database)
+				updateLinkCacheForThread(t)
 				threads = append(threads, t)
 				break
 			}

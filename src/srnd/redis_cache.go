@@ -264,7 +264,7 @@ func (self *RedisCache) invalidateUkko() {
 }
 
 func (self *RedisCache) invalidateFrontPage() {
-	self.client.Del(INDEX, INDEX+"::Time")
+	self.client.Del(INDEX, INDEX+"::Time", BOARDS, BOARDS+"::Time")
 }
 
 func (self *RedisCache) invalidateCatalog(group string) {

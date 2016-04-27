@@ -191,7 +191,7 @@ func (self modEngine) DeletePost(msgid string, regen RegenFunc) (err error) {
 	} else {
 		ref = hdr.Get("References", "")
 		group = hdr.Get("Newsgroups", "")
-		if ref == "" {
+		if ref == "" || ref == msgid {
 			// is root post
 			// delete replies too
 			repls := self.database.GetThreadReplies(msgid, 0, 0)
@@ -224,8 +224,12 @@ func (self modEngine) DeletePost(msgid string, regen RegenFunc) (err error) {
 				delfiles = append(delfiles, img, thm)
 			}
 		}
+		log.Println("delete", delmsg)
 		// delete article from post database
-		self.database.DeleteArticle(delmsg)
+		err = self.database.DeleteArticle(delmsg)
+		if err != nil {
+			log.Println(err)
+		}
 		// ban article
 		self.database.BanArticle(delmsg, "deleted by moderator")
 	}

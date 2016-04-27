@@ -244,6 +244,7 @@ func (self *RedisCache) pollLongTerm() {
 		<-self.longTermTicker.C
 		// regenerate long term stuff
 		self.regenLongTerm(ioutil.Discard)
+		self.invalidateFrontPage()
 	}
 }
 
@@ -257,6 +258,8 @@ func (self *RedisCache) invalidateThreadPage(entry ArticleEntry) {
 	key := HashMessageID(entry.MessageID())
 	self.client.Del(JSON_THREAD_PREFIX+key, THREAD_PREFIX+key)
 	self.client.Del(JSON_THREAD_PREFIX+key+"::Time", THREAD_PREFIX+key+"::Time")
+	// TODO: do we really want to do this?
+	self.invalidateFrontPage()
 }
 
 func (self *RedisCache) invalidateUkko() {
@@ -283,7 +286,6 @@ func (self *RedisCache) pollRegen() {
 			// regen ukko
 		case _ = <-self.ukkoTicker.C:
 			self.invalidateUkko()
-			self.invalidateFrontPage()
 		case _ = <-self.regenCatalogTicker.C:
 			self.regenCatalogLock.Lock()
 			for board, _ := range self.regenCatalogMap {
@@ -406,7 +408,7 @@ func (self *RedisCache) RegenOnModEvent(newsgroup, msgid, root string, page int)
 	if root == msgid {
 		self.DeleteThreadMarkup(root)
 	} else {
-		self.regenThreadChan <- ArticleEntry{root, newsgroup}
+		self.invalidateThreadPage(ArticleEntry{root, newsgroup})
 	}
 	self.regenGroupChan <- groupRegenRequest{newsgroup, int(page)}
 }

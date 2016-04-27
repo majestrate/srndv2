@@ -741,9 +741,19 @@ func (self PostgresDatabase) DeleteThread(msgid string) (err error) {
 }
 
 func (self PostgresDatabase) DeleteArticle(msgid string) (err error) {
-	_, err = self.conn.Exec("DELETE FROM ArticlePosts WHERE message_id = $1", msgid)
-	_, err = self.conn.Exec("DELETE FROM ArticleKeys WHERE message_id = $1", msgid)
-	_, err = self.conn.Exec("DELETE FROM ArticleAttachments WHERE message_id = $1", msgid)
+	_, err = self.conn.Exec("DELETE FROM NNTPHeaders WHERE header_article_message_id = $1", msgid)
+	if err == nil {
+		_, err = self.conn.Exec("DELETE FROM ArticleNumbers WHERE message_id = $1", msgid)
+		if err == nil {
+			_, err = self.conn.Exec("DELETE FROM ArticlePosts WHERE message_id = $1", msgid)
+			if err == nil {
+				_, err = self.conn.Exec("DELETE FROM ArticleKeys WHERE message_id = $1", msgid)
+				if err == nil {
+					_, err = self.conn.Exec("DELETE FROM ArticleAttachments WHERE message_id = $1", msgid)
+				}
+			}
+		}
+	}
 	return
 }
 

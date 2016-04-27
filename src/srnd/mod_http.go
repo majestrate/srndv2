@@ -566,6 +566,7 @@ func (self httpModUI) handleDeletePost(msg ArticleEntry, r *http.Request) map[st
 	var mm ModMessage
 	resp := make(map[string]interface{})
 	msgid := msg.MessageID()
+	mm = append(mm, overchanDelete(msgid))
 	delmsgs := []string{}
 	// get headers
 	hdr, _ := self.daemon.database.GetHeadersForMessage(msgid)
@@ -584,18 +585,10 @@ func (self httpModUI) handleDeletePost(msg ArticleEntry, r *http.Request) map[st
 					delmsgs = append(delmsgs, repl)
 				}
 			}
-		} else {
-			// only regen threads when we delete a non root port
-			group := hdr.Get("Newsgroups", "")
-			self.regen(ArticleEntry{
-				ref, group,
-			})
 		}
 	}
 	delmsgs = append(delmsgs, msgid)
 	// append mod line to mod message
-	mm = append(mm, overchanDelete(msgid))
-
 	resp["deleted"] = delmsgs
 	// only regen threads when we delete a non root port
 

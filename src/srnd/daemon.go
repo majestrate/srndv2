@@ -771,16 +771,16 @@ func (self *NNTPDaemon) poll(worker int) {
 				if group == "ctl" {
 					modchnl <- msgid
 				}
+				// federate
+				self.sendAllFeeds(ArticleEntry{msgid, group})
+				// generate thumbnails as needed
+				self.store.ThumbnailMessage(msgid)
 				// send to frontend
 				if self.frontend != nil {
 					if self.frontend.AllowNewsgroup(group) {
 						self.frontend.PostsChan() <- frontendPost{msgid, ref, group}
 					}
 				}
-				// generate thumbnails as needed
-				self.store.ThumbnailMessage(msgid)
-				// federate
-				self.sendAllFeeds(ArticleEntry{msgid, group})
 			}
 		case nntp := <-self.send_all_feeds:
 			group := nntp.Newsgroup()

@@ -717,7 +717,7 @@ func (self httpFrontend) handle_poster(wr http.ResponseWriter, r *http.Request) 
 	}
 
 	// this is a POST request
-	if r.Method == "POST" && self.AllowNewsgroup(board) && newsgroupValidFormat(board) {
+	if r.Method == "POST" && self.AllowNewsgroup(board) && newsgroupValidFormat(board) && board != "ctl" {
 		self.handle_postform(wr, r, board)
 	} else {
 		wr.WriteHeader(403)

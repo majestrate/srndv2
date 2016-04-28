@@ -524,20 +524,12 @@ func read_message_body(body io.Reader, hdr textproto.MIMEHeader, store ArticleSt
 		}
 	} else {
 		// plaintext attachment
-		var buff [1024]byte
-		var str []byte
-		for {
-			var n int
-			n, err = body.Read(buff[:])
-			if err != nil {
-				if err == io.EOF {
-					err = nil
-				}
-				break
-			}
-			str = append(str, buff[:n]...)
+		b := new(bytes.Buffer)
+		_, err = io.Copy(b, body)
+		if err == nil {
+			nntp.message = createPlaintextAttachment(b.Bytes())
+			return nntp, err
 		}
-		nntp.message = createPlaintextAttachment(str)
-		return nntp, err
 	}
+	return nntp, err
 }

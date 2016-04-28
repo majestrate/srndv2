@@ -758,6 +758,37 @@ func (self *nntpConnection) handleLine(daemon *NNTPDaemon, code int, line string
 						}
 					}
 				}
+			} else if cmd == "LISTGROUP" {
+				// handle LISTGROUP
+				var group string
+				if len(parts) > 1 {
+					// parameters
+					group = parts[1]
+				} else {
+					group = self.group
+				}
+				if len(group) > 0 && newsgroupValidFormat(group) {
+					if daemon.database.HasNewsgroup(group) {
+						// we has newsgroup
+						var hi, lo int64
+						count, err := daemon.database.CountAllArticlesInGroup(group)
+						if err == nil {
+							hi, lo, err = daemon.database.GetLastAndFirstForGroup(group)
+							if err == nil {
+								conn.PrintfLine("211 %d %d %d %s", count, lo, hi, group)
+							}
+						}
+						if err != nil {
+							log.Println("LISTGROUP fail", err)
+							conn.PrintfLine("500 error in LISTGROUP: %s", err.Error())
+						}
+					} else {
+						// don't has newsgroup
+						conn.PrintfLine("411 no such newsgroup")
+					}
+				} else {
+					conn.PrintfLine("412 no newsgroup selected")
+				}
 			} else if cmd == "NEWSGROUPS" {
 				// handle NEWSGROUPS
 				conn.PrintfLine("231 List of newsgroups follow")

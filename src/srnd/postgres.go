@@ -1333,3 +1333,8 @@ func (self PostgresDatabase) GetHeadersForMessage(msgid string) (hdr ArticleHead
 	}
 	return
 }
+
+func (self PostgresDatabase) CountAllArticlesInGroup(group string) (count int64, err error) {
+	err = self.conn.QueryRow("SELECT COUNT(message_id) FROM ArticlePosts WHERE newsgroup = $1", group).Scan(&count)
+	return
+}

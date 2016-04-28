@@ -1136,6 +1136,11 @@ func (self RedisDB) GetHeadersForMessage(msgid string) (hdr ArticleHeaders, err 
 	return
 }
 
+func (self RedisDB) CountAllArticlesInGroup(group string) (count int64, err error) {
+	count, err = self.client.ZCard(GROUP_ARTICLE_POSTTIME_WKR_PREFIX + group).Result()
+	return
+}
+
 func processHashResult(hash []string) (mapRes map[string]string) {
 	mapRes = make(map[string]string)
 	max := len(hash)

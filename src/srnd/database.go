@@ -39,6 +39,7 @@ type Database interface {
 	RegisterNewsgroup(group string)
 	RegisterArticle(article NNTPMessage)
 	GetAllArticlesInGroup(group string, send chan ArticleEntry)
+	CountAllArticlesInGroup(group string) (int64, error)
 	GetAllArticles() []ArticleEntry
 
 	// check if a newsgroup is banned

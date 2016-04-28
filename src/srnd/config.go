@@ -26,6 +26,7 @@ type FeedConfig struct {
 	username         string
 	passwd           string
 	linkauth_keyfile string
+	tls_off          bool
 	Name             string
 	sync_interval    time.Duration
 }
@@ -383,6 +384,7 @@ func ReadConfig() *SRNdConfig {
 			// username / password auth
 			fconf.username = sect.ValueOf("username")
 			fconf.passwd = sect.ValueOf("password")
+			fconf.tls_off = sect.ValueOf("disabletls") == "1"
 
 			// load feed polcies
 			sect_name := sect.Name()[5:]

@@ -63,6 +63,7 @@ func SendStartTLS(conn net.Conn, config *tls.Config) (econn *textproto.Conn, sta
 				state = tconn.ConnectionState()
 				econn = textproto.NewConn(tconn)
 			} else {
+				log.Println("STARTTLS failed", err)
 				tconn.Close()
 			}
 		} else {

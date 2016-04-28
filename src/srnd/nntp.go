@@ -184,6 +184,7 @@ func (self *nntpConnection) outboundHandshake(conn *textproto.Conn, conf *FeedCo
 							break
 						} else if err == nil {
 							if line == "STARTTLS\n" {
+								log.Println(self.name, "supports STARTTLS")
 								tls = true
 							} else if line == "MODE-READER\n" || line == "READER\n" {
 								log.Println(self.name, "supports READER")
@@ -227,7 +228,7 @@ func (self *nntpConnection) outboundHandshake(conn *textproto.Conn, conf *FeedCo
 					if code == 281 {
 						log.Println(self.name, "Auth Successful")
 					} else {
-						log.Println(self.name, "Auth incorrect")
+						log.Println(self.name, "Auth incorrect", line)
 						conn.PrintfLine("QUIT")
 						conn.Close()
 						return false, false, false, io.EOF
@@ -1348,20 +1349,22 @@ func (self *nntpConnection) startReader(daemon *NNTPDaemon, conn *textproto.Conn
 // stream if true means they support streaming mode
 // reader if true means they support reader mode
 func (self *nntpConnection) runConnection(daemon *NNTPDaemon, inbound, stream, reader, use_tls bool, preferMode string, nconn net.Conn, conf *FeedConfig) {
-
 	self.addr = nconn.RemoteAddr()
 	var err error
 	var line string
 	var success bool
 	var conn *textproto.Conn
 
-	if use_tls && daemon.CanTLS() && !inbound {
+	if (conf != nil && !conf.tls_off) && use_tls && daemon.CanTLS() && !inbound {
+		log.Println(self.name, "STARTTLS with", self.hostname)
 		_conn, state, err := SendStartTLS(nconn, daemon.GetTLSConfig(self.hostname))
 		if err == nil {
 			// we upgraded
 			conn = _conn
 			self.authenticated = state.HandshakeComplete
+			log.Println(self.name, "tls auth", self.authenticated)
 		} else {
+			log.Println(self.name, err)
 			// we didn't upgrade, fall back
 			conn = textproto.NewConn(nconn)
 		}
@@ -1422,7 +1425,7 @@ func (self *nntpConnection) runConnection(daemon *NNTPDaemon, inbound, stream, r
 						conn = _conn
 						self.tls_state = state
 						self.authenticated = state.HandshakeComplete
-						log.Println("TLS initiated")
+						log.Println(self.name, "TLS initiated", self.authenticated)
 					} else {
 						log.Println("STARTTLS failed:", err)
 					}

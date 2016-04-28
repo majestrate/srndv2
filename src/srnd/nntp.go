@@ -775,7 +775,14 @@ func (self *nntpConnection) handleLine(daemon *NNTPDaemon, code int, line string
 						if err == nil {
 							hi, lo, err = daemon.database.GetLastAndFirstForGroup(group)
 							if err == nil {
-								conn.PrintfLine("211 %d %d %d %s", count, lo, hi, group)
+								conn.PrintfLine("211 %d %d %d %s list follows", count, lo, hi, group)
+								dw := conn.DotWriter()
+								idx := lo
+								for idx <= hi {
+									fmt.Fprintf(dw, "%d\r\n", idx)
+									idx++
+								}
+								dw.Close()
 							}
 						}
 						if err != nil {

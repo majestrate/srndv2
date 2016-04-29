@@ -370,6 +370,10 @@ func (self *post) PostURL() string {
 }
 
 func (self *post) Prefix() string {
+	if len(self.prefix) == 0 {
+		// fall back if not set
+		return "/"
+	}
 	return self.prefix
 }
 

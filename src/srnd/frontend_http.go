@@ -6,6 +6,7 @@
 package srnd
 
 import (
+	"bufio"
 	"bytes"
 	"encoding/json"
 	"errors"
@@ -21,6 +22,7 @@ import (
 	"mime"
 	"net"
 	"net/http"
+	"net/textproto"
 	"strings"
 	"time"
 )
@@ -225,20 +227,30 @@ func (self *httpFrontend) poll() {
 	for {
 		select {
 		case nntp := <-modChnl:
-			// forward signed messages to daemon
-			err := self.daemon.store.RegisterPost(nntp)
-			if err == nil {
-				f := self.daemon.store.CreateFile(nntp.MessageID())
-				if f != nil {
-					err := nntp.WriteTo(f)
-					if err != nil {
-						log.Println("failed to write mod message", err)
+			f := self.daemon.store.CreateFile(nntp.MessageID())
+			if f != nil {
+				b := new(bytes.Buffer)
+				err := nntp.WriteTo(b)
+				if err == nil {
+					r := bufio.NewReader(b)
+					var hdr textproto.MIMEHeader
+					hdr, err = readMIMEHeader(r)
+					if err == nil {
+						err = writeMIMEHeader(f, hdr)
+						if err == nil {
+							err = self.daemon.store.ProcessMessageBody(f, hdr, r)
+						}
 					}
-					f.Close()
+				}
+				f.Close()
+				if err == nil {
 					self.daemon.loadFromInfeed(nntp.MessageID())
+				} else {
+					log.Println("error storing mod message", err)
+					DelFile(self.daemon.store.GetFilename(nntp.MessageID()))
 				}
 			} else {
-				log.Println("failed to register mod message", err)
+				log.Println("failed to register mod message, file was not opened")
 			}
 		case nntp := <-self.recvpostchan:
 			// get root post and tell frontend to regen that thread

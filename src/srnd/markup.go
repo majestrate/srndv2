@@ -55,6 +55,11 @@ func formatline(line string) (markup string) {
 			markup += "<span class='redtext'>"
 			markup += html.EscapeString(line[2 : len(line)-2])
 			markup += "</span>"
+		} else if strings.HasPrefix(line, "@@") && strings.HasSuffix(line, "@@") {
+			// psytext
+			markup += "<span class='psy'>"
+			markup += html.EscapeString(line[2 : len(line)-2])
+			markup += "</span>"
 		} else {
 			// regular line
 			// for each word

@@ -47,6 +47,7 @@ type PostModel interface {
 	Sage() bool
 	Pubkey() string
 	Reference() string
+	ReferenceHash() string
 
 	RenderBody() string
 	RenderPost() string

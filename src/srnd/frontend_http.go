@@ -305,6 +305,13 @@ func (self *httpFrontend) handle_postform(wr http.ResponseWriter, r *http.Reques
 	// the post we will turn into an nntp article
 	var pr postRequest
 
+	// do we send json reply?
+	sendJson := r.URL.Query().Get("t") == "json"
+
+	if sendJson {
+		wr.Header().Add("Content-Type", "text/json; encoding=UTF-8")
+	}
+
 	// close request body when done
 	defer r.Body.Close()
 
@@ -312,7 +319,11 @@ func (self *httpFrontend) handle_postform(wr http.ResponseWriter, r *http.Reques
 
 	if err != nil {
 		wr.WriteHeader(500)
-		io.WriteString(wr, err.Error())
+		if sendJson {
+			json.NewEncoder(wr).Encode(map[string]interface{}{"error": err.Error()})
+		} else {
+			io.WriteString(wr, err.Error())
+		}
 		return
 	}
 
@@ -397,7 +408,11 @@ func (self *httpFrontend) handle_postform(wr http.ResponseWriter, r *http.Reques
 				errmsg := fmt.Sprintf("httpfrontend post handler error reading multipart: %s", err)
 				log.Println(errmsg)
 				wr.WriteHeader(500)
-				io.WriteString(wr, errmsg)
+				if sendJson {
+					json.NewEncoder(wr).Encode(map[string]interface{}{"error": errmsg})
+				} else {
+					io.WriteString(wr, errmsg)
+				}
 				return
 			}
 			break
@@ -437,26 +452,39 @@ func (self *httpFrontend) handle_postform(wr http.ResponseWriter, r *http.Reques
 	}
 
 	if captcha_retry {
-		// retry the post with a new captcha
-		resp_map = make(map[string]interface{})
-		resp_map["prefix"] = self.prefix
-		resp_map["redirect_url"] = self.prefix + url
-		resp_map["reason"] = "captcha incorrect"
-		io.WriteString(wr, template.renderTemplate("post_fail.mustache", resp_map))
+		if sendJson {
+			json.NewEncoder(wr).Encode(map[string]interface{}{"error": "bad captcha"})
+		} else {
+			// retry the post with a new captcha
+			resp_map = make(map[string]interface{})
+			resp_map["prefix"] = self.prefix
+			resp_map["redirect_url"] = self.prefix + url
+			resp_map["reason"] = "captcha incorrect"
+			io.WriteString(wr, template.renderTemplate("post_fail.mustache", resp_map))
+		}
 		return
 	}
 
 	b := func() {
-		wr.WriteHeader(403)
-		io.WriteString(wr, "banned")
+		if sendJson {
+			wr.WriteHeader(200)
+			json.NewEncoder(wr).Encode(map[string]interface{}{"error": "banned"})
+		} else {
+			wr.WriteHeader(403)
+			io.WriteString(wr, "banned")
+		}
 	}
 
 	e := func(err error) {
 		wr.WriteHeader(200)
-		resp_map["reason"] = err.Error()
-		resp_map["prefix"] = self.prefix
-		resp_map["redirect_url"] = self.prefix + url
-		io.WriteString(wr, template.renderTemplate("post_fail.mustache", resp_map))
+		if sendJson {
+			json.NewEncoder(wr).Encode(map[string]interface{}{"error": err.Error()})
+		} else {
+			resp_map["reason"] = err.Error()
+			resp_map["prefix"] = self.prefix
+			resp_map["redirect_url"] = self.prefix + url
+			io.WriteString(wr, template.renderTemplate("post_fail.mustache", resp_map))
+		}
 	}
 
 	s := func(nntp NNTPMessage) {
@@ -466,7 +494,11 @@ func (self *httpFrontend) handle_postform(wr http.ResponseWriter, r *http.Reques
 		msg_id := nntp.Headers().Get("References", nntp.MessageID())
 		// render response as success
 		url := fmt.Sprintf("%sthread-%s.html", self.prefix, HashMessageID(msg_id))
-		io.WriteString(wr, template.renderTemplate("post_success.mustache", map[string]interface{}{"prefix": self.prefix, "message_id": nntp.MessageID(), "redirect_url": url}))
+		if sendJson {
+			json.NewEncoder(wr).Encode(map[string]interface{}{"message_id": nntp.MessageID(), "url": url, "error": nil})
+		} else {
+			io.WriteString(wr, template.renderTemplate("post_success.mustache", map[string]interface{}{"prefix": self.prefix, "message_id": nntp.MessageID(), "redirect_url": url}))
+		}
 	}
 	self.handle_postRequest(&pr, b, e, s, false)
 }

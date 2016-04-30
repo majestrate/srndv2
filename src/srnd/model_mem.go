@@ -290,6 +290,14 @@ func PostModelFromMessage(parent, prefix string, nntp NNTPMessage) PostModel {
 	return p
 }
 
+func (self *post) ReferenceHash() string {
+	ref := self.Reference()
+	if len(ref) > 0 {
+		return HashMessageID(self.Reference())
+	}
+	return self.PostHash()
+}
+
 func (self *post) Reference() string {
 	return self.Parent
 }

@@ -465,7 +465,9 @@ type thread struct {
 }
 
 func (self *thread) MarshalJSON() (b []byte, err error) {
-	return json.Marshal(self.Posts)
+	posts := []PostModel{self.OP()}
+	posts = append(posts, self.Replies()...)
+	return json.Marshal(posts)
 }
 
 func (self *thread) IsDirty() bool {

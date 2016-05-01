@@ -145,7 +145,6 @@ type GroupModel []BoardModel
 
 // TODO: optimize using 1 query?
 // update every page
-// return updated model
 func (self *GroupModel) UpdateAll(db Database) {
 	m := *self
 	for _, page := range m {

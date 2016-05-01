@@ -234,7 +234,6 @@ func (self *post) MarshalJSON() (b []byte, err error) {
 	if len(self.Key) > 0 {
 		self.Tripcode = makeTripcode(self.Key)
 	}
-	self.BodyMarkup = self.RenderBody()
 	self.PostMarkup = self.RenderPost()
 	self.PostPrefix = self.Prefix()
 	return json.Marshal(*self)
@@ -531,6 +530,7 @@ func (self *thread) Update(db Database) {
 	root := self.Posts[0].MessageID()
 	self.Posts = append([]PostModel{self.Posts[0]}, db.GetThreadReplyPostModels(self.prefix, root, 0, 0)...)
 	self.dirty = false
+	updateLinkCacheForThread(self)
 }
 
 type linkModel struct {

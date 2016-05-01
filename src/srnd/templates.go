@@ -120,6 +120,70 @@ func updateLinkCacheForThread(thread ThreadModel) {
 	template.links_short_mtx.Unlock()
 }
 
+// get cached post model from cache after updating it
+func (self *templateEngine) updatePostModel(prefix, frontend, msgid, rootmsgid, group string, db Database) PostModel {
+	// get board
+	self.groups_mtx.Lock()
+	board := self.groups[group]
+	self.groups_mtx.Unlock()
+
+	var th ThreadModel
+	if msgid == rootmsgid {
+		// new thread
+		page := board[0]
+		page.Update(db)
+		th = page.GetThread(rootmsgid)
+	} else {
+		// reply
+		for _, page := range board {
+			t := page.GetThread(rootmsgid)
+			if t != nil {
+				th = t
+				th.Update(db)
+				break
+			}
+		}
+	}
+	if th == nil {
+		// reload board, this will be a heavy operation
+		board.UpdateAll(db)
+		// find it
+		for _, page := range board {
+			t := page.GetThread(rootmsgid)
+			if t != nil {
+				th = t
+				th.Update(db)
+				break
+			}
+		}
+		for _, page := range board {
+			updateLinkCacheForBoard(page)
+		}
+		self.groups_mtx.Lock()
+		self.groups[group] = board
+		self.groups_mtx.Unlock()
+	}
+	if th == nil {
+		log.Println("template could not find post model for thread", rootmsgid, "in", group)
+		return nil
+	}
+
+	// found
+	m := th.OP()
+	if m.MessageID() == msgid {
+		return m
+	}
+	for _, p := range th.Replies() {
+		if p.MessageID() == msgid {
+			// found as reply
+			return p
+		}
+	}
+	log.Println("template could not find post model for thread", rootmsgid, "in", group)
+	// not found
+	return nil
+}
+
 // get the url for a backlink
 func (self *templateEngine) findLink(hash string) (url string) {
 	if len(hash) == 10 {
@@ -290,7 +354,6 @@ func (self *templateEngine) genUkko(prefix, frontend string, wr io.Writer, datab
 		for _, t := range page.Threads() {
 			if t.OP().MessageID() == article[0] {
 				t.Update(database)
-				updateLinkCacheForThread(t)
 				threads = append(threads, t)
 				break
 			}
@@ -324,8 +387,6 @@ func (self *templateEngine) genThread(allowFiles bool, root ArticleEntry, prefix
 		if t != nil {
 			// update thread
 			t.Update(db)
-			// update link cache
-			updateLinkCacheForThread(t)
 			// render it
 			if json {
 				self.renderJSON(wr, t)

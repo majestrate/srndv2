@@ -149,10 +149,18 @@ func (self httpFrontend) deleteBoardMarkup(group string) {
 }
 
 // load post model and inform live ui
-func (self *httpFrontend) informLiveUI(msgid, group string) {
-	model := self.daemon.database.GetPostModel(self.prefix, msgid)
+func (self *httpFrontend) informLiveUI(msgid, ref, group string) {
+	// root post
+	if ref == "" {
+		ref = msgid
+	}
+	model := template.updatePostModel(self.prefix, self.name, msgid, ref, group, self.daemon.database)
+	// inform liveui
 	if model != nil && self.liveui_chnl != nil {
 		self.liveui_chnl <- model
+		log.Println("liveui", msgid, ref, group)
+	} else {
+		log.Println("liveui failed to get model")
 	}
 }
 
@@ -256,10 +264,10 @@ func (self *httpFrontend) poll() {
 			// get root post and tell frontend to regen that thread
 			msgid := nntp.MessageID()
 			group := nntp.Newsgroup()
-			updateLinkCache()
-			self.informLiveUI(msgid, group)
-			if len(nntp.Reference()) > 0 {
-				msgid = nntp.Reference()
+			ref := nntp.Reference()
+			self.informLiveUI(msgid, ref, group)
+			if len(ref) > 0 {
+				msgid = ref
 			}
 			entry := ArticleEntry{msgid, group}
 			// regnerate thread
@@ -343,6 +351,13 @@ func (self *httpFrontend) handle_postform(wr http.ResponseWriter, r *http.Reques
 		// if it's loopback check headers for reverse proxy headers
 		// TODO: make sure this isn't a tor user being sneaky
 		pr.IpAddress = getRealIP(r.Header.Get("X-Real-IP"))
+		if pr.IpAddress == "" {
+			// try X-Forwarded-For if X-Real-IP not set
+			ip := r.Header.Get("X-Forwarded-For")
+			parts := strings.Split(ip, ",")
+			ip = parts[0]
+			pr.IpAddress = getRealIP(ip)
+		}
 	}
 	pr.Destination = r.Header.Get("X-I2P-DestHash")
 	pr.Frontend = self.name
@@ -761,7 +776,7 @@ func (self httpFrontend) handle_poster(wr http.ResponseWriter, r *http.Request) 
 	}
 
 	// this is a POST request
-	if r.Method == "POST" && self.AllowNewsgroup(board) && newsgroupValidFormat(board) && board != "ctl" {
+	if r.Method == "POST" && self.AllowNewsgroup(board) && newsgroupValidFormat(board) {
 		self.handle_postform(wr, r, board)
 	} else {
 		wr.WriteHeader(403)

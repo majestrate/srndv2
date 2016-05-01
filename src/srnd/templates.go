@@ -315,10 +315,19 @@ func (self *templateEngine) genBoardPage(allowFiles bool, prefix, frontend, news
 	// get the board model
 	board := self.obtainBoard(prefix, frontend, newsgroup, false, db)
 	// update the board page
-	board.Update(page, db)
-	if page >= len(board) {
-		log.Println("board page should not exist", newsgroup, "page", page)
-		return
+	if len(board) > 0 {
+		board.Update(page, db)
+		if page >= len(board) {
+			log.Println("board page should not exist", newsgroup, "page", page)
+			return
+		}
+	} else {
+		// get the entire board
+		board = self.obtainBoard(prefix, frontend, newsgroup, true, db)
+		if page >= len(board) {
+			log.Println("board page should not exist", newsgroup, "page", page, "tried 2 times to generate page")
+			return
+		}
 	}
 	// update link cache
 	updateLinkCacheForBoard(board[page])

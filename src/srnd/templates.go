@@ -130,9 +130,11 @@ func (self *templateEngine) updatePostModel(prefix, frontend, msgid, rootmsgid, 
 	var th ThreadModel
 	if msgid == rootmsgid {
 		// new thread
-		page := board[0]
-		page.Update(db)
-		th = page.GetThread(rootmsgid)
+		if len(board) > 0 {
+			page := board[0]
+			page.Update(db)
+			th = page.GetThread(rootmsgid)
+		}
 	} else {
 		// reply
 		for _, page := range board {
@@ -407,7 +409,7 @@ func (self *templateEngine) genThread(allowFiles bool, root ArticleEntry, prefix
 		if t != nil {
 			// we found it
 			// render thread
-			updateLinkCacheForThread(t)
+			t.Update(db)
 			if json {
 				self.renderJSON(wr, t)
 			} else {

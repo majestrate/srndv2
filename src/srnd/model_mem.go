@@ -215,6 +215,11 @@ type post struct {
 	BodyMarkup       string
 	PostMarkup       string
 	PostPrefix       string
+	index            int
+}
+
+func (self *post) Index() int {
+	return self.index + 1
 }
 
 func (self *post) RepresentativeThumb() string {
@@ -396,6 +401,10 @@ func (self *post) IsTor() bool {
 	return len(self.addr) == 0
 }
 
+func (self *post) SetIndex(idx int) {
+	self.index = idx
+}
+
 func (self *post) RenderPost() string {
 	param := make(map[string]interface{})
 	param["post"] = self
@@ -499,7 +508,13 @@ func (self *thread) OP() PostModel {
 
 func (self *thread) Replies() []PostModel {
 	if len(self.Posts) > 1 {
-		return self.Posts[1:]
+		var replies []PostModel
+		// inject post index
+		for idx, post := range self.Posts[1:] {
+			post.SetIndex(idx + 1)
+			replies = append(replies, post)
+		}
+		return replies
 	}
 	return []PostModel{}
 }

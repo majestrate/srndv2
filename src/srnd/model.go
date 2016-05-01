@@ -59,6 +59,12 @@ type PostModel interface {
 	// truncate body to a certain size
 	// return copy
 	Truncate() PostModel
+
+	// what is our position in this thread?
+	// 0 for OP, nonzero for reply
+	Index() int
+	// set post index
+	SetIndex(idx int)
 }
 
 // interface for models that have a navbar

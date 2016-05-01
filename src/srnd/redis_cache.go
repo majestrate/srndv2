@@ -280,6 +280,11 @@ func (self *RedisCache) pollRegen() {
 		// listen for regen board requests
 		case req := <-self.regenGroupChan:
 			self.invalidateBoardPage(req.group, req.page)
+
+			self.regenCatalogLock.Lock()
+			self.regenCatalogMap[req.group] = true
+			self.regenCatalogLock.Unlock()
+
 			// listen for regen thread requests
 		case entry := <-self.regenThreadChan:
 			self.invalidateThreadPage(entry)

@@ -1299,6 +1299,8 @@ func (self *nntpConnection) requestArticle(daemon *NNTPDaemon, conn *textproto.C
 					err = self.storeMessage(daemon, hdr, dr)
 					if err != nil {
 						log.Println(self.name, "failed to obtain article", err)
+						// probably an invalid signature or format
+						daemon.database.BanArticle(msgid, err.Error())
 					}
 				}
 			} else {

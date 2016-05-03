@@ -100,7 +100,7 @@ type httpFrontend struct {
 
 	store *sessions.CookieStore
 
-	upgrader websocket.Upgrader
+	upgrader *websocket.Upgrader
 
 	jsonUsername string
 	jsonPassword string
@@ -1109,6 +1109,11 @@ func NewHTTPFrontend(daemon *NNTPDaemon, cache CacheInterface, config map[string
 		front.jsonUsername = config["json-api-username"]
 		front.jsonPassword = config["json-api-password"]
 		front.enableJson = true
+	}
+	front.upgrader = &websocket.Upgrader{
+		CheckOrigin: func(r *http.Request) bool {
+			return true
+		},
 	}
 	front.attachmentLimit = 5
 	front.secret = config["api-secret"]

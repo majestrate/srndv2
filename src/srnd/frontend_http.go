@@ -1065,8 +1065,13 @@ func (self *httpFrontend) Mainloop() {
 	// run daemon's mod engine with our frontend
 	go RunModEngine(self.daemon.mod, self.cache.RegenOnModEvent)
 
+	// start cache
 	self.cache.Start()
 
+	// before we go further ensure all db models are loaded into template model cache
+	template.loadAllModels(self.prefix, self.name, self.daemon.database)
+
+	
 	// poll channels
 	go self.poll()
 

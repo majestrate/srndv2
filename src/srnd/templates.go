@@ -458,6 +458,18 @@ func (self *templateEngine) renderNotFound(wr http.ResponseWriter, r *http.Reque
 	self.writeTemplate("404.mustache", opts, wr)
 }
 
+// preload all boards / threads / replies
+func (self *templateEngine) loadAllModels(prefix, frontend string, db Database) {
+	groups := db.GetAllNewsgroups()
+	for _, group := range groups {
+		log.Println("preload models for", group)
+		board := self.obtainBoard(prefix, frontend, group, true, db)
+		board.UpdateAll(db)
+	}
+}
+
+
+
 func newTemplateEngine(dir string) *templateEngine {
 	return &templateEngine{
 		groups:       make(map[string]GroupModel),

@@ -713,7 +713,7 @@ func (self RedisDB) GetPostAttachmentModels(prefix, messageID string) (atts []At
 }
 
 // register a message with the database
-func (self RedisDB) RegisterArticle(message NNTPMessage) {
+func (self RedisDB) RegisterArticle(message NNTPMessage) (err error) {
 	pipe := self.client.Pipeline()
 	defer pipe.Close()
 
@@ -766,6 +766,7 @@ func (self RedisDB) RegisterArticle(message NNTPMessage) {
 
 	// register article header
 	for k, val := range message.Headers() {
+		k = strings.ToLower(k)
 		for _, v := range val {
 			header := "Name::" + k + "::Value::" + v
 			pipe.SAdd(HEADER_KR_PREFIX+header, msgid)
@@ -790,10 +791,11 @@ func (self RedisDB) RegisterArticle(message NNTPMessage) {
 		}
 	}
 
-	_, err := pipe.Exec()
+	_, err = pipe.Exec()
 	if err != nil {
 		log.Println("failed to register nntp article", err)
 	}
+	return
 }
 
 //

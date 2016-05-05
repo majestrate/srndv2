@@ -239,7 +239,7 @@ func (self *articleStore) ReadMessage(r io.Reader) (NNTPMessage, error) {
 }
 
 func (self *articleStore) RegisterPost(nntp NNTPMessage) (err error) {
-	self.database.RegisterArticle(nntp)
+	err = self.database.RegisterArticle(nntp)
 	return
 }
 

@@ -37,7 +37,7 @@ type Database interface {
 	HasArticle(message_id string) bool
 	HasArticleLocal(message_id string) bool
 	RegisterNewsgroup(group string)
-	RegisterArticle(article NNTPMessage)
+	RegisterArticle(article NNTPMessage) error
 	GetAllArticlesInGroup(group string, send chan ArticleEntry)
 	CountAllArticlesInGroup(group string) (int64, error)
 	GetAllArticles() []ArticleEntry
@@ -110,6 +110,7 @@ type Database interface {
 
 	// get board page number N
 	// prefix and frontend are injected
+	// does not load replies for thread, only gets root posts
 	GetGroupForPage(prefix, frontend, newsgroup string, pageno, perpage int) BoardModel
 
 	// get the root posts of the last N bumped threads in a given newsgroup or globally for ukko

@@ -468,8 +468,6 @@ func (self *templateEngine) loadAllModels(prefix, frontend string, db Database) 
 	}
 }
 
-
-
 func newTemplateEngine(dir string) *templateEngine {
 	return &templateEngine{
 		groups:       make(map[string]GroupModel),

@@ -699,7 +699,10 @@ func (self *httpFrontend) handle_postRequest(pr *postRequest, b bannedFunc, e er
 				err = a.Save(self.daemon.store.AttachmentDir())
 				if err == nil {
 					delfiles = append(delfiles, a.Filepath())
-					err = self.daemon.store.GenerateThumbnail(a.Filepath())
+					// check if we need to thumbnail it
+					if !CheckFile(self.daemon.store.ThumbnailFilepath(a.Filepath())) {
+						err = self.daemon.store.GenerateThumbnail(a.Filepath())
+					}
 					if err == nil {
 						delfiles = append(delfiles, self.daemon.store.ThumbnailFilepath(a.Filepath()))
 					}
@@ -710,15 +713,15 @@ func (self *httpFrontend) handle_postRequest(pr *postRequest, b bannedFunc, e er
 			}
 		}
 		if err != nil {
-			// nuke files that
+			// nuke files
 			for _, fname := range delfiles {
 				DelFile(fname)
 			}
 			e(err)
 			return
 		}
-		// pack it before sending so that the article is well formed
 	}
+	// pack it before sending so that the article is well formed
 	nntp.Pack()
 	// sign if needed
 	if len(tripcode_privkey) == nacl.CryptoSignSeedLen() {
@@ -898,7 +901,7 @@ func (self *httpFrontend) handle_unauthed_api(wr http.ResponseWriter, r *http.Re
 	if api == "header" {
 		var msgids []string
 		q := r.URL.Query()
-		name := q.Get("name")
+		name := strings.ToLower(q.Get("name"))
 		val := q.Get("value")
 		msgids, err = self.daemon.database.GetMessageIDByHeader(name, val)
 		if err == nil {
@@ -1065,7 +1068,11 @@ func (self *httpFrontend) Mainloop() {
 	// run daemon's mod engine with our frontend
 	go RunModEngine(self.daemon.mod, self.cache.RegenOnModEvent)
 
+	// start cache
 	self.cache.Start()
+
+	// before we go further ensure all db models are loaded into template model cache
+	template.loadAllModels(self.prefix, self.name, self.daemon.database)
 
 	// poll channels
 	go self.poll()

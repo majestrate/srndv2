@@ -22,6 +22,7 @@ import (
 	"net"
 	"os"
 	"strconv"
+	"strings"
 	"time"
 )
 
@@ -984,7 +985,7 @@ func (self PostgresDatabase) GetPostAttachmentModels(prefix, messageID string) (
 }
 
 // register a message with the database
-func (self PostgresDatabase) RegisterArticle(message NNTPMessage) {
+func (self PostgresDatabase) RegisterArticle(message NNTPMessage) (err error) {
 
 	msgid := message.MessageID()
 	group := message.Newsgroup()
@@ -997,7 +998,7 @@ func (self PostgresDatabase) RegisterArticle(message NNTPMessage) {
 	}
 	now := timeNow()
 	// insert article metadata
-	_, err := self.conn.Exec("INSERT INTO Articles (message_id, message_id_hash, message_newsgroup, time_obtained, message_ref_id) VALUES($1, $2, $3, $4, $5)", msgid, HashMessageID(msgid), group, now, message.Reference())
+	_, err = self.conn.Exec("INSERT INTO Articles (message_id, message_id_hash, message_newsgroup, time_obtained, message_ref_id) VALUES($1, $2, $3, $4, $5)", msgid, HashMessageID(msgid), group, now, message.Reference())
 	if err != nil {
 		log.Println("failed to insert article metadata", err)
 		return
@@ -1044,6 +1045,7 @@ func (self PostgresDatabase) RegisterArticle(message NNTPMessage) {
 
 	// register article header
 	for k, val := range message.Headers() {
+		k = strings.ToLower(k)
 		for _, v := range val {
 			_, err = self.conn.Exec("INSERT INTO NNTPHeaders(header_name, header_value, header_article_message_id) VALUES($1, $2, $3)", k, v, msgid)
 			if err != nil {
@@ -1070,6 +1072,7 @@ func (self PostgresDatabase) RegisterArticle(message NNTPMessage) {
 			continue
 		}
 	}
+	return
 }
 
 //
@@ -1077,9 +1080,9 @@ func (self PostgresDatabase) RegisterArticle(message NNTPMessage) {
 //
 func (self PostgresDatabase) GetMessageIDByHeader(name, val string) (msgids []string, err error) {
 	var rows *sql.Rows
+	name = strings.ToLower(name)
 	rows, err = self.conn.Query("SELECT header_article_message_id FROM NNTPHeaders WHERE header_name = $1 AND header_value = $2", name, val)
 	if err == nil {
-		msgids = []string{}
 		for rows.Next() {
 			var msgid string
 			rows.Scan(&msgid)

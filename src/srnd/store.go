@@ -239,7 +239,7 @@ func (self *articleStore) ReadMessage(r io.Reader) (NNTPMessage, error) {
 }
 
 func (self *articleStore) RegisterPost(nntp NNTPMessage) (err error) {
-	self.database.RegisterArticle(nntp)
+	err = self.database.RegisterArticle(nntp)
 	return
 }
 
@@ -281,9 +281,9 @@ func (self *articleStore) AttachmentFilepath(fname string) string {
 // get the filepath for a thumbanil
 func (self *articleStore) ThumbnailFilepath(fname string) string {
 	// all thumbnails are jpegs now
-	if strings.HasSuffix(fname, ".gif") {
-		return filepath.Join(self.thumbs, fname)
-	}
+	//if strings.HasSuffix(fname, ".gif") {
+	//	return filepath.Join(self.thumbs, fname)
+	//}
 	return filepath.Join(self.thumbs, fname+".jpg")
 }
 

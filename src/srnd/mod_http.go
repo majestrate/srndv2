@@ -16,6 +16,7 @@ import (
 	"github.com/majestrate/nacl"
 	"io"
 	"log"
+	"net"
 	"net/http"
 	"strings"
 )
@@ -317,12 +318,17 @@ func (self httpModUI) getAdminFunc(funcname string) AdminFunc {
 			cidr := extractParam(param, "cidr")
 			// by encrypted ip
 			encip := extractParam(param, "encip")
+
 			var err error
 			var post_msgids []string
 			if len(cidr) > 0 {
-
+				var cnet *net.IPNet
+				_, cnet, err = net.ParseCIDR(cidr)
+				if err == nil {
+					post_msgids, err = self.daemon.database.GetMessageIDByCIDR(cnet)
+				}
 			} else if len(encip) > 0 {
-
+				post_msgids, err = self.daemon.database.GetMessageIDByEncryptedIP(encip)
 			}
 			return post_msgids, err
 		}

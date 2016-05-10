@@ -539,3 +539,15 @@ func (*discardCloser) Close() (err error) {
 
 // like ioutil.Discard but an io.WriteCloser
 var Discard = new(discardCloser)
+
+func extractParamFallback(param map[string]interface{}, k, fallback string) string {
+	v, ok := param[k]
+	if ok {
+		return v.(string)
+	}
+	return fallback
+}
+
+func extractParam(param map[string]interface{}, k string) string {
+	return extractParamFallback(param, k, "")
+}

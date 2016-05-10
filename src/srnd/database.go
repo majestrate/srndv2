@@ -5,6 +5,7 @@ package srnd
 
 import (
 	"log"
+	"net"
 	"time"
 )
 
@@ -237,6 +238,12 @@ type Database interface {
 
 	// get the headers for a message given its message-id
 	GetHeadersForMessage(msgid string) (ArticleHeaders, error)
+
+	// get all message-ids posted by posters in this cidr
+	GetMessageIDByCIDR(cidr *net.IPNet) ([]string, error)
+
+	// get all message-ids posted by poster with encrypted ip
+	GetMessageIDByEncryptedIP(encaddr string) ([]string, error)
 }
 
 func NewDatabase(db_type, schema, host, port, user, password string) Database {

@@ -19,6 +19,7 @@ import (
 	_ "github.com/lib/pq"
 	"log"
 	"math"
+	"net"
 	"os"
 	"strconv"
 	"time"
@@ -81,9 +82,12 @@ func (self PostgresDatabase) CreateTables() {
 			// upgrade to version 3
 			self.upgrade2to3()
 		} else if version == 3 {
-			// we are up to date
+			// update to version 4
 			self.upgrade3to4()
 		} else if version == 4 {
+			// update to version 5
+			self.upgrade4to5()
+		} else if version == 5 {
 			log.Println("we are up to date at version", version)
 			return
 		}
@@ -148,6 +152,22 @@ func (self PostgresDatabase) upgrade2to3() {
 		checkError(err)
 	}
 	self.setDBVersion(3)
+}
+
+func (self PostgresDatabase) upgrade4to5() {
+	log.Println("migrating... 4 -> 5")
+	cmds := []string{
+		"ALTER TABLE EncryptedAddrs DROP COLUMN IF EXISTS addr_cidr",
+		"ALTER TABLE EncryptedAddrs ADD COLUMN addr_cidr cidr",
+		"UPDATE EncryptedAddrs AS a SET a.addr_cidr = e.cidr FROM ( SELECT cidr(addr), addr FROM EncryptedAddrs) AS e WHERE e.addr = a.addr ",
+	}
+	for _, cmd := range cmds {
+		_, err := self.conn.Exec(cmd)
+		if err != nil {
+			log.Fatalf("failed to execute query `%s`, %s", cmd, err.Error())
+		}
+	}
+	self.setDBVersion(5)
 }
 
 func (self PostgresDatabase) upgrade3to4() {
@@ -544,7 +564,7 @@ func (self PostgresDatabase) GetEncAddress(addr string) (encaddr string, err err
 			if len(encaddr) == 0 {
 				err = errors.New("failed to generate new encryption key")
 			} else {
-				_, err = self.conn.Exec("INSERT INTO EncryptedAddrs(enckey, encaddr, addr) VALUES($1, $2, $3)", key, encaddr, addr)
+				_, err = self.conn.Exec("INSERT INTO EncryptedAddrs(enckey, encaddr, addr, addr_cidr) VALUES($1, $2, $3, $3)", key, encaddr, addr+"/32")
 			}
 		} else {
 			err = self.conn.QueryRow("SELECT encAddr FROM EncryptedAddrs WHERE addr = $1 LIMIT 1", addr).Scan(&encaddr)
@@ -1336,5 +1356,31 @@ func (self PostgresDatabase) GetHeadersForMessage(msgid string) (hdr ArticleHead
 
 func (self PostgresDatabase) CountAllArticlesInGroup(group string) (count int64, err error) {
 	err = self.conn.QueryRow("SELECT COUNT(message_id) FROM ArticlePosts WHERE newsgroup = $1", group).Scan(&count)
+	return
+}
+
+func (self PostgresDatabase) GetMessageIDByCIDR(cidr *net.IPNet) (msgids []string, err error) {
+	var rows *sql.Rows
+	rows, err = self.conn.Query("SELECT message_id FROM ArticlePosts WHERE addr IN ( SELECT encaddr FROM EncryptedAddrs WHERE addr_cidr <<= cidr($1) )", cidr.String())
+	for err == nil && rows.Next() {
+		var msgid string
+		err = rows.Scan(&msgid)
+		if err == nil {
+			msgids = append(msgids, msgid)
+		}
+	}
+	return
+}
+
+func (self PostgresDatabase) GetMessageIDByEncryptedIP(encaddr string) (msgids []string, err error) {
+	var rows *sql.Rows
+	rows, err = self.conn.Query("SELECT message_id FROM ArticlePosts WHERE addr = $1", encaddr)
+	for err == nil && rows.Next() {
+		var msgid string
+		err = rows.Scan(&msgid)
+		if err == nil {
+			msgids = append(msgids, msgid)
+		}
+	}
 	return
 }

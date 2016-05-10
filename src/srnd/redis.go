@@ -767,6 +767,7 @@ func (self RedisDB) RegisterArticle(message NNTPMessage) {
 	// register article header
 	for k, val := range message.Headers() {
 		for _, v := range val {
+			k = strings.ToLower(k)
 			header := "Name::" + k + "::Value::" + v
 			pipe.SAdd(HEADER_KR_PREFIX+header, msgid)
 			pipe.SAdd(MESSAGEID_HEADER_KR_PREFIX+msgid, header)
@@ -845,6 +846,18 @@ func (self RedisDB) GetPagesPerBoard(group string) (int, error) {
 func (self RedisDB) GetThreadsPerPage(group string) (int, error) {
 	//XXX: hardcoded
 	return 10, nil
+}
+
+func (self RedisDB) GetMessageIDByCIDR(cidr *net.IPNet) (msgids []string, err error) {
+	// TODO: implement
+	err = errors.New("not implemented in redis driver")
+	return
+}
+
+func (self RedisDB) GetMessageIDByEncryptedIP(encip string) (msgids []string, err error) {
+	// TOOD: implement
+	err = errors.New("not implemented in redis driver")
+	return
 }
 
 func (self RedisDB) GetMessageIDByHash(hash string) (article ArticleEntry, err error) {

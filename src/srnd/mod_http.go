@@ -43,14 +43,6 @@ func extractGroup(param map[string]interface{}) string {
 	return extractParam(param, "newsgroup")
 }
 
-func extractParam(param map[string]interface{}, k string) string {
-	v, ok := param[k]
-	if ok {
-		return v.(string)
-	}
-	return ""
-}
-
 func (self httpModUI) getAdminFunc(funcname string) AdminFunc {
 	if funcname == "template.reload" {
 		return func(param map[string]interface{}) (interface{}, error) {
@@ -317,6 +309,22 @@ func (self httpModUI) getAdminFunc(funcname string) AdminFunc {
 		return func(_ map[string]interface{}) (interface{}, error) {
 			go self.daemon.expire.ExpireOrphans()
 			return "expiration started", nil
+		}
+	} else if funcname == "frontend.posts" {
+		// get all posts given parameters
+		return func(param map[string]interface{}) (interface{}, error) {
+			// by cidr
+			cidr := extractParam(param, "cidr")
+			// by encrypted ip
+			encip := extractParam(param, "encip")
+			var err error
+			var post_msgids []string
+			if len(cidr) > 0 {
+
+			} else if len(encip) > 0 {
+
+			}
+			return post_msgids, err
 		}
 	}
 	return nil

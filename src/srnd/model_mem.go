@@ -259,9 +259,6 @@ func (self *attachment) Prefix() string {
 }
 
 func (self *attachment) Thumbnail() string {
-	if strings.HasSuffix(self.Path, ".gif") {
-		return self.prefix + "thm/" + self.Path
-	}
 	return self.prefix + "thm/" + self.Path + ".jpg"
 }
 

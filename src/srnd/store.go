@@ -162,7 +162,11 @@ func (self *articleStore) GenerateThumbnail(fname string) error {
 	infname := self.AttachmentFilepath(fname)
 	var cmd *exec.Cmd
 	if self.isImage(fname) {
+		if strings.HasSuffix(infname, ".gif") {
+			infname += "[0]"
+		}
 		cmd = exec.Command(self.convert_path, "-thumbnail", "200", infname, outfname)
+
 	} else if self.isAudio(fname) {
 		tmpfname := infname + ".wav"
 		cmd = exec.Command(self.ffmpeg_path, "-i", infname, tmpfname)

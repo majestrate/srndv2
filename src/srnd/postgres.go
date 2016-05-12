@@ -160,7 +160,7 @@ func (self PostgresDatabase) upgrade4to5() {
 	cmds := []string{
 		"ALTER TABLE EncryptedAddrs DROP COLUMN IF EXISTS addr_cidr",
 		"ALTER TABLE EncryptedAddrs ADD COLUMN addr_cidr cidr",
-		"UPDATE EncryptedAddrs AS a SET a.addr_cidr = e.cidr FROM ( SELECT cidr(addr), addr FROM EncryptedAddrs) AS e WHERE e.addr = a.addr ",
+		"UPDATE EncryptedAddrs AS a SET addr_cidr = e.cidr FROM ( SELECT cidr(addr), addr FROM EncryptedAddrs) AS e WHERE e.addr = a.addr",
 	}
 	for _, cmd := range cmds {
 		_, err := self.conn.Exec(cmd)

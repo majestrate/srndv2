@@ -16,3 +16,5 @@ webroot/*.html
 webroot/thm/*.*
 webroot/img/*.*
 .git
+srndv2
+*.txt

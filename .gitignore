@@ -15,6 +15,5 @@ _obj
 webroot/*.html
 webroot/thm/*.*
 webroot/img/*.*
-.gx
 srndv2
 *.txt

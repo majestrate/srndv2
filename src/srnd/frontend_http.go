@@ -491,6 +491,7 @@ func (self *httpFrontend) handle_postform(wr http.ResponseWriter, r *http.Reques
 	}
 
 	e := func(err error) {
+		log.Println("frontend error:", err)
 		wr.WriteHeader(200)
 		if sendJson {
 			json.NewEncoder(wr).Encode(map[string]interface{}{"error": err.Error()})

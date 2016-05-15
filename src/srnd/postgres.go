@@ -565,7 +565,7 @@ func (self PostgresDatabase) GetEncAddress(addr string) (encaddr string, err err
 			if len(encaddr) == 0 {
 				err = errors.New("failed to generate new encryption key")
 			} else {
-				_, err = self.conn.Exec("INSERT INTO EncryptedAddrs(enckey, encaddr, addr, addr_cidr) VALUES($1, $2, $3, $3)", key, encaddr, addr+"/32")
+				_, err = self.conn.Exec("INSERT INTO EncryptedAddrs(enckey, encaddr, addr, addr_cidr) VALUES($1, $2, $3, cidr($4))", key, encaddr, addr, addr+"/32")
 			}
 		} else {
 			err = self.conn.QueryRow("SELECT encAddr FROM EncryptedAddrs WHERE addr = $1 LIMIT 1", addr).Scan(&encaddr)

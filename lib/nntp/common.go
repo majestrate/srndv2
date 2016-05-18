@@ -1,7 +1,6 @@
 package nntp
 
 import (
-	"github.com/dchest/blake256"
 	"github.com/majestrate/srndv2/lib/crypto"
 
 	"crypto/sha1"
@@ -38,7 +37,7 @@ func (msgid MessageID) ShortHash() string {
 
 // compute blake2 hash of message id
 func (msgid MessageID) Blake2Hash() string {
-	h := blake256.New()
+	h := crypto.Hash()
 	io.WriteString(h, msgid.String())
 	return strings.ToLower(fmt.Sprintf("%x", h.Sum(nil)))
 }

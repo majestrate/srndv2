@@ -3,9 +3,7 @@ package store
 import (
 	"encoding/base32"
 	"fmt"
-	"github.com/dchest/blake256"              // for filehash
-	"github.com/majestrate/srndv2/lib/crypto" // for random
-
+	"github.com/majestrate/srndv2/lib/crypto"
 	"io"
 	"os"
 	"path/filepath"
@@ -79,7 +77,7 @@ func (fs FilesystemStorage) StoreAttachment(r io.Reader, filename string) (fpath
 		defer tf.Close()
 
 		// create hasher
-		h := blake256.New()
+		h := crypto.Hash()
 		// create multiwriter
 		mw := io.MultiWriter(tf, h)
 

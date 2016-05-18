@@ -1,6 +1,7 @@
 package nntp
 
 import (
+	"github.com/majestrate/srndv2/lib/nntp/message"
 	"io"
 )
 
@@ -9,7 +10,7 @@ import (
 type ArticleFilter interface {
 	// filter the article header
 	// returns the modified Header and an error if one occurs
-	FilterHeader(hdr Header) (Header, error)
+	FilterHeader(hdr message.Header) (message.Header, error)
 
 	// reads the article's body and write the filtered version to an io.Writer
 	// returns the number of bytes written to the io.Writer, true if the body was

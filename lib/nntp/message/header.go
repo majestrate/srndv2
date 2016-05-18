@@ -1,4 +1,4 @@
-package nntp
+package message
 
 import (
 	"bufio"

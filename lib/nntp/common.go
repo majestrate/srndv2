@@ -63,3 +63,14 @@ func (g Newsgroup) Valid() bool {
 func (g Newsgroup) String() string {
 	return string(g)
 }
+
+// (message-id, newsgroup) tuple
+type ArticleEntry [2]string
+
+func (e ArticleEntry) MessageID() MessageID {
+	return MessageID(e[0])
+}
+
+func (e ArticleEntry) Newsgroup() Newsgroup {
+	return Newsgroup(e[1])
+}

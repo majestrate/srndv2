@@ -1,82 +1,49 @@
 package nntp
 
-import (
-	"crypto/tls"
-	"encoding/json"
-	"net"
-	"net/textproto"
-)
+// an nntp connection
+type Conn interface {
 
-// state of an nntp connection
-type ConnState struct {
-	// name of parent feed
-	FeedName string `json:"feedname"`
-	// name of the connection
-	ConnName string `json:"connname"`
-	// hostname of remote connection
-	HostName string `json:"hostname"`
-	// current nntp mode
-	Mode string `json:"mode"`
-	// current selected nntp newsgroup
-	Group string `json:"newsgroup"`
-	// current selected nntp article
-	Article string `json:"article"`
-	// parent feed's policy
-	Policy *FeedPolicy `json:"feedpolicy"`
-}
+	// negotiate an nntp session on this connection
+	// returns nil if we negitated successfully
+	// returns ErrAuthRejected if the remote server rejected any authentication
+	// we sent or another error if one occured while negotiating
+	Negotiate() error
 
-// nntp connection to remote server
-type Conn struct {
-	// buffered connection
-	C *textproto.Conn
-	// remote address
-	Addr net.Addr
+	// obtain connection state
+	GetState() *ConnState
 
-	// unexported fields ...
+	// retutrn true if posting is allowed
+	// return false if posting is not allowed
+	PostingAllowed() bool
 
-	// connection state (mutable)
-	state ConnState
-	// state of tls connection
-	tlsState *tls.ConnectionState
-	// has this connection authenticated yet?
-	authenticated bool
-	// the username logged in with if it has authenticated via user/pass
-	username string
-	// underlying network socket
-	conn net.Conn
-}
+	// handle inbound non-streaming connection
+	// apply filters sequentially for each article, then call event hooks
+	ProcessInbound(filters []ArticleFilter, hooks EventHooks)
 
-// json representation of this connection
-// format is:
-// {
-//   "state" : (connection state object),
-//   "authed" : bool,
-//   "tls" : (tls info or null if plaintext connection)
-// }
-func (c *Conn) MarshalJSON() ([]byte, error) {
-	j := make(map[string]interface{})
-	j["state"] = c.state
-	j["authed"] = c.authenticated
-	j["tls"] = c.tlsState
-	return json.Marshal(j)
-}
+	// does this connection want to do nntp streaming?
+	WantsStreaming() bool
 
-// get the current state of our connection (immutable)
-func (c *Conn) GetState() (state *ConnState) {
-	return &ConnState{
-		FeedName: c.state.FeedName,
-		ConnName: c.state.ConnName,
-		HostName: c.state.HostName,
-		Mode:     c.state.Mode,
-		Group:    c.state.Group,
-		Article:  c.state.Article,
-		Policy: &FeedPolicy{
-			Whitelist:            c.state.Policy.Whitelist,
-			Blacklist:            c.state.Policy.Blacklist,
-			AllowAnonPosts:       c.state.Policy.AllowAnonPosts,
-			AllowAnonAttachments: c.state.Policy.AllowAnonAttachments,
-			AllowAttachments:     c.state.Policy.AllowAttachments,
-			UntrustedRequiresPoW: c.state.Policy.UntrustedRequiresPoW,
-		},
-	}
+	// what mode are we in?
+	// returns mode in all caps
+	Mode() Mode
+
+	// initiate nntp streaming
+	// after calling this the caller MUST call StreamAndQuit()
+	// returns a channel for message ids, true if caller sends on the channel or
+	// false if the channel is for the caller to recv with
+	// returns nil and ErrStreamingNotAllowed if streaming is not allowed on this
+	// connection or another error if one occurs while trying to start streaming
+	StartStreaming() (chan ArticleEntry, bool, error)
+
+	// stream articles and quit when the channel obtained by StartStreaming() is
+	// closed, after which this nntp connection is no longer open
+	// check inbound articles with given ArticlePolicy, if article is accepted
+	// apply filters sequentially for each article, then call event hooks
+	StreamAndQuit(acceptor ArticleAcceptor, filters []ArticleFilter, hooks EventHooks)
+
+	// is this nntp connection open?
+	IsOpen() bool
+
+	// send quit command and close connection
+	Quit()
 }

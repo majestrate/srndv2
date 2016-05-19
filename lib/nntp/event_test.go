@@ -6,7 +6,7 @@ import (
 
 func TestTAKETHISParse(t *testing.T) {
 	msgid := GenMessageID("test.tld")
-	ev := TAKETHIS(msgid)
+	ev := stream_cmd_TAKETHIS(msgid)
 	t.Logf("event: %s", ev)
 	if ev.MessageID() != msgid {
 		t.Logf("%s != %s, event was %s", msgid, ev.MessageID(), ev)
@@ -24,7 +24,7 @@ func TestTAKETHISParse(t *testing.T) {
 
 func TestCHECKParse(t *testing.T) {
 	msgid := GenMessageID("test.tld")
-	ev := CHECK(msgid)
+	ev := stream_cmd_CHECK(msgid)
 	t.Logf("event: %s", ev)
 	if ev.MessageID() != msgid {
 		t.Logf("%s != %s, event was %s", msgid, ev.MessageID(), ev)

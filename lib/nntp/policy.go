@@ -9,7 +9,7 @@ import (
 //
 type FeedPolicy struct {
 	// whitelist list for newsgroups to always allow
-	Whitelist []Newsgroup
+	Whitelist []string
 	// list of blacklist regexps
 	Blacklist []string
 	// are anon posts of any kind allowed?
@@ -44,7 +44,7 @@ func (p *FeedPolicy) MarshalJSON() ([]byte, error) {
 
 // default feed policy to be used if not configured explicitly
 var DefaultFeedPolicy = &FeedPolicy{
-	Whitelist:            []Newsgroup{Newsgroup("ctl"), Newsgroup("overchan.test")},
+	Whitelist:            []string{"ctl", "overchan.test"},
 	Blacklist:            []string{`!^overchan\.`},
 	AllowAnonPosts:       true,
 	AllowAnonAttachments: false,

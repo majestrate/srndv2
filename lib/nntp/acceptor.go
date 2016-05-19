@@ -32,9 +32,31 @@ func (s PolicyStatus) String() string {
 	}
 }
 
+// is this an accept code?
+func (s PolicyStatus) Accept() bool {
+	return s == ARTICLE_ACCEPT
+}
+
+// is this a defer code?
+func (s PolicyStatus) Defer() bool {
+	return s == ARTICLE_DEFER
+}
+
+// is this a ban code
+func (s PolicyStatus) Ban() bool {
+	return s == ARTICLE_BAN
+}
+
+// is this a reject code?
+func (s PolicyStatus) Reject() bool {
+	return s == ARTICLE_BAN || s == ARTICLE_REJECT
+}
+
 // type defining a policy that determines if we want to accept/reject/defer an
 // incoming article
-type ArticlePolicy interface {
-	// given an article header, return ARTICLE_ACCEPT if we accepted
-	CheckHeader(hdr message.Header) int
+type ArticleAcceptor interface {
+	// check article given an article header
+	CheckHeader(hdr message.Header) PolicyStatus
+	// check article given a message id
+	CheckMessageID(msgid MessageID) PolicyStatus
 }

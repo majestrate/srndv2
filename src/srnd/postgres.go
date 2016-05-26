@@ -32,7 +32,7 @@ type PostgresDatabase struct {
 }
 
 func NewPostgresDatabase(host, port, user, password string) Database {
-	var db PostgresDatabase
+	db := new(PostgresDatabase)
 	var err error
 	if len(user) > 0 {
 		if len(password) > 0 {
@@ -53,20 +53,20 @@ func NewPostgresDatabase(host, port, user, password string) Database {
 	if err != nil {
 		log.Fatalf("can`not open connection to db: %s", err)
 	}
-
+	db.conn.SetConnMaxLifetime(time.Second)
 	return db
 }
 
 // finalize all transactions
 // close database connections
-func (self PostgresDatabase) Close() {
+func (self *PostgresDatabase) Close() {
 	if self.conn != nil {
 		self.conn.Close()
 		self.conn = nil
 	}
 }
 
-func (self PostgresDatabase) CreateTables() {
+func (self *PostgresDatabase) CreateTables() {
 	for {
 		version := self.getDBVersion()
 		if version == -1 {
@@ -95,7 +95,7 @@ func (self PostgresDatabase) CreateTables() {
 	}
 }
 
-func (self PostgresDatabase) upgrade1to2() {
+func (self *PostgresDatabase) upgrade1to2() {
 	log.Println("migrating... 1 -> 2")
 
 	var err error
@@ -121,7 +121,7 @@ func (self PostgresDatabase) upgrade1to2() {
 	self.setDBVersion(2)
 }
 
-func (self PostgresDatabase) upgrade2to3() {
+func (self *PostgresDatabase) upgrade2to3() {
 	log.Println("migrating... 2 -> 3")
 
 	var err error
@@ -155,7 +155,7 @@ func (self PostgresDatabase) upgrade2to3() {
 	self.setDBVersion(3)
 }
 
-func (self PostgresDatabase) upgrade4to5() {
+func (self *PostgresDatabase) upgrade4to5() {
 	log.Println("migrating... 4 -> 5")
 	cmds := []string{
 		"ALTER TABLE EncryptedAddrs DROP COLUMN IF EXISTS addr_cidr",
@@ -171,7 +171,7 @@ func (self PostgresDatabase) upgrade4to5() {
 	self.setDBVersion(5)
 }
 
-func (self PostgresDatabase) upgrade3to4() {
+func (self *PostgresDatabase) upgrade3to4() {
 	log.Println("migrating... 3 -> 4")
 	tables := make(map[string]string)
 	tables["ArticleNumbers"] = `(
@@ -222,7 +222,7 @@ func (self PostgresDatabase) upgrade3to4() {
 	self.setDBVersion(4)
 }
 
-func (self PostgresDatabase) upgrade0to1() {
+func (self *PostgresDatabase) upgrade0to1() {
 
 	// begin >:D
 	log.Println("migrating... 0 -> 1")
@@ -264,7 +264,7 @@ func (self PostgresDatabase) upgrade0to1() {
 }
 
 // create all tables for database version 0
-func (self PostgresDatabase) createTablesV0() {
+func (self *PostgresDatabase) createTablesV0() {
 	tables := make(map[string]string)
 
 	// table of active newsgroups
@@ -392,7 +392,7 @@ func (self PostgresDatabase) createTablesV0() {
 }
 
 // set what the current database version is
-func (self PostgresDatabase) setDBVersion(version int) (err error) {
+func (self *PostgresDatabase) setDBVersion(version int) (err error) {
 	log.Println("set db version to", version)
 	_, err = self.conn.Exec("DELETE FROM Settings WHERE name = $1", "version")
 	_, err = self.conn.Exec("INSERT INTO Settings(name, value) VALUES($1, $2)", "version", fmt.Sprintf("%d", version))
@@ -400,7 +400,7 @@ func (self PostgresDatabase) setDBVersion(version int) (err error) {
 }
 
 // get the current database version
-func (self PostgresDatabase) getDBVersion() (version int) {
+func (self *PostgresDatabase) getDBVersion() (version int) {
 	var val string
 	var vers int64
 	err := self.conn.QueryRow("SELECT value FROM Settings WHERE name = $1", "version").Scan(&val)
@@ -417,24 +417,24 @@ func (self PostgresDatabase) getDBVersion() (version int) {
 	return
 }
 
-func (self PostgresDatabase) BanNewsgroup(group string) (err error) {
+func (self *PostgresDatabase) BanNewsgroup(group string) (err error) {
 	_, err = self.conn.Exec("INSERT INTO BannedGroups(newsgroup, time_banned) VALUES($1, $2)", group, timeNow())
 	return
 }
 
-func (self PostgresDatabase) UnbanNewsgroup(group string) (err error) {
+func (self *PostgresDatabase) UnbanNewsgroup(group string) (err error) {
 	_, err = self.conn.Exec("DELETE FROM BannedGroups WHERE newsgroup = $1", group)
 	return
 }
 
-func (self PostgresDatabase) NewsgroupBanned(group string) (banned bool, err error) {
+func (self *PostgresDatabase) NewsgroupBanned(group string) (banned bool, err error) {
 	var count int64
 	err = self.conn.QueryRow("SELECT COUNT(newsgroup) FROM BannedGroups WHERE newsgroup = $1", group).Scan(&count)
 	banned = count > 0
 	return
 }
 
-func (self PostgresDatabase) NukeNewsgroup(group string, store ArticleStore) {
+func (self *PostgresDatabase) NukeNewsgroup(group string, store ArticleStore) {
 	// first delete all thread presences
 	_, _ = self.conn.Exec("DELETE FROM ArticleThreads WHERE newsgroup = $1", group)
 	// get all articles in that newsgroup
@@ -468,7 +468,7 @@ func (self PostgresDatabase) NukeNewsgroup(group string, store ArticleStore) {
 	}
 }
 
-func (self PostgresDatabase) AddModPubkey(pubkey string) error {
+func (self *PostgresDatabase) AddModPubkey(pubkey string) error {
 	if self.CheckModPubkey(pubkey) {
 		log.Println("did not add pubkey", pubkey, "already exists")
 		return nil
@@ -477,12 +477,12 @@ func (self PostgresDatabase) AddModPubkey(pubkey string) error {
 	return err
 }
 
-func (self PostgresDatabase) GetGroupForMessage(message_id string) (group string, err error) {
+func (self *PostgresDatabase) GetGroupForMessage(message_id string) (group string, err error) {
 	err = self.conn.QueryRow("SELECT newsgroup FROM ArticlePosts WHERE message_id = $1", message_id).Scan(&group)
 	return
 }
 
-func (self PostgresDatabase) GetPageForRootMessage(root_message_id string) (group string, page int64, err error) {
+func (self *PostgresDatabase) GetPageForRootMessage(root_message_id string) (group string, page int64, err error) {
 	err = self.conn.QueryRow("SELECT newsgroup FROM ArticleThreads WHERE root_message_id = $1", root_message_id).Scan(&group)
 	if err == nil {
 		perpage, _ := self.GetPagesPerBoard(group)
@@ -492,7 +492,7 @@ func (self PostgresDatabase) GetPageForRootMessage(root_message_id string) (grou
 	return
 }
 
-func (self PostgresDatabase) GetInfoForMessage(msgid string) (root string, newsgroup string, page int64, err error) {
+func (self *PostgresDatabase) GetInfoForMessage(msgid string) (root string, newsgroup string, page int64, err error) {
 	err = self.conn.QueryRow("SELECT newsgroup, ref_id FROM ArticlePosts WHERE message_id = $1", msgid).Scan(&newsgroup, &root)
 	if err == nil {
 		if root == "" {
@@ -505,19 +505,19 @@ func (self PostgresDatabase) GetInfoForMessage(msgid string) (root string, newsg
 	return
 }
 
-func (self PostgresDatabase) CheckModPubkeyGlobal(pubkey string) bool {
+func (self *PostgresDatabase) CheckModPubkeyGlobal(pubkey string) bool {
 	var result int64
 	_ = self.conn.QueryRow("SELECT COUNT(*) FROM ModPrivs WHERE pubkey = $1 AND newsgroup = $2 AND permission = $3", pubkey, "overchan", "all").Scan(&result)
 	return result > 0
 }
 
-func (self PostgresDatabase) CheckModPubkeyCanModGroup(pubkey, newsgroup string) bool {
+func (self *PostgresDatabase) CheckModPubkeyCanModGroup(pubkey, newsgroup string) bool {
 	var result int64
 	_ = self.conn.QueryRow("SELECT COUNT(*) FROM ModPrivs WHERE pubkey = $1 AND newsgroup = $2", pubkey, newsgroup).Scan(&result)
 	return result > 0
 }
 
-func (self PostgresDatabase) CountPostsInGroup(newsgroup string, time_frame int64) (result int64) {
+func (self *PostgresDatabase) CountPostsInGroup(newsgroup string, time_frame int64) (result int64) {
 	if time_frame > 0 {
 		time_frame = timeNow() - time_frame
 	} else if time_frame < 0 {
@@ -527,13 +527,13 @@ func (self PostgresDatabase) CountPostsInGroup(newsgroup string, time_frame int6
 	return
 }
 
-func (self PostgresDatabase) CheckModPubkey(pubkey string) bool {
+func (self *PostgresDatabase) CheckModPubkey(pubkey string) bool {
 	var result int64
 	self.conn.QueryRow("SELECT COUNT(*) FROM ModPrivs WHERE pubkey = $1 AND newsgroup = $2 AND permission = $3", pubkey, "ctl", "login").Scan(&result)
 	return result > 0
 }
 
-func (self PostgresDatabase) BanArticle(messageID, reason string) error {
+func (self *PostgresDatabase) BanArticle(messageID, reason string) error {
 	if self.ArticleBanned(messageID) {
 		log.Println(messageID, "already banned")
 		return nil
@@ -542,7 +542,7 @@ func (self PostgresDatabase) BanArticle(messageID, reason string) error {
 	return err
 }
 
-func (self PostgresDatabase) ArticleBanned(messageID string) (result bool) {
+func (self *PostgresDatabase) ArticleBanned(messageID string) (result bool) {
 
 	var count int64
 	err := self.conn.QueryRow("SELECT COUNT(message_id) FROM BannedArticles WHERE message_id = $1", messageID).Scan(&count)
@@ -554,7 +554,7 @@ func (self PostgresDatabase) ArticleBanned(messageID string) (result bool) {
 	return
 }
 
-func (self PostgresDatabase) GetEncAddress(addr string) (encaddr string, err error) {
+func (self *PostgresDatabase) GetEncAddress(addr string) (encaddr string, err error) {
 	var count int64
 	err = self.conn.QueryRow("SELECT COUNT(addr) FROM EncryptedAddrs WHERE addr = $1", addr).Scan(&count)
 	if err == nil {
@@ -574,19 +574,19 @@ func (self PostgresDatabase) GetEncAddress(addr string) (encaddr string, err err
 	return
 }
 
-func (self PostgresDatabase) GetEncKey(encAddr string) (enckey string, err error) {
+func (self *PostgresDatabase) GetEncKey(encAddr string) (enckey string, err error) {
 	err = self.conn.QueryRow("SELECT enckey FROM EncryptedAddrs WHERE encaddr = $1 LIMIT 1", encAddr).Scan(&enckey)
 	return
 }
 
-func (self PostgresDatabase) CheckIPBanned(addr string) (banned bool, err error) {
+func (self *PostgresDatabase) CheckIPBanned(addr string) (banned bool, err error) {
 	var amount int64
 	err = self.conn.QueryRow("SELECT COUNT(*) FROM IPBans WHERE addr >>= $1 ", addr).Scan(&amount)
 	banned = amount > 0
 	return
 }
 
-func (self PostgresDatabase) GetIPAddress(encaddr string) (addr string, err error) {
+func (self *PostgresDatabase) GetIPAddress(encaddr string) (addr string, err error) {
 	var count int64
 	err = self.conn.QueryRow("SELECT COUNT(encAddr) FROM EncryptedAddrs WHERE encAddr = $1", encaddr).Scan(&count)
 	if err == nil && count > 0 {
@@ -595,7 +595,7 @@ func (self PostgresDatabase) GetIPAddress(encaddr string) (addr string, err erro
 	return
 }
 
-func (self PostgresDatabase) MarkModPubkeyGlobal(pubkey string) (err error) {
+func (self *PostgresDatabase) MarkModPubkeyGlobal(pubkey string) (err error) {
 	if len(pubkey) != 64 {
 		err = errors.New("invalid pubkey length")
 		return
@@ -609,7 +609,7 @@ func (self PostgresDatabase) MarkModPubkeyGlobal(pubkey string) (err error) {
 	return
 }
 
-func (self PostgresDatabase) UnMarkModPubkeyGlobal(pubkey string) (err error) {
+func (self *PostgresDatabase) UnMarkModPubkeyGlobal(pubkey string) (err error) {
 	if self.CheckModPubkeyGlobal(pubkey) {
 		// already marked
 		_, err = self.conn.Exec("DELETE FROM ModPrivs WHERE pubkey = $1 AND newsgroup = $2 AND permission = $3", pubkey, "overchan", "all")
@@ -619,12 +619,12 @@ func (self PostgresDatabase) UnMarkModPubkeyGlobal(pubkey string) (err error) {
 	return
 }
 
-func (self PostgresDatabase) CountThreadReplies(root_message_id string) (repls int64) {
+func (self *PostgresDatabase) CountThreadReplies(root_message_id string) (repls int64) {
 	_ = self.conn.QueryRow("SELECT COUNT(message_id) FROM ArticlePosts WHERE ref_id = $1", root_message_id).Scan(&repls)
 	return
 }
 
-func (self PostgresDatabase) GetRootPostsForExpiration(newsgroup string, threadcount int) (roots []string) {
+func (self *PostgresDatabase) GetRootPostsForExpiration(newsgroup string, threadcount int) (roots []string) {
 
 	rows, err := self.conn.Query("SELECT root_message_id FROM ArticleThreads WHERE newsgroup = $1 AND root_message_id NOT IN ( SELECT root_message_id FROM ArticleThreads WHERE newsgroup = $1 ORDER BY last_bump DESC LIMIT $2)", newsgroup, threadcount)
 	if err == nil {
@@ -644,12 +644,12 @@ func (self PostgresDatabase) GetRootPostsForExpiration(newsgroup string, threadc
 }
 
 // register an article in a newsgroup with the ArticleNumbers table
-func (self PostgresDatabase) registerNNTPNumber(group, msgid string) (err error) {
+func (self *PostgresDatabase) registerNNTPNumber(group, msgid string) (err error) {
 	_, err = self.conn.Exec("WITH x(msg_no) AS ( SELECT MAX(message_no) AS msg_no FROM ArticleNumbers WHERE newsgroup = $1 ) INSERT INTO ArticleNumbers(newsgroup, message_id, message_no) VALUES($1, $2, (SELECT CASE WHEN msg_no IS NULL THEN 0 ELSE msg_no END FROM x) + 1 )", group, msgid)
 	return
 }
 
-func (self PostgresDatabase) GetAllNewsgroups() (groups []string) {
+func (self *PostgresDatabase) GetAllNewsgroups() (groups []string) {
 
 	rows, err := self.conn.Query("SELECT name FROM Newsgroups")
 	if err == nil {
@@ -663,7 +663,7 @@ func (self PostgresDatabase) GetAllNewsgroups() (groups []string) {
 	return
 }
 
-func (self PostgresDatabase) GetGroupPageCount(newsgroup string) int64 {
+func (self *PostgresDatabase) GetGroupPageCount(newsgroup string) int64 {
 	var count int64
 	err := self.conn.QueryRow("SELECT COUNT(*) FROM ArticleThreads WHERE newsgroup = $1", newsgroup).Scan(&count)
 	if err != nil {
@@ -675,7 +675,7 @@ func (self PostgresDatabase) GetGroupPageCount(newsgroup string) int64 {
 
 // only fetches root posts
 // does not update the thread contents
-func (self PostgresDatabase) GetGroupForPage(prefix, frontend, newsgroup string, pageno, perpage int) BoardModel {
+func (self *PostgresDatabase) GetGroupForPage(prefix, frontend, newsgroup string, pageno, perpage int) BoardModel {
 	var threads []ThreadModel
 	pages := self.GetGroupPageCount(newsgroup)
 	rows, err := self.conn.Query("WITH roots(root_message_id, last_bump) AS ( SELECT root_message_id, last_bump FROM ArticleThreads WHERE newsgroup = $1 ORDER BY last_bump DESC OFFSET $2 LIMIT $3 ) SELECT p.newsgroup, p.message_id, p.name, p.subject, p.path, p.time_posted, p.message, p.addr FROM ArticlePosts p INNER JOIN roots ON ( roots.root_message_id = p.message_id ) ORDER BY roots.last_bump DESC", newsgroup, pageno*perpage, perpage)
@@ -720,7 +720,7 @@ func (self PostgresDatabase) GetGroupForPage(prefix, frontend, newsgroup string,
 	}
 }
 
-func (self PostgresDatabase) GetPostsInGroup(newsgroup string) (models []PostModel, err error) {
+func (self *PostgresDatabase) GetPostsInGroup(newsgroup string) (models []PostModel, err error) {
 
 	rows, err := self.conn.Query("SELECT newsgroup, message_id, ref_id, name, subject, path, time_posted, message, addr FROM ArticlePosts WHERE newsgroup = $1 ORDER BY time_posted", newsgroup)
 	if err == nil {
@@ -734,7 +734,7 @@ func (self PostgresDatabase) GetPostsInGroup(newsgroup string) (models []PostMod
 	return
 }
 
-func (self PostgresDatabase) GetPostModel(prefix, messageID string) PostModel {
+func (self *PostgresDatabase) GetPostModel(prefix, messageID string) PostModel {
 	model := new(post)
 	err := self.conn.QueryRow("SELECT newsgroup, message_id, ref_id, name, subject, path, time_posted, message, addr FROM ArticlePosts WHERE message_id = $1 LIMIT 1", messageID).Scan(&model.board, &model.Message_id, &model.Parent, &model.PostName, &model.PostSubject, &model.MessagePath, &model.Posted, &model.PostMessage, &model.addr)
 	if err == nil {
@@ -756,12 +756,12 @@ func (self PostgresDatabase) GetPostModel(prefix, messageID string) PostModel {
 	}
 }
 
-func (self PostgresDatabase) DeleteThread(msgid string) (err error) {
+func (self *PostgresDatabase) DeleteThread(msgid string) (err error) {
 	_, err = self.conn.Exec("DELETE FROM ArticleThreads WHERE root_message_id = $1", msgid)
 	return
 }
 
-func (self PostgresDatabase) DeleteArticle(msgid string) (err error) {
+func (self *PostgresDatabase) DeleteArticle(msgid string) (err error) {
 	_, err = self.conn.Exec("DELETE FROM NNTPHeaders WHERE header_article_message_id = $1", msgid)
 	if err == nil {
 		_, err = self.conn.Exec("DELETE FROM ArticleNumbers WHERE message_id = $1", msgid)
@@ -778,7 +778,7 @@ func (self PostgresDatabase) DeleteArticle(msgid string) (err error) {
 	return
 }
 
-func (self PostgresDatabase) GetThreadReplyPostModels(prefix, rootpost string, start, limit int) (repls []PostModel) {
+func (self *PostgresDatabase) GetThreadReplyPostModels(prefix, rootpost string, start, limit int) (repls []PostModel) {
 	var rows *sql.Rows
 	var err error
 	if limit > 0 {
@@ -820,7 +820,7 @@ func (self PostgresDatabase) GetThreadReplyPostModels(prefix, rootpost string, s
 
 }
 
-func (self PostgresDatabase) GetThreadReplies(rootpost string, start, limit int) (repls []string) {
+func (self *PostgresDatabase) GetThreadReplies(rootpost string, start, limit int) (repls []string) {
 	var rows *sql.Rows
 	var err error
 	if limit > 0 {
@@ -847,7 +847,7 @@ func (self PostgresDatabase) GetThreadReplies(rootpost string, start, limit int)
 	return
 }
 
-func (self PostgresDatabase) ThreadHasReplies(rootpost string) bool {
+func (self *PostgresDatabase) ThreadHasReplies(rootpost string) bool {
 	var count int64
 	err := self.conn.QueryRow("SELECT COUNT(message_id) FROM ArticlePosts WHERE ref_id = $1", rootpost).Scan(&count)
 	if err != nil {
@@ -856,7 +856,7 @@ func (self PostgresDatabase) ThreadHasReplies(rootpost string) bool {
 	return count > 0
 }
 
-func (self PostgresDatabase) GetGroupThreads(group string, recv chan ArticleEntry) {
+func (self *PostgresDatabase) GetGroupThreads(group string, recv chan ArticleEntry) {
 	rows, err := self.conn.Query("SELECT message_id FROM ArticlePosts WHERE newsgroup = $1 AND ref_id = '' ", group)
 	if err == nil {
 		for rows.Next() {
@@ -870,7 +870,7 @@ func (self PostgresDatabase) GetGroupThreads(group string, recv chan ArticleEntr
 	}
 }
 
-func (self PostgresDatabase) GetLastBumpedThreads(newsgroup string, threads int) (roots []ArticleEntry) {
+func (self *PostgresDatabase) GetLastBumpedThreads(newsgroup string, threads int) (roots []ArticleEntry) {
 	var err error
 	var rows *sql.Rows
 	if len(newsgroup) > 0 {
@@ -892,7 +892,7 @@ func (self PostgresDatabase) GetLastBumpedThreads(newsgroup string, threads int)
 	return
 }
 
-func (self PostgresDatabase) GroupHasPosts(group string) bool {
+func (self *PostgresDatabase) GroupHasPosts(group string) bool {
 
 	var count int64
 	err := self.conn.QueryRow("SELECT COUNT(message_id) FROM ArticlePosts WHERE newsgroup = $1", group).Scan(&count)
@@ -903,7 +903,7 @@ func (self PostgresDatabase) GroupHasPosts(group string) bool {
 }
 
 // check if a newsgroup exists
-func (self PostgresDatabase) HasNewsgroup(group string) bool {
+func (self *PostgresDatabase) HasNewsgroup(group string) bool {
 	var count int64
 	err := self.conn.QueryRow("SELECT COUNT(name) FROM Newsgroups WHERE name = $1", group).Scan(&count)
 	if err != nil {
@@ -913,7 +913,7 @@ func (self PostgresDatabase) HasNewsgroup(group string) bool {
 }
 
 // check if an article exists
-func (self PostgresDatabase) HasArticle(message_id string) bool {
+func (self *PostgresDatabase) HasArticle(message_id string) bool {
 	var count int64
 	err := self.conn.QueryRow("SELECT COUNT(message_id) FROM Articles WHERE message_id = $1", message_id).Scan(&count)
 	if err != nil {
@@ -923,7 +923,7 @@ func (self PostgresDatabase) HasArticle(message_id string) bool {
 }
 
 // check if an article exists locally
-func (self PostgresDatabase) HasArticleLocal(message_id string) bool {
+func (self *PostgresDatabase) HasArticleLocal(message_id string) bool {
 	var count int64
 	err := self.conn.QueryRow("SELECT COUNT(message_id) FROM ArticlePosts WHERE message_id = $1", message_id).Scan(&count)
 	if err != nil {
@@ -933,7 +933,7 @@ func (self PostgresDatabase) HasArticleLocal(message_id string) bool {
 }
 
 // count articles we have
-func (self PostgresDatabase) ArticleCount() (count int64) {
+func (self *PostgresDatabase) ArticleCount() (count int64) {
 
 	err := self.conn.QueryRow("SELECT COUNT(message_id) FROM ArticlePosts").Scan(&count)
 	if err != nil {
@@ -943,14 +943,14 @@ func (self PostgresDatabase) ArticleCount() (count int64) {
 }
 
 // register a new newsgroup
-func (self PostgresDatabase) RegisterNewsgroup(group string) {
+func (self *PostgresDatabase) RegisterNewsgroup(group string) {
 	_, err := self.conn.Exec("INSERT INTO Newsgroups (name, last_post) VALUES($1, $2)", group, timeNow())
 	if err != nil {
 		log.Println("failed to register newsgroup", group, err)
 	}
 }
 
-func (self PostgresDatabase) GetPostAttachments(messageID string) (atts []string) {
+func (self *PostgresDatabase) GetPostAttachments(messageID string) (atts []string) {
 	rows, err := self.conn.Query("SELECT filepath FROM ArticleAttachments WHERE message_id = $1", messageID)
 	if err == nil {
 		for rows.Next() {
@@ -965,7 +965,7 @@ func (self PostgresDatabase) GetPostAttachments(messageID string) (atts []string
 	return
 }
 
-func (self PostgresDatabase) GetPostAttachmentModels(prefix, messageID string) (atts []AttachmentModel) {
+func (self *PostgresDatabase) GetPostAttachmentModels(prefix, messageID string) (atts []AttachmentModel) {
 	rows, err := self.conn.Query("SELECT filepath, filename FROM ArticleAttachments WHERE message_id = $1", messageID)
 	if err == nil {
 		for rows.Next() {
@@ -985,7 +985,7 @@ func (self PostgresDatabase) GetPostAttachmentModels(prefix, messageID string) (
 }
 
 // register a message with the database
-func (self PostgresDatabase) RegisterArticle(message NNTPMessage) (err error) {
+func (self *PostgresDatabase) RegisterArticle(message NNTPMessage) (err error) {
 
 	msgid := message.MessageID()
 	group := message.Newsgroup()
@@ -1078,7 +1078,7 @@ func (self PostgresDatabase) RegisterArticle(message NNTPMessage) (err error) {
 //
 // get message ids of articles with this header name and value
 //
-func (self PostgresDatabase) GetMessageIDByHeader(name, val string) (msgids []string, err error) {
+func (self *PostgresDatabase) GetMessageIDByHeader(name, val string) (msgids []string, err error) {
 	var rows *sql.Rows
 	name = strings.ToLower(name)
 	rows, err = self.conn.Query("SELECT header_article_message_id FROM NNTPHeaders WHERE header_name = $1 AND header_value = $2", name, val)
@@ -1093,14 +1093,14 @@ func (self PostgresDatabase) GetMessageIDByHeader(name, val string) (msgids []st
 	return
 }
 
-func (self PostgresDatabase) RegisterSigned(message_id, pubkey string) (err error) {
+func (self *PostgresDatabase) RegisterSigned(message_id, pubkey string) (err error) {
 	_, err = self.conn.Exec("INSERT INTO ArticleKeys(message_id, pubkey) VALUES ($1, $2)", message_id, pubkey)
 	return
 }
 
 // get all articles in a newsgroup
 // send result down a channel
-func (self PostgresDatabase) GetAllArticlesInGroup(group string, recv chan ArticleEntry) {
+func (self *PostgresDatabase) GetAllArticlesInGroup(group string, recv chan ArticleEntry) {
 	rows, err := self.conn.Query("SELECT message_id FROM ArticlePosts WHERE newsgroup = $1", group)
 	if err != nil {
 		log.Printf("failed to get all articles in %s: %s", group, err)
@@ -1116,7 +1116,7 @@ func (self PostgresDatabase) GetAllArticlesInGroup(group string, recv chan Artic
 
 // get all articles
 // send result down a channel
-func (self PostgresDatabase) GetAllArticles() (articles []ArticleEntry) {
+func (self *PostgresDatabase) GetAllArticles() (articles []ArticleEntry) {
 	rows, err := self.conn.Query("SELECT message_id, newsgroup FROM ArticlePosts")
 	if err == nil {
 		for rows.Next() {
@@ -1131,45 +1131,45 @@ func (self PostgresDatabase) GetAllArticles() (articles []ArticleEntry) {
 	return articles
 }
 
-func (self PostgresDatabase) GetPagesPerBoard(group string) (int, error) {
+func (self *PostgresDatabase) GetPagesPerBoard(group string) (int, error) {
 	//XXX: hardcoded
 	return 10, nil
 }
 
-func (self PostgresDatabase) GetThreadsPerPage(group string) (int, error) {
+func (self *PostgresDatabase) GetThreadsPerPage(group string) (int, error) {
 	//XXX: hardcoded
 	return 10, nil
 }
 
-func (self PostgresDatabase) GetMessageIDByHash(hash string) (article ArticleEntry, err error) {
+func (self *PostgresDatabase) GetMessageIDByHash(hash string) (article ArticleEntry, err error) {
 	err = self.conn.QueryRow("SELECT message_id, message_newsgroup FROM Articles WHERE message_id_hash = $1 LIMIT 1", hash).Scan(&article[0], &article[1])
 	return
 }
 
-func (self PostgresDatabase) BanAddr(addr string) (err error) {
+func (self *PostgresDatabase) BanAddr(addr string) (err error) {
 	_, err = self.conn.Exec("INSERT INTO IPBans(addr, made, expires) VALUES($1, $2, $3)", addr, timeNow(), -1)
 	return
 }
 
 // assumes it is there
-func (self PostgresDatabase) UnbanAddr(addr string) (err error) {
+func (self *PostgresDatabase) UnbanAddr(addr string) (err error) {
 	_, err = self.conn.Exec("DELETE FROM IPBans WHERE addr >>= $1", addr)
 	return
 }
 
-func (self PostgresDatabase) CheckEncIPBanned(encaddr string) (banned bool, err error) {
+func (self *PostgresDatabase) CheckEncIPBanned(encaddr string) (banned bool, err error) {
 	var result int64
 	err = self.conn.QueryRow("SELECT COUNT(*) FROM EncIPBans WHERE encaddr = $1", encaddr).Scan(&result)
 	banned = result > 0
 	return
 }
 
-func (self PostgresDatabase) BanEncAddr(encaddr string) (err error) {
+func (self *PostgresDatabase) BanEncAddr(encaddr string) (err error) {
 	_, err = self.conn.Exec("INSERT INTO EncIPBans(encaddr, made, expires) VALUES($1, $2, $3)", encaddr, timeNow(), -1)
 	return
 }
 
-func (self PostgresDatabase) GetLastAndFirstForGroup(group string) (last, first int64, err error) {
+func (self *PostgresDatabase) GetLastAndFirstForGroup(group string) (last, first int64, err error) {
 	var rows *sql.Rows
 	rows, err = self.conn.Query("WITH x(min_no, max_no) AS ( SELECT MIN(message_no) AS min_no, MAX(message_no) AS max_no FROM ArticleNumbers WHERE newsgroup = $1) SELECT CASE WHEN min_no IS NULL THEN 0 ELSE min_no END AS mn FROM x UNION SELECT CASE WHEN max_no IS NULL THEN 1 ELSE max_no END AS max_no FROM x", group)
 	if rows.Next() {
@@ -1184,31 +1184,31 @@ func (self PostgresDatabase) GetLastAndFirstForGroup(group string) (last, first 
 	return
 }
 
-func (self PostgresDatabase) GetMessageIDForNNTPID(group string, id int64) (msgid string, err error) {
+func (self *PostgresDatabase) GetMessageIDForNNTPID(group string, id int64) (msgid string, err error) {
 	err = self.conn.QueryRow("SELECT message_id FROM ArticleNumbers WHERE newsgroup = $1 AND message_no = $2 LIMIT 1", group, id).Scan(&msgid)
 	return
 }
 
-func (self PostgresDatabase) GetNNTPIDForMessageID(group, msgid string) (id int64, err error) {
+func (self *PostgresDatabase) GetNNTPIDForMessageID(group, msgid string) (id int64, err error) {
 	err = self.conn.QueryRow("SELECT message_no FROM ArticleNumbers WHERE newsgroup = $1 AND message_id = $2 LIMIT 1", group, msgid).Scan(&id)
 	return
 }
 
-func (self PostgresDatabase) MarkModPubkeyCanModGroup(pubkey, group string) (err error) {
+func (self *PostgresDatabase) MarkModPubkeyCanModGroup(pubkey, group string) (err error) {
 	_, err = self.conn.Exec("INSERT INTO ModPrivs(pubkey, newsgroup) VALUES($1, $2)", pubkey, group)
 	return
 }
 
-func (self PostgresDatabase) UnMarkModPubkeyCanModGroup(pubkey, group string) (err error) {
+func (self *PostgresDatabase) UnMarkModPubkeyCanModGroup(pubkey, group string) (err error) {
 	_, err = self.conn.Exec("DELETE FROM ModPrivs WHERE pubkey = $1 AND newsgroup = $2", pubkey, group)
 	return
 }
 
-func (self PostgresDatabase) IsExpired(root_message_id string) bool {
+func (self *PostgresDatabase) IsExpired(root_message_id string) bool {
 	return self.HasArticle(root_message_id) && !self.HasArticleLocal(root_message_id)
 }
 
-func (self PostgresDatabase) GetLastDaysPostsForGroup(newsgroup string, n int64) (posts []PostEntry) {
+func (self *PostgresDatabase) GetLastDaysPostsForGroup(newsgroup string, n int64) (posts []PostEntry) {
 
 	day := time.Hour * 24
 	now := time.Now().UTC()
@@ -1228,7 +1228,7 @@ func (self PostgresDatabase) GetLastDaysPostsForGroup(newsgroup string, n int64)
 	return
 }
 
-func (self PostgresDatabase) GetLastDaysPosts(n int64) (posts []PostEntry) {
+func (self *PostgresDatabase) GetLastDaysPosts(n int64) (posts []PostEntry) {
 
 	day := time.Hour * 24
 	now := time.Now().UTC()
@@ -1248,7 +1248,7 @@ func (self PostgresDatabase) GetLastDaysPosts(n int64) (posts []PostEntry) {
 	return
 }
 
-func (self PostgresDatabase) GetLastPostedPostModels(prefix string, n int64) (posts []PostModel) {
+func (self *PostgresDatabase) GetLastPostedPostModels(prefix string, n int64) (posts []PostModel) {
 
 	rows, err := self.conn.Query("SELECT newsgroup, message_id, ref_id, name, subject, path, time_posted, message, addr FROM ArticlePosts WHERE newsgroup != 'ctl' ORDER BY time_posted DESC LIMIT $1", n)
 	if err == nil {
@@ -1276,7 +1276,7 @@ func (self PostgresDatabase) GetLastPostedPostModels(prefix string, n int64) (po
 	}
 }
 
-func (self PostgresDatabase) GetMonthlyPostHistory() (posts []PostEntry) {
+func (self *PostgresDatabase) GetMonthlyPostHistory() (posts []PostEntry) {
 	var oldest int64
 	now := time.Now()
 	now = time.Date(now.Year(), now.Month(), 1, 0, 0, 0, 0, time.UTC)
@@ -1312,7 +1312,7 @@ func (self PostgresDatabase) GetMonthlyPostHistory() (posts []PostEntry) {
 	return
 }
 
-func (self PostgresDatabase) CheckNNTPLogin(username, passwd string) (valid bool, err error) {
+func (self *PostgresDatabase) CheckNNTPLogin(username, passwd string) (valid bool, err error) {
 	var login_hash, login_salt string
 	err = self.conn.QueryRow("SELECT login_hash, login_salt FROM NNTPUsers WHERE username = $1", username).Scan(&login_hash, &login_salt)
 	if err == nil {
@@ -1324,26 +1324,26 @@ func (self PostgresDatabase) CheckNNTPLogin(username, passwd string) (valid bool
 	return
 }
 
-func (self PostgresDatabase) AddNNTPLogin(username, passwd string) (err error) {
+func (self *PostgresDatabase) AddNNTPLogin(username, passwd string) (err error) {
 	login_salt := genLoginCredSalt()
 	login_hash := nntpLoginCredHash(passwd, login_salt)
 	_, err = self.conn.Exec("INSERT INTO NNTPUsers(username, login_hash, login_salt) VALUES($1, $2, $3)", username, login_hash, login_salt)
 	return
 }
 
-func (self PostgresDatabase) RemoveNNTPLogin(username string) (err error) {
+func (self *PostgresDatabase) RemoveNNTPLogin(username string) (err error) {
 	_, err = self.conn.Exec("DELETE FROM NNTPUsers WHERE username = $1", username)
 	return
 }
 
-func (self PostgresDatabase) CheckNNTPUserExists(username string) (exists bool, err error) {
+func (self *PostgresDatabase) CheckNNTPUserExists(username string) (exists bool, err error) {
 	var count int64
 	err = self.conn.QueryRow("SELECT COUNT(username) FROM NNTPUsers WHERE username = $1", username).Scan(&count)
 	exists = count > 0
 	return
 }
 
-func (self PostgresDatabase) GetHeadersForMessage(msgid string) (hdr ArticleHeaders, err error) {
+func (self *PostgresDatabase) GetHeadersForMessage(msgid string) (hdr ArticleHeaders, err error) {
 	var rows *sql.Rows
 	rows, err = self.conn.Query("SELECT header_name, header_value FROM NNTPHeaders WHERE header_article_message_id = $1", msgid)
 	if err == nil {
@@ -1357,12 +1357,12 @@ func (self PostgresDatabase) GetHeadersForMessage(msgid string) (hdr ArticleHead
 	return
 }
 
-func (self PostgresDatabase) CountAllArticlesInGroup(group string) (count int64, err error) {
+func (self *PostgresDatabase) CountAllArticlesInGroup(group string) (count int64, err error) {
 	err = self.conn.QueryRow("SELECT COUNT(message_id) FROM ArticlePosts WHERE newsgroup = $1", group).Scan(&count)
 	return
 }
 
-func (self PostgresDatabase) GetMessageIDByCIDR(cidr *net.IPNet) (msgids []string, err error) {
+func (self *PostgresDatabase) GetMessageIDByCIDR(cidr *net.IPNet) (msgids []string, err error) {
 	var rows *sql.Rows
 	rows, err = self.conn.Query("SELECT message_id FROM ArticlePosts WHERE addr IN ( SELECT encaddr FROM EncryptedAddrs WHERE addr_cidr <<= cidr($1) )", cidr.String())
 	for err == nil && rows.Next() {
@@ -1375,7 +1375,7 @@ func (self PostgresDatabase) GetMessageIDByCIDR(cidr *net.IPNet) (msgids []strin
 	return
 }
 
-func (self PostgresDatabase) GetMessageIDByEncryptedIP(encaddr string) (msgids []string, err error) {
+func (self *PostgresDatabase) GetMessageIDByEncryptedIP(encaddr string) (msgids []string, err error) {
 	var rows *sql.Rows
 	rows, err = self.conn.Query("SELECT message_id FROM ArticlePosts WHERE addr = $1", encaddr)
 	for err == nil && rows.Next() {

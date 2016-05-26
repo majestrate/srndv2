@@ -195,3 +195,6 @@ const Line_InvalidMode = RPL_SyntaxError + " Invalid Mode Selected"
 
 // line sent on successful streaming
 const Line_StreamingAllowed = RPL_PostingStreaming + " aw yeh streamit brah"
+
+// send this when we handle a QUIT command
+const Line_RPLQuit = RPL_Quit + " bai"

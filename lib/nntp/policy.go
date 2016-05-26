@@ -1,45 +1,21 @@
 package nntp
 
-import (
-	"encoding/json"
-)
-
 //
 // a policy that governs whether we federate an article via a feed
 //
 type FeedPolicy struct {
 	// whitelist list for newsgroups to always allow
-	Whitelist []string
+	Whitelist []string `json:"whitelist"`
 	// list of blacklist regexps
-	Blacklist []string
+	Blacklist []string `json:"blacklist"`
 	// are anon posts of any kind allowed?
-	AllowAnonPosts bool
+	AllowAnonPosts bool `json:"anon"`
 	// are anon posts with attachments allowed?
-	AllowAnonAttachments bool
+	AllowAnonAttachments bool `json:"anon_attachments"`
 	// are any attachments allowed?
-	AllowAttachments bool
+	AllowAttachments bool `json:"attachments"`
 	// do we require Proof Of Work for untrusted connections?
-	UntrustedRequiresPoW bool
-}
-
-// marshal feed policy to json
-// {
-//   "white" : [ list, of, whitelisted, newsgroups ],
-//   "black" : [ list, of, newsgroup, blacklist, regexp ],
-//   "anon" : bool,
-//   "anon-attachments" : bool,
-//   "attachments" : bool,
-//   "pow": bool
-// }
-func (p *FeedPolicy) MarshalJSON() ([]byte, error) {
-	j := make(map[string]interface{})
-	j["white"] = p.Whitelist
-	j["black"] = p.Blacklist
-	j["anon"] = p.AllowAnonPosts
-	j["anon-attachments"] = p.AllowAnonAttachments
-	j["attachments"] = p.AllowAttachments
-	j["pow"] = p.UntrustedRequiresPoW
-	return json.Marshal(j)
+	UntrustedRequiresPoW bool `json:"pow"`
 }
 
 // default feed policy to be used if not configured explicitly

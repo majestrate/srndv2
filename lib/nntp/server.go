@@ -18,17 +18,12 @@ type EventHooks interface {
 type Server struct {
 	// user callbacks
 	Hooks EventHooks
-
-	// unexported members ...
-
 	// filters to apply
-	filters []ArticleFilter
-
+	Filters []ArticleFilter
 	// database driver
-	db database.DB
-
+	DB database.DB
 	// global article acceptor
-	globalAcceptor ArticleAcceptor
+	Acceptor ArticleAcceptor
 }
 
 func (s *Server) GotArticle(msgid MessageID, group Newsgroup) {
@@ -76,7 +71,7 @@ func (s *Server) Serve(l net.Listener) (err error) {
 
 // get the article policy for a connection given its state
 func (s *Server) getPolicyFor(state *ConnState) ArticleAcceptor {
-	return s.globalAcceptor
+	return s.Acceptor
 }
 
 func (s *Server) recvInboundStream(chnl chan ArticleEntry) {
@@ -97,7 +92,7 @@ func (s *Server) handleInboundConnection(c net.Conn) {
 		"addr": c.RemoteAddr(),
 	}).Debug("handling inbound connection")
 	var nc Conn
-	nc = newInboundConn(c)
+	nc = newInboundConn(s, c)
 	err := nc.Negotiate()
 	if err == nil {
 		// do they want to stream?
@@ -108,7 +103,7 @@ func (s *Server) handleInboundConnection(c net.Conn) {
 			chnl, _, err = nc.StartStreaming()
 			// for inbound we will recv messages
 			go s.recvInboundStream(chnl)
-			nc.StreamAndQuit(policy, s.filters, s)
+			nc.StreamAndQuit(policy, s.Filters, s)
 			log.WithFields(log.Fields{
 				"pkg":  "nntp-server",
 				"addr": c.RemoteAddr(),
@@ -116,7 +111,7 @@ func (s *Server) handleInboundConnection(c net.Conn) {
 			return
 		} else {
 			// handle non streaming commands
-			nc.ProcessInbound(s.filters, s)
+			nc.ProcessInbound(s.Filters, s)
 		}
 	} else {
 		log.WithFields(log.Fields{

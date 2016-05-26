@@ -4,6 +4,7 @@ import (
 	"crypto/tls"
 	"encoding/json"
 	log "github.com/Sirupsen/logrus"
+	"github.com/majestrate/srndv2/lib/database"
 	"net"
 	"net/textproto"
 	"strings"
@@ -23,12 +24,17 @@ type v1Conn struct {
 	state ConnState
 	// state of tls connection
 	tlsState *tls.ConnectionState
+	// tls config for this connection, nil if we don't support tls
+	tlsConfig *tls.Config
 	// has this connection authenticated yet?
 	authenticated bool
 	// the username logged in with if it has authenticated via user/pass
 	username string
 	// underlying network socket
 	conn net.Conn
+
+	// database connection
+	db database.DB
 
 	// command handlers
 	cmds map[string]lineHandlerFunc
@@ -212,6 +218,88 @@ func switchModeInbound(c *v1Conn, line string) (err error) {
 	return
 }
 
+// handle quit command
+func quitConnection(c *v1Conn, line string) (err error) {
+	log.WithFields(log.Fields{
+		"pkg":     "nntp-conn",
+		"version": "1",
+		"state":   &c.state,
+	}).Debug("quit requested")
+	_ = c.printfLine(Line_RPLQuit)
+	err = c.C.Close()
+	return
+}
+
+// send our capabailities
+func sendCapabilities(c *v1Conn, line string) (err error) {
+	var caps []string
+
+	caps = append(caps, "MODE-READER", "IMPLEMENTATION nntpchand", "STREAMING")
+	if c.tlsConfig != nil {
+		caps = append(caps, "STARTTLS")
+	}
+
+	err = c.printfLine("%s We can do things", RPL_Capabilities)
+	if err == nil {
+		for _, l := range caps {
+			err = c.printfLine(l)
+			if err != nil {
+				log.WithFields(log.Fields{
+					"pkg":     "nntp-conn",
+					"version": "1",
+					"state":   &c.state,
+				}).Error(err)
+			}
+		}
+		err = c.printfLine(".")
+	}
+	return
+}
+
+// handle streaming line
+func streamingLine(c *v1Conn, line string) (err error) {
+	ev := StreamEvent(line)
+	if c.Mode().Is(MODE_STREAM) {
+		if ev.Valid() {
+			// valid stream line
+			cmd := ev.Command()
+			msgid := ev.MessageID().String()
+			if cmd == stream_CHECK {
+				var has bool
+				has, err = c.db.HasArticle(msgid)
+				if err == nil {
+					if has {
+						// do have it, reject
+						err = c.printfLine("%s %s", RPL_StreamingReject, msgid)
+					} else {
+						var banned bool
+						banned, err = c.db.ArticleBanned(msgid)
+						if banned {
+							// it's banned, reject
+							err = c.printfLine("%s %s", RPL_StreamingReject, msgid)
+						} else {
+							// don't have it and not banned, accept
+							err = c.printfLine("%s %s", RPL_StreamingAccept, msgid)
+						}
+					}
+				}
+			}
+		} else {
+			// invalid line
+			err = c.printfLine("%s Invalid syntax", RPL_SyntaxError)
+		}
+	} else {
+		if ev.MessageID().Valid() {
+			// not in streaming mode
+			err = c.printfLine("%s %s", RPL_StreamingDefer, ev.MessageID())
+		} else {
+			// invalid message id
+			err = c.printfLine("%s Invalid Syntax", RPL_SyntaxError)
+		}
+	}
+	return
+}
+
 // inbound streaming start
 func (c *v1IBConn) StartStreaming() (chnl chan ArticleEntry, send bool, err error) {
 	if c.Mode().Is(MODE_STREAM) {
@@ -279,13 +367,18 @@ func (c *v1IBConn) StreamAndQuit(policy ArticleAcceptor, filters []ArticleFilter
 	}
 }
 
-func newInboundConn(c net.Conn) Conn {
+func newInboundConn(s *Server, c net.Conn) Conn {
 	return &v1IBConn{
 		C: v1Conn{
+			db:   s.DB,
 			C:    textproto.NewConn(c),
 			conn: c,
 			cmds: map[string]lineHandlerFunc{
-				"MODE": switchModeInbound,
+				"MODE":         switchModeInbound,
+				"QUIT":         quitConnection,
+				"CAPABILITIES": sendCapabilities,
+				"CHECK":        streamingLine,
+				"TAKETHIS":     streamingLine,
 			},
 		},
 	}

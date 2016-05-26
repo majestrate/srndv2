@@ -53,7 +53,9 @@ func NewPostgresDatabase(host, port, user, password string) Database {
 	if err != nil {
 		log.Fatalf("can`not open connection to db: %s", err)
 	}
-	db.conn.SetConnMaxLifetime(time.Second)
+	db.conn.SetConnMaxLifetime(time.Second * 30)
+	db.conn.SetMaxOpenConns(30)
+	db.conn.SetMaxIdleConns(10)
 	return db
 }
 

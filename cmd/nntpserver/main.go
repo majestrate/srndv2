@@ -4,6 +4,7 @@ import (
 	log "github.com/Sirupsen/logrus"
 	"github.com/majestrate/srndv2/lib/config"
 	"github.com/majestrate/srndv2/lib/nntp"
+	"github.com/majestrate/srndv2/lib/store"
 	"net"
 )
 
@@ -20,6 +21,10 @@ func main() {
 	}
 
 	serv := new(nntp.Server)
+	serv.Storage, err = store.NewFilesytemStorage(conf.Store.Path)
+	if err != nil {
+		log.Fatal(err)
+	}
 	l, err := net.Listen("tcp", conf.NNTP.Bind)
 	if err != nil {
 		log.Fatal(err)

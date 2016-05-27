@@ -3,11 +3,41 @@ package message
 import (
 	"bufio"
 	"io"
+	"mime"
 	"strings"
 )
 
 // an nntp message header
 type Header map[string][]string
+
+// get message-id header
+func (self Header) MessageID() (v string) {
+	for _, hdr := range []string{"MessageID", "Message-ID", "Message-Id", "message-id"} {
+		v = self.Get(hdr, "")
+		if v != "" {
+			break
+		}
+	}
+	return
+}
+
+// extract media type from content-type header
+func (self Header) GetMediaType() (mediatype string, params map[string]string, err error) {
+	return mime.ParseMediaType(self.Get("Content-Type", "text/plain"))
+}
+
+// is this header for a multipart message?
+func (self Header) IsMultipart() bool {
+	return strings.HasPrefix(self.Get("Content-Type", "text/plain"), "multipart/mixed")
+}
+
+func (self Header) IsSigned() bool {
+	return self.Get("X-Pubkey-Ed25519", "") != ""
+}
+
+func (self Header) Newsgroup() string {
+	return self.Get("Newsgroups", "overchan.discard")
+}
 
 // do we have a key in this header?
 func (self Header) Has(key string) bool {
@@ -103,7 +133,7 @@ func (s *HeaderIO) WriteHeader(hdr Header, wr io.Writer) (err error) {
 			// key
 			line = append(line, []byte(k)...)
 			// ": "
-			line = append(line, 32, 58)
+			line = append(line, 58, 32)
 			// value
 			line = append(line, []byte(v)...)
 			// delimiter
@@ -115,6 +145,7 @@ func (s *HeaderIO) WriteHeader(hdr Header, wr io.Writer) (err error) {
 			}
 		}
 	}
+	_, err = wr.Write([]byte{s.delim})
 	return
 }
 

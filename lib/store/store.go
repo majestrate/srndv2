@@ -25,6 +25,9 @@ type Storage interface {
 	// return ErrNoSuchArticle if it does not exist or an error if another error occured while checking
 	HasArticle(msgid string) error
 
+	// delete article from underlying storage
+	DeleteArticle(msgid string) error
+
 	// ensure the underlying storage backend is created
 	Ensure() error
 }

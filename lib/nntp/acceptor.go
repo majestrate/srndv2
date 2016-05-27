@@ -17,6 +17,11 @@ const (
 
 type PolicyStatus int
 
+const PolicyAccept = PolicyStatus(ARTICLE_ACCEPT)
+const PolicyReject = PolicyStatus(ARTICLE_REJECT)
+const PolicyDefer = PolicyStatus(ARTICLE_DEFER)
+const PolicyBan = PolicyStatus(ARTICLE_BAN)
+
 func (s PolicyStatus) String() string {
 	switch int(s) {
 	case ARTICLE_ACCEPT:
@@ -59,4 +64,6 @@ type ArticleAcceptor interface {
 	CheckHeader(hdr message.Header) PolicyStatus
 	// check article given a message id
 	CheckMessageID(msgid MessageID) PolicyStatus
+	// get max article size in bytes
+	MaxArticleSize() int64
 }

@@ -22,7 +22,7 @@ func (fs FilesystemStorage) String() string {
 // ensure the filesystem storage exists and is well formed and read/writable
 func (fs FilesystemStorage) Ensure() (err error) {
 	_, err = os.Stat(fs.String())
-	if err == os.ErrNotExist {
+	if os.IsNotExist(err) {
 		// directory does not exist, create it
 		err = os.Mkdir(fs.String(), 0755)
 		if err != nil {
@@ -39,7 +39,7 @@ func (fs FilesystemStorage) Ensure() (err error) {
 	for _, subdir := range []string{"att", "thm", "articles", "tmp"} {
 		fpath := filepath.Join(fs.String(), subdir)
 		_, err = os.Stat(fpath)
-		if err == os.ErrNotExist {
+		if os.IsNotExist(err) {
 			// make subdirectory
 			err = os.Mkdir(fpath, 0755)
 			if err != nil {
@@ -98,7 +98,8 @@ func (fs FilesystemStorage) StoreArticle(r io.Reader, msgid string) (fpath strin
 		}).Debug("storing article")
 		// don't have an article with this message id, write it to disk
 		var f *os.File
-		f, err = os.OpenFile(fpath, os.O_WRONLY, 0700)
+		fpath = filepath.Join(fs.ArticleDir(), msgid)
+		f, err = os.OpenFile(fpath, os.O_CREATE|os.O_WRONLY, 0700)
 		if err == nil {
 			// file opened okay, defer the close
 			defer f.Close()
@@ -124,8 +125,9 @@ func (fs FilesystemStorage) StoreArticle(r io.Reader, msgid string) (fpath strin
 			}
 		} else {
 			log.WithFields(log.Fields{
-				"pkg":   "fs-store",
-				"msgid": msgid,
+				"pkg":      "fs-store",
+				"msgid":    msgid,
+				"filepath": fpath,
 			}).Error("did not open file for storage", err)
 		}
 	}
@@ -145,6 +147,11 @@ func (fs FilesystemStorage) HasArticle(msgid string) (err error) {
 	if os.IsNotExist(err) {
 		err = ErrNoSuchArticle
 	}
+	return
+}
+
+func (fs FilesystemStorage) DeleteArticle(msgid string) (err error) {
+	err = os.Remove(filepath.Join(fs.ArticleDir(), msgid))
 	return
 }
 

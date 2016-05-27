@@ -17,6 +17,8 @@ type Config struct {
 	// log level
 	Log string `json:"log"`
 
+	Store *StoreConfig `json:"storage"`
+
 	// unexported fields ...
 
 	// absolute filepath to configuration
@@ -25,7 +27,11 @@ type Config struct {
 
 // default configuration
 var DefaultConfig = Config{
+	Store: &StoreConfig{
+		Path: "storage",
+	},
 	NNTP: &NNTPServerConfig{
+
 		Bind: "127.0.0.1:1119",
 		Name: "nntp.server.tld",
 		Article: &ArticleConfig{

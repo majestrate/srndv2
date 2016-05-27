@@ -17,8 +17,8 @@ type Conn interface {
 	PostingAllowed() bool
 
 	// handle inbound non-streaming connection
-	// apply filters sequentially for each article, then call event hooks
-	ProcessInbound(filters []ArticleFilter, hooks EventHooks)
+	// call event hooks on event
+	ProcessInbound(hooks EventHooks)
 
 	// does this connection want to do nntp streaming?
 	WantsStreaming() bool
@@ -37,9 +37,7 @@ type Conn interface {
 
 	// stream articles and quit when the channel obtained by StartStreaming() is
 	// closed, after which this nntp connection is no longer open
-	// check inbound articles with given ArticlePolicy, if article is accepted
-	// apply filters sequentially for each article, then call event hooks
-	StreamAndQuit(acceptor ArticleAcceptor, filters []ArticleFilter, hooks EventHooks)
+	StreamAndQuit(hooks EventHooks)
 
 	// is this nntp connection open?
 	IsOpen() bool

@@ -3,6 +3,8 @@ package nntp
 import (
 	log "github.com/Sirupsen/logrus"
 	"github.com/majestrate/srndv2/lib/database"
+	"github.com/majestrate/srndv2/lib/store"
+
 	"net"
 )
 
@@ -24,6 +26,10 @@ type Server struct {
 	DB database.DB
 	// global article acceptor
 	Acceptor ArticleAcceptor
+	// name of this server
+	Name string
+	// article storage
+	Storage store.Storage
 }
 
 func (s *Server) GotArticle(msgid MessageID, group Newsgroup) {
@@ -74,6 +80,7 @@ func (s *Server) getPolicyFor(state *ConnState) ArticleAcceptor {
 	return s.Acceptor
 }
 
+// recv inbound streaming messages
 func (s *Server) recvInboundStream(chnl chan ArticleEntry) {
 	for {
 		e, ok := <-chnl
@@ -97,13 +104,12 @@ func (s *Server) handleInboundConnection(c net.Conn) {
 	if err == nil {
 		// do they want to stream?
 		if nc.WantsStreaming() {
-			policy := s.getPolicyFor(nc.GetState())
 			// yeeeeeh let's stream
 			var chnl chan ArticleEntry
 			chnl, _, err = nc.StartStreaming()
 			// for inbound we will recv messages
 			go s.recvInboundStream(chnl)
-			nc.StreamAndQuit(policy, s.Filters, s)
+			nc.StreamAndQuit(s)
 			log.WithFields(log.Fields{
 				"pkg":  "nntp-server",
 				"addr": c.RemoteAddr(),
@@ -111,7 +117,7 @@ func (s *Server) handleInboundConnection(c net.Conn) {
 			return
 		} else {
 			// handle non streaming commands
-			nc.ProcessInbound(s.Filters, s)
+			nc.ProcessInbound(s)
 		}
 	} else {
 		log.WithFields(log.Fields{

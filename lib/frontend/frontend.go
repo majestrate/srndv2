@@ -8,7 +8,12 @@ import (
 type Frontend interface {
 
 	// channel that is for the frontend to pool for new posts from the nntpd
-	PostsChan() chan Post
+	// nntp -> frontend
+	InboundPosts() chan Post
+
+	// channel that is for the nntp server to poll for new posts from the frontend
+	// frontend -> nntp
+	OutboundPosts() chan Post
 
 	// run mainloop
 	Mainloop()

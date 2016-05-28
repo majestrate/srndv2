@@ -5,7 +5,9 @@ import (
 	"crypto/tls"
 	"encoding/base64"
 	"encoding/json"
+	"fmt"
 	log "github.com/Sirupsen/logrus"
+	"github.com/majestrate/srndv2/lib/database"
 	"github.com/majestrate/srndv2/lib/model"
 	"github.com/majestrate/srndv2/lib/nntp/message"
 	"github.com/majestrate/srndv2/lib/store"
@@ -50,6 +52,9 @@ type v1Conn struct {
 
 	// article storage
 	storage store.Storage
+
+	// database driver
+	db database.DB
 
 	// command handlers
 	cmds map[string]lineHandlerFunc
@@ -410,6 +415,7 @@ func (c *v1Conn) readArticle(newpost bool, hooks EventHooks) (ps PolicyStatus, e
 								"state":   &c.state,
 								"version": "1",
 							}).Error("error reading part ", err)
+							break
 						}
 					}
 				}
@@ -611,6 +617,47 @@ func (c *v1Conn) readArticle(newpost bool, hooks EventHooks) (ps PolicyStatus, e
 	return
 }
 
+// handle IHAVE command
+func nntpRecvArticle(c *v1Conn, line string, hooks EventHooks) (err error) {
+	parts := strings.Split(line, " ")
+	if len(parts) == 2 {
+		msgid := MessageID(parts[1])
+		if msgid.Valid() {
+			// valid message-id
+			err = c.printfLine("%s send article to be transfered", RPL_TransferAccepted)
+			// read in article
+			if err == nil {
+				var status PolicyStatus
+				status, err = c.readArticle(false, hooks)
+				if err == nil {
+					// we read in article
+					if status.Accept() {
+						// accepted
+						err = c.printfLine("%s transfer wuz gud", RPL_TransferOkay)
+					} else if status.Defer() {
+						// deferred
+						err = c.printfLine("%s transfer defer", RPL_TransferDefer)
+					} else if status.Reject() {
+						// rejected
+						err = c.printfLine("%s transfer rejected, don't send it again brah", RPL_TransferReject)
+					}
+				} else {
+					// could not transfer article
+					err = c.printfLine("%s transfer failed; try again later", RPL_TransferDefer)
+				}
+			}
+		} else {
+			// invalid message-id
+			err = c.printfLine("%s article not wanted", RPL_TransferNotWanted)
+		}
+	} else {
+		// invaldi syntax
+		err = c.printfLine("%s invalid syntax", RPL_SyntaxError)
+	}
+	return
+}
+
+// handle POST command
 func nntpPostArticle(c *v1Conn, line string, hooks EventHooks) (err error) {
 	if c.PostingAllowed() {
 		if c.Mode().Is(MODE_READER) {
@@ -694,6 +741,97 @@ func streamingLine(c *v1Conn, line string, hooks EventHooks) (err error) {
 	return
 }
 
+func newsgroupList(c *v1Conn, line string, hooks EventHooks) (err error) {
+	var groups []string
+	if c.db == nil {
+		// no database driver available
+		// let's say we carry overchan.test for now
+		groups = append(groups, "overchan.test")
+	} else {
+		groups, err = c.db.GetAllNewsgroups()
+	}
+
+	if err == nil {
+		// we got newsgroups from the db
+		dw := c.C.DotWriter()
+		fmt.Fprintf(dw, "%s list of newsgroups follows\n", RPL_List)
+		for _, g := range groups {
+			hi := int64(1)
+			lo := int64(0)
+			if c.db != nil {
+				hi, lo, err = c.db.GetLastAndFirstForGroup(g)
+			}
+			if err != nil {
+				// log error if it occurs
+				log.WithFields(log.Fields{
+					"pkg":   "nntp-conn",
+					"group": g,
+					"state": c.state,
+				}).Warn("cannot get high low water marks for LIST command")
+
+			} else {
+				fmt.Fprintf(dw, "%s %d %d y", g, hi, lo)
+			}
+		}
+		// flush dotwriter
+		err = dw.Close()
+	} else {
+		// db error while getting newsgroup list
+		err = c.printfLine("%s cannot list newsgroups %s", RPL_GenericError, err.Error())
+	}
+	return
+}
+
+// switch to another newsgroup
+func switchNewsgroup(c *v1Conn, line string, hooks EventHooks) (err error) {
+	parts := strings.Split(line, " ")
+	var has bool
+	var group Newsgroup
+	if len(parts) == 2 {
+		group = Newsgroup(parts[1])
+		if group.Valid() {
+			// correct format
+			if c.db == nil {
+				// no database driver
+				has = true
+			} else {
+				has, err = c.db.HasNewsgroup(group.String())
+			}
+		}
+	}
+	if has {
+		// we have it
+		hi := int64(1)
+		lo := int64(0)
+		if c.db != nil {
+			// check database for water marks
+			hi, lo, err = c.db.GetLastAndFirstForGroup(group.String())
+		}
+		if err == nil {
+			// XXX: ensure hi > lo
+			err = c.printfLine("%s %d %d %d %s", RPL_Group, hi-lo, lo, hi, group.String())
+			if err == nil {
+				// line was sent
+				c.state.Group = group
+				log.WithFields(log.Fields{
+					"pkg":   "nntp-conn",
+					"group": group,
+					"state": c.state,
+				}).Debug("switched newsgroups")
+			}
+		} else {
+			err = c.printfLine("%s error checking for newsgroup %s", RPL_GenericError, err.Error())
+		}
+	} else if err != nil {
+		// error
+		err = c.printfLine("%s error checking for newsgroup %s", RPL_GenericError, err.Error())
+	} else {
+		// incorrect format
+		err = c.printfLine("%s no such newsgroup", RPL_NoSuchGroup)
+	}
+	return
+}
+
 // inbound streaming start
 func (c *v1IBConn) StartStreaming() (chnl chan ArticleEntry, send bool, err error) {
 	if c.Mode().Is(MODE_STREAM) {
@@ -735,12 +873,15 @@ func newInboundConn(s *Server, c net.Conn) Conn {
 			C:             textproto.NewConn(c),
 			conn:          c,
 			cmds: map[string]lineHandlerFunc{
+				"IHAVE":        nntpRecvArticle,
 				"POST":         nntpPostArticle,
 				"MODE":         switchModeInbound,
 				"QUIT":         quitConnection,
 				"CAPABILITIES": sendCapabilities,
 				"CHECK":        streamingLine,
 				"TAKETHIS":     streamingLine,
+				"LIST":         newsgroupList,
+				"GROUP":        switchNewsgroup,
 			},
 		},
 	}

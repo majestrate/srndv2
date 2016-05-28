@@ -11,7 +11,7 @@ type ConnState struct {
 	// current nntp mode
 	Mode Mode `json:"mode"`
 	// current selected nntp newsgroup
-	Group string `json:"newsgroup"`
+	Group Newsgroup `json:"newsgroup"`
 	// current selected nntp article
 	Article string `json:"article"`
 	// parent feed's policy

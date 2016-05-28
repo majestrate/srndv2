@@ -18,8 +18,8 @@ type Frontend interface {
 	// run mainloop
 	Mainloop()
 
-	// do we want posts from a newsgroup?
-	AllowNewsgroup(group string) bool
+	// do we accept this inbound post?
+	AllowPost(p Post) bool
 
 	// trigger a manual regen of indexes for a root post
 	Regen(msg model.ArticleEntry)

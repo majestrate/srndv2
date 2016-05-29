@@ -1,6 +1,13 @@
 package config
 
+// proxy configuration
 type ProxyConfig struct {
-	ProxyType string
-	ProxyAddr string
+	Type string `json:"type"`
+	Addr string `json:"addr"`
+}
+
+// default tor proxy
+var DefaultTorProxy = ProxyConfig{
+	Type: "socks",
+	Addr: "127.0.0.1:9050",
 }

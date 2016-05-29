@@ -30,10 +30,9 @@ type Conn interface {
 	// initiate nntp streaming
 	// after calling this the caller MUST call StreamAndQuit()
 	// returns a channel for message ids, true if caller sends on the channel or
-	// false if the channel is for the caller to recv with
 	// returns nil and ErrStreamingNotAllowed if streaming is not allowed on this
 	// connection or another error if one occurs while trying to start streaming
-	StartStreaming() (chan ArticleEntry, bool, error)
+	StartStreaming() (chan ArticleEntry, error)
 
 	// stream articles and quit when the channel obtained by StartStreaming() is
 	// closed, after which this nntp connection is no longer open

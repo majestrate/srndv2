@@ -2,7 +2,9 @@ package network
 
 import (
 	"errors"
+	"github.com/majestrate/srndv2/lib/config"
 	"net"
+	"strings"
 )
 
 // operation timed out
@@ -19,5 +21,17 @@ var ErrRefused = errors.New("refused")
 // returns a net.Conn and nil on success
 // returns nil and error if an error happens while dialing
 type Dialer interface {
-	Dial(remote net.Addr) (net.Conn, error)
+	Dial(remote string) (net.Conn, error)
+}
+
+// create a new dialer from configuration
+func NewDialer(conf *config.ProxyConfig) (d Dialer) {
+	d = StdDialer
+	if conf != nil {
+		proxyType := strings.ToLower(conf.Type)
+		if proxyType == "socks" || proxyType == "socks4a" {
+			d = SocksDialer(conf.Addr)
+		}
+	}
+	return
 }

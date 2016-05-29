@@ -2,10 +2,12 @@ package nntp
 
 import (
 	log "github.com/Sirupsen/logrus"
+	"github.com/majestrate/srndv2/lib/config"
 	"github.com/majestrate/srndv2/lib/database"
+	"github.com/majestrate/srndv2/lib/network"
 	"github.com/majestrate/srndv2/lib/store"
-
 	"net"
+	"time"
 )
 
 // callback hooks fired on certain events
@@ -30,6 +32,10 @@ type Server struct {
 	Name string
 	// article storage
 	Storage store.Storage
+	// nntp config
+	Config *config.NNTPServerConfig
+	// outfeeds to connect to
+	Feeds []*config.FeedConfig
 }
 
 func (s *Server) GotArticle(msgid MessageID, group Newsgroup) {
@@ -52,6 +58,44 @@ func (s *Server) SentArticleVia(msgid MessageID, feedname string) {
 	if s.Hooks != nil {
 		s.Hooks.SentArticleVia(msgid, feedname)
 	}
+}
+
+// persist 1 feed forever
+func (s *Server) persist(cfg *config.FeedConfig) {
+	delay := time.Second
+	for {
+		dialer := network.NewDialer(cfg.Proxy)
+		c, err := dialer.Dial(cfg.Addr)
+		if err == nil {
+			// successful connect
+			delay = time.Second
+			conn := newOutboundConn(c, s, cfg)
+			err = conn.Negotiate()
+			if err == nil {
+				// negotiation good
+
+			} else {
+				log.WithFields(log.Fields{
+					"name": cfg.Name,
+				}).Info("outbound nntp connection failed to negotiate ", err)
+				conn.Quit()
+			}
+		} else {
+			// failed dial, do exponential backoff up to 1 hour
+			if delay <= time.Hour {
+				delay *= 2
+			}
+			log.WithFields(log.Fields{
+				"name": cfg.Name,
+			}).Info("feed backoff for ", delay)
+			time.Sleep(delay)
+		}
+	}
+}
+
+// persist all outbound feeds
+func (s *Server) PersistFeeds() {
+
 }
 
 // serve connections from listener
@@ -106,7 +150,7 @@ func (s *Server) handleInboundConnection(c net.Conn) {
 		if nc.WantsStreaming() {
 			// yeeeeeh let's stream
 			var chnl chan ArticleEntry
-			chnl, _, err = nc.StartStreaming()
+			chnl, err = nc.StartStreaming()
 			// for inbound we will recv messages
 			go s.recvInboundStream(chnl)
 			nc.StreamAndQuit(s)

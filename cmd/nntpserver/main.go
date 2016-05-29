@@ -20,7 +20,10 @@ func main() {
 		log.SetLevel(log.DebugLevel)
 	}
 
-	serv := new(nntp.Server)
+	serv := &nntp.Server{
+		Config: conf.NNTP,
+		Feeds:  conf.Feeds,
+	}
 	serv.Storage, err = store.NewFilesytemStorage(conf.Store.Path)
 	if err != nil {
 		log.Fatal(err)

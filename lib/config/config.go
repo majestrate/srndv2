@@ -27,22 +27,10 @@ type Config struct {
 
 // default configuration
 var DefaultConfig = Config{
-	Store: &StoreConfig{
-		Path: "storage",
-	},
-	NNTP: &NNTPServerConfig{
-
-		Bind: "127.0.0.1:1119",
-		Name: "nntp.server.tld",
-		Article: &ArticleConfig{
-			AllowGroups:          []string{"ctl", "overchan.test"},
-			DisallowGroups:       []string{"overchan.cp"},
-			ForceWhitelist:       false,
-			AllowAnon:            true,
-			AllowAttachments:     true,
-			AllowAnonAttachments: false,
-		},
-	},
+	Store: &DefaultStoreConfig,
+	NNTP:  &DefaultNNTPConfig,
+	Feeds: DefaultFeeds,
+	Log:   "debug",
 }
 
 // reload configuration

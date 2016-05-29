@@ -85,4 +85,3 @@ func GetFilenameForHistory(webroot_dir string) string {
 func GetFilenameForUkko(webroot_dir string) string {
 	return filepath.Join(webroot_dir, "ukko.html")
 }
-

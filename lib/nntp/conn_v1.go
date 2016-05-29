@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"fmt"
 	log "github.com/Sirupsen/logrus"
+	"github.com/majestrate/srndv2/lib/config"
 	"github.com/majestrate/srndv2/lib/database"
 	"github.com/majestrate/srndv2/lib/model"
 	"github.com/majestrate/srndv2/lib/nntp/message"
@@ -32,8 +33,9 @@ type v1Conn struct {
 
 	// connection state (mutable)
 	state ConnState
-	// state of tls connection
-	tlsState *tls.ConnectionState
+
+	// tls connection if tls is established
+	tlsConn *tls.Conn
 	// tls config for this connection, nil if we don't support tls
 	tlsConfig *tls.Config
 	// has this connection authenticated yet?
@@ -71,7 +73,11 @@ func (c *v1Conn) MarshalJSON() ([]byte, error) {
 	j := make(map[string]interface{})
 	j["state"] = c.state
 	j["authed"] = c.authenticated
-	j["tls"] = c.tlsState
+	if c.tlsConn == nil {
+		j["tls"] = nil
+	} else {
+		j["tls"] = c.tlsConn.ConnectionState()
+	}
 	return json.Marshal(j)
 }
 
@@ -105,7 +111,7 @@ func (c *v1Conn) Mode() Mode {
 
 // is posting allowed rignt now?
 func (c *v1Conn) PostingAllowed() bool {
-	return c.authenticated
+	return c.Authed()
 }
 
 // process incoming commands
@@ -117,7 +123,7 @@ func (c *v1Conn) Process(hooks EventHooks) {
 		line, err = c.readline()
 		if len(line) == 0 {
 			// eof (proably?)
-			c.C.Close()
+			c.Close()
 			return
 		}
 
@@ -134,16 +140,73 @@ func (c *v1Conn) Process(hooks EventHooks) {
 	}
 }
 
-type v1RemoteConn struct {
-	C v1Conn
+type v1OBConn struct {
+	C               v1Conn
+	supports_stream bool
+}
+
+func (c *v1OBConn) IsOpen() bool {
+	return c.IsOpen()
+}
+
+func (c *v1OBConn) Mode() Mode {
+	return c.Mode()
+}
+
+func (c *v1OBConn) Negotiate() (err error) {
+	return
+}
+
+func (c *v1OBConn) PostingAllowed() bool {
+	return c.PostingAllowed()
+}
+
+func (c *v1OBConn) ProcessInbound(hooks EventHooks) {
+
+}
+
+func (c *v1OBConn) WantsStreaming() bool {
+	return c.supports_stream
+}
+
+func (c *v1OBConn) StreamAndQuit(hook EventHooks) {
+	for {
+
+	}
+}
+
+func (c *v1OBConn) Quit() {
+	c.C.printfLine("QUIT")
+	c.C.readline()
+	c.C.Close()
+}
+
+func (c *v1OBConn) StartStreaming() (chnl chan ArticleEntry, err error) {
+
+	return
+}
+
+func (c *v1OBConn) GetState() *ConnState {
+	return c.GetState()
 }
 
 // create a new connection from an established connection
-func newOutboundConn(c net.Conn) *v1RemoteConn {
-	return &v1RemoteConn{
+func newOutboundConn(c net.Conn, s *Server, conf *config.FeedConfig) Conn {
+	sname := s.Name
+	if len(sname) == 0 {
+		sname = "nntp.anon.tld"
+	}
+	storage := s.Storage
+	if storage == nil {
+		storage = store.NewNullStorage()
+	}
+	return &v1OBConn{
 		C: v1Conn{
-			C:    textproto.NewConn(c),
-			conn: c,
+			serverName: sname,
+			storage:    storage,
+			C:          textproto.NewConn(c),
+			conn:       c,
+			hdrio:      message.NewHeaderIO(),
 		},
 	}
 }
@@ -182,7 +245,24 @@ func (c *v1IBConn) Quit() {
 		"pkg":  "nntp-ibconn",
 		"addr": c.C.conn.RemoteAddr(),
 	}).Info("closing inbound connection")
-	c.C.conn.Close()
+	c.C.Close()
+}
+
+// is this connection authenticated?
+func (c *v1Conn) Authed() bool {
+	return c.tlsConn != nil || c.authenticated
+}
+
+// unconditionally close connection
+func (c *v1Conn) Close() {
+	if c.tlsConn == nil {
+		// tls is not on
+		c.C.Close()
+	} else {
+		// tls is on
+		// we should close tls cleanly
+		c.tlsConn.Close()
+	}
 }
 
 func (c *v1IBConn) WantsStreaming() bool {
@@ -247,8 +327,8 @@ func quitConnection(c *v1Conn, line string, hooks EventHooks) (err error) {
 		"version": "1",
 		"state":   &c.state,
 	}).Debug("quit requested")
-	_ = c.printfLine(Line_RPLQuit)
-	err = c.C.Close()
+	err = c.printfLine(Line_RPLQuit)
+	c.Close()
 	return
 }
 
@@ -518,13 +598,30 @@ func (c *v1Conn) readArticle(newpost bool, hooks EventHooks) (ps PolicyStatus, e
 			} else {
 				// not a new post, get from header
 				msgid = MessageID(hdr.MessageID())
-				if !msgid.Valid() {
+				if msgid.Valid() {
+					// check store fo existing article
+					err = c.storage.HasArticle(msgid.String())
+					if err == ErrArticleNotFound {
+						// we don't have the article
+						status = PolicyAccept
+					} else if err == nil {
+						// we do have the article, reject it we don't need it again
+						status = PolicyReject
+					} else {
+						// some other error happened
+						log.WithFields(log.Fields{
+							"pkg":   "nntp-conn",
+							"state": c.state,
+						}).Error("failed to check store for article ", err)
+					}
+					err = nil
+				} else {
 					// bad article
 					status = PolicyBan
 				}
 			}
-			// check the header if we have an acceptor
-			if status != PolicyBan && c.acceptor != nil {
+			// check the header if we have an acceptor and the previous checks are good
+			if status.Accept() && c.acceptor != nil {
 				status = c.acceptor.CheckHeader(hdr)
 			}
 			// prepare to write header
@@ -601,16 +698,12 @@ func (c *v1Conn) readArticle(newpost bool, hooks EventHooks) (ps PolicyStatus, e
 		}
 		// close info channel for store
 		close(store_info_chnl)
-		log.Println("close out_w")
 		out_w.Close()
 		// close body pipe
-		log.Println("close body_w")
 		body_w.Close()
 		// inform result
 		accept_chnl <- status
 	}(article_r, store_w, article_body_w)
-
-	log.Println("running read")
 
 	ps = <-done_chnl
 	close(done_chnl)
@@ -702,7 +795,14 @@ func streamingLine(c *v1Conn, line string, hooks EventHooks) (err error) {
 					// no acceptor, we'll take them all
 					err = c.printfLine("%s %s", RPL_StreamingAccept, msgid)
 				} else {
-					status := c.acceptor.CheckMessageID(ev.MessageID())
+					status := PolicyAccept
+					if c.storage.HasArticle(msgid.String()) == nil {
+						// we have this article
+						status = PolicyReject
+					}
+					if status.Accept() && c.acceptor != nil {
+						status = c.acceptor.CheckMessageID(ev.MessageID())
+					}
 					if status.Accept() {
 						// accepted
 						err = c.printfLine("%s %s", RPL_StreamingAccept, msgid)
@@ -782,6 +882,34 @@ func newsgroupList(c *v1Conn, line string, hooks EventHooks) (err error) {
 	return
 }
 
+// handle inbound STARTTLS command
+func upgradeTLS(c *v1Conn, line string, hooks EventHooks) (err error) {
+	if c.tlsConfig == nil {
+		err = c.printfLine("%s TLS not supported", RPL_TLSRejected)
+	} else {
+		err = c.printfLine("%s Continue with TLS Negotiation", RPL_TLSContinue)
+		if err == nil {
+			tconn := tls.Server(c.conn, c.tlsConfig)
+			err = tconn.Handshake()
+			if err == nil {
+				// successful tls handshake
+				c.tlsConn = tconn
+				c.C = textproto.NewConn(c.tlsConn)
+			} else {
+				// tls failed
+				log.WithFields(log.Fields{
+					"pkg":   "nntp-conn",
+					"addr":  c.conn.RemoteAddr(),
+					"state": c.state,
+				}).Warn("TLS Handshake failed ", err)
+				// fall back to plaintext
+				err = nil
+			}
+		}
+	}
+	return
+}
+
 // switch to another newsgroup
 func switchNewsgroup(c *v1Conn, line string, hooks EventHooks) (err error) {
 	parts := strings.Split(line, " ")
@@ -833,7 +961,7 @@ func switchNewsgroup(c *v1Conn, line string, hooks EventHooks) (err error) {
 }
 
 // inbound streaming start
-func (c *v1IBConn) StartStreaming() (chnl chan ArticleEntry, send bool, err error) {
+func (c *v1IBConn) StartStreaming() (chnl chan ArticleEntry, err error) {
 	if c.Mode().Is(MODE_STREAM) {
 		chnl = make(chan ArticleEntry)
 	} else {
@@ -863,9 +991,13 @@ func newInboundConn(s *Server, c net.Conn) Conn {
 	if storage == nil {
 		storage = store.NewNullStorage()
 	}
+	anon := false
+	if s.Config != nil {
+		anon = s.Config.AnonNNTP
+	}
 	return &v1IBConn{
 		C: v1Conn{
-			authenticated: true,
+			authenticated: anon,
 			serverName:    sname,
 			storage:       storage,
 			acceptor:      s.Acceptor,
@@ -873,6 +1005,7 @@ func newInboundConn(s *Server, c net.Conn) Conn {
 			C:             textproto.NewConn(c),
 			conn:          c,
 			cmds: map[string]lineHandlerFunc{
+				"STARTTLS":     upgradeTLS,
 				"IHAVE":        nntpRecvArticle,
 				"POST":         nntpPostArticle,
 				"MODE":         switchModeInbound,

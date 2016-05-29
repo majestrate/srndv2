@@ -99,6 +99,9 @@ const RPL_ContinueAuthorization = "350"
 // more authentication info required
 const RPL_MoreAuth = "381"
 
+// continue with tls handshake
+const RPL_TLSContinue = "382"
+
 // 4xx codes
 
 // server says servive is not avaiable on initial connection
@@ -189,6 +192,9 @@ const RPL_FeatureNotSupported = "503"
 
 // message encoding is bad
 const RPL_EncodingError = "504"
+
+// starttls can not be done
+const RPL_TLSRejected = "580"
 
 // line sent on invalid mode
 const Line_InvalidMode = RPL_SyntaxError + " Invalid Mode Selected"

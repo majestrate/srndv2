@@ -10,18 +10,27 @@ type FeedConfig struct {
 	Policy *ArticleConfig `json:"policy"`
 	// remote server's address
 	Addr string `json:"addr"`
-	// do we want to periodically pull from this server?
-	PullSync bool `json:"pull_enabled"`
 	// proxy server config
 	Proxy *ProxyConfig `json:"proxy"`
 	// nntp username to log in with
-	Username string `json:"-"`
+	Username string `json:"username"`
 	// nntp password to use when logging in
-	Password string `json:"-"`
+	Password string `json:"password"`
 	// do we want to use tls?
 	TLS bool `json:"tls"`
 	// the name of this feed
 	Name string `json:"name"`
 	// how often to pull articles from the server
-	PullInterval time.Duration `json:"pull_interval"`
+	// 0 for never
+	PullInterval time.Duration `json:"pull"`
+}
+
+var DuummyFeed = FeedConfig{
+	Policy: &DefaultArticlePolicy,
+	Addr:   "nntp.dummy.tld:1119",
+	Proxy:  &DefaultTorProxy,
+}
+
+var DefaultFeeds = []*FeedConfig{
+	&DuummyFeed,
 }

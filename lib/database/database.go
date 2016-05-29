@@ -102,7 +102,7 @@ type DB interface {
 	GetGroupForPage(newsgroup string, pageno, perpage int) (*model.BoardPage, error)
 
 	// get the threads for ukko page
-	GetUkkoThreads(newsgroup string, threadcount int) ([]*model.Thread, error)
+	GetUkkoThreads(threadcount int) ([]*model.Thread, error)
 
 	// get a post model for a single post
 	GetPost(messageID string) (*model.Post, error)

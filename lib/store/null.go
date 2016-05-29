@@ -33,6 +33,11 @@ func (n *nullStore) Ensure() (err error) {
 	return
 }
 
+func (n *nullStore) OpenArticle(msgid string) (r io.ReadCloser, err error) {
+	err = ErrNoSuchArticle
+	return
+}
+
 // create a storage backend that does nothing
 func NewNullStorage() Storage {
 	return &nullStore{}

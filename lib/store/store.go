@@ -28,6 +28,9 @@ type Storage interface {
 	// delete article from underlying storage
 	DeleteArticle(msgid string) error
 
+	// open article for reading
+	OpenArticle(msgid string) (io.ReadCloser, error)
+
 	// ensure the underlying storage backend is created
 	Ensure() error
 }

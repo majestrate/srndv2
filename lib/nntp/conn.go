@@ -36,7 +36,7 @@ type Conn interface {
 
 	// stream articles and quit when the channel obtained by StartStreaming() is
 	// closed, after which this nntp connection is no longer open
-	StreamAndQuit(hooks EventHooks)
+	StreamAndQuit()
 
 	// is this nntp connection open?
 	IsOpen() bool

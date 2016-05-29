@@ -33,7 +33,6 @@ type v1Conn struct {
 
 	// connection state (mutable)
 	state ConnState
-
 	// tls connection if tls is established
 	tlsConn *tls.Conn
 	// tls config for this connection, nil if we don't support tls
@@ -48,16 +47,14 @@ type v1Conn struct {
 	serverName string
 	// article acceptor checks if we want articles
 	acceptor ArticleAcceptor
-
 	// headerIO for read/write of article header
 	hdrio *message.HeaderIO
-
 	// article storage
 	storage store.Storage
-
 	// database driver
 	db database.DB
-
+	// event callbacks
+	hooks EventHooks
 	// command handlers
 	cmds map[string]lineHandlerFunc
 }
@@ -143,6 +140,7 @@ func (c *v1Conn) Process(hooks EventHooks) {
 type v1OBConn struct {
 	C               v1Conn
 	supports_stream bool
+	streamChnl      chan ArticleEntry
 }
 
 func (c *v1OBConn) IsOpen() bool {
@@ -169,9 +167,110 @@ func (c *v1OBConn) WantsStreaming() bool {
 	return c.supports_stream
 }
 
-func (c *v1OBConn) StreamAndQuit(hook EventHooks) {
+func (c *v1OBConn) StreamAndQuit() {
 	for {
+		e, ok := <-c.streamChnl
+		if ok {
+			// do CHECK
+			msgid := e.MessageID()
+			if !msgid.Valid() {
+				log.WithFields(log.Fields{
+					"pkg":   "nntp-conn",
+					"state": c.C.state,
+					"msgid": msgid,
+				}).Warn("Dropping stream event with invalid message-id")
+				continue
+			}
+			// send line
+			err := c.C.printfLine("%s %s", stream_CHECK, msgid)
+			if err == nil {
+				// read response
+				var line string
+				line, err = c.C.readline()
+				ev := StreamEvent(line)
+				if ev.Valid() {
+					cmd := ev.Command()
+					if cmd == RPL_StreamingAccept {
+						// accepted to send
 
+						// check if we really have it in storage
+						err = c.C.storage.HasArticle(msgid.String())
+						if err == nil {
+							var r io.ReadCloser
+							r, err = c.C.storage.OpenArticle(msgid.String())
+							if err == nil {
+								log.WithFields(log.Fields{
+									"pkg":   "nntp-conn",
+									"state": c.C.state,
+									"msgid": msgid,
+								}).Debug("article accepted will send via TAKETHIS now")
+								_ = c.C.printfLine("%s %s", stream_TAKETHIS, msgid)
+								n, _ := io.Copy(c.C.C.W, r)
+								r.Close()
+								err = c.C.printfLine(".")
+								if err == nil {
+									// successful takethis sent
+									log.WithFields(log.Fields{
+										"pkg":   "nntp-conn",
+										"state": c.C.state,
+										"msgid": msgid,
+										"bytes": n,
+									}).Debug("article transfer done")
+									// read response
+									line, err = c.C.readline()
+									ev := StreamEvent(line)
+									if ev.Valid() {
+										// valid reply
+										cmd := ev.Command()
+										if cmd == RPL_StreamingTransfered {
+											// successful transfer
+											log.WithFields(log.Fields{
+												"feed":  c.C.state.FeedName,
+												"msgid": msgid,
+												"bytes": n,
+											}).Debug("Article Transferred")
+											// call hooks
+											go c.C.hooks.SentArticleVia(msgid, c.C.state.FeedName)
+										} else {
+											// failed transfer
+											log.WithFields(log.Fields{
+												"feed":  c.C.state.FeedName,
+												"msgid": msgid,
+												"bytes": n,
+											}).Debug("Article Rejected")
+										}
+									}
+								}
+							}
+						} else {
+							log.WithFields(log.Fields{
+								"pkg":   "nntp-conn",
+								"state": c.C.state,
+								"msgid": msgid,
+							}).Warn("article not in storage, not sending")
+						}
+					}
+				} else {
+					// invalid reply
+					log.WithFields(log.Fields{
+						"pkg":   "nntp-conn",
+						"state": c.C.state,
+						"msgid": msgid,
+						"line":  line,
+					}).Warn("invalid streaming response")
+				}
+			} else {
+				log.WithFields(log.Fields{
+					"pkg":   "nntp-conn",
+					"state": c.C.state,
+					"msgid": msgid,
+				}).Error("streaming error during CHECK", err)
+				return
+			}
+		} else {
+			// channel closed
+			return
+		}
 	}
 }
 
@@ -182,7 +281,11 @@ func (c *v1OBConn) Quit() {
 }
 
 func (c *v1OBConn) StartStreaming() (chnl chan ArticleEntry, err error) {
+	if c.streamChnl == nil {
+		c.streamChnl = make(chan ArticleEntry)
 
+	}
+	chnl = c.streamChnl
 	return
 }
 
@@ -202,6 +305,11 @@ func newOutboundConn(c net.Conn, s *Server, conf *config.FeedConfig) Conn {
 	}
 	return &v1OBConn{
 		C: v1Conn{
+			state: ConnState{
+				FeedName: conf.Name,
+				HostName: conf.Addr,
+				Open:     true,
+			},
 			serverName: sname,
 			storage:    storage,
 			C:          textproto.NewConn(c),
@@ -263,6 +371,7 @@ func (c *v1Conn) Close() {
 		// we should close tls cleanly
 		c.tlsConn.Close()
 	}
+	c.state.Open = false
 }
 
 func (c *v1IBConn) WantsStreaming() bool {
@@ -979,7 +1088,7 @@ func (c *v1IBConn) ProcessInbound(hooks EventHooks) {
 }
 
 // inbound streaming handling
-func (c *v1IBConn) StreamAndQuit(hooks EventHooks) {
+func (c *v1IBConn) StreamAndQuit() {
 }
 
 func newInboundConn(s *Server, c net.Conn) Conn {
@@ -997,6 +1106,11 @@ func newInboundConn(s *Server, c net.Conn) Conn {
 	}
 	return &v1IBConn{
 		C: v1Conn{
+			state: ConnState{
+				FeedName: "inbound-feed",
+				HostName: c.RemoteAddr().String(),
+				Open:     true,
+			},
 			authenticated: anon,
 			serverName:    sname,
 			storage:       storage,

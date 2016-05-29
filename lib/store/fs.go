@@ -242,6 +242,13 @@ func (fs FilesystemStorage) StoreAttachment(r io.Reader, filename string) (fpath
 	return
 }
 
+// open article given message-id
+// does not check validity
+func (fs FilesystemStorage) OpenArticle(msgid string) (r io.ReadCloser, err error) {
+	r, err = os.Open(filepath.Join(fs.ArticleDir(), msgid))
+	return
+}
+
 // create a new filesystem storage directory
 // ensure directory and subdirectories
 func NewFilesytemStorage(dirname string) (fs FilesystemStorage, err error) {

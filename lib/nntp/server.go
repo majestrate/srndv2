@@ -153,7 +153,7 @@ func (s *Server) handleInboundConnection(c net.Conn) {
 			chnl, err = nc.StartStreaming()
 			// for inbound we will recv messages
 			go s.recvInboundStream(chnl)
-			nc.StreamAndQuit(s)
+			nc.StreamAndQuit()
 			log.WithFields(log.Fields{
 				"pkg":  "nntp-server",
 				"addr": c.RemoteAddr(),

@@ -88,6 +88,8 @@ const (
 	ARTICLE_ATTACHMENT_KR_PREFIX      = APP_PREFIX + "ArticleAttachmentsKR::"
 	ATTACHMENT_ARTICLE_KR_PREFIX      = APP_PREFIX + "AttachmentArticlesKR::"
 	IP_RANGE_BAN_KR                   = APP_PREFIX + "IPRangeBanKR"
+	IP_ARTICLE_KR_PREFIX              = APP_PREFIX + "AddrArticle::"
+	IP_WKR                            = APP_PREFIX + "AddrWKR"
 )
 
 type RedisDB struct {
@@ -203,7 +205,7 @@ func (self RedisDB) NukeNewsgroup(group string, store ArticleStore) {
 	self.client.Del(GROUP_MOD_KEY_REVERSE_KR_PREFIX + group)
 	self.client.Del(GROUP_ARTICLE_POSTTIME_WKR_PREFIX+group, GROUP_THREAD_POSTTIME_WKR_PREFIX+group, GROUP_THREAD_BUMPTIME_WKR_PREFIX+group) //these should be empty at this point anyway
 	self.client.ZRem(GROUP_POSTTIME_WKR, group)
-	self.client.ZRem(ARTICLE_NUMBERS_PREFIX+"last", group)
+	self.client.ZRem(ARTICLE_NUMBERS_PREFIX+"last", group)github.com/majestrate/srndv2/lib/database
 
 	log.Println("nuke of", group, "done")
 }
@@ -535,6 +537,19 @@ func (self RedisDB) DeleteArticle(msgid string) error {
 		}
 		self.client.Del(ARTICLE_ATTACHMENT_KR_PREFIX + msgid)
 		self.client.ZRem(ARTICLE_NUMBERS_PREFIX+"group::"+p.Board, msgid)
+
+		addr := p.Addr
+		ip := net.ParseIP(addr)
+		if ip != nil {
+			addr = util.ZeroIPString(ip)
+		}
+		self.client.SRem(IP_ARTICLE_KR_PREFIX+addr, msgid)
+		if ip != nil {
+			count, err := self.client.SRem(IP_ARTICLE_KR_PREFIX + addr).Result()
+			if err == nil && count <= 0 {
+				self.client.ZRem(IP_WKR, addr)
+			}
+		}
 	}
 	return err
 }
@@ -653,6 +668,18 @@ func (self RedisDB) RegisterArticle(message *model.Article) (err error) {
 	if has {
 		return
 	}
+
+	//insert IP
+
+	addr := message.Addr
+	ip := net.ParseIP(addr)
+
+	if ip != nil {
+		addr = util.ZeroIPString(ip)
+		pipe.ZAddNX(IP_RANGE_BAN_KR, redis.Z{Score: 0.0, Member: addr})
+	}
+	pipe.SAdd(IP_ARTICLE_KR_PREFIX+addr, msgid)
+
 	now := util.TimeNow()
 
 	// insert article metadata
@@ -664,7 +691,7 @@ func (self RedisDB) RegisterArticle(message *model.Article) (err error) {
 	pipe.ZAddNX(GROUP_ARTICLE_POSTTIME_WKR_PREFIX+group, redis.Z{Score: float64(now), Member: msgid})
 
 	// insert article post
-	pipe.HMSet(ARTICLE_POST_PREFIX+msgid, "newsgroup", group, "message_id", msgid, "ref_id", message.Reference, "name", message.Name, "subject", message.Subject, "path", message.Path, "time_posted", strconv.Itoa(int(message.Posted)), "message", message.Text, "addr", message.Addr)
+	pipe.HMSet(ARTICLE_POST_PREFIX+msgid, "newsgroup", group, "message_id", msgid, "ref_id", message.Reference, "name", message.Name, "subject", message.Subject, "path", message.Path, "time_posted", strconv.Itoa(int(message.Posted)), "message", message.Text, "addr", addr)
 
 	if group != "ctl" { // control messages aren't added to the global keyring
 		pipe.ZAddNX(ARTICLE_WKR, redis.Z{Score: float64(now), Member: msgid})
@@ -690,7 +717,6 @@ func (self RedisDB) RegisterArticle(message *model.Article) (err error) {
 		pipe.ZAddXX(GROUP_THREAD_POSTTIME_WKR_PREFIX+group, redis.Z{Score: float64(message.Posted), Member: ref})
 		pipe.ZAddNX(THREAD_POST_WKR+ref, redis.Z{Score: float64(message.Posted), Member: msgid})
 	}
-
 	// register article header
 	for k, val := range message.Header {
 		k = strings.ToLower(k)
@@ -777,14 +803,21 @@ func (self RedisDB) GetThreadsPerPage(group string) (int, error) {
 }
 
 func (self RedisDB) GetMessageIDByCIDR(cidr *net.IPNet) (msgids []string, err error) {
-	// TODO: implement
-	err = errors.New("not implemented in redis driver")
+	min, max := util.IPNet2MinMax(cidr)
+	start := util.ZeroIPString(min)
+	stop := util.ZeroIPString(max)
+	res, err := self.client.ZRangeByLex(IP_WKR, redis.ZRangeByScore{Min: "[" + start, Max: "[" + stop}).Result()
+	if err == nil && len(res) > 0 {
+		for _, ip := range res {
+			posts, _ := self.client.SMembers(IP_ARTICLE_KR_PREFIX + ip).Result()
+			msgids = append(msgids, posts...)
+		}
+	}
 	return
 }
 
 func (self RedisDB) GetMessageIDByEncryptedIP(encip string) (msgids []string, err error) {
-	// TOOD: implement
-	err = errors.New("not implemented in redis driver")
+	msgids, err = self.client.SMembers(IP_ARTICLE_KR_PREFIX + encip).Result()
 	return
 }
 

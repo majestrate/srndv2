@@ -4,4 +4,5 @@ type Attachment struct {
 	Path string
 	Name string
 	Mime string
+	Hash string
 }

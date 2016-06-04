@@ -10,7 +10,7 @@ import (
 
 func main() {
 
-	log.Info("starting up nntp server")
+	log.Info("starting NNTP server...")
 	conf, err := config.Ensure("settings.json")
 	if err != nil {
 		log.Fatal(err)

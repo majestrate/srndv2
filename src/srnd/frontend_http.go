@@ -102,9 +102,10 @@ type httpFrontend struct {
 
 	upgrader *websocket.Upgrader
 
-	jsonUsername string
-	jsonPassword string
-	enableJson   bool
+	jsonUsername        string
+	jsonPassword        string
+	enableJson          bool
+	enableBoardCreation bool
 
 	attachmentLimit int
 
@@ -516,7 +517,7 @@ func (self *httpFrontend) handle_postform(wr http.ResponseWriter, r *http.Reques
 			io.WriteString(wr, template.renderTemplate("post_success.mustache", map[string]interface{}{"prefix": self.prefix, "message_id": nntp.MessageID(), "redirect_url": url}))
 		}
 	}
-	self.handle_postRequest(&pr, b, e, s, false)
+	self.handle_postRequest(&pr, b, e, s, self.enableBoardCreation)
 }
 
 // turn a post request into an nntp article write it to temp dir and tell daemon
@@ -1051,7 +1052,7 @@ func (self *httpFrontend) Mainloop() {
 	m.Path("/img/{f}").Handler(http.FileServer(http.Dir(self.webroot_dir)))
 	m.Path("/{f}.html").Handler(cache_handler).Methods("GET", "HEAD")
 	m.Path("/{f}.json").Handler(cache_handler).Methods("GET", "HEAD")
-	m.Path("/static/{f}").Handler(http.FileServer(http.Dir(self.static_dir)))
+	m.PathPrefix("/static/").Handler(http.FileServer(http.Dir(self.static_dir)))
 	m.Path("/post/{f}").HandlerFunc(self.handle_poster).Methods("POST")
 	m.Path("/captcha/img").HandlerFunc(self.new_captcha).Methods("GET")
 	m.Path("/captcha/{f}").Handler(captcha.Server(350, 175)).Methods("GET")
@@ -1113,6 +1114,7 @@ func NewHTTPFrontend(daemon *NNTPDaemon, cache CacheInterface, config map[string
 	front.template_dir = config["templates"]
 	front.prefix = config["prefix"]
 	front.regen_on_start = config["regen_on_start"] == "1"
+	front.enableBoardCreation = config["board_creation"] == "1"
 	if config["json-api"] == "1" {
 		front.jsonUsername = config["json-api-username"]
 		front.jsonPassword = config["json-api-password"]

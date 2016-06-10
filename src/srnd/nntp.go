@@ -227,6 +227,7 @@ func (self *nntpConnection) outboundHandshake(conn *textproto.Conn, conf *FeedCo
 					code, line, err = conn.ReadCodeLine(281)
 					if code == 281 {
 						log.Println(self.name, "Auth Successful")
+						self.authenticated = true
 					} else {
 						log.Println(self.name, "Auth incorrect", line)
 						conn.PrintfLine("QUIT")

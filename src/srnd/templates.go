@@ -5,8 +5,10 @@
 package srnd
 
 import (
+	"bytes"
 	"encoding/json"
 	"github.com/cbroglie/mustache"
+	tinyhtml "github.com/whyrusleeping/tinyhtml"
 	"io"
 	"io/ioutil"
 	"log"
@@ -36,6 +38,8 @@ type templateEngine struct {
 	groups_mtx sync.RWMutex
 	// mutex for accessing templates
 	templates_mtx sync.RWMutex
+	// do we want to minimize the html generated?
+	Minimize bool
 }
 
 func (self *templateEngine) templateCached(name string) (ok bool) {
@@ -249,7 +253,13 @@ func (self *templateEngine) renderTemplate(name string, obj map[string]interface
 
 // write a template to an io.Writer
 func (self *templateEngine) writeTemplate(name string, obj map[string]interface{}, wr io.Writer) (err error) {
-	_, err = io.WriteString(wr, self.renderTemplate(name, obj))
+	str := self.renderTemplate(name, obj)
+	var r io.Reader
+	r = bytes.NewBufferString(str)
+	if self.Minimize {
+		r = tinyhtml.New(r)
+	}
+	_, err = io.Copy(wr, r)
 	return
 }
 

@@ -182,6 +182,7 @@ func GenSRNdConfig() *configparser.Configuration {
 	sect.Add("bind", "[::]:18000")
 	sect.Add("name", "web.srndv2.test")
 	sect.Add("webroot", "webroot")
+	sect.Add("minimize_html", "0")
 	sect.Add("prefix", "/")
 	sect.Add("static_files", "contrib")
 	sect.Add("templates", "contrib/templates/default")

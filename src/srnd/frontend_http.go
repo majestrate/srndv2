@@ -1103,6 +1103,7 @@ func (self *httpFrontend) endLiveUI() {
 
 // create a new http based frontend
 func NewHTTPFrontend(daemon *NNTPDaemon, cache CacheInterface, config map[string]string, url string) Frontend {
+	template.Minimize = config["minimize_html"] == "1"
 	front := new(httpFrontend)
 	front.daemon = daemon
 	front.cache = cache

@@ -510,8 +510,10 @@ func (self *thread) Replies() []PostModel {
 		var replies []PostModel
 		// inject post index
 		for idx, post := range self.Posts[1:] {
-			post.SetIndex(idx + 1)
-			replies = append(replies, post)
+			if post != nil {
+				post.SetIndex(idx + 1)
+				replies = append(replies, post)
+			}
 		}
 		return replies
 	}

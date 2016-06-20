@@ -14,6 +14,7 @@ import (
 	"path/filepath"
 	"strings"
 	"time"
+        "os"
 )
 
 type FeedConfig struct {
@@ -66,28 +67,34 @@ type SRNdConfig struct {
 // generate defaults on demand
 func CheckConfig() {
 	if !CheckFile("srnd.ini") {
-		var conf *configparser.Configuration
-		if !InstallerEnabled() {
-			log.Println("no srnd.ini, creating...")
-			conf = GenSRNdConfig()
-		} else {
-			res := make(chan *configparser.Configuration)
-			installer := NewInstaller(res)
-			go installer.Start()
-			conf = <-res
-			installer.Stop()
-			close(res)
+		log.Println("No srnd.ini file found in working directory...")
+		if !CheckFile(os.Getenv("SRND_INI_PATH")) {
+			log.Printf("No config file found at %s...", os.Getenv("SRND_INI_PATH"))
+			var conf *configparser.Configuration
+			if !InstallerEnabled() {
+				log.Println("Creating srnd.ini in working directory...")
+				conf = GenSRNdConfig()
+			} else {
+				res := make(chan *configparser.Configuration)
+				installer := NewInstaller(res)
+				go installer.Start()
+				conf = <-res
+				installer.Stop()
+				close(res)
+			}
+			err := configparser.Save(conf, "srnd.ini")
+			if err != nil {
+				log.Fatal("cannot generate srnd.ini", err)
+			}
 		}
-		err := configparser.Save(conf, "srnd.ini")
-		if err != nil {
-			log.Fatal("cannot generate srnd.ini", err)
-		}
-	}
-	if !CheckFile("feeds.ini") {
-		log.Println("no feeds.ini, creating...")
-		err := GenFeedsConfig()
-		if err != nil {
-			log.Fatal("cannot generate feeds.ini", err)
+		if !CheckFile("feeds.ini") {
+			if !CheckFile(os.Getenv("SRND_FEEDS_INI_PATH")) {
+				log.Println("no feeds.ini, creating...")
+				err := GenFeedsConfig()
+				if err != nil {
+					log.Fatal("cannot generate feeds.ini", err)
+				}
+			}
 		}
 	}
 }
@@ -240,10 +247,17 @@ func ReadConfig() *SRNdConfig {
 	// begin read srnd.ini
 
 	fname := "srnd.ini"
+
+	if os.Getenv("SRND_INI_PATH") != "" {
+		if CheckFile(os.Getenv("SRND_INI_PATH")) {
+			log.Printf("found SRND config at %s...", os.Getenv("SRND_INI_PATH"))
+			fname = os.Getenv("SRND_INI_PATH")
+		}
+	}
 	var s *configparser.Section
 	conf, err := configparser.Read(fname)
 	if err != nil {
-		log.Fatal("cannot read config file", fname)
+		log.Fatal("cannot read config file ", fname)
 		return nil
 	}
 	var sconf SRNdConfig
@@ -335,16 +349,24 @@ func ReadConfig() *SRNdConfig {
 	// begin load feeds.ini
 
 	fname = "feeds.ini"
+
+	if os.Getenv("SRND_FEEDS_INI_PATH") != "" {
+		if CheckFile(os.Getenv("SRND_FEEDS_INI_PATH")) {
+			log.Printf("found feeds config at %s...", os.Getenv("SRND_FEEDS_INI_PATH"))
+			fname = os.Getenv("SRND_FEEDS_INI_PATH")
+		}
+	}
+
 	conf, err = configparser.Read(fname)
 
 	if err != nil {
-		log.Fatal("cannot read config file", fname)
+		log.Fatal("Cannot read config file ", fname, ". You must either have feeds.ini in the working directory or have set the SRND_FEEDS_INI_PATH environment variable.")
 		return nil
 	}
 
 	sections, err := conf.Find("feed-*")
 	if err != nil {
-		log.Fatal("failed to load feeds.ini", err)
+		log.Fatal("failed to load feeds.ini ", err)
 	}
 
 	var num_sections int

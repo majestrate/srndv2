@@ -11,10 +11,10 @@ import (
 	"github.com/majestrate/nacl"
 	"log"
 	"net"
+	"os"
 	"path/filepath"
 	"strings"
 	"time"
-        "os"
 )
 
 type FeedConfig struct {
@@ -131,6 +131,7 @@ func GenSRNdConfig() *configparser.Configuration {
 	sect.Add("allow_attachments", "1")
 	sect.Add("require_tls", "1")
 	sect.Add("anon_nntp", "0")
+	sect.Add("feeds", filepath.Join(".", "feeds.d"))
 
 	// profiling settings
 	sect = conf.NewSection("pprof")
@@ -357,25 +358,49 @@ func ReadConfig() *SRNdConfig {
 		}
 	}
 
-	conf, err = configparser.Read(fname)
+	confs, err := feedParse(fname)
+	if err != nil {
+		log.Fatal("failed to parse", fname, err)
+	}
+
+	sconf.feeds = append(sconf.feeds, confs...)
+
+	var feeds_ok bool
+	// check for feeds option
+	fname, feeds_ok = sconf.daemon["feeds"]
+
+	if feeds_ok {
+		// load feeds dir first
+		feeds, err := filepath.Glob(filepath.Join(fname, "*.ini"))
+		if err == nil {
+			for _, f := range feeds {
+				log.Println("load feed", f)
+				confs, err := feedParse(f)
+				if err != nil {
+					log.Fatal("failed to parse feed", f, err)
+				}
+				sconf.feeds = append(sconf.feeds, confs...)
+			}
+		}
+	}
+
+	return &sconf
+}
+
+func feedParse(fname string) (confs []FeedConfig, err error) {
+
+	conf, err := configparser.Read(fname)
 
 	if err != nil {
-		log.Fatal("Cannot read config file ", fname, ". You must either have feeds.ini in the working directory or have set the SRND_FEEDS_INI_PATH environment variable.")
-		return nil
+		return nil, err
 	}
 
 	sections, err := conf.Find("feed-*")
-	if err != nil {
-		log.Fatal("failed to load feeds.ini ", err)
-	}
 
 	var num_sections int
 	num_sections = len(sections)
 
 	if num_sections > 0 {
-		sconf.feeds = make([]FeedConfig, num_sections)
-		idx := 0
-
 		// load feeds
 		for _, sect := range sections {
 			var fconf FeedConfig
@@ -420,36 +445,17 @@ func ReadConfig() *SRNdConfig {
 			}
 			feed_sect, err := conf.Section(sect_name)
 			if err != nil {
-				log.Fatal("no section", sect_name, "in feeds.ini")
+				log.Fatal("no section", sect_name, "in ", fname)
 			}
 			opts := feed_sect.Options()
 			fconf.policy.rules = make(map[string]string)
 			for k, v := range opts {
 				fconf.policy.rules[k] = v
 			}
-			sconf.feeds[idx] = fconf
-			idx += 1
+			confs = append(confs, fconf)
 		}
 	}
-
-	// feed quarks
-	sections, err = conf.Find("quarks-*")
-	if err == nil {
-		// we have quarks? neat, let's load them
-		// does not check for anything specific
-		for _, sect := range sections {
-			sect_name := sect.Name()[7:]
-			// find the feed for this quark
-			for idx, fconf := range sconf.feeds {
-				if fconf.Addr == sect_name {
-					// yup this is the one
-					sconf.feeds[idx].quarks = sect.Options()
-				}
-			}
-		}
-	}
-
-	return &sconf
+	return
 }
 
 // fatals on failed validation

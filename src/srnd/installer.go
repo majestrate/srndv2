@@ -598,5 +598,5 @@ func (self *Installer) Stop() {
 }
 
 func InstallerEnabled() bool {
-	return true
+	return os.Getenv("SRND_NO_INSTALLER") != "1"
 }

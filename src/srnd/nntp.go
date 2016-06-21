@@ -830,7 +830,9 @@ func (self *nntpConnection) handleLine(daemon *NNTPDaemon, code int, line string
 						conn.PrintfLine("224 Overview information follows")
 						dw := conn.DotWriter()
 						for idx, model := range models {
-							io.WriteString(dw, fmt.Sprintf("%.6d\t%s\t\"%s\" <%s@%s>\t%s\t%s\t%s\r\n", idx+1, model.Subject(), model.Name(), model.Name(), model.Frontend(), model.Date(), model.MessageID(), model.Reference()))
+							if model != nil {
+								io.WriteString(dw, fmt.Sprintf("%.6d\t%s\t\"%s\" <%s@%s>\t%s\t%s\t%s\r\n", idx+1, model.Subject(), model.Name(), model.Name(), model.Frontend(), model.Date(), model.MessageID(), model.Reference()))
+							}
 						}
 						dw.Close()
 					} else {

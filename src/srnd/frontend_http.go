@@ -312,7 +312,7 @@ func (self *httpFrontend) handle_newboard(wr http.ResponseWriter, r *http.Reques
 func (self *httpFrontend) handle_postform(wr http.ResponseWriter, r *http.Request, board string) {
 
 	// the post we will turn into an nntp article
-	var pr postRequest
+	pr := new(postRequest)
 
 	// do we send json reply?
 	sendJson := r.URL.Query().Get("t") == "json"
@@ -380,12 +380,14 @@ func (self *httpFrontend) handle_postform(wr http.ResponseWriter, r *http.Reques
 					// TODO: we could just write to disk the attachment so we're not filling ram up with crap
 					att := readAttachmentFromMimePartAndStore(part, nil)
 					if att != nil {
-						log.Println("attaching file...")
-						pr.Attachments = append(pr.Attachments, postAttachment{
-							Filedata: att.Filedata(),
-							Filename: att.Filename(),
-							Filetype: att.Mime(),
-						})
+						if att.Filename() != "" {
+							log.Println("attaching file...")
+							pr.Attachments = append(pr.Attachments, postAttachment{
+								Filedata: att.Filedata(),
+								Filename: att.Filename(),
+								Filetype: att.Mime(),
+							})
+						}
 					}
 				}
 				continue
@@ -517,7 +519,7 @@ func (self *httpFrontend) handle_postform(wr http.ResponseWriter, r *http.Reques
 			io.WriteString(wr, template.renderTemplate("post_success.mustache", map[string]interface{}{"prefix": self.prefix, "message_id": nntp.MessageID(), "redirect_url": url}))
 		}
 	}
-	self.handle_postRequest(&pr, b, e, s, self.enableBoardCreation)
+	self.handle_postRequest(pr, b, e, s, self.enableBoardCreation)
 }
 
 // turn a post request into an nntp article write it to temp dir and tell daemon
@@ -528,7 +530,8 @@ func (self *httpFrontend) handle_postRequest(pr *postRequest, b bannedFunc, e er
 		e(err)
 		return
 	}
-	if len(pr.Attachments) == 0 && len(strings.Trim(pr.Message, "\r\n ")) == 0 {
+	m := strings.Trim(pr.Message, "\r\n\t ")
+	if len(pr.Attachments) == 0 && len(m) == 0 {
 		err = errors.New("no post message")
 		e(err)
 		return

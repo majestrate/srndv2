@@ -100,7 +100,7 @@ type httpFrontend struct {
 
 	store *sessions.CookieStore
 
-	upgrader *websocket.Upgrader
+	upgrader websocket.Upgrader
 
 	jsonUsername        string
 	jsonPassword        string
@@ -525,6 +525,11 @@ func (self *httpFrontend) handle_postRequest(pr *postRequest, b bannedFunc, e er
 	var err error
 	if len(pr.Attachments) > self.attachmentLimit {
 		err = errors.New("too many attachments")
+		e(err)
+		return
+	}
+	if len(pr.Attachments) == 0 && len(strings.Trim(pr.Message, "\r\n ")) == 0 {
+		err = errors.New("no post message")
 		e(err)
 		return
 	}
@@ -1121,7 +1126,7 @@ func NewHTTPFrontend(daemon *NNTPDaemon, cache CacheInterface, config map[string
 		front.jsonPassword = config["json-api-password"]
 		front.enableJson = true
 	}
-	front.upgrader = &websocket.Upgrader{
+	front.upgrader = websocket.Upgrader{
 		CheckOrigin: func(r *http.Request) bool {
 			return true
 		},

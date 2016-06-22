@@ -176,8 +176,8 @@ func (self *PostgresDatabase) upgrade5to6() {
                                      source_pubkey VARCHAR(255) NOT NULL,
                                      target_pubkey VARCHAR(255) NOT NULL,
                                      event_time BIGINT NOT NULL,
-                                     status VARCHAR(255) NOT NULL
-                                     id BIGSERIAL PRIMARY KEY,
+                                     status VARCHAR(255) NOT NULL,
+                                     id BIGSERIAL PRIMARY KEY
                                    )`
 
 	table_order := []string{"PubkeyProperties", "PubkeyModifyEvents"}

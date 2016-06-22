@@ -375,6 +375,11 @@ func (self *nntpConnection) checkMIMEHeaderNoAuth(daemon *NNTPDaemon, hdr textpr
 		reason = "newsgroup banned"
 		ban = true
 		return
+	} else if banned, _ = daemon.database.PubkeyIsBanned(pubkey); banned {
+		// check for banned pubkey
+		reason = "poster's pubkey is banned"
+		ban = true
+		return
 	} else if !(ValidMessageID(msgid) || (reference != "" && !ValidMessageID(reference))) {
 		// invalid message id or reference
 		reason = "invalid reference or message id is '" + msgid + "' reference is '" + reference + "'"
@@ -404,8 +409,8 @@ func (self *nntpConnection) checkMIMEHeaderNoAuth(daemon *NNTPDaemon, hdr textpr
 	} else if anon_poster {
 		// this was posted anonymously
 		if daemon.allow_anon {
-			if has_attachment || is_signed {
-				// this is a signed message or has attachment
+			if has_attachment {
+				// this has attachment
 				if daemon.allow_anon_attachments {
 					if daemon.allow_attachments {
 						// we'll allow anon attachments
@@ -418,7 +423,7 @@ func (self *nntpConnection) checkMIMEHeaderNoAuth(daemon *NNTPDaemon, hdr textpr
 					}
 				} else {
 					// we don't take signed messages or attachments posted anonymously
-					reason = "no anon signed posts or attachments"
+					reason = "no anon attachments"
 					ban = true
 					return
 				}

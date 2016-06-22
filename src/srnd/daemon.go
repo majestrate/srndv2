@@ -531,8 +531,12 @@ func (self *NNTPDaemon) Run() {
 	pubkey, ok := self.conf.frontend["admin_key"]
 	if ok {
 		// TODO: check for valid format
-		log.Println("add admin key", pubkey)
-		err = self.database.MarkModPubkeyGlobal(pubkey)
+		var isadmin bool
+		isadmin, err := self.database.CheckAdminPubkey(pubkey)
+		if !isadmin {
+			log.Println("add admin key", pubkey)
+			err = self.database.MarkPubkeyAdmin(pubkey)
+		}
 		if err != nil {
 			log.Printf("failed to add admin mod key, %s", err)
 		}
@@ -600,7 +604,9 @@ func (self *NNTPDaemon) Run() {
 func (self *NNTPDaemon) syncAllMessages() {
 	log.Println("syncing all messages to all feeds")
 	for _, article := range self.database.GetAllArticles() {
-		self.sendAllFeeds(article)
+		if self.store.HasArticle(article.MessageID()) {
+			self.sendAllFeeds(article)
+		}
 	}
 	log.Println("sync all messages queue flushed")
 }

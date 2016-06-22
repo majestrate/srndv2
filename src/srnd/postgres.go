@@ -91,6 +91,10 @@ func (self *PostgresDatabase) CreateTables() {
 			// update to version 5
 			self.upgrade4to5()
 		} else if version == 5 {
+			// upgrade to version 6
+			self.upgrade5to6()
+		} else if version == 6 {
+			// we are up to date
 			log.Println("we are up to date at version", version)
 			return
 		}
@@ -155,6 +159,38 @@ func (self *PostgresDatabase) upgrade2to3() {
 		checkError(err)
 	}
 	self.setDBVersion(3)
+}
+
+func (self *PostgresDatabase) upgrade5to6() {
+	log.Println("migrating... 5 -> 6")
+	tables := make(map[string]string)
+
+	// public key properties, key value pair: pubkey -> status
+	tables["PubkeyProperties"] = `(
+                                  pubkey VARCHAR(255) PRIMARY KEY,
+                                  status VARCHAR(255) NOT NULL
+                                )`
+
+	// ledger of public key property modification events
+	tables["PubkeyModifyEvents"] = `(
+                                     source_pubkey VARCHAR(255) NOT NULL,
+                                     target_pubkey VARCHAR(255) NOT NULL,
+                                     event_time BIGINT NOT NULL,
+                                     status VARCHAR(255) NOT NULL
+                                     id BIGSERIAL PRIMARY KEY,
+                                   )`
+
+	table_order := []string{"PubkeyProperties", "PubkeyModifyEvents"}
+	for _, t := range table_order {
+		q := tables[t]
+		// create table
+		_, err := self.conn.Exec(fmt.Sprintf("CREATE TABLE IF NOT EXISTS %s%s", t, q))
+		if err != nil {
+			log.Fatalf("cannot create table %s, %s", t, err)
+		}
+	}
+
+	self.setDBVersion(6)
 }
 
 func (self *PostgresDatabase) upgrade4to5() {
@@ -531,7 +567,7 @@ func (self *PostgresDatabase) CountPostsInGroup(newsgroup string, time_frame int
 
 func (self *PostgresDatabase) CheckModPubkey(pubkey string) bool {
 	var result int64
-	self.conn.QueryRow("SELECT COUNT(*) FROM ModPrivs WHERE pubkey = $1 AND newsgroup = $2 AND permission = $3", pubkey, "ctl", "login").Scan(&result)
+	self.conn.QueryRow("SELECT COUNT(*) FROM ModPrivs WHERE pubkey = $1", pubkey).Scan(&result)
 	return result > 0
 }
 
@@ -607,6 +643,30 @@ func (self *PostgresDatabase) MarkModPubkeyGlobal(pubkey string) (err error) {
 		log.Println("pubkey already marked as global", pubkey)
 	} else {
 		_, err = self.conn.Exec("INSERT INTO ModPrivs(pubkey, newsgroup, permission) VALUES ( $1, $2, $3 )", pubkey, "overchan", "all")
+	}
+	return
+}
+
+func (self *PostgresDatabase) MarkPubkeyAdmin(pubkey string) (err error) {
+	var admin bool
+	admin, err = self.CheckAdminPubkey(pubkey)
+	if err == nil && !admin {
+		// add as admin since it's not already there
+		_, err = self.conn.Exec("INSERT INTO ModPrivs(pubkey, newsgroup, permission) VALUES ( $1, $2, $3 )", pubkey, "overchan", "admin")
+	}
+	return
+}
+
+func (self *PostgresDatabase) UnmarkPubkeyAdmin(pubkey string) (err error) {
+	_, err = self.conn.Exec("DELETE FROM ModPrivs WHERE pubkey = $1 AND permission = $2", pubkey, "admin")
+	return
+}
+
+func (self *PostgresDatabase) CheckAdminPubkey(pubkey string) (admin bool, err error) {
+	var count int64
+	err = self.conn.QueryRow("SELECT COUNT(pubkey) FROM ModPrivs WHERE pubkey = $1 AND permission = $2", pubkey, "admin").Scan(&count)
+	if err == nil {
+		admin = count > 0
 	}
 	return
 }
@@ -1197,7 +1257,7 @@ func (self *PostgresDatabase) GetNNTPIDForMessageID(group, msgid string) (id int
 }
 
 func (self *PostgresDatabase) MarkModPubkeyCanModGroup(pubkey, group string) (err error) {
-	_, err = self.conn.Exec("INSERT INTO ModPrivs(pubkey, newsgroup) VALUES($1, $2)", pubkey, group)
+	_, err = self.conn.Exec("INSERT INTO ModPrivs(pubkey, newsgroup, permission) VALUES($1, $2, $3)", pubkey, group, "all")
 	return
 }
 
@@ -1388,4 +1448,15 @@ func (self *PostgresDatabase) GetMessageIDByEncryptedIP(encaddr string) (msgids 
 		}
 	}
 	return
+}
+
+func (self *PostgresDatabase) BanPubkey(pubkey string) (err error) {
+	// TODO: implement
+	err = errors.New("ban pubkey not implemented")
+	return
+}
+
+func (self *PostgresDatabase) PubkeyIsBanned(pubkey string) (bool, error) {
+	// TODO: implement
+	return false, nil
 }

@@ -140,6 +140,15 @@ type Database interface {
 	// check if a mod with this pubkey has permission to moderate at all
 	CheckModPubkey(pubkey string) bool
 
+	// check if a pubkey has admin privs
+	CheckAdminPubkey(pubkey string) (bool, error)
+
+	// mark a key as having admin privs
+	MarkPubkeyAdmin(pubkey string) error
+
+	// unmark a key as having admin privs
+	UnmarkPubkeyAdmin(pubkey string) error
+
 	// check if a mod with this pubkey can moderate on the given newsgroup
 	CheckModPubkeyCanModGroup(pubkey, newsgroup string) bool
 
@@ -245,6 +254,12 @@ type Database interface {
 
 	// get all message-ids posted by poster with encrypted ip
 	GetMessageIDByEncryptedIP(encaddr string) ([]string, error)
+
+	// check if this public key is banned from posting
+	PubkeyIsBanned(pubkey string) (bool, error)
+
+	// ban a public key from posting
+	BanPubkey(pubkey string) error
 }
 
 func NewDatabase(db_type, schema, host, port, user, password string) Database {

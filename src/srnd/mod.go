@@ -29,7 +29,7 @@ type ModUI interface {
 
 	// check if this key is allowed to access
 	// return true if it can otherwise false
-	CheckKey(privkey string) (bool, error)
+	CheckKey(privkey, scope string) (bool, error)
 
 	// serve the base page
 	ServeModPage(wr http.ResponseWriter, r *http.Request)
@@ -155,9 +155,9 @@ type ModEngine interface {
 	DeletePost(msgid string, regen RegenFunc) error
 	// ban a cidr
 	BanAddress(cidr string) error
-	// do we allow this public key to delete?
-	AllowDelete(pubkey string) bool
-	// do we allow this public key to ban?
+	// do we allow this public key to delete this message-id ?
+	AllowDelete(pubkey, msgid string) bool
+	// do we allow this public key to do inet-ban?
 	AllowBan(pubkey string) bool
 	// load a mod message
 	LoadMessage(msgid string) NNTPMessage
@@ -242,14 +242,33 @@ func (self modEngine) DeletePost(msgid string, regen RegenFunc) (err error) {
 	return nil
 }
 
-// TODO: permissions
 func (self modEngine) AllowBan(pubkey string) bool {
+	is_admin, _ := self.database.CheckAdminPubkey(pubkey)
+	if is_admin {
+		// admins can do whatever
+		return true
+	}
 	return self.database.CheckModPubkeyGlobal(pubkey)
 }
 
-// TODO: permissions
-func (self modEngine) AllowDelete(pubkey string) bool {
-	return self.database.CheckModPubkeyGlobal(pubkey)
+func (self modEngine) AllowDelete(pubkey, msgid string) (allow bool) {
+	is_admin, _ := self.database.CheckAdminPubkey(pubkey)
+	if is_admin {
+		// admins can do whatever
+		return true
+	}
+	if self.database.CheckModPubkeyGlobal(pubkey) {
+		// globals can delete as they wish
+		return true
+	}
+	// check for scoped permissions
+	_, group, _, err := self.database.GetInfoForMessage(msgid)
+	if err == nil && newsgroupValidFormat(group) {
+		allow = self.database.CheckModPubkeyCanModGroup(pubkey, group)
+	} else if err != nil {
+		log.Println("db error in mod engine while checking permissions", err)
+	}
+	return
 }
 
 // run a mod engine logic mainloop
@@ -272,8 +291,13 @@ func RunModEngine(mod ModEngine, regen RegenFunc) {
 				action := ev.Action()
 				if action == "delete" {
 					msgid := ev.Target()
+					if !ValidMessageID(msgid) {
+						// invalid message-id
+						log.Println("invalid message-id for mod delete", msgid, "from", pubkey)
+						continue
+					}
 					// this is a delete action
-					if mod.AllowDelete(pubkey) {
+					if mod.AllowDelete(pubkey, msgid) {
 						err := mod.DeletePost(msgid, regen)
 						if err != nil {
 							log.Println(msgid, err)
@@ -291,6 +315,8 @@ func RunModEngine(mod ModEngine, regen RegenFunc) {
 							if err != nil {
 								log.Println("failed to do literal ipv6 range ban on", target, err)
 							}
+						} else {
+							log.Println("ignoring literal ipv6 rangeban from", pubkey, "as they are not allowed to ban")
 						}
 						continue
 					}
@@ -306,6 +332,8 @@ func RunModEngine(mod ModEngine, regen RegenFunc) {
 							if err != nil {
 								log.Println("failed to do range ban on", cidr, err)
 							}
+						} else {
+							log.Println("ingoring encrypted-ip inet ban from", pubkey, "as they are not allowed to ban")
 						}
 					} else if len(parts) == 1 {
 						// literal cidr
@@ -315,10 +343,14 @@ func RunModEngine(mod ModEngine, regen RegenFunc) {
 							if err != nil {
 								log.Println("failed to do literal range ban on", cidr, err)
 							}
+						} else {
+							log.Println("ingoring literal cidr range ban from", pubkey, "as they are not allowed to ban")
 						}
 					} else {
 						log.Printf("invalid overchan-inet-ban: target=%s", target)
 					}
+				} else {
+					log.Println("invalid mod action", action, "from", pubkey)
 				}
 			}
 		}

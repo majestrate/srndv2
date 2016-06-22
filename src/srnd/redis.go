@@ -62,6 +62,7 @@ const (
 	BANNED_GROUP_PREFIX          = APP_PREFIX + "BannedGroup::"
 	BANNED_ARTICLE_PREFIX        = APP_PREFIX + "BannedArticle::"
 	MOD_KEY_PREFIX               = APP_PREFIX + "ModKey::"
+	ADMIN_KEY_PREFIX             = APP_PREFIX + "AdminKey::"
 	NNTP_LOGIN_PREFIX            = APP_PREFIX + "Login::"
 	ENCRYPTED_ADDRS_PREFIX       = APP_PREFIX + "EncryptedAddrs::"
 	ADDRS_ENCRYPTED_ADDRS_PREFIX = APP_PREFIX + "AddrsEncryptedAddrs::"
@@ -1153,6 +1154,38 @@ func (self RedisDB) GetHeadersForMessage(msgid string) (hdr ArticleHeaders, err 
 
 func (self RedisDB) CountAllArticlesInGroup(group string) (count int64, err error) {
 	count, err = self.client.ZCard(GROUP_ARTICLE_POSTTIME_WKR_PREFIX + group).Result()
+	return
+}
+
+func (self RedisDB) BanPubkey(pubkey string) error {
+	return errors.New("ban pubkey not implemented")
+}
+
+func (self RedisDB) CheckAdminPubkey(pubkey string) (isadmin bool, err error) {
+	isadmin, err = self.client.Exists(ADMIN_KEY_PREFIX + pubkey).Result()
+	return
+}
+
+func (self RedisDB) UnmarkPubkeyAdmin(pubkey string) (err error) {
+	var isadmin bool
+	isadmin, err = self.CheckAdminPubkey(pubkey)
+	if isadmin {
+		_, err = self.client.Del(ADMIN_KEY_PREFIX + pubkey).Result()
+	}
+	return
+}
+
+func (self RedisDB) MarkPubkeyAdmin(pubkey string) (err error) {
+	var isadmin bool
+	isadmin, err = self.CheckAdminPubkey(pubkey)
+	if !isadmin {
+		_, err = self.client.Set(ADMIN_KEY_PREFIX+pubkey, "1", 0).Result()
+	}
+	return
+}
+
+func (self RedisDB) PubkeyIsBanned(pubkey string) (bannded bool, err error) {
+	// TODO: implement
 	return
 }
 

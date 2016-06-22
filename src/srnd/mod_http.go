@@ -187,16 +187,32 @@ func (self httpModUI) getAdminFunc(funcname string) AdminFunc {
 	} else if funcname == "pubkey.add" {
 		return func(param map[string]interface{}) (interface{}, error) {
 			pubkey := extractParam(param, "pubkey")
-			log.Println("pubkey.add", pubkey)
-			if self.daemon.database.CheckModPubkeyGlobal(pubkey) {
-				return "already added", nil
-			} else {
-				err := self.daemon.database.MarkModPubkeyGlobal(pubkey)
+			group := extractGroup(param)
+			if group == "" {
+				log.Println("pubkey.add global mod", pubkey)
+				if self.daemon.database.CheckModPubkeyGlobal(pubkey) {
+					return "already added", nil
+				} else {
+					err := self.daemon.database.MarkModPubkeyGlobal(pubkey)
+					if err == nil {
+						return "added", nil
+					} else {
+						return "error", err
+					}
+				}
+			} else if newsgroupValidFormat(group) {
+				log.Println("pubkey.add", group, "mod", pubkey)
+				if self.daemon.database.CheckModPubkeyCanModGroup(pubkey, group) {
+					return "already added", nil
+				}
+				err := self.daemon.database.MarkModPubkeyCanModGroup(pubkey, group)
 				if err == nil {
 					return "added", nil
 				} else {
 					return "error", err
 				}
+			} else {
+				return "bad newsgroup: " + group, nil
 			}
 		}
 	} else if funcname == "pubkey.del" {
@@ -211,7 +227,7 @@ func (self httpModUI) getAdminFunc(funcname string) AdminFunc {
 					return "error", err
 				}
 			} else {
-				return "key not trusted", nil
+				return "key not already trusted", nil
 			}
 		}
 
@@ -245,14 +261,14 @@ func (self httpModUI) getAdminFunc(funcname string) AdminFunc {
 				exists, err := self.daemon.database.CheckNNTPUserExists(username)
 				if exists {
 					// user is already there
-					return "user already exists", nil
+					return "nntp user already exists", nil
 				} else if err == nil {
 					// now add the user
 					err = self.daemon.database.AddNNTPLogin(username, passwd)
 					// success adding?
 					if err == nil {
 						// yeh
-						return "added user", nil
+						return "added nntp user", nil
 					}
 					// nah
 					return "", err
@@ -338,7 +354,7 @@ func (self httpModUI) getAdminFunc(funcname string) AdminFunc {
 
 // handle an admin action
 func (self httpModUI) HandleAdminCommand(wr http.ResponseWriter, r *http.Request) {
-	self.asAuthed(func(url string) {
+	self.asAuthed("admin", func(url string) {
 		action := strings.Split(url, "/admin/")[1]
 		f := self.getAdminFunc(action)
 		if f == nil {
@@ -369,20 +385,37 @@ func (self httpModUI) HandleAdminCommand(wr http.ResponseWriter, r *http.Request
 	}, wr, r)
 }
 
-// TODO: check for different levels of permissions
-func (self httpModUI) CheckKey(privkey string) (bool, error) {
+func (self httpModUI) CheckPubkey(pubkey, scope string) (bool, error) {
+	is_admin, err := self.daemon.database.CheckAdminPubkey(pubkey)
+	if is_admin {
+		// admin can do what they want
+		return true, nil
+	}
+	if self.daemon.database.CheckModPubkeyGlobal(pubkey) {
+		// this user is a global mod, can't do admin
+		return scope != "admin", nil
+	}
+	// check for board specific mods
+	if strings.Index(scope, "mod-") == 0 {
+		group := scope[4:]
+		if self.daemon.database.CheckModPubkeyCanModGroup(pubkey, group) {
+			return true, nil
+		}
+	} else if scope == "login" {
+		// check if a user can log in
+		return self.daemon.database.CheckModPubkey(pubkey), nil
+	}
+	return false, err
+}
+
+func (self httpModUI) CheckKey(privkey, scope string) (bool, error) {
 	privkey_bytes, err := hex.DecodeString(privkey)
 	if err == nil {
 		kp := nacl.LoadSignKey(privkey_bytes)
 		if kp != nil {
 			defer kp.Free()
 			pubkey := hex.EncodeToString(kp.Public())
-			if self.daemon.database.CheckModPubkeyGlobal(pubkey) {
-				// this user is an admin
-				return true, nil
-			} else {
-				return false, nil
-			}
+			return self.CheckPubkey(pubkey, scope)
 		}
 	}
 	log.Println("invalid key format for key", privkey)
@@ -414,13 +447,13 @@ func (self httpModUI) getSessionPrivkeyBytes(r *http.Request) []byte {
 	return nil
 }
 
-// returns true if the session is okay
+// returns true if the session is okay for a scope
 // otherwise redirect to login page
-func (self httpModUI) checkSession(r *http.Request) bool {
+func (self httpModUI) checkSession(r *http.Request, scope string) bool {
 	s := self.getSession(r)
 	k, ok := s.Values["privkey"]
 	if ok {
-		ok, err := self.CheckKey(k.(string))
+		ok, err := self.CheckKey(k.(string), scope)
 		if err != nil {
 			return false
 		}
@@ -445,8 +478,8 @@ func (self httpModUI) writeTemplateParam(wr http.ResponseWriter, r *http.Request
 
 // do a function as authenticated
 // pass in the request path to the handler
-func (self httpModUI) asAuthed(handler func(string), wr http.ResponseWriter, r *http.Request) {
-	if self.checkSession(r) {
+func (self httpModUI) asAuthed(scope string, handler func(string), wr http.ResponseWriter, r *http.Request) {
+	if self.checkSession(r, scope) {
 		handler(r.URL.Path)
 	} else {
 		wr.WriteHeader(403)
@@ -454,8 +487,8 @@ func (self httpModUI) asAuthed(handler func(string), wr http.ResponseWriter, r *
 }
 
 // do stuff to a certain message if with have it and are authed
-func (self httpModUI) asAuthedWithMessage(handler func(ArticleEntry, *http.Request) map[string]interface{}, wr http.ResponseWriter, req *http.Request) {
-	self.asAuthed(func(path string) {
+func (self httpModUI) asAuthedWithMessage(scope string, handler func(ArticleEntry, *http.Request) map[string]interface{}, wr http.ResponseWriter, req *http.Request) {
+	self.asAuthed(scope, func(path string) {
 		// get the long hash
 		if strings.Count(path, "/") > 2 {
 			// TOOD: prefix detection
@@ -464,9 +497,20 @@ func (self httpModUI) asAuthedWithMessage(handler func(ArticleEntry, *http.Reque
 			msg, err := self.daemon.database.GetMessageIDByHash(longhash)
 			resp := make(map[string]interface{})
 			if err == nil {
-				resp = handler(msg, req)
+				group := msg.Newsgroup()
+				if err == nil {
+					if self.checkSession(req, "mod-"+group) {
+						// we can moderate this group
+						resp = handler(msg, req)
+					} else {
+						// no permission to moderate this group
+						resp["error"] = fmt.Sprint("you don't have permission to moderate '%s'", group)
+					}
+				} else {
+					resp["error"] = err.Error()
+				}
 			} else {
-				resp["error"] = fmt.Sprintf("don't have message with hash %s, %s", longhash, err.Error())
+				resp["error"] = fmt.Sprint("don't have post %s, %s", longhash, err.Error())
 			}
 			enc := json.NewEncoder(wr)
 			enc.Encode(resp)
@@ -483,7 +527,7 @@ func (self httpModUI) HandleDelPubkey(wr http.ResponseWriter, r *http.Request) {
 }
 
 func (self httpModUI) HandleUnbanAddress(wr http.ResponseWriter, r *http.Request) {
-	self.asAuthed(func(path string) {
+	self.asAuthed("ban", func(path string) {
 		// extract the ip address
 		// TODO: ip ranges and prefix detection
 		if strings.Count(path, "/") > 2 {
@@ -580,6 +624,7 @@ func (self httpModUI) handleDeletePost(msg ArticleEntry, r *http.Request) map[st
 	var mm ModMessage
 	resp := make(map[string]interface{})
 	msgid := msg.MessageID()
+
 	mm = append(mm, overchanDelete(msgid))
 	delmsgs := []string{}
 	// get headers
@@ -625,12 +670,12 @@ func (self httpModUI) handleDeletePost(msg ArticleEntry, r *http.Request) map[st
 
 // ban the address of a poster
 func (self httpModUI) HandleBanAddress(wr http.ResponseWriter, r *http.Request) {
-	self.asAuthedWithMessage(self.handleBanAddress, wr, r)
+	self.asAuthedWithMessage("ban", self.handleBanAddress, wr, r)
 }
 
 // delete a post
 func (self httpModUI) HandleDeletePost(wr http.ResponseWriter, r *http.Request) {
-	self.asAuthedWithMessage(self.handleDeletePost, wr, r)
+	self.asAuthedWithMessage("login", self.handleDeletePost, wr, r)
 }
 
 func (self httpModUI) HandleLogin(wr http.ResponseWriter, r *http.Request) {
@@ -639,7 +684,7 @@ func (self httpModUI) HandleLogin(wr http.ResponseWriter, r *http.Request) {
 	if len(privkey) == 0 {
 		msg += "no key"
 	} else {
-		ok, err := self.CheckKey(privkey)
+		ok, err := self.CheckKey(privkey, "login")
 		if err != nil {
 			msg += fmt.Sprintf("%s", err)
 		} else if ok {
@@ -661,7 +706,7 @@ func (self httpModUI) HandleKeyGen(wr http.ResponseWriter, r *http.Request) {
 }
 
 func (self httpModUI) ServeModPage(wr http.ResponseWriter, r *http.Request) {
-	if self.checkSession(r) {
+	if self.checkSession(r, "login") {
 		wr.Header().Set("X-CSRF-Token", csrf.Token(r))
 		// we are logged in
 		url := r.URL.String()

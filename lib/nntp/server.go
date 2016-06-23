@@ -63,6 +63,10 @@ func (s *Server) SentArticleVia(msgid MessageID, feedname string) {
 // persist 1 feed forever
 func (s *Server) persist(cfg *config.FeedConfig) {
 	delay := time.Second
+
+	log.WithFields(log.Fields{
+		"name": cfg.Name,
+	}).Debug("Persist Feed")
 	for {
 		dialer := network.NewDialer(cfg.Proxy)
 		c, err := dialer.Dial(cfg.Addr)
@@ -95,7 +99,9 @@ func (s *Server) persist(cfg *config.FeedConfig) {
 
 // persist all outbound feeds
 func (s *Server) PersistFeeds() {
-
+	for _, f := range s.Feeds {
+		go s.persist(f)
+	}
 }
 
 // serve connections from listener

@@ -646,7 +646,7 @@ func (self RedisDB) GetPostAttachments(messageID string) ([]*model.Attachment, e
 			hashres, _ := self.client.HGetAll(ATTACHMENT_PREFIX + hash).Result()
 			mapRes := processHashResult(hashres)
 
-			atts[i] = &model.Attachment{mapRes["filepath"], mapRes["filename"], mapRes["mime"], mapRes["sha_hash"]}
+			atts[i] = &model.Attachment{mapRes["filepath"], mapRes["filename"], mapRes["mime"], mapRes["sha_hash"], ""}
 		}
 	}
 	return atts, err

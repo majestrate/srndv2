@@ -5,4 +5,6 @@ type Attachment struct {
 	Name string
 	Mime string
 	Hash string
+	// only filled for api
+	Body string
 }

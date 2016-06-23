@@ -1,7 +1,7 @@
 package frontend
 
 import (
-	"github.com/majestrate/srndv2/lib/model"
+//"github.com/majestrate/srndv2/lib/model"
 )
 
 // a frontend that displays nntp posts and allows posting
@@ -22,5 +22,5 @@ type Frontend interface {
 	AllowPost(p Post) bool
 
 	// trigger a manual regen of indexes for a root post
-	Regen(msg model.ArticleEntry)
+	Regen(p Post)
 }

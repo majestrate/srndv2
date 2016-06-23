@@ -374,7 +374,6 @@ func (self *articleStore) GetMessage(msgid string) (nntp NNTPMessage) {
 			err = read_message_body(br, hdr, nil, nil, true, func(nntp NNTPMessage) {
 				c := chnl
 				// inject pubkey for mod
-				log.Println(nntp.Message())
 				nntp.Headers().Set("X-PubKey-Ed25519", hdr.Get("X-PubKey-Ed25519"))
 				c <- nntp
 				close(c)

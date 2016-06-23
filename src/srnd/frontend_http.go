@@ -530,7 +530,8 @@ func (self *httpFrontend) handle_postRequest(pr *postRequest, b bannedFunc, e er
 		e(err)
 		return
 	}
-	m := strings.Trim(pr.Message, "\r\n\t ")
+	pr.Message = strings.Trim(pr.Message, "\r")
+	m := strings.Trim(pr.Message, "\n\t ")
 	if len(pr.Attachments) == 0 && len(m) == 0 {
 		err = errors.New("no post message")
 		e(err)

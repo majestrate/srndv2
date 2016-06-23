@@ -8,9 +8,7 @@ import (
 	"bufio"
 	"bytes"
 	"compress/gzip"
-	"crypto/sha512"
 	"errors"
-	"github.com/majestrate/nacl"
 	"io"
 	"log"
 	"mime"
@@ -23,7 +21,6 @@ import (
 )
 
 type ArticleStore interface {
-	MessageReader
 
 	// full filepath to attachment directory
 	AttachmentDir() string
@@ -38,8 +35,6 @@ type ArticleStore interface {
 	CreateFile(msgid string) io.WriteCloser
 	// get the filename of a message
 	GetFilename(msgid string) string
-	// Get a message given its messageid
-	GetMessage(msgid string) NNTPMessage
 	// open a message in the store for reading given its message-id
 	// return io.ReadCloser, error
 	OpenMessage(msgid string) (io.ReadCloser, error)
@@ -63,6 +58,8 @@ type ArticleStore interface {
 	RegisterPost(nntp NNTPMessage) error
 	// register signed message
 	RegisterSigned(msgid, pk string) error
+
+	GetMessage(msgid string) NNTPMessage
 }
 type articleStore struct {
 	directory    string
@@ -238,10 +235,6 @@ func (self *articleStore) OpenMessage(msgid string) (rc io.ReadCloser, err error
 	return
 }
 
-func (self *articleStore) ReadMessage(r io.Reader) (NNTPMessage, error) {
-	return read_message(r)
-}
-
 func (self *articleStore) RegisterPost(nntp NNTPMessage) (err error) {
 	err = self.database.RegisterArticle(nntp)
 	return
@@ -321,55 +314,6 @@ func (self *articleStore) GetFilename(messageID string) string {
 	return filepath.Join(self.directory, messageID)
 }
 
-// read a file give filepath
-// parameters are filename and true if it's a temp file
-// otherwise parameters are filename and false
-func (self *articleStore) readfile(fname string, tmp bool) NNTPMessage {
-
-	file, err := os.Open(fname)
-	if err != nil {
-		log.Println("store cannot open file", fname, err)
-		return nil
-	}
-
-	if self.compression && !tmp {
-		// we enabled compression and this is not a temp file
-		// try compressed version first
-		// fall back to uncompressed if failed
-		cr, err := gzip.NewReader(file)
-		if err == nil {
-			// read the message
-			message, err := self.ReadMessage(cr)
-			// close the compression reader
-			cr.Close()
-			// close the file
-			if err == nil {
-				// success
-				file.Close()
-				return message
-			}
-		}
-		log.Println("store compression enabled but", fname, "doesn't look compressed")
-		// decompression failed
-		// seek back to the beginning of the file
-		file.Seek(0, 0)
-	}
-	message, err := self.ReadMessage(file)
-	file.Close()
-	if err == nil {
-		return message
-	}
-
-	log.Println("store failed to load file", fname, err)
-	return nil
-}
-
-// load an article
-// return nil on failure
-func (self *articleStore) GetMessage(messageID string) NNTPMessage {
-	return self.readfile(self.GetFilename(messageID), false)
-}
-
 func (self *articleStore) GetHeaders(messageID string) (hdr ArticleHeaders) {
 	txthdr := self.getMIMEHeader(messageID)
 	if txthdr != nil {
@@ -401,37 +345,54 @@ func (self *articleStore) getMIMEHeader(messageID string) (hdr textproto.MIMEHea
 }
 
 func (self *articleStore) ProcessMessageBody(wr io.Writer, hdr textproto.MIMEHeader, body io.Reader) (err error) {
-	var nntp NNTPMessage
-	nntp, err = read_message_body(body, hdr, self, wr, false)
-	if err == nil {
+	err = read_message_body(body, hdr, self, wr, false, func(nntp NNTPMessage) {
 		err = self.RegisterPost(nntp)
 		if err == nil {
 			pk := hdr.Get("X-PubKey-Ed25519")
 			if len(pk) > 0 {
 				// signed and valid
 				err = self.RegisterSigned(getMessageID(hdr), pk)
+				if err != nil {
+					log.Println("register signed failed", err)
+				}
 			}
+		} else {
+			log.Println("error procesing message body", err)
+		}
+	})
+	return
+}
+
+func (self *articleStore) GetMessage(msgid string) (nntp NNTPMessage) {
+	r, err := self.OpenMessage(msgid)
+	if err == nil {
+		defer r.Close()
+		br := bufio.NewReader(r)
+		hdr, err := readMIMEHeader(br)
+		if err == nil {
+			chnl := make(chan NNTPMessage)
+			err = read_message_body(br, hdr, nil, nil, true, func(nntp NNTPMessage) {
+				c := chnl
+				// inject pubkey for mod
+				log.Println(nntp.Message())
+				nntp.Headers().Set("X-PubKey-Ed25519", hdr.Get("X-PubKey-Ed25519"))
+				c <- nntp
+				close(c)
+			})
+			nntp = <-chnl
 		}
 	}
 	return
 }
 
-func read_message(r io.Reader) (NNTPMessage, error) {
-	br := bufio.NewReader(r)
-	hdr, err := readMIMEHeader(br)
-	if err == nil {
-		return read_message_body(br, hdr, nil, nil, false)
-	}
-	return nil, err
-}
-
-// read message body with mimeheader pre-read,
+// read message body with mimeheader pre-read
+// calls callback for each read nntp message
 // if writer is not nil and discardAttachmentBody is false the message body will be written to the writer and the nntp message will not be filled
 // if writer is not nil and discardAttachmentBody is true the message body will be discarded and writer ignored
 // if writer is nil and discardAttachmentBody is true the body is discarded entirely
 // if writer is nil and discardAttachmentBody is false the body is loaded into the nntp message
-// return inner most nntp article if signed
-func read_message_body(body io.Reader, hdr textproto.MIMEHeader, store ArticleStore, wr io.Writer, discardAttachmentBody bool) (NNTPMessage, error) {
+// if the body contains a signed message it unrwarps 1 layer of signing
+func read_message_body(body io.Reader, hdr map[string][]string, store ArticleStore, wr io.Writer, discardAttachmentBody bool, callback func(NNTPMessage)) error {
 	nntp := new(nntpArticle)
 	nntp.headers = ArticleHeaders(hdr)
 	content_type := nntp.ContentType()
@@ -439,7 +400,7 @@ func read_message_body(body io.Reader, hdr textproto.MIMEHeader, store ArticleSt
 	if err != nil {
 		log.Println("failed to parse media type", err, "for mime", content_type)
 		nntp.Reset()
-		return nil, err
+		return err
 	}
 	if wr != nil && !discardAttachmentBody {
 		body = io.TeeReader(body, wr)
@@ -450,7 +411,8 @@ func read_message_body(body io.Reader, hdr textproto.MIMEHeader, store ArticleSt
 		for {
 			part, err := partReader.NextPart()
 			if err == io.EOF {
-				return nntp, nil
+				callback(nntp)
+				return nil
 			} else if err == nil {
 				hdr := part.Header
 				// get content type of part
@@ -466,10 +428,12 @@ func read_message_body(body io.Reader, hdr textproto.MIMEHeader, store ArticleSt
 							nntp.message = att
 						}
 					} else {
-						var att NNTPAttachment
 						// non plaintext gets added to attachments
-						att = readAttachmentFromMimePartAndStore(part, store)
-						if att != nil {
+						att := readAttachmentFromMimePartAndStore(part, store)
+						if att == nil {
+							// failed to read attachment
+							log.Println("failed to read attachment of type", media_type)
+						} else {
 							nntp.Attach(att)
 						}
 					}
@@ -481,7 +445,7 @@ func read_message_body(body io.Reader, hdr textproto.MIMEHeader, store ArticleSt
 			} else {
 				log.Println("failed to load part! ", err)
 				nntp.Reset()
-				return nil, err
+				return err
 			}
 		}
 	} else if media_type == "message/rfc822" {
@@ -491,40 +455,19 @@ func read_message_body(body io.Reader, hdr textproto.MIMEHeader, store ArticleSt
 		if pk == "" || sig == "" {
 			log.Println("invalid sig or pubkey", sig, pk)
 			nntp.Reset()
-			return nil, errors.New("invalid headers")
+			return errors.New("invalid headers")
 		}
-		log.Printf("got signed message from %s", pk)
-		pk_bytes := unhex(pk)
-		sig_bytes := unhex(sig)
-		buff := new(bytes.Buffer)
-		h := sha512.New()
-		mw := io.MultiWriter(h, buff)
-		_, err = io.Copy(mw, body)
-		hash := h.Sum(nil)
-		h = nil
-		log.Printf("hash=%s", hexify(hash))
-		log.Printf("sig=%s", hexify(sig_bytes))
-		if nacl.CryptoVerifyFucky(hash, sig_bytes, pk_bytes) {
-			log.Println("signature is valid :^)")
-			if err == nil {
-				br := bufio.NewReader(buff)
-				hdr, err = readMIMEHeader(br)
-				if err == nil {
-					// open inner message
-					// this will recurse until we get an unsigned message
-					log.Println("reading inner message...")
-					nntp, err := read_message_body(br, hdr, store, Discard, false)
-					if err == nil {
-						nntp.Headers().Set("X-PubKey-Ed25519", pk)
-					}
-					return nntp, err
-				}
+		// process inner body
+		// verify message
+		err = verifyMessage(pk, sig, body, func(h map[string][]string, innerBody io.Reader) {
+			// handle inner message
+			err := read_message_body(innerBody, h, store, nil, true, callback)
+			if err != nil {
+				log.Println("error reading inner signed message", err)
 			}
-			return nil, err
-		} else {
-			log.Println("!!!signature is invalid!!!")
-			nntp.Reset()
-			return nil, errors.New("invalid signature")
+		})
+		if err != nil {
+			log.Println("error reading inner message", err)
 		}
 	} else {
 		// plaintext attachment
@@ -532,8 +475,8 @@ func read_message_body(body io.Reader, hdr textproto.MIMEHeader, store ArticleSt
 		_, err = io.Copy(b, body)
 		if err == nil {
 			nntp.message = createPlaintextAttachment(b.Bytes())
-			return nntp, err
+			callback(nntp)
 		}
 	}
-	return nntp, err
+	return err
 }

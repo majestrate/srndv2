@@ -4,7 +4,9 @@
 package srnd
 
 import (
+	"bufio"
 	"crypto/sha512"
+	"errors"
 	"fmt"
 	"github.com/majestrate/nacl"
 	"io"
@@ -95,18 +97,6 @@ type NNTPMessage interface {
 	Addr() string
 	// reset contents
 	Reset()
-	// get inner signed message
-	Signed() NNTPMessage
-}
-
-type MessageReader interface {
-	// read a message from a reader
-	ReadMessage(r io.Reader) (NNTPMessage, error)
-}
-
-type MessageWriter interface {
-	// write a message to a writer
-	WriteMessage(nntp NNTPMessage, wr io.Writer) error
 }
 
 type nntpArticle struct {
@@ -144,17 +134,6 @@ func (self *nntpArticle) Reset() {
 
 func (self *nntpArticle) SignedPart() NNTPAttachment {
 	return self.signedPart
-}
-
-func (self *nntpArticle) Signed() NNTPMessage {
-	if self.signedPart == nil || self.signedPart.body == nil {
-		return nil
-	}
-	nntp, err := read_message(self.signedPart.body)
-	if err == nil {
-		return nntp
-	}
-	return nil
 }
 
 // create a simple plaintext nntp message
@@ -199,7 +178,7 @@ func signArticle(nntp NNTPMessage, seed []byte) (signed *nntpArticle, err error)
 	// write body to sign buffer
 	mw := io.MultiWriter(sha, signed.signedPart)
 	err = nntp.WriteTo(mw)
-	mw.Write([]byte{10})
+	// mw.Write([]byte{10})
 	if err == nil {
 		// build keypair
 		kp := nacl.LoadSignKey(seed)
@@ -390,11 +369,6 @@ func (self *nntpArticle) WriteBody(wr io.Writer) (err error) {
 		_, err = wr.Write(self.signedPart.Bytes())
 		return
 	}
-	if len(self.attachments) == 0 && self.message != nil {
-		// write plaintext and be done
-		_, err = wr.Write(self.message.Bytes())
-		return
-	}
 	content_type := self.ContentType()
 	_, params, err := mime.ParseMediaType(content_type)
 	if err != nil {
@@ -436,7 +410,46 @@ func (self *nntpArticle) WriteBody(wr io.Writer) (err error) {
 		err = w.Close()
 		w = nil
 	} else {
+		// write out message
 		_, err = wr.Write(self.message.Bytes())
 	}
 	return err
+}
+
+// verify a signed message's body
+// innerHandler must close reader when done
+// returns error if one happens while verifying article
+func verifyMessage(pk, sig string, body io.Reader, innerHandler func(map[string][]string, io.Reader)) (err error) {
+	log.Println("unwrapping signed message from", pk)
+	pk_bytes := unhex(pk)
+	sig_bytes := unhex(sig)
+	h := sha512.New()
+	pr, pw := io.Pipe()
+	// read header
+	// handle inner body
+	go func(hdr_reader *io.PipeReader) {
+		r := bufio.NewReader(hdr_reader)
+		hdr, err := readMIMEHeader(r)
+		if err == nil {
+			innerHandler(hdr, r)
+		}
+		hdr_reader.Close()
+	}(pr)
+	body = io.TeeReader(body, pw)
+	// copy body 128 bytes at a time
+	var buff [128]byte
+	_, err = io.CopyBuffer(h, body, buff[:])
+	if err == nil {
+		hash := h.Sum(nil)
+		log.Printf("hash=%s", hexify(hash))
+		log.Printf("sig=%s", hexify(sig_bytes))
+		if nacl.CryptoVerifyFucky(hash, sig_bytes, pk_bytes) {
+			log.Println("signature is valid :^)")
+		} else {
+			err = errors.New("invalid signature")
+		}
+	}
+	// flush pipe
+	pw.Close()
+	return
 }

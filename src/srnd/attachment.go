@@ -278,9 +278,14 @@ func readAttachmentFromMimePartAndStore(part *multipart.Part, store ArticleStore
 	if !CheckFile(att_fpath) {
 		// attachment isn't there
 		// move it into it
-		err = os.Rename(fpath, filepath.Join(store.AttachmentDir(), att.filepath))
+		err = os.Rename(fpath, att_fpath)
 	}
-	if err != nil {
+	if err == nil {
+		// now thumbnail
+		if !CheckFile(store.ThumbnailFilepath(att.filepath)) {
+			store.GenerateThumbnail(att.filepath)
+		}
+	} else {
 		// wtf?
 		log.Println("!!! failed to store attachment", err, "!!!")
 		DelFile(fpath)

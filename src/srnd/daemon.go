@@ -779,8 +779,6 @@ func (self *NNTPDaemon) poll(worker int) {
 				}
 				// federate
 				self.sendAllFeeds(ArticleEntry{msgid, group})
-				// generate thumbnails as needed
-				self.store.ThumbnailMessage(msgid)
 				// send to frontend
 				if self.frontend != nil {
 					if self.frontend.AllowNewsgroup(group) {

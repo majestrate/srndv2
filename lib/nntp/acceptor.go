@@ -1,6 +1,7 @@
 package nntp
 
 import (
+	"github.com/majestrate/srndv2/lib/model"
 	"github.com/majestrate/srndv2/lib/nntp/message"
 )
 
@@ -63,7 +64,7 @@ type ArticleAcceptor interface {
 	// check article given an article header
 	CheckHeader(hdr message.Header) PolicyStatus
 	// check article given a message id
-	CheckMessageID(msgid MessageID) PolicyStatus
+	CheckMessageID(msgid model.MessageID) PolicyStatus
 	// get max article size in bytes
 	MaxArticleSize() int64
 }

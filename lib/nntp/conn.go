@@ -1,5 +1,9 @@
 package nntp
 
+import (
+	"github.com/majestrate/srndv2/lib/model"
+)
+
 // an nntp connection
 type Conn interface {
 
@@ -32,7 +36,7 @@ type Conn interface {
 	// returns a channel for message ids, true if caller sends on the channel or
 	// returns nil and ErrStreamingNotAllowed if streaming is not allowed on this
 	// connection or another error if one occurs while trying to start streaming
-	StartStreaming() (chan ArticleEntry, error)
+	StartStreaming() (chan model.ArticleEntry, error)
 
 	// stream articles and quit when the channel obtained by StartStreaming() is
 	// closed, after which this nntp connection is no longer open

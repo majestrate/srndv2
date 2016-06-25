@@ -6,17 +6,6 @@ import (
 
 type ArticleHeader map[string][]string
 
-// a ( MessageID , newsgroup ) tuple
-type ArticleEntry [2]string
-
-func (self ArticleEntry) Newsgroup() string {
-	return self[1]
-}
-
-func (self ArticleEntry) MessageID() string {
-	return self[0]
-}
-
 // a ( time point, post count ) tuple
 type PostEntry [2]int64
 

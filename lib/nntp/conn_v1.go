@@ -140,7 +140,7 @@ func (c *v1Conn) Process(hooks EventHooks) {
 type v1OBConn struct {
 	C               v1Conn
 	supports_stream bool
-	streamChnl      chan ArticleEntry
+	streamChnl      chan model.ArticleEntry
 }
 
 func (c *v1OBConn) IsOpen() bool {
@@ -280,9 +280,9 @@ func (c *v1OBConn) Quit() {
 	c.C.Close()
 }
 
-func (c *v1OBConn) StartStreaming() (chnl chan ArticleEntry, err error) {
+func (c *v1OBConn) StartStreaming() (chnl chan model.ArticleEntry, err error) {
 	if c.streamChnl == nil {
-		c.streamChnl = make(chan ArticleEntry)
+		c.streamChnl = make(chan model.ArticleEntry)
 
 	}
 	chnl = c.streamChnl
@@ -295,7 +295,10 @@ func (c *v1OBConn) GetState() *ConnState {
 
 // create a new connection from an established connection
 func newOutboundConn(c net.Conn, s *Server, conf *config.FeedConfig) Conn {
-	sname := s.Name
+	sname := ""
+	if s.Config != nil {
+		sname = s.Config.Name
+	}
 	if len(sname) == 0 {
 		sname = "nntp.anon.tld"
 	}
@@ -474,7 +477,7 @@ func (c *v1Conn) readArticle(newpost bool, hooks EventHooks) (ps PolicyStatus, e
 	article_body_r, article_body_w := io.Pipe()
 
 	accept_chnl := make(chan PolicyStatus)
-	store_info_chnl := make(chan ArticleEntry)
+	store_info_chnl := make(chan model.ArticleEntry)
 	store_result_chl := make(chan error)
 
 	hdr_chnl := make(chan message.Header)
@@ -699,14 +702,14 @@ func (c *v1Conn) readArticle(newpost bool, hooks EventHooks) (ps PolicyStatus, e
 		hdr, err := c.hdrio.ReadHeader(r)
 		if err == nil {
 			// get message-id
-			var msgid MessageID
+			var msgid model.MessageID
 			if newpost {
 				// new post
 				// generate it
-				msgid = GenMessageID(c.serverName)
+				msgid = model.GenMessageID(c.serverName)
 			} else {
 				// not a new post, get from header
-				msgid = MessageID(hdr.MessageID())
+				msgid = model.MessageID(hdr.MessageID())
 				if msgid.Valid() {
 					// check store fo existing article
 					err = c.storage.HasArticle(msgid.String())
@@ -740,7 +743,7 @@ func (c *v1Conn) readArticle(newpost bool, hooks EventHooks) (ps PolicyStatus, e
 				// store to disk
 				w = out_w
 				// inform store
-				store_info_chnl <- ArticleEntry{msgid.String(), hdr.Newsgroup()}
+				store_info_chnl <- model.ArticleEntry{msgid.String(), hdr.Newsgroup()}
 				hdr_chnl <- hdr
 			} else {
 				// we have not accepted the article
@@ -823,7 +826,7 @@ func (c *v1Conn) readArticle(newpost bool, hooks EventHooks) (ps PolicyStatus, e
 func nntpRecvArticle(c *v1Conn, line string, hooks EventHooks) (err error) {
 	parts := strings.Split(line, " ")
 	if len(parts) == 2 {
-		msgid := MessageID(parts[1])
+		msgid := model.MessageID(parts[1])
 		if msgid.Valid() {
 			// valid message-id
 			err = c.printfLine("%s send article to be transfered", RPL_TransferAccepted)
@@ -1023,9 +1026,9 @@ func upgradeTLS(c *v1Conn, line string, hooks EventHooks) (err error) {
 func switchNewsgroup(c *v1Conn, line string, hooks EventHooks) (err error) {
 	parts := strings.Split(line, " ")
 	var has bool
-	var group Newsgroup
+	var group model.Newsgroup
 	if len(parts) == 2 {
-		group = Newsgroup(parts[1])
+		group = model.Newsgroup(parts[1])
 		if group.Valid() {
 			// correct format
 			if c.db == nil {
@@ -1070,9 +1073,9 @@ func switchNewsgroup(c *v1Conn, line string, hooks EventHooks) (err error) {
 }
 
 // inbound streaming start
-func (c *v1IBConn) StartStreaming() (chnl chan ArticleEntry, err error) {
+func (c *v1IBConn) StartStreaming() (chnl chan model.ArticleEntry, err error) {
 	if c.Mode().Is(MODE_STREAM) {
-		chnl = make(chan ArticleEntry)
+		chnl = make(chan model.ArticleEntry)
 	} else {
 		err = ErrInvalidMode
 	}
@@ -1092,7 +1095,10 @@ func (c *v1IBConn) StreamAndQuit() {
 }
 
 func newInboundConn(s *Server, c net.Conn) Conn {
-	sname := s.Name
+	sname := ""
+	if s.Config != nil {
+		sname = s.Config.Name
+	}
 	if len(sname) == 0 {
 		sname = "nntp.anon.tld"
 	}

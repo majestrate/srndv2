@@ -83,7 +83,7 @@ func (self *LazyCacheController) invalidateBoardPage(group string, pageno int) {
 }
 
 func (self *LazyCacheController) invalidateThreadPage(entry model.ArticleEntry) {
-	key := util.GetFilenameForThread(self.webroot_dir, entry.MessageID(), false)
+	key := util.GetFilenameForThread(self.webroot_dir, entry.MessageID().String(), false)
 	self.c.DeleteCache(key)
 	self.invalidateFrontPage()
 }
@@ -150,7 +150,7 @@ func (self *LazyCacheController) regenerateCatalog(board string) {
 
 // regenerate just a thread page
 func (self *LazyCacheController) regenerateThread(root model.ArticleEntry) {
-	key := util.GetFilenameForThread(self.webroot_dir, root.MessageID(), false)
+	key := util.GetFilenameForThread(self.webroot_dir, root.MessageID().String(), false)
 	self.c.Cache(key, self.regen.GenerateThread(root))
 }
 
@@ -203,7 +203,7 @@ func (self *LazyCacheController) Start() {
 
 func (self *LazyCacheController) Regen(msg model.ArticleEntry) {
 	self.regenThreadChan <- msg
-	self.RegenerateBoard(msg.Newsgroup())
+	self.RegenerateBoard(msg.Newsgroup().String())
 }
 
 func (self *LazyCacheController) GetThreadChan() chan model.ArticleEntry {

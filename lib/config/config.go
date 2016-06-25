@@ -45,7 +45,7 @@ func (c *Config) Reload() (err error) {
 
 // ensure that a config file exists
 // creates one if it does not exist
-func Ensure(fname string) (cfg *Config, err error) {
+func EnsureJSON(fname string) (cfg *Config, err error) {
 	_, err = os.Stat(fname)
 	if os.IsNotExist(err) {
 		err = nil
@@ -60,13 +60,13 @@ func Ensure(fname string) (cfg *Config, err error) {
 		}
 	}
 	if err == nil {
-		cfg, err = Load(fname)
+		cfg, err = LoadJSON(fname)
 	}
 	return
 }
 
 // load configuration file
-func Load(fname string) (cfg *Config, err error) {
+func LoadJSON(fname string) (cfg *Config, err error) {
 	cfg = new(Config)
 	cfg.fpath = fname
 	err = cfg.Reload()

@@ -2,6 +2,7 @@ package nntp
 
 import (
 	"errors"
+	"github.com/majestrate/srndv2/lib/model"
 	"github.com/majestrate/srndv2/lib/nntp/message"
 )
 
@@ -15,19 +16,19 @@ type Client interface {
 	// returns an article and nil if obtained
 	// returns nil and an error if an error occured while obtaining the article,
 	// error is ErrArticleNotFound if the remote server doesn't have that article
-	Article(msgid MessageID) (*message.Article, error)
+	Article(msgid model.MessageID) (*message.Article, error)
 
 	// check if the remote server has an article given its message-id
 	// return true and nil if the server has the article
 	// return false and nil if the server doesn't have the article
 	// returns false and error if an error occured while checking
-	Check(msgid MessageID) (bool, error)
+	Check(msgid model.MessageID) (bool, error)
 
 	// check if the remote server carries a newsgroup
 	// return true and nil if the server carries this newsgroup
 	// return false and nil if the server doesn't carry this newsgroup
 	// returns false and error if an error occured while checking
-	NewsgroupExists(group Newsgroup) (bool, error)
+	NewsgroupExists(group model.Newsgroup) (bool, error)
 
 	// return true and nil if posting is allowed
 	// return false and nil if posting is not allowed

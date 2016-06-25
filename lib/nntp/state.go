@@ -1,5 +1,9 @@
 package nntp
 
+import (
+	"github.com/majestrate/srndv2/lib/model"
+)
+
 // state of an nntp connection
 type ConnState struct {
 	// name of parent feed
@@ -11,7 +15,7 @@ type ConnState struct {
 	// current nntp mode
 	Mode Mode `json:"mode"`
 	// current selected nntp newsgroup
-	Group Newsgroup `json:"newsgroup"`
+	Group model.Newsgroup `json:"newsgroup"`
 	// current selected nntp article
 	Article string `json:"article"`
 	// parent feed's policy

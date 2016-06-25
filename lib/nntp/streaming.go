@@ -2,6 +2,7 @@ package nntp
 
 import (
 	"fmt"
+	"github.com/majestrate/srndv2/lib/model"
 	"strings"
 )
 
@@ -9,10 +10,10 @@ import (
 // these are pipelined between nntp servers
 type StreamEvent string
 
-func (ev StreamEvent) MessageID() MessageID {
+func (ev StreamEvent) MessageID() model.MessageID {
 	parts := strings.Split(string(ev), " ")
 	if len(parts) > 1 {
-		return MessageID(parts[1])
+		return model.MessageID(parts[1])
 	}
 	return ""
 }
@@ -32,7 +33,7 @@ func (ev StreamEvent) Valid() bool {
 var stream_TAKETHIS = "TAKETHIS"
 var stream_CHECK = "CHECK"
 
-func createStreamEvent(cmd string, msgid MessageID) StreamEvent {
+func createStreamEvent(cmd string, msgid model.MessageID) StreamEvent {
 	if msgid.Valid() {
 		return StreamEvent(fmt.Sprintf("%s %s", cmd, msgid))
 	} else {
@@ -40,26 +41,26 @@ func createStreamEvent(cmd string, msgid MessageID) StreamEvent {
 	}
 }
 
-func stream_rpl_Accept(msgid MessageID) StreamEvent {
+func stream_rpl_Accept(msgid model.MessageID) StreamEvent {
 	return createStreamEvent(RPL_StreamingAccept, msgid)
 }
 
-func stream_rpl_Reject(msgid MessageID) StreamEvent {
+func stream_rpl_Reject(msgid model.MessageID) StreamEvent {
 	return createStreamEvent(RPL_StreamingReject, msgid)
 }
 
-func stream_rpl_Defer(msgid MessageID) StreamEvent {
+func stream_rpl_Defer(msgid model.MessageID) StreamEvent {
 	return createStreamEvent(RPL_StreamingDefer, msgid)
 }
 
-func stream_rpl_Failed(msgid MessageID) StreamEvent {
+func stream_rpl_Failed(msgid model.MessageID) StreamEvent {
 	return createStreamEvent(RPL_StreamingFailed, msgid)
 }
 
-func stream_cmd_TAKETHIS(msgid MessageID) StreamEvent {
+func stream_cmd_TAKETHIS(msgid model.MessageID) StreamEvent {
 	return createStreamEvent(stream_TAKETHIS, msgid)
 }
 
-func stream_cmd_CHECK(msgid MessageID) StreamEvent {
+func stream_cmd_CHECK(msgid model.MessageID) StreamEvent {
 	return createStreamEvent(stream_CHECK, msgid)
 }

@@ -4,6 +4,7 @@ import (
 	log "github.com/Sirupsen/logrus"
 	"github.com/majestrate/srndv2/lib/config"
 	"github.com/majestrate/srndv2/lib/database"
+	"github.com/majestrate/srndv2/lib/model"
 	"github.com/majestrate/srndv2/lib/network"
 	"github.com/majestrate/srndv2/lib/store"
 	"net"
@@ -13,9 +14,9 @@ import (
 // callback hooks fired on certain events
 type EventHooks interface {
 	// called when we have obtained an article given its message-id
-	GotArticle(msgid MessageID, group Newsgroup)
+	GotArticle(msgid model.MessageID, group model.Newsgroup)
 	// called when we have sent an article to a single remote feed
-	SentArticleVia(msgid MessageID, feedname string)
+	SentArticleVia(msgid model.MessageID, feedname string)
 }
 
 // an nntp server
@@ -28,8 +29,6 @@ type Server struct {
 	DB database.DB
 	// global article acceptor
 	Acceptor ArticleAcceptor
-	// name of this server
-	Name string
 	// article storage
 	Storage store.Storage
 	// nntp config
@@ -38,7 +37,7 @@ type Server struct {
 	Feeds []*config.FeedConfig
 }
 
-func (s *Server) GotArticle(msgid MessageID, group Newsgroup) {
+func (s *Server) GotArticle(msgid model.MessageID, group model.Newsgroup) {
 	log.WithFields(log.Fields{
 		"pkg":   "nntp-server",
 		"msgid": msgid,
@@ -49,7 +48,7 @@ func (s *Server) GotArticle(msgid MessageID, group Newsgroup) {
 	}
 }
 
-func (s *Server) SentArticleVia(msgid MessageID, feedname string) {
+func (s *Server) SentArticleVia(msgid model.MessageID, feedname string) {
 	log.WithFields(log.Fields{
 		"pkg":   "nntp-server",
 		"msgid": msgid,
@@ -131,7 +130,7 @@ func (s *Server) getPolicyFor(state *ConnState) ArticleAcceptor {
 }
 
 // recv inbound streaming messages
-func (s *Server) recvInboundStream(chnl chan ArticleEntry) {
+func (s *Server) recvInboundStream(chnl chan model.ArticleEntry) {
 	for {
 		e, ok := <-chnl
 		if ok {
@@ -155,7 +154,7 @@ func (s *Server) handleInboundConnection(c net.Conn) {
 		// do they want to stream?
 		if nc.WantsStreaming() {
 			// yeeeeeh let's stream
-			var chnl chan ArticleEntry
+			var chnl chan model.ArticleEntry
 			chnl, err = nc.StartStreaming()
 			// for inbound we will recv messages
 			go s.recvInboundStream(chnl)

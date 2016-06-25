@@ -1,11 +1,12 @@
 package nntp
 
 import (
+	"github.com/majestrate/srndv2/lib/model"
 	"testing"
 )
 
 func TestTAKETHISParse(t *testing.T) {
-	msgid := GenMessageID("test.tld")
+	msgid := model.GenMessageID("test.tld")
 	ev := stream_cmd_TAKETHIS(msgid)
 	t.Logf("event: %s", ev)
 	if ev.MessageID() != msgid {
@@ -23,7 +24,7 @@ func TestTAKETHISParse(t *testing.T) {
 }
 
 func TestCHECKParse(t *testing.T) {
-	msgid := GenMessageID("test.tld")
+	msgid := model.GenMessageID("test.tld")
 	ev := stream_cmd_CHECK(msgid)
 	t.Logf("event: %s", ev)
 	if ev.MessageID() != msgid {

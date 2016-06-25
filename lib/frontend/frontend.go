@@ -24,3 +24,11 @@ type Frontend interface {
 	// trigger a manual regen of indexes for a root post
 	Regen(p model.PostReference)
 }
+
+type FrontendEventHooks struct {
+	Frontend Frontend
+}
+
+func (ev *FrontendEventHooks) GotArticle(msgid model.MessageID, group model.Newsgroup) {
+
+}

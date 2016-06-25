@@ -24,3 +24,6 @@ type Post struct {
 	PostPrefix       string
 	index            int
 }
+
+// ( message-id, references, newsgroup )
+type PostReference [3]string

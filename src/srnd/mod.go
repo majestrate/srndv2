@@ -186,6 +186,7 @@ func (self modEngine) DeletePost(msgid string, regen RegenFunc) (err error) {
 	var delposts []string
 	var page int64
 	var ref, group string
+	rootmsgid := ""
 	if hdr == nil {
 		log.Println("failed to get headers for article", msgid, err)
 	} else {
@@ -202,9 +203,8 @@ func (self modEngine) DeletePost(msgid string, regen RegenFunc) (err error) {
 			}
 
 			_, page, err = self.database.GetPageForRootMessage(msgid)
-			// delete thread presence
-			self.database.DeleteThread(msgid)
 			ref = msgid
+			rootmsgid = msgid
 		} else {
 			_, page, err = self.database.GetPageForRootMessage(ref)
 		}
@@ -224,7 +224,18 @@ func (self modEngine) DeletePost(msgid string, regen RegenFunc) (err error) {
 				delfiles = append(delfiles, img, thm)
 			}
 		}
-		log.Println("delete", delmsg)
+	}
+	// delete all files
+	for _, f := range delfiles {
+		log.Printf("delete file: %s", f)
+		os.Remove(f)
+	}
+
+	if rootmsgid != "" {
+		self.database.DeleteThread(rootmsgid)
+	}
+
+	for _, delmsg := range delposts {
 		// delete article from post database
 		err = self.database.DeleteArticle(delmsg)
 		if err != nil {
@@ -232,11 +243,6 @@ func (self modEngine) DeletePost(msgid string, regen RegenFunc) (err error) {
 		}
 		// ban article
 		self.database.BanArticle(delmsg, "deleted by moderator")
-	}
-	// delete all files
-	for _, f := range delfiles {
-		log.Printf("delete file: %s", f)
-		os.Remove(f)
 	}
 	regen(group, msgid, ref, int(page))
 	return nil
@@ -286,7 +292,7 @@ func RunModEngine(mod ModEngine, regen RegenFunc) {
 		if nntp.Newsgroup() == "ctl" {
 			pubkey := nntp.Pubkey()
 			for _, line := range strings.Split(nntp.Message(), "\n") {
-				line = strings.Trim(line, "\r\t\n")
+				line = strings.Trim(line, "\r\t\n ")
 				ev := ParseModEvent(line)
 				action := ev.Action()
 				if action == "delete" {

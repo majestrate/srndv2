@@ -424,7 +424,13 @@ func read_message_body(body io.Reader, hdr map[string][]string, store ArticleSto
 						if att == nil {
 							log.Println("failed to load plaintext attachment")
 						} else {
-							nntp.message = att
+							if att.Filename() == "" {
+								// message part
+								nntp.message = att
+							} else {
+								// plaintext attachment
+								nntp.Attach(att)
+							}
 						}
 					} else {
 						// non plaintext gets added to attachments

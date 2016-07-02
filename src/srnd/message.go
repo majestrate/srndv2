@@ -369,6 +369,7 @@ func (self *nntpArticle) WriteBody(wr io.Writer) (err error) {
 		_, err = wr.Write(self.signedPart.Bytes())
 		return
 	}
+	self.Pack()
 	content_type := self.ContentType()
 	_, params, err := mime.ParseMediaType(content_type)
 	if err != nil {

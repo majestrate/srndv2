@@ -420,7 +420,7 @@ func read_message_body(body io.Reader, hdr map[string][]string, store ArticleSto
 				media_type, _, err = mime.ParseMediaType(part_type)
 				if err == nil {
 					if media_type == "text/plain" {
-						att := readAttachmentFromMimePartAndStore(part, nil)
+						att := readAttachmentFromMimePartAndStore(part, store)
 						if att == nil {
 							log.Println("failed to load plaintext attachment")
 						} else {

@@ -66,12 +66,15 @@ type liveChan struct {
 	postchnl   chan PostModel
 	uuid       string
 	resultchnl chan *liveChan
+	newsgroup  string
 }
 
 // inform this livechan that we got a new post
 func (lc *liveChan) Inform(post PostModel) {
 	if lc.postchnl != nil {
-		lc.postchnl <- post
+		if lc.newsgroup == "" || lc.newsgroup == post.Board() {
+			lc.postchnl <- post
+		}
 	}
 }
 
@@ -192,7 +195,7 @@ func (self *httpFrontend) poll_liveui() {
 			}
 		case model, ok := <-self.liveui_chnl:
 			if ok {
-				// inform global
+				// inform all
 				if ok {
 					for _, livechan := range self.liveui_chans {
 						livechan.Inform(model)
@@ -961,7 +964,11 @@ func (self *httpFrontend) handle_liveui(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 	// obtain a new channel for reading post models
-	livechnl := self.subscribeAll()
+	board := ""
+	if r.URL.RawQuery != "" {
+		board = "overchan." + r.URL.RawQuery
+	}
+	livechnl := self.subscribe(board)
 	if livechnl == nil {
 		// shutting down
 		conn.Close()
@@ -1001,12 +1008,13 @@ func (self *httpFrontend) handle_liveui(w http.ResponseWriter, r *http.Request) 
 	}
 }
 
-// get a chan that is subscribed to all new posts
-func (self *httpFrontend) subscribeAll() chan *liveChan {
+// get a chan that is subscribed to all new posts in a newsgroup
+func (self *httpFrontend) subscribe(board string) chan *liveChan {
 	if self.liveui_register == nil {
 		return nil
 	} else {
 		live := new(liveChan)
+		live.newsgroup = board
 		live.resultchnl = make(chan *liveChan)
 		self.liveui_register <- live
 		return live.resultchnl

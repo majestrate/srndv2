@@ -39,7 +39,8 @@ type FileCache struct {
 }
 
 func (self *FileCache) DeleteBoardMarkup(group string) {
-	pages, _ := self.database.GetPagesPerBoard(group)
+	pages64 := self.database.GetGroupPageCount(group)
+	pages := int(pages64)
 	for page := 0; page < pages; page++ {
 		fname := self.getFilenameForBoardPage(group, page, false)
 		os.Remove(fname)

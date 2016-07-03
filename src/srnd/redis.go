@@ -415,7 +415,7 @@ func (self RedisDB) GetGroupPageCount(newsgroup string) int64 {
 
 	if count > 0 {
 		// divide by threads per page
-		perpage, _ := self.GetPagesPerBoard(newsgroup)
+		perpage, _ := self.GetThreadsPerPage(newsgroup)
 		pages := int64(math.Floor(float64(count-1)/float64(perpage))) + 1
 		return pages
 	}

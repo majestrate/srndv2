@@ -194,7 +194,8 @@ func (self *redisHandler) serveCached(w http.ResponseWriter, r *http.Request, ke
 }
 
 func (self *RedisCache) DeleteBoardMarkup(group string) {
-	pages, _ := self.database.GetPagesPerBoard(group)
+	pages64 := self.database.GetGroupPageCount(group)
+	pages := int(pages64)
 	keys := make([]string, 0)
 	for page := 0; page < pages; page++ {
 		key := GROUP_PREFIX + group + "::Page::" + strconv.Itoa(page)

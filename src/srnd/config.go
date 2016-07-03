@@ -132,6 +132,7 @@ func GenSRNdConfig() *configparser.Configuration {
 	sect.Add("require_tls", "1")
 	sect.Add("anon_nntp", "0")
 	sect.Add("feeds", filepath.Join(".", "feeds.d"))
+	sect.Add("archive", "0")
 
 	// profiling settings
 	sect = conf.NewSection("pprof")

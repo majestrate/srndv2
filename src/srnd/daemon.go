@@ -505,8 +505,11 @@ func (self *NNTPDaemon) Run() {
 	self.ask_for_article = make(chan ArticleEntry)
 
 	self.pump_ticker = time.NewTicker(time.Millisecond * 100)
-
-	self.expire = createExpirationCore(self.database, self.store)
+	if self.conf.daemon["archive"] == "1" {
+		log.Println("running in archive mode")
+	} else {
+		self.expire = createExpirationCore(self.database, self.store)
+	}
 	self.sync_on_start = self.conf.daemon["sync_on_start"] == "1"
 	self.instance_name = self.conf.daemon["instance_name"]
 	self.allow_anon = self.conf.daemon["allow_anon"] == "1"
@@ -771,8 +774,10 @@ func (self *NNTPDaemon) poll(worker int) {
 				if err == nil {
 					rollover = tpp * ppb
 				}
-				// expire posts
-				self.expire.ExpireGroup(group, rollover)
+				if self.expire != nil {
+					// expire posts
+					self.expire.ExpireGroup(group, rollover)
+				}
 				// send to mod panel
 				if group == "ctl" {
 					modchnl <- msgid

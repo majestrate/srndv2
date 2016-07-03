@@ -324,8 +324,13 @@ func (self httpModUI) getAdminFunc(funcname string) AdminFunc {
 		}
 	} else if funcname == "store.expire" {
 		return func(_ map[string]interface{}) (interface{}, error) {
-			go self.daemon.expire.ExpireOrphans()
-			return "expiration started", nil
+			if self.daemon.expire == nil {
+				// TODO: expire orphans?
+				return "archive mode enabled, will not expire orphans", nil
+			} else {
+				go self.daemon.expire.ExpireOrphans()
+				return "expiration started", nil
+			}
 		}
 	} else if funcname == "frontend.posts" {
 		// get all posts given parameters

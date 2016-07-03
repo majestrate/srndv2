@@ -549,7 +549,11 @@ func (self *NNTPDaemon) Run() {
 
 	defer self.listener.Close()
 	// run expiration mainloop
-	go self.expire.Mainloop()
+	if self.expire == nil {
+		log.Println("we are an archive, not expiring posts")
+	} else {
+		go self.expire.Mainloop()
+	}
 	// we are now running
 	self.running = true
 	// start polling feeds

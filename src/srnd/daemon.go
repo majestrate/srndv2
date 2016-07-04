@@ -507,6 +507,7 @@ func (self *NNTPDaemon) Run() {
 	self.pump_ticker = time.NewTicker(time.Millisecond * 100)
 	if self.conf.daemon["archive"] == "1" {
 		log.Println("running in archive mode")
+		self.expire = nil
 	} else {
 		self.expire = createExpirationCore(self.database, self.store)
 	}

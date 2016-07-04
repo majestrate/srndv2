@@ -62,11 +62,34 @@ type groupRegenRequest struct {
 	page int
 }
 
+// livechan captcha solution
+type liveCaptcha struct {
+	ID       string
+	Solution string
+}
+
+// inbound livechan command
+type liveCommand struct {
+	Type    string
+	Captcha *liveCaptcha
+	Post    *postRequest
+}
+
 type liveChan struct {
-	postchnl   chan PostModel
-	uuid       string
+	// channel for recv-ing posts for sub'd newsgroup
+	postchnl chan PostModel
+	// channel for sending control messages
+	datachnl chan []byte
+	// unique session id
+	uuid string
+	// for recv-ing self
 	resultchnl chan *liveChan
-	newsgroup  string
+	// subbed newsgroup
+	newsgroup string
+	// have we solved captcha?
+	captcha bool
+	// our ip address
+	IP string
 }
 
 // inform this livechan that we got a new post
@@ -75,6 +98,57 @@ func (lc *liveChan) Inform(post PostModel) {
 		if lc.newsgroup == "" || lc.newsgroup == post.Board() {
 			lc.postchnl <- post
 		}
+	}
+}
+
+func (lc *liveChan) SendError(err error) {
+	msg, _ := json.Marshal(map[string]string{
+		"Type":  "error",
+		"Error": err.Error(),
+	})
+	lc.datachnl <- msg
+}
+
+func (lc *liveChan) PostSuccess(nntp NNTPMessage) {
+	// meh
+	log.Println("livechan post success")
+}
+
+func (lc *liveChan) SendBanned() {
+	msg, _ := json.Marshal(map[string]string{
+		"Type": "ban",
+		// TODO: real ban message
+		"Reason": "your an faget, your IP was: " + lc.IP,
+	})
+	lc.datachnl <- msg
+}
+
+// handle message from a websocket session
+func (lc *liveChan) handleMessage(front *httpFrontend, cmd *liveCommand) {
+
+	if cmd.Captcha != nil {
+		lc.captcha = captcha.VerifyString(cmd.Captcha.ID, cmd.Captcha.Solution)
+		// send captcha result
+		msg, _ := json.Marshal(map[string]interface{}{
+			"Type":    "captcha",
+			"Success": lc.captcha,
+		})
+		log.Println("captcha", lc.captcha)
+		lc.datachnl <- msg
+	}
+	if lc.captcha && cmd.Post != nil {
+		cmd.Post.Attachments = []postAttachment{}
+		cmd.Post.Frontend = front.name
+		cmd.Post.IpAddress = lc.IP
+		cmd.Post.Group = lc.newsgroup
+		cmd.Post.ExtraHeaders = map[string]string{"X-Livechan": "1"}
+		front.handle_postRequest(cmd.Post, lc.SendBanned, lc.SendError, lc.PostSuccess, false)
+	} else if cmd.Captcha == nil {
+		// resend captcha challenge
+		msg, _ := json.Marshal(map[string]string{
+			"Type": "captcha",
+		})
+		lc.datachnl <- msg
 	}
 }
 
@@ -191,15 +265,24 @@ func (self *httpFrontend) poll_liveui() {
 				}
 				if live.resultchnl != nil {
 					live.resultchnl <- live
+					// get scrollback
+					posts := self.daemon.database.GetLastBumpedThreads(live.newsgroup, 5)
+					if posts != nil {
+						for _, e := range posts {
+							post := self.daemon.database.GetPostModel(self.prefix, e.MessageID())
+							if post != nil {
+								live.Inform(post)
+							}
+						}
+					}
 				}
 			}
 		case model, ok := <-self.liveui_chnl:
+
+			// TODO: should we do board specific filtering?
 			if ok {
-				// inform all
-				if ok {
-					for _, livechan := range self.liveui_chans {
-						livechan.Inform(model)
-					}
+				for _, livechan := range self.liveui_chans {
+					livechan.Inform(model)
 				}
 			}
 		case <-self.end_liveui:
@@ -293,13 +376,14 @@ func (self *httpFrontend) poll() {
 }
 
 // create a new captcha, return as json object
-func (self httpFrontend) new_captcha_json(wr http.ResponseWriter, r *http.Request) {
+func (self *httpFrontend) new_captcha_json(wr http.ResponseWriter, r *http.Request) {
 	captcha_id := captcha.New()
 	resp := make(map[string]string)
 	// the captcha id
 	resp["id"] = captcha_id
 	// url of the image
-	resp["url"] = fmt.Sprintf("%s%s.png", self.prefix, captcha_id)
+	resp["url"] = fmt.Sprintf("%scaptcha/%s.png", self.prefix, captcha_id)
+	wr.Header().Set("Content-Type", "text/json; encoding=UTF-8")
 	enc := json.NewEncoder(wr)
 	enc.Encode(&resp)
 }
@@ -956,6 +1040,42 @@ func (self *httpFrontend) handle_api(wr http.ResponseWriter, r *http.Request) {
 // upgrade to web sockets and subscribe to all new posts
 // XXX: firehose?
 func (self *httpFrontend) handle_liveui(w http.ResponseWriter, r *http.Request) {
+	log.Println("websocket from", r.RemoteAddr)
+	IpAddress, _, err := net.SplitHostPort(r.RemoteAddr)
+	// TODO: have in config upstream proxy ip and check for that
+	if strings.HasPrefix(IpAddress, "127.") {
+		// if it's loopback check headers for reverse proxy headers
+		// TODO: make sure this isn't a tor user being sneaky
+		ip := getRealIP(r.Header.Get("X-Real-IP"))
+		if ip == "" {
+			// try X-Forwarded-For if X-Real-IP not set
+			ip = r.Header.Get("X-Forwarded-For")
+			parts := strings.Split(ip, ",")
+			ip = parts[0]
+			if ip != "" {
+				IpAddress = getRealIP(ip)
+			}
+		} else {
+			IpAddress = ip
+		}
+	}
+	var banned bool
+	if err == nil {
+		banned, err = self.daemon.database.CheckIPBanned(IpAddress)
+		if banned {
+			w.WriteHeader(403)
+			io.WriteString(w, "banned")
+			return
+		}
+	}
+
+	if err != nil {
+		w.WriteHeader(504)
+		log.Println(err)
+		io.WriteString(w, err.Error())
+		return
+	}
+
 	conn, err := self.upgrader.Upgrade(w, r, nil)
 	if err != nil {
 		// problem
@@ -968,7 +1088,7 @@ func (self *httpFrontend) handle_liveui(w http.ResponseWriter, r *http.Request) 
 	if r.URL.RawQuery != "" {
 		board = "overchan." + r.URL.RawQuery
 	}
-	livechnl := self.subscribe(board)
+	livechnl := self.subscribe(board, IpAddress)
 	if livechnl == nil {
 		// shutting down
 		conn.Close()
@@ -980,10 +1100,20 @@ func (self *httpFrontend) handle_liveui(w http.ResponseWriter, r *http.Request) 
 	go func() {
 		// read loop
 		for {
-			_, _, err := conn.ReadMessage()
+			t, m, err := conn.NextReader()
 			if err != nil {
 				conn.Close()
 				return
+			}
+			if t == websocket.TextMessage {
+				dec := json.NewDecoder(m)
+				cmd := new(liveCommand)
+				err := dec.Decode(cmd)
+				if err != nil {
+					conn.Close()
+					return
+				}
+				live.handleMessage(self, cmd)
 			}
 		}
 	}()
@@ -995,6 +1125,12 @@ func (self *httpFrontend) handle_liveui(w http.ResponseWriter, r *http.Request) 
 				err = conn.WriteJSON(model)
 			} else {
 				// channel closed
+				break
+			}
+		case data, ok := <-live.datachnl:
+			if ok {
+				err = conn.WriteMessage(websocket.TextMessage, data)
+			} else {
 				break
 			}
 		case <-ticker.C:
@@ -1009,13 +1145,15 @@ func (self *httpFrontend) handle_liveui(w http.ResponseWriter, r *http.Request) 
 }
 
 // get a chan that is subscribed to all new posts in a newsgroup
-func (self *httpFrontend) subscribe(board string) chan *liveChan {
+func (self *httpFrontend) subscribe(board, ip string) chan *liveChan {
 	if self.liveui_register == nil {
 		return nil
 	} else {
 		live := new(liveChan)
+		live.IP = ip
 		live.newsgroup = board
 		live.resultchnl = make(chan *liveChan)
+		live.datachnl = make(chan []byte)
 		self.liveui_register <- live
 		return live.resultchnl
 	}
@@ -1059,7 +1197,6 @@ func (self *httpFrontend) Mainloop() {
 	m.Path("/mod/admin/{action}").HandlerFunc(self.modui.HandleAdminCommand).Methods("GET", "POST")
 	self.httpmux.PathPrefix("/mod/").Handler(CSRF(m))
 	m = self.httpmux
-	m.Path("/").Handler(cache_handler)
 	// robots.txt handler
 	m.Path("/robots.txt").HandlerFunc(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		io.WriteString(w, "User-Agent: *\nDisallow: /\n")
@@ -1071,9 +1208,9 @@ func (self *httpFrontend) Mainloop() {
 	m.Path("/{f}.json").Handler(cache_handler).Methods("GET", "HEAD")
 	m.PathPrefix("/static/").Handler(http.FileServer(http.Dir(self.static_dir)))
 	m.Path("/post/{f}").HandlerFunc(self.handle_poster).Methods("POST")
+	m.Path("/captcha/new").HandlerFunc(self.new_captcha_json).Methods("GET")
 	m.Path("/captcha/img").HandlerFunc(self.new_captcha).Methods("GET")
 	m.Path("/captcha/{f}").Handler(captcha.Server(350, 175)).Methods("GET")
-	m.Path("/captcha/new.json").HandlerFunc(self.new_captcha_json).Methods("GET")
 	m.Path("/new/").HandlerFunc(self.handle_newboard).Methods("GET")
 	m.Path("/api/{meth}").HandlerFunc(self.handle_api).Methods("POST", "GET")
 	// live ui websocket
@@ -1082,6 +1219,8 @@ func (self *httpFrontend) Mainloop() {
 	m.Path("/livechan/").HandlerFunc(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		template.writeTemplate("live.mustache", map[string]interface{}{"prefix": self.prefix}, w)
 	})).Methods("GET", "HEAD")
+	m.Path("/").Handler(cache_handler)
+
 	var err error
 
 	// run daemon's mod engine with our frontend

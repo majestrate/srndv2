@@ -216,6 +216,7 @@ type post struct {
 	PostMarkup       string
 	PostPrefix       string
 	index            int
+	Type             string
 }
 
 func (self *post) Index() int {
@@ -241,6 +242,8 @@ func (self *post) MarshalJSON() (b []byte, err error) {
 	}
 	self.PostMarkup = self.RenderPost()
 	self.PostPrefix = self.Prefix()
+	// for liveui
+	self.Type = "Post"
 	return json.Marshal(*self)
 }
 

@@ -267,7 +267,9 @@ func (self *httpFrontend) poll_liveui() {
 					// get scrollback
 					posts := self.daemon.database.GetLastBumpedThreads(live.newsgroup, 5)
 					if posts != nil {
-						for _, e := range posts {
+						c := len(posts)
+						for idx := range posts {
+							e := posts[c-idx-1]
 							post := self.daemon.database.GetPostModel(self.prefix, e.MessageID())
 							if post != nil {
 								live.Inform(post)
@@ -1039,7 +1041,7 @@ func (self *httpFrontend) handle_api(wr http.ResponseWriter, r *http.Request) {
 // upgrade to web sockets and subscribe to all new posts
 // XXX: firehose?
 func (self *httpFrontend) handle_liveui(w http.ResponseWriter, r *http.Request) {
-	log.Println("websocket from", r.RemoteAddr)
+
 	IpAddress, _, err := net.SplitHostPort(r.RemoteAddr)
 	// TODO: have in config upstream proxy ip and check for that
 	if strings.HasPrefix(IpAddress, "127.") {

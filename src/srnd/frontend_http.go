@@ -137,7 +137,6 @@ func (lc *liveChan) handleMessage(front *httpFrontend, cmd *liveCommand) {
 		lc.datachnl <- msg
 	}
 	if lc.captcha && cmd.Post != nil {
-		cmd.Post.Attachments = []postAttachment{}
 		cmd.Post.Frontend = front.name
 		cmd.Post.IpAddress = lc.IP
 		cmd.Post.Group = lc.newsgroup

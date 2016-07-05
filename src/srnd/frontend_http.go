@@ -265,13 +265,17 @@ func (self *httpFrontend) poll_liveui() {
 				if live.resultchnl != nil {
 					live.resultchnl <- live
 					// get scrollback
-					posts := self.daemon.database.GetLastBumpedThreads(live.newsgroup, 5)
-					if posts != nil {
-						c := len(posts)
-						for idx := range posts {
-							e := posts[c-idx-1]
-							post := self.daemon.database.GetPostModel(self.prefix, e.MessageID())
-							if post != nil {
+					board := template.obtainBoard(self.prefix, self.name, live.newsgroup, false, self.daemon.database)
+					if board != nil {
+						threads := board[0].Threads()
+						c := len(threads)
+						for idx := range threads {
+							th := threads[c-idx-1]
+							th.Update(self.daemon.database)
+							// send root post
+							live.Inform(th.OP())
+							// send replies
+							for _, post := range th.Replies() {
 								live.Inform(post)
 							}
 						}

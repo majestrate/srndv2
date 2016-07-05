@@ -155,6 +155,7 @@ func GenSRNdConfig() *configparser.Configuration {
 	sect.Add("convert_bin", "/usr/bin/convert")
 	sect.Add("ffmpegthumbnailer_bin", "/usr/bin/ffmpeg")
 	sect.Add("sox_bin", "/usr/bin/sox")
+	sect.Add("placeholder_thumbnail", "contrib/static/placeholder.png")
 	sect.Add("compression", "0")
 
 	// database backend config

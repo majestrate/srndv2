@@ -70,6 +70,7 @@ type articleStore struct {
 	convert_path string
 	ffmpeg_path  string
 	sox_path     string
+	placeholder  string
 	compression  bool
 	compWriter   *gzip.Writer
 }
@@ -83,6 +84,7 @@ func createArticleStore(config map[string]string, database Database) ArticleStor
 		convert_path: config["convert_bin"],
 		ffmpeg_path:  config["ffmpegthumbnailer_bin"],
 		sox_path:     config["sox_bin"],
+		placeholder:  config["placeholder_thumbnail"],
 		database:     database,
 		compression:  config["compression"] == "1",
 	}
@@ -116,6 +118,13 @@ func (self *articleStore) Init() {
 	}
 	if !CheckFile(self.sox_path) {
 		log.Fatal("connt find executable for sox: ", self.sox_path, " not found")
+	}
+	if !CheckFile(self.placeholder) {
+		log.Println("falling back to use default placeholder image")
+		self.placeholder = "contrib/static/placeholder.png"
+		if !CheckFile(self.placeholder) {
+			log.Fatal("cannot find thumbnail placeholder file: ", self.placeholder, " not found")
+		}
 	}
 }
 
@@ -151,13 +160,23 @@ func (self *articleStore) isImage(fname string) bool {
 		}
 	}
 	return false
+}
 
+// is this a video file?
+func (self *articleStore) isVideo(fname string) bool {
+	for _, ext := range []string{".mpeg", ".ogv", ".mkv", ".avi", ".mp4", ".webm"} {
+		if strings.HasSuffix(strings.ToLower(fname), ext) {
+			return true
+		}
+	}
+	return false
 }
 
 func (self *articleStore) GenerateThumbnail(fname string) error {
 	outfname := self.ThumbnailFilepath(fname)
 	infname := self.AttachmentFilepath(fname)
 	var cmd *exec.Cmd
+	var err error
 	if self.isImage(fname) {
 		if strings.HasSuffix(infname, ".gif") {
 			infname += "[0]"
@@ -167,7 +186,9 @@ func (self *articleStore) GenerateThumbnail(fname string) error {
 	} else if self.isAudio(fname) {
 		tmpfname := infname + ".wav"
 		cmd = exec.Command(self.ffmpeg_path, "-i", infname, tmpfname)
-		out, err := cmd.CombinedOutput()
+		var out []byte
+
+		out, err = cmd.CombinedOutput()
 
 		if err == nil {
 			cmd = exec.Command(self.sox_path, tmpfname, "-n", "spectrogram", "-a", "-d", "0:10", "-r", "-p", "6", "-x", "200", "-y", "150", "-o", outfname)
@@ -180,14 +201,19 @@ func (self *articleStore) GenerateThumbnail(fname string) error {
 		}
 		DelFile(tmpfname)
 		return err
-	} else {
+	} else if self.isVideo(fname) || strings.HasSuffix(fname, ".txt") {
 		cmd = exec.Command(self.ffmpeg_path, "-i", infname, "-vf", "scale=300:200", "-vframes", "1", outfname)
 	}
-	exec_out, err := cmd.CombinedOutput()
-	if err == nil {
-		log.Println("made thumbnail for", infname)
+	if cmd == nil {
+		log.Println("use placeholder for", infname)
+		os.Link(self.placeholder, outfname)
 	} else {
-		log.Println("error generating thumbnail", string(exec_out))
+		exec_out, err := cmd.CombinedOutput()
+		if err == nil {
+			log.Println("made thumbnail for", infname)
+		} else {
+			log.Println("error generating thumbnail", string(exec_out))
+		}
 	}
 	return err
 }

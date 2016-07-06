@@ -1163,7 +1163,7 @@ func (self *httpFrontend) subscribe(board, ip string) chan *liveChan {
 		live.IP = ip
 		live.newsgroup = board
 		live.resultchnl = make(chan *liveChan)
-		live.datachnl = make(chan []byte)
+		live.datachnl = make(chan []byte, 8)
 		self.liveui_register <- live
 		return live.resultchnl
 	}

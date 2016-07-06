@@ -561,7 +561,7 @@ func (self *NNTPDaemon) Run() {
 			self.article_lifetime = time.Duration(lifetime) * time.Hour
 			since := 0 - (self.article_lifetime)
 			self.expire.ExpireBefore(time.Now().Add(since))
-			self.expiration_ticker = time.NewTicker(self.article_lifetime)
+			self.expiration_ticker = time.NewTicker(time.Minute)
 			go func() {
 				for {
 					_, ok := <-self.expiration_ticker.C

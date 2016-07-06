@@ -110,8 +110,13 @@ func (lc *liveChan) SendError(err error) {
 }
 
 func (lc *liveChan) PostSuccess(nntp NNTPMessage) {
-	// meh
-	log.Println("livechan post success")
+	// inform ui that a post was made
+	msg, _ := json.Marshal(map[string]interface{}{
+		"Type":  "posted",
+		"Msgid": nntp.MessageID(),
+		"OP":    nntp.OP(),
+	})
+	lc.datachnl <- msg
 }
 
 func (lc *liveChan) SendBanned() {

@@ -124,7 +124,9 @@ type NNTPDaemon struct {
 	ask_articles_mtx  sync.RWMutex
 	ask_articles      []ArticleEntry
 
-	pump_ticker *time.Ticker
+	pump_ticker       *time.Ticker
+	expiration_ticker *time.Ticker
+	article_lifetime  time.Duration
 }
 
 func (self NNTPDaemon) End() {
@@ -554,6 +556,24 @@ func (self *NNTPDaemon) Run() {
 		log.Println("we are an archive, not expiring posts")
 	} else {
 		go self.expire.Mainloop()
+		lifetime := mapGetInt(self.conf.daemon, "article_lifetime", 0)
+		if lifetime > 0 {
+			self.article_lifetime = time.Duration(lifetime) * time.Hour
+			since := 0 - (self.article_lifetime)
+			self.expire.ExpireBefore(time.Now().Add(since))
+			self.expiration_ticker = time.NewTicker(self.article_lifetime)
+			go func() {
+				for {
+					_, ok := <-self.expiration_ticker.C
+					if ok {
+						t := time.Now()
+						self.expire.ExpireBefore(t.Add(since))
+					} else {
+						return
+					}
+				}
+			}()
+		}
 	}
 	// we are now running
 	self.running = true

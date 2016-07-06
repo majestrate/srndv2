@@ -8,6 +8,7 @@ import (
 	"log"
 	"os"
 	"path/filepath"
+	"time"
 )
 
 // content expiration interface
@@ -18,6 +19,8 @@ type ExpirationCore interface {
 	ExpirePost(messageID string)
 	// expire all orphaned articles
 	ExpireOrphans()
+	// expire all articles posted before time
+	ExpireBefore(t time.Time)
 	// run our mainloop
 	Mainloop()
 }
@@ -75,6 +78,17 @@ func (self expire) ExpireThread(rootMsgid string) {
 		}
 	}
 	self.database.DeleteThread(rootMsgid)
+}
+
+func (self expire) ExpireBefore(t time.Time) {
+	articles, err := self.database.GetPostsBefore(t)
+	if err == nil {
+		for _, msgid := range articles {
+			self.ExpirePost(msgid)
+		}
+	} else {
+		log.Println("failed to expire older posts", err)
+	}
 }
 
 // expire all orphaned articles

@@ -1189,6 +1189,12 @@ func (self RedisDB) PubkeyIsBanned(pubkey string) (bannded bool, err error) {
 	return
 }
 
+func (self RedisDB) GetPostsBefore(t time.Time) (msgids []string, err error) {
+	s := strconv.FormatInt(t.Unix(), 10)
+	msgids, err = self.client.ZRangeByScore(ARTICLE_WKR, redis.ZRangeByScore{Min: "0", Max: s}).Result()
+	return
+}
+
 func processHashResult(hash []string) (mapRes map[string]string) {
 	mapRes = make(map[string]string)
 	max := len(hash)

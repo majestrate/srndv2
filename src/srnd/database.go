@@ -260,6 +260,9 @@ type Database interface {
 
 	// ban a public key from posting
 	BanPubkey(pubkey string) error
+
+	// get all message-id posted before a time
+	GetPostsBefore(t time.Time) ([]string, error)
 }
 
 func NewDatabase(db_type, schema, host, port, user, password string) Database {

@@ -106,7 +106,9 @@ func (lc *liveChan) SendError(err error) {
 		"Type":  "error",
 		"Error": err.Error(),
 	})
-	lc.datachnl <- msg
+	if lc.datachnl != nil {
+		lc.datachnl <- msg
+	}
 }
 
 func (lc *liveChan) PostSuccess(nntp NNTPMessage) {
@@ -116,7 +118,9 @@ func (lc *liveChan) PostSuccess(nntp NNTPMessage) {
 		"Msgid": nntp.MessageID(),
 		"OP":    nntp.OP(),
 	})
-	lc.datachnl <- msg
+	if lc.datachnl != nil {
+		lc.datachnl <- msg
+	}
 }
 
 func (lc *liveChan) SendBanned() {
@@ -125,7 +129,9 @@ func (lc *liveChan) SendBanned() {
 		// TODO: real ban message
 		"Reason": "your an faget, your IP was: " + lc.IP,
 	})
-	lc.datachnl <- msg
+	if lc.datachnl != nil {
+		lc.datachnl <- msg
+	}
 }
 
 // handle message from a websocket session
@@ -138,8 +144,9 @@ func (lc *liveChan) handleMessage(front *httpFrontend, cmd *liveCommand) {
 			"Type":    "captcha",
 			"Success": lc.captcha,
 		})
-		log.Println("captcha", lc.captcha)
-		lc.datachnl <- msg
+		if lc.datachnl != nil {
+			lc.datachnl <- msg
+		}
 	}
 	if lc.captcha && cmd.Post != nil {
 		cmd.Post.Frontend = front.name
@@ -152,7 +159,11 @@ func (lc *liveChan) handleMessage(front *httpFrontend, cmd *liveCommand) {
 		msg, _ := json.Marshal(map[string]string{
 			"Type": "captcha",
 		})
-		lc.datachnl <- msg
+
+		if lc.datachnl != nil {
+			lc.datachnl <- msg
+		}
+
 	}
 }
 
@@ -258,6 +269,8 @@ func (self *httpFrontend) poll_liveui() {
 				}
 				close(live.postchnl)
 				live.postchnl = nil
+				close(live.datachnl)
+				live.datachnl = nil
 			}
 		case live, ok := <-self.liveui_register:
 			// register new user event
@@ -281,7 +294,7 @@ func (self *httpFrontend) poll_liveui() {
 							live.Inform(th.OP())
 							// send replies
 							for _, post := range th.Replies() {
-								live.Inform(post)
+								go live.Inform(post)
 							}
 						}
 					}
@@ -292,7 +305,7 @@ func (self *httpFrontend) poll_liveui() {
 			// TODO: should we do board specific filtering?
 			if ok {
 				for _, livechan := range self.liveui_chans {
-					livechan.Inform(model)
+					go livechan.Inform(model)
 				}
 			}
 		case <-self.end_liveui:

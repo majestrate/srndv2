@@ -1460,3 +1460,16 @@ func (self *PostgresDatabase) PubkeyIsBanned(pubkey string) (bool, error) {
 	// TODO: implement
 	return false, nil
 }
+
+func (self *PostgresDatabase) GetPostsBefore(t time.Time) (msgids []string, err error) {
+	var rows *sql.Rows
+	rows, err = self.conn.Query("SELECT message_id FROM ArticlePosts WHERE time_posted < $1", t.Unix())
+	if err == nil {
+		for rows.Next() {
+			var msgid string
+			rows.Scan(&msgid)
+			msgids = append(msgids, msgid)
+		}
+	}
+	return
+}

@@ -40,6 +40,8 @@ func HandleStartTLS(conn net.Conn, config *tls.Config) (econn *textproto.Conn, s
 			if err == nil {
 				state = tconn.ConnectionState()
 				econn = textproto.NewConn(tconn)
+				econn.PrintfLine("100 Okay")
+				return
 			} else {
 				tconn.Close()
 			}
@@ -57,15 +59,12 @@ func SendStartTLS(conn net.Conn, config *tls.Config) (econn *textproto.Conn, sta
 		if strings.HasPrefix(line, "382 ") {
 			// we gud
 			tconn := tls.Client(conn, config)
-			err = tconn.Handshake()
-			if err == nil {
-				// tls okay
-				state = tconn.ConnectionState()
-				econn = textproto.NewConn(tconn)
-			} else {
-				log.Println("STARTTLS failed", err)
-				tconn.Close()
-			}
+			// tls okay
+			log.Println("TLS Handshake done", config.ServerName)
+			state = tconn.ConnectionState()
+			econn = textproto.NewConn(tconn)
+			_, err = econn.ReadLine()
+			return
 		} else {
 			// it won't do tls
 			err = TlsNotSupported

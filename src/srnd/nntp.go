@@ -1367,17 +1367,18 @@ func (self *nntpConnection) runConnection(daemon *NNTPDaemon, inbound, stream, r
 
 	if (conf != nil && !conf.tls_off) && use_tls && daemon.CanTLS() && !inbound {
 		log.Println(self.name, "STARTTLS with", self.hostname)
-		_conn, state, err := SendStartTLS(nconn, daemon.GetTLSConfig(self.hostname))
+		_conn, _, err := SendStartTLS(nconn, daemon.GetTLSConfig(self.hostname))
 		if err == nil {
 			// we upgraded
 			conn = _conn
-			self.authenticated = state.HandshakeComplete
+			self.authenticated = true
 			log.Println(self.name, "tls auth", self.authenticated)
 		} else {
 			log.Println(self.name, err)
 			// we didn't upgrade, fall back
 			conn = textproto.NewConn(nconn)
 		}
+
 	} else {
 		// we are authenticated if we are don't need tls
 		conn = textproto.NewConn(nconn)
@@ -1391,6 +1392,8 @@ func (self *nntpConnection) runConnection(daemon *NNTPDaemon, inbound, stream, r
 					self.mode = "STREAM"
 					// start outbound streaming in background
 					go self.startStreaming(daemon, reader, conn)
+				} else {
+					log.Println(self.name, "failed to switch to streaming", err)
 				}
 			}
 		} else if reader {

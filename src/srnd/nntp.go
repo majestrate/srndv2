@@ -128,7 +128,12 @@ func (self *nntpConnection) QuitAndWait() {
 func (self *nntpConnection) modeSwitch(mode string, conn *textproto.Conn) (success bool, err error) {
 	self.access.Lock()
 	mode = strings.ToUpper(mode)
-	conn.PrintfLine("MODE %s", mode)
+	err = conn.PrintfLine("MODE %s", mode)
+	if err != nil {
+		log.Println(self.name, "cannot switch mode", err)
+		self.access.Unlock()
+		return
+	}
 	var code int
 	code, _, err = conn.ReadCodeLine(-1)
 	if code >= 200 && code < 300 {
@@ -1368,13 +1373,9 @@ func (self *nntpConnection) runConnection(daemon *NNTPDaemon, inbound, stream, r
 
 	if (conf != nil && !conf.tls_off) && use_tls && daemon.CanTLS() && !inbound {
 		log.Println(self.name, "STARTTLS with", self.hostname)
-		_conn, _, err := SendStartTLS(nconn, daemon.GetTLSConfig(self.hostname))
-		if err == nil {
-			// we upgraded
-			conn = _conn
-			self.authenticated = true
-			log.Println(self.name, "tls auth", self.authenticated)
-		} else {
+		conn, _, err = SendStartTLS(nconn, daemon.GetTLSConfig(self.hostname))
+		if err != nil {
+			log.Println(self.name, err)
 			return
 		}
 
@@ -1391,8 +1392,6 @@ func (self *nntpConnection) runConnection(daemon *NNTPDaemon, inbound, stream, r
 					self.mode = "STREAM"
 					// start outbound streaming in background
 					go self.startStreaming(daemon, reader, conn)
-				} else {
-					log.Println(self.name, "failed to switch to streaming", err)
 				}
 			}
 		} else if reader {
@@ -1409,7 +1408,7 @@ func (self *nntpConnection) runConnection(daemon *NNTPDaemon, inbound, stream, r
 		} else {
 			// bullshit
 			// we can't do anything so we quit
-			log.Println(self.name, "can't stream or read, wtf?")
+			log.Println(self.name, "can't stream or read, wtf?", err)
 			conn.PrintfLine("QUIT")
 			conn.Close()
 			return
@@ -1436,7 +1435,7 @@ func (self *nntpConnection) runConnection(daemon *NNTPDaemon, inbound, stream, r
 						// we are now tls
 						conn = _conn
 						self.tls_state = state
-						self.authenticated = state.HandshakeComplete
+						self.authenticated = true
 						log.Println(self.name, "TLS initiated", self.authenticated)
 					} else {
 						log.Println("STARTTLS failed:", err)

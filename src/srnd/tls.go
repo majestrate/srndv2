@@ -36,11 +36,9 @@ func HandleStartTLS(conn net.Conn, config *tls.Config) (econn *textproto.Conn, s
 		if err == nil {
 			// begin tls crap here
 			tconn := tls.Server(conn, config)
-			err = tconn.Handshake()
 			if err == nil {
 				state = tconn.ConnectionState()
 				econn = textproto.NewConn(tconn)
-				err = econn.PrintfLine("100 Okay")
 				return
 			} else {
 				tconn.Close()
@@ -63,7 +61,6 @@ func SendStartTLS(conn net.Conn, config *tls.Config) (econn *textproto.Conn, sta
 			log.Println("TLS Handshake done", config.ServerName)
 			state = tconn.ConnectionState()
 			econn = textproto.NewConn(tconn)
-			_, err = econn.ReadLine()
 			return
 		} else {
 			// it won't do tls

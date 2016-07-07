@@ -1359,6 +1359,7 @@ func (self *nntpConnection) startReader(daemon *NNTPDaemon, conn *textproto.Conn
 // stream if true means they support streaming mode
 // reader if true means they support reader mode
 func (self *nntpConnection) runConnection(daemon *NNTPDaemon, inbound, stream, reader, use_tls bool, preferMode string, nconn net.Conn, conf *FeedConfig) {
+	defer nconn.Close()
 	self.addr = nconn.RemoteAddr()
 	var err error
 	var line string
@@ -1374,9 +1375,7 @@ func (self *nntpConnection) runConnection(daemon *NNTPDaemon, inbound, stream, r
 			self.authenticated = true
 			log.Println(self.name, "tls auth", self.authenticated)
 		} else {
-			log.Println(self.name, err)
-			// we didn't upgrade, fall back
-			conn = textproto.NewConn(nconn)
+			return
 		}
 
 	} else {

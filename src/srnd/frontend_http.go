@@ -283,23 +283,25 @@ func (self *httpFrontend) poll_liveui() {
 				if live.resultchnl != nil {
 					live.resultchnl <- live
 					// get scrollback
-					board := template.obtainBoard(self.prefix, self.name, live.newsgroup, false, self.daemon.database)
-					if board != nil {
-						threads := board[0].Threads()
-						c := len(threads)
-						for idx := range threads {
-							th := threads[c-idx-1]
-							th.Update(self.daemon.database)
-							// send root post
-							go func() {
-								live.Inform(th.OP())
-								// send replies
-								for _, post := range th.Replies() {
-									live.Inform(post)
+					go func() {
+						board := self.daemon.database.GetGroupForPage(self.prefix, self.name, live.newsgroup, 0, 5)
+						if board != nil {
+							threads := board.Threads()
+							if threads != nil {
+								c := len(threads)
+								for idx := range threads {
+									th := threads[c-idx-1]
+									th.Update(self.daemon.database)
+									// send root post
+									live.Inform(th.OP())
+									// send replies
+									for _, post := range th.Replies() {
+										live.Inform(post)
+									}
 								}
-							}()
+							}
 						}
-					}
+					}()
 				}
 			}
 		case model, ok := <-self.liveui_chnl:

@@ -291,11 +291,13 @@ func (self *httpFrontend) poll_liveui() {
 							th := threads[c-idx-1]
 							th.Update(self.daemon.database)
 							// send root post
-							live.Inform(th.OP())
-							// send replies
-							for _, post := range th.Replies() {
-								go live.Inform(post)
-							}
+							go func() {
+								live.Inform(th.OP())
+								// send replies
+								for _, post := range th.Replies() {
+									live.Inform(post)
+								}
+							}()
 						}
 					}
 				}

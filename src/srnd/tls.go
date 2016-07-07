@@ -40,7 +40,7 @@ func HandleStartTLS(conn net.Conn, config *tls.Config) (econn *textproto.Conn, s
 			if err == nil {
 				state = tconn.ConnectionState()
 				econn = textproto.NewConn(tconn)
-				econn.PrintfLine("100 Okay")
+				err = econn.PrintfLine("100 Okay")
 				return
 			} else {
 				tconn.Close()

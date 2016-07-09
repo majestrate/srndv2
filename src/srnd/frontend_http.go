@@ -286,20 +286,41 @@ func (self *httpFrontend) poll_liveui() {
 					live.resultchnl <- live
 					// get scrollback
 					go func() {
-						board := self.daemon.database.GetGroupForPage(self.prefix, self.name, live.newsgroup, 0, 5)
-						if board != nil {
-							threads := board.Threads()
-							if threads != nil {
-								c := len(threads)
-								for idx := range threads {
-									th := threads[c-idx-1]
-									th.Update(self.daemon.database)
-									// send root post
-									live.Inform(th.OP())
-									// send replies
-									for _, post := range th.Replies() {
-										live.Inform(post)
+						var threads []ThreadModel
+						group := live.newsgroup
+						if group == "" {
+							// for ukko
+							ents := self.daemon.database.GetLastBumpedThreads("", 5)
+							if ents != nil {
+								for _, e := range ents {
+									g := e[1]
+									page := self.daemon.database.GetGroupForPage(self.prefix, self.name, g, 0, 10)
+									for _, t := range page.Threads() {
+										if t.OP().MessageID() == e[0] {
+											threads = append(threads, t)
+											break
+										}
 									}
+								}
+							}
+						} else {
+							// for board
+							board := self.daemon.database.GetGroupForPage(self.prefix, self.name, live.newsgroup, 0, 5)
+							if board != nil {
+								threads = board.Threads()
+							}
+						}
+
+						if threads != nil {
+							c := len(threads)
+							for idx := range threads {
+								th := threads[c-idx-1]
+								th.Update(self.daemon.database)
+								// send root post
+								live.Inform(th.OP())
+								// send replies
+								for _, post := range th.Replies() {
+									live.Inform(post)
 								}
 							}
 						}

@@ -202,6 +202,7 @@ type post struct {
 	Message_id       string
 	MessagePath      string
 	addr             string
+	Newsgroup        string
 	op               bool
 	Posted           int64
 	Parent           string
@@ -244,6 +245,7 @@ func (self *post) MarshalJSON() (b []byte, err error) {
 	self.PostPrefix = self.Prefix()
 	// for liveui
 	self.Type = "Post"
+	self.Newsgroup = self.board
 	return json.Marshal(*self)
 }
 

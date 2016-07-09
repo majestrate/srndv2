@@ -151,7 +151,9 @@ func (lc *liveChan) handleMessage(front *httpFrontend, cmd *liveCommand) {
 	if lc.captcha && cmd.Post != nil {
 		cmd.Post.Frontend = front.name
 		cmd.Post.IpAddress = lc.IP
-		cmd.Post.Group = lc.newsgroup
+		if lc.newsgroup != "" {
+			cmd.Post.Group = lc.newsgroup
+		}
 		cmd.Post.ExtraHeaders = map[string]string{"X-Livechan": "1"}
 		front.handle_postRequest(cmd.Post, lc.SendBanned, lc.SendError, lc.PostSuccess, false)
 	} else if cmd.Captcha == nil {

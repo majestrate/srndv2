@@ -54,11 +54,12 @@ type RedisCache struct {
 	regenGroupChan  chan groupRegenRequest
 	regenCatalogMap map[string]bool
 
-	ukkoTicker         *time.Ticker
+	ukko bool
+
+	regenUkkoTicker    *time.Ticker
 	longTermTicker     *time.Ticker
 	regenCatalogTicker *time.Ticker
-
-	regenCatalogLock sync.RWMutex
+	regenCatalogLock   sync.RWMutex
 }
 
 type redisHandler struct {
@@ -159,8 +160,23 @@ notfound:
 }
 
 func (self *redisHandler) serveCached(w http.ResponseWriter, r *http.Request, key string, handler recacheRedis) {
-	ts, _ := self.cache.client.Get(key + "::Time").Result()
+	ts, err := self.cache.client.Get(key + "::Time").Result()
 	var modtime time.Time
+
+	// we are regenerating
+	// serve old page
+	if err == redis.Nil {
+		html, err := self.cache.client.Get(key).Result()
+		if err != nil {
+			http.Error(w, key+" "+err.Error(), 500)
+		} else if len(html) == 0 {
+			http.Error(w, key+" has no markup lol", 500) // hue hue
+		} else {
+			io.WriteString(w, html)
+		}
+
+		return
+	}
 
 	if len(ts) == 0 {
 		modtime = time.Now().UTC()
@@ -204,6 +220,7 @@ func (self *RedisCache) DeleteBoardMarkup(group string) {
 		keys = append(keys, key, key+"::Time")
 	}
 	self.client.Del(keys...)
+	self.ukkoNeedsRegen()
 }
 
 // try to delete root post's page
@@ -212,6 +229,7 @@ func (self *RedisCache) DeleteThreadMarkup(root_post_id string) {
 	self.client.Del(THREAD_PREFIX + HashMessageID(root_post_id) + "::Time")
 	self.client.Del(JSON_THREAD_PREFIX + HashMessageID(root_post_id))
 	self.client.Del(JSON_THREAD_PREFIX + HashMessageID(root_post_id) + "::Time")
+	self.ukkoNeedsRegen()
 }
 
 // regen every newsgroup
@@ -251,28 +269,28 @@ func (self *RedisCache) pollLongTerm() {
 
 func (self *RedisCache) invalidateBoardPage(group string, pageno int) {
 	key := group + "::Page::" + strconv.Itoa(pageno)
-	self.client.Del(JSON_GROUP_PREFIX+key, GROUP_PREFIX+key)
 	self.client.Del(JSON_GROUP_PREFIX+key+"::Time", GROUP_PREFIX+key+"::Time")
+	self.ukkoNeedsRegen()
 }
 
 func (self *RedisCache) invalidateThreadPage(entry ArticleEntry) {
 	key := HashMessageID(entry.MessageID())
-	self.client.Del(JSON_THREAD_PREFIX+key, THREAD_PREFIX+key)
 	self.client.Del(JSON_THREAD_PREFIX+key+"::Time", THREAD_PREFIX+key+"::Time")
 	// TODO: do we really want to do this?
 	self.invalidateFrontPage()
+	self.ukkoNeedsRegen()
 }
 
 func (self *RedisCache) invalidateUkko() {
-	self.client.Del(UKKO, JSON_UKKO, UKKO+"::Time", JSON_UKKO+"::Time")
+	self.client.Del(UKKO+"::Time", JSON_UKKO+"::Time")
 }
 
 func (self *RedisCache) invalidateFrontPage() {
-	self.client.Del(INDEX, INDEX+"::Time", BOARDS, BOARDS+"::Time")
+	self.client.Del(INDEX+"::Time", BOARDS+"::Time")
 }
 
 func (self *RedisCache) invalidateCatalog(group string) {
-	self.client.Del(CATALOG_PREFIX+group, CATALOG_PREFIX+group+"::Time")
+	self.client.Del(CATALOG_PREFIX + group + "::Time")
 }
 
 func (self *RedisCache) pollRegen() {
@@ -281,21 +299,32 @@ func (self *RedisCache) pollRegen() {
 		// listen for regen board requests
 		case req := <-self.regenGroupChan:
 			self.invalidateBoardPage(req.group, req.page)
-
 			self.regenCatalogLock.Lock()
 			self.regenCatalogMap[req.group] = true
 			self.regenCatalogLock.Unlock()
-
+			go self.regenerateBoardPage(req.group, req.page, ioutil.Discard, false)
+			go self.regenerateBoardPage(req.group, req.page, ioutil.Discard, true)
 			// listen for regen thread requests
 		case entry := <-self.regenThreadChan:
 			self.invalidateThreadPage(entry)
+			go self.regenerateThread(entry, ioutil.Discard, false)
+			go self.regenerateThread(entry, ioutil.Discard, true)
 			// regen ukko
-		case _ = <-self.ukkoTicker.C:
-			self.invalidateUkko()
+		case _ = <-self.regenUkkoTicker.C:
+			if self.needsUkkoRegen() {
+				self.invalidateUkko()
+				go self.regenUkkoJSON(ioutil.Discard)
+				go self.regenUkkoMarkup(ioutil.Discard)
+				// ukko regen done
+				// TODO: atomic needed?
+				self.ukko = false
+			}
 		case _ = <-self.regenCatalogTicker.C:
+			// regen catalogs
 			self.regenCatalogLock.Lock()
 			for board, _ := range self.regenCatalogMap {
 				self.invalidateCatalog(board)
+				go self.regenerateCatalog(board, ioutil.Discard)
 			}
 			self.regenCatalogMap = make(map[string]bool)
 			self.regenCatalogLock.Unlock()
@@ -303,8 +332,19 @@ func (self *RedisCache) pollRegen() {
 	}
 }
 
+// mark that we need ukko to regenerate
+func (self *RedisCache) ukkoNeedsRegen() {
+	// TODO: atomic needed?
+	self.ukko = true
+}
+
+// do we need ukko to regenerate?
+func (self *RedisCache) needsUkkoRegen() bool {
+	return self.ukko
+}
+
 func (self *RedisCache) cache(key string, buf *bytes.Buffer) {
-	tx, err := self.client.Watch(key, key+"::Time")
+	tx, err := self.client.Watch(key + "::Time")
 	defer tx.Close()
 
 	if err != nil {
@@ -464,7 +504,7 @@ func NewRedisCache(prefix, webroot, name string, threads int, attachments bool, 
 	cache := new(RedisCache)
 
 	cache.longTermTicker = time.NewTicker(time.Hour)
-	cache.ukkoTicker = time.NewTicker(time.Second * 10)
+	cache.regenUkkoTicker = time.NewTicker(time.Second * 10)
 	cache.regenCatalogTicker = time.NewTicker(time.Second * 20)
 
 	cache.regenCatalogMap = make(map[string]bool)
@@ -477,6 +517,8 @@ func NewRedisCache(prefix, webroot, name string, threads int, attachments bool, 
 	cache.regen_threads = threads
 	cache.attachments = attachments
 	cache.database = db
+	// regen ukko always on startup
+	cache.ukko = true
 
 	log.Println("Connecting to redis...")
 
@@ -492,6 +534,7 @@ func NewRedisCache(prefix, webroot, name string, threads int, attachments bool, 
 	if err != nil {
 		log.Fatalf("cannot open connection to redis: %s", err)
 	}
-
+	// required for redis
+	cache.RegenAll()
 	return cache
 }

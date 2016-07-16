@@ -302,19 +302,19 @@ func (self *RedisCache) pollRegen() {
 			self.regenCatalogLock.Lock()
 			self.regenCatalogMap[req.group] = true
 			self.regenCatalogLock.Unlock()
-			go self.regenerateBoardPage(req.group, req.page, ioutil.Discard, false)
-			go self.regenerateBoardPage(req.group, req.page, ioutil.Discard, true)
+			self.regenerateBoardPage(req.group, req.page, ioutil.Discard, false)
+			self.regenerateBoardPage(req.group, req.page, ioutil.Discard, true)
 			// listen for regen thread requests
 		case entry := <-self.regenThreadChan:
 			self.invalidateThreadPage(entry)
-			go self.regenerateThread(entry, ioutil.Discard, false)
-			go self.regenerateThread(entry, ioutil.Discard, true)
+			self.regenerateThread(entry, ioutil.Discard, false)
+			self.regenerateThread(entry, ioutil.Discard, true)
 			// regen ukko
 		case _ = <-self.regenUkkoTicker.C:
 			if self.needsUkkoRegen() {
 				self.invalidateUkko()
-				go self.regenUkkoJSON(ioutil.Discard)
-				go self.regenUkkoMarkup(ioutil.Discard)
+				self.regenUkkoJSON(ioutil.Discard)
+				self.regenUkkoMarkup(ioutil.Discard)
 				// ukko regen done
 				// TODO: atomic needed?
 				self.ukko = false
@@ -324,7 +324,7 @@ func (self *RedisCache) pollRegen() {
 			self.regenCatalogLock.Lock()
 			for board, _ := range self.regenCatalogMap {
 				self.invalidateCatalog(board)
-				go self.regenerateCatalog(board, ioutil.Discard)
+				self.regenerateCatalog(board, ioutil.Discard)
 			}
 			self.regenCatalogMap = make(map[string]bool)
 			self.regenCatalogLock.Unlock()
@@ -534,7 +534,5 @@ func NewRedisCache(prefix, webroot, name string, threads int, attachments bool, 
 	if err != nil {
 		log.Fatalf("cannot open connection to redis: %s", err)
 	}
-	// required for redis
-	cache.RegenAll()
 	return cache
 }

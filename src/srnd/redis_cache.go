@@ -318,6 +318,7 @@ func (self *RedisCache) pollRegen() {
 				// ukko regen done
 				// TODO: atomic needed?
 				self.ukko = false
+				self.RegenFrontPage()
 			}
 		case _ = <-self.regenCatalogTicker.C:
 			// regen catalogs

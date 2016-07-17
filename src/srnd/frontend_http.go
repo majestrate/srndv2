@@ -498,24 +498,15 @@ func (self *httpFrontend) handle_postform(wr http.ResponseWriter, r *http.Reques
 			// read part for attachment
 			if strings.HasPrefix(partname, "attachment_") && self.attachments {
 				if len(pr.Attachments) < self.attachmentLimit {
-					store := self.daemon.store
-					if checkCaptcha {
-						// TODO: we could just write to disk the attachment so we're not filling ram up with crap
-						store = nil
-					}
 					log.Println("attaching file...")
-					att := readAttachmentFromMimePartAndStore(part, store)
+					att := readAttachmentFromMimePartAndStore(part, nil)
 					if att != nil {
-						if att.Filename() != "" {
-							pa := postAttachment{
-								Filename: att.Filename(),
-								Filetype: att.Mime(),
-							}
-							if checkCaptcha {
-								pa.Filedata = att.Filedata()
-							}
-							pr.Attachments = append(pr.Attachments, pa)
+						pa := postAttachment{
+							Filename: att.Filename(),
+							Filetype: att.Mime(),
+							Filedata: att.Filedata(),
 						}
+						pr.Attachments = append(pr.Attachments, pa)
 					}
 				}
 				continue
@@ -1268,6 +1259,9 @@ func (self *httpFrontend) handle_liveui(w http.ResponseWriter, r *http.Request) 
 			_, _, err := conn.NextReader()
 			if err != nil {
 				conn.Close()
+				if self.liveui_deregister != nil {
+					self.liveui_deregister <- live
+				}
 				return
 			}
 		}
@@ -1293,10 +1287,6 @@ func (self *httpFrontend) handle_liveui(w http.ResponseWriter, r *http.Request) 
 		}
 	}
 	conn.Close()
-	// deregister connection
-	if self.liveui_deregister != nil {
-		self.liveui_deregister <- live
-	}
 }
 
 // get a chan that is subscribed to all new posts in a newsgroup

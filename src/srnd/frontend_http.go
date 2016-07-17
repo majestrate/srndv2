@@ -20,7 +20,6 @@ import (
 	"io"
 	"log"
 	"mime"
-	"net"
 	"net/http"
 	"net/textproto"
 	"strings"
@@ -209,7 +208,8 @@ type httpFrontend struct {
 	end_liveui        chan bool
 	// all liveui users
 	// maps uuid -> liveChan
-	liveui_chans map[string]*liveChan
+	liveui_chans     map[string]*liveChan
+	liveui_usercount int
 }
 
 // do we allow this newsgroup?
@@ -268,6 +268,7 @@ func (self *httpFrontend) poll_liveui() {
 			if ok {
 				if self.liveui_chans != nil {
 					delete(self.liveui_chans, live.uuid)
+					self.liveui_usercount--
 				}
 				close(live.postchnl)
 				live.postchnl = nil
@@ -281,6 +282,7 @@ func (self *httpFrontend) poll_liveui() {
 					live.uuid = randStr(10)
 					live.postchnl = make(chan PostModel, 8)
 					self.liveui_chans[live.uuid] = live
+					self.liveui_usercount++
 				}
 				if live.resultchnl != nil {
 					live.resultchnl <- live
@@ -446,13 +448,10 @@ func (self *httpFrontend) handle_newboard(wr http.ResponseWriter, r *http.Reques
 }
 
 // handle new post via http request for a board
-func (self *httpFrontend) handle_postform(wr http.ResponseWriter, r *http.Request, board string) {
+func (self *httpFrontend) handle_postform(wr http.ResponseWriter, r *http.Request, board string, sendJson, checkCaptcha bool) {
 
 	// the post we will turn into an nntp article
 	pr := new(postRequest)
-
-	// do we send json reply?
-	sendJson := r.URL.Query().Get("t") == "json"
 
 	if sendJson {
 		wr.Header().Add("Content-Type", "text/json; encoding=UTF-8")
@@ -478,25 +477,10 @@ func (self *httpFrontend) handle_postform(wr http.ResponseWriter, r *http.Reques
 	// encrypt IP Addresses
 	// when a post is recv'd from a frontend, the remote address is given its own symetric key that the local srnd uses to encrypt the address with, for privacy
 	// when a mod event is fired, it includes the encrypted IP address and the symetric key that frontend used to encrypt it, thus allowing others to determine the IP address
-	// each stnf will optionally comply with the mod event, banning the address from being able to post from that frontend
-	// this will be done eventually but for now that requires too much infrastrucutre, let's go with regular IP Addresses for now.
+	// each node will optionally comply with the mod event, banning the address from being able to post from that frontend
 
 	// get the "real" ip address from the request
-
-	pr.IpAddress, _, err = net.SplitHostPort(r.RemoteAddr)
-	// TODO: have in config upstream proxy ip and check for that
-	if strings.HasPrefix(pr.IpAddress, "127.") {
-		// if it's loopback check headers for reverse proxy headers
-		// TODO: make sure this isn't a tor user being sneaky
-		pr.IpAddress = getRealIP(r.Header.Get("X-Real-IP"))
-		if pr.IpAddress == "" {
-			// try X-Forwarded-For if X-Real-IP not set
-			ip := r.Header.Get("X-Forwarded-For")
-			parts := strings.Split(ip, ",")
-			ip = parts[0]
-			pr.IpAddress = getRealIP(ip)
-		}
-	}
+	pr.IpAddress, err = extractRealIP(r)
 	pr.Destination = r.Header.Get("X-I2P-DestHash")
 	pr.Frontend = self.name
 
@@ -514,16 +498,23 @@ func (self *httpFrontend) handle_postform(wr http.ResponseWriter, r *http.Reques
 			// read part for attachment
 			if strings.HasPrefix(partname, "attachment_") && self.attachments {
 				if len(pr.Attachments) < self.attachmentLimit {
-					// TODO: we could just write to disk the attachment so we're not filling ram up with crap
-					att := readAttachmentFromMimePartAndStore(part, nil)
+					store := self.daemon.store
+					if checkCaptcha {
+						// TODO: we could just write to disk the attachment so we're not filling ram up with crap
+						store = nil
+					}
+					log.Println("attaching file...")
+					att := readAttachmentFromMimePartAndStore(part, store)
 					if att != nil {
 						if att.Filename() != "" {
-							log.Println("attaching file...")
-							pr.Attachments = append(pr.Attachments, postAttachment{
-								Filedata: att.Filedata(),
+							pa := postAttachment{
 								Filename: att.Filename(),
 								Filetype: att.Mime(),
-							})
+							}
+							if checkCaptcha {
+								pa.Filedata = att.Filedata()
+							}
+							pr.Attachments = append(pr.Attachments, pa)
 						}
 					}
 				}
@@ -556,10 +547,9 @@ func (self *httpFrontend) handle_postform(wr http.ResponseWriter, r *http.Reques
 			// we done
 			// reset buffer for reading parts
 			part_buff.Reset()
-			// close our part
-			part.Close()
 		} else {
 			if err != io.EOF {
+				// TODO: we need to delete uploaded files somehow since they are unregistered at this point
 				errmsg := fmt.Sprintf("httpfrontend post handler error reading multipart: %s", err)
 				log.Println(errmsg)
 				wr.WriteHeader(500)
@@ -574,20 +564,32 @@ func (self *httpFrontend) handle_postform(wr http.ResponseWriter, r *http.Reques
 		}
 	}
 
-	if len(captcha_id) == 0 {
-		s, _ := self.store.Get(r, self.name)
-		cid, ok := s.Values["captcha_id"]
+	sess, _ := self.store.Get(r, self.name)
+	if checkCaptcha && len(captcha_id) == 0 {
+		cid, ok := sess.Values["captcha_id"]
 		if ok {
 			captcha_id = cid.(string)
 		}
-		s.Values["captcha_id"] = ""
-		s.Save(r, wr)
+		sess.Values["captcha_id"] = ""
 	}
 
-	if !captcha.VerifyString(captcha_id, captcha_solution) {
+	if checkCaptcha && !captcha.VerifyString(captcha_id, captcha_solution) {
 		// captcha is not valid
 		captcha_retry = true
+	} else {
+		// valid captcha
+		// increment post count
+		var posts int
+		val, ok := sess.Values["posts"]
+		if ok {
+			posts = val.(int)
+		} else {
+			posts = 0
+		}
+		posts++
+		sess.Values["posts"] = posts
 	}
+	sess.Save(r, wr)
 
 	// make error template param
 	resp_map := make(map[string]interface{})
@@ -928,7 +930,9 @@ func (self httpFrontend) handle_poster(wr http.ResponseWriter, r *http.Request) 
 
 	// this is a POST request
 	if r.Method == "POST" && self.AllowNewsgroup(board) && newsgroupValidFormat(board) {
-		self.handle_postform(wr, r, board)
+		// do we send json reply?
+		sendJson := r.URL.Query().Get("t") == "json"
+		self.handle_postform(wr, r, board, sendJson, true)
 	} else {
 		wr.WriteHeader(403)
 		io.WriteString(wr, "Nope")
@@ -946,8 +950,9 @@ func (self *httpFrontend) new_captcha(wr http.ResponseWriter, r *http.Request) {
 		// redirect to the image
 		http.Redirect(wr, r, redirect_url, 302)
 	} else {
-		// todo: send a "this is broken" image
-		wr.WriteHeader(500)
+		// handle session error
+		// TODO: clear cookies?
+		http.Error(wr, err.Error(), 500)
 	}
 }
 
@@ -1067,6 +1072,133 @@ func (self *httpFrontend) handle_unauthed_api(wr http.ResponseWriter, r *http.Re
 	}
 }
 
+// handle livechan api
+func (self *httpFrontend) handle_liveapi(w http.ResponseWriter, r *http.Request) {
+	// response
+	res := make(map[string]interface{})
+	// set content type
+	w.Header().Set("Content-Type", "text/json; encoding=UTF-8")
+
+	// check for ip banned
+	ip, err := extractRealIP(r)
+	if err == nil {
+		var banned bool
+		banned, err = self.daemon.database.CheckIPBanned(ip)
+		if banned {
+			// TODO: ban reason
+			res["error"] = "u banned yo"
+			w.WriteHeader(http.StatusForbidden)
+		} else if err == nil {
+			// obtain session
+			s, err := self.store.Get(r, self.name)
+			if err == nil {
+				vars := mux.Vars(r)
+				meth := vars["meth"]
+				if r.Method == "POST" {
+					if meth == "captcha" {
+						// /livechan/api/captcha
+
+						// post captcha solution
+						c := new(liveCaptcha)
+						defer r.Body.Close()
+						dec := json.NewDecoder(r.Body)
+						err = dec.Decode(c)
+						if err == nil {
+							// decode success
+							res["success"] = false
+							if captcha.VerifyString(c.ID, c.Solution) {
+								// successful captcha
+								res["success"] = true
+								s.Values["captcha"] = true
+							}
+						} else {
+							// decode error
+							res["error"] = err.Error()
+							s.Values["captcha"] = false
+						}
+						s.Save(r, w)
+					} else if meth == "post" {
+						// /livechan/api/post?newsgroup=overchan.boardname
+
+						// post to a board
+						board := r.URL.Query().Get("newsgroup")
+						if self.AllowNewsgroup(board) && newsgroupValidFormat(board) {
+
+							// check if we solved captcha
+							val, ok := s.Values["captcha"]
+							if ok {
+								var live bool
+								if live, ok = val.(bool); ok && live {
+									// treat as frontend post
+									// send json and bypass checking for captcha in request body
+									self.handle_postform(w, r, board, true, false)
+									// done
+									return
+								} else {
+									// not livechan or captcha is not filled out
+									res["captcha"] = true
+								}
+
+							} else {
+								// not a livechan session
+								res["captcha"] = true
+							}
+
+						} else {
+							// bad newsgroup
+							res["error"] = "bad newsgroup: " + board
+						}
+					} else {
+						// bad post method
+						res["error"] = "no such method: " + meth
+					}
+				} else if r.Method == "GET" {
+					// handle GET methods for api endpoint
+					if meth == "online" {
+						// /livechan/api/online
+
+						// return how many users are online
+						res["online"] = self.liveui_usercount
+					} else if meth == "pph" {
+						// /livechan/api/pph?newsgroup=overchan.boardname
+
+						// return post per hour count
+						// TODO: implement better (?)
+						board := r.URL.Query().Get("newsgroup")
+						if newsgroupValidFormat(board) {
+							res["pph"] = self.daemon.database.CountPostsInGroup(board, 3600)
+						} else {
+							res["error"] = "invalid newsgroup"
+						}
+					} else {
+						// unknown method
+						res["error"] = "unknown method: " + meth
+					}
+				} else {
+					// bad method ( should never happen tho, catch case regardless )
+					res["error"] = "not found"
+					w.WriteHeader(http.StatusMethodNotAllowed)
+				}
+			} else {
+				// failed to get session
+				res["error"] = "could not parse session: " + err.Error()
+				w.WriteHeader(http.StatusBadRequest)
+			}
+		} else {
+			// ban error check
+			res["error"] = "error checking ban: " + err.Error()
+			w.WriteHeader(http.StatusInternalServerError)
+		}
+	} else {
+		// could not extract ip address
+		res["error"] = "could not extract ip: " + err.Error()
+		w.WriteHeader(http.StatusBadRequest)
+	}
+	// write response
+	enc := json.NewEncoder(w)
+	enc.Encode(res)
+}
+
 func (self *httpFrontend) handle_api(wr http.ResponseWriter, r *http.Request) {
 
 	vars := mux.Vars(r)
@@ -1088,27 +1220,10 @@ func (self *httpFrontend) handle_api(wr http.ResponseWriter, r *http.Request) {
 }
 
 // upgrade to web sockets and subscribe to all new posts
-// XXX: firehose?
 func (self *httpFrontend) handle_liveui(w http.ResponseWriter, r *http.Request) {
 
-	IpAddress, _, err := net.SplitHostPort(r.RemoteAddr)
-	// TODO: have in config upstream proxy ip and check for that
-	if strings.HasPrefix(IpAddress, "127.") {
-		// if it's loopback check headers for reverse proxy headers
-		// TODO: make sure this isn't a tor user being sneaky
-		ip := getRealIP(r.Header.Get("X-Real-IP"))
-		if ip == "" {
-			// try X-Forwarded-For if X-Real-IP not set
-			ip = r.Header.Get("X-Forwarded-For")
-			parts := strings.Split(ip, ",")
-			ip = parts[0]
-			if ip != "" {
-				IpAddress = getRealIP(ip)
-			}
-		} else {
-			IpAddress = ip
-		}
-	}
+	IpAddress, err := extractRealIP(r)
+	log.Println("liveui:", IpAddress)
 	var banned bool
 	if err == nil {
 		banned, err = self.daemon.database.CheckIPBanned(IpAddress)
@@ -1121,7 +1236,7 @@ func (self *httpFrontend) handle_liveui(w http.ResponseWriter, r *http.Request) 
 
 	if err != nil {
 		w.WriteHeader(504)
-		log.Println(err)
+		log.Println("parse ip:", err)
 		io.WriteString(w, err.Error())
 		return
 	}
@@ -1150,20 +1265,10 @@ func (self *httpFrontend) handle_liveui(w http.ResponseWriter, r *http.Request) 
 	go func() {
 		// read loop
 		for {
-			t, m, err := conn.NextReader()
+			_, _, err := conn.NextReader()
 			if err != nil {
 				conn.Close()
 				return
-			}
-			if t == websocket.TextMessage {
-				dec := json.NewDecoder(m)
-				cmd := new(liveCommand)
-				err := dec.Decode(cmd)
-				if err != nil {
-					conn.Close()
-					return
-				}
-				live.handleMessage(self, cmd)
 			}
 		}
 	}()
@@ -1269,6 +1374,9 @@ func (self *httpFrontend) Mainloop() {
 	m.Path("/livechan/").HandlerFunc(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		template.writeTemplate("live.mustache", map[string]interface{}{"prefix": self.prefix}, w)
 	})).Methods("GET", "HEAD")
+	// live ui api endpoint
+	m.Path("/livechan/api/{meth}").HandlerFunc(self.handle_liveapi).Methods("GET", "POST")
+
 	m.Path("/").Handler(cache_handler)
 
 	var err error
@@ -1329,6 +1437,7 @@ func NewHTTPFrontend(daemon *NNTPDaemon, cache CacheInterface, config map[string
 	}
 	front.upgrader = websocket.Upgrader{
 		CheckOrigin: func(r *http.Request) bool {
+			// TODO: detect origin
 			return true
 		},
 	}
@@ -1338,7 +1447,7 @@ func NewHTTPFrontend(daemon *NNTPDaemon, cache CacheInterface, config map[string
 	front.store.Options = &sessions.Options{
 		// TODO: detect http:// etc in prefix
 		Path:   front.prefix,
-		MaxAge: 10000000, // big number
+		MaxAge: 600,
 	}
 	front.recvpostchan = make(chan frontendPost)
 	front.regenThreadChan = front.cache.GetThreadChan()

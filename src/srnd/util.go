@@ -15,6 +15,7 @@ import (
 	"io"
 	"log"
 	"net"
+	"net/http"
 	"net/textproto"
 	"os"
 	"path/filepath"
@@ -550,4 +551,29 @@ func extractParamFallback(param map[string]interface{}, k, fallback string) stri
 
 func extractParam(param map[string]interface{}, k string) string {
 	return extractParamFallback(param, k, "")
+}
+
+// get real ip addresss from an http request
+func extractRealIP(r *http.Request) (ip string, err error) {
+	ip, _, err = net.SplitHostPort(r.RemoteAddr)
+	if err != nil {
+		log.Println("extract real ip: ", err)
+	}
+	// TODO: have in config upstream proxy ip and check for that
+	if strings.HasPrefix(ip, "127.") {
+		// if it's loopback check headers for reverse proxy headers
+		// TODO: make sure this isn't a tor user being sneaky
+		ip = getRealIP(r.Header.Get("X-Real-IP"))
+		if ip == "" {
+			// try X-Forwarded-For if X-Real-IP not set
+			_ip := r.Header.Get("X-Forwarded-For")
+			parts := strings.Split(_ip, ",")
+			_ip = parts[0]
+			ip = getRealIP(_ip)
+		}
+		if ip == "" {
+			ip = "127.0.0.1"
+		}
+	}
+	return
 }

@@ -259,6 +259,10 @@ func (self *attachment) MarshalJSON() (b []byte, err error) {
 	return json.Marshal(*self)
 }
 
+func (self *attachment) Hash() string {
+	return strings.Split(self.Path, ".")[0]
+}
+
 func (self *attachment) Prefix() string {
 	return self.prefix
 }

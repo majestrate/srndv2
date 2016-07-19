@@ -25,6 +25,7 @@ type AttachmentModel interface {
 	Thumbnail() string
 	Source() string
 	Filename() string
+	Hash() string
 }
 
 // for individual posts

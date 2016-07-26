@@ -98,15 +98,13 @@ type RedisDB struct {
 
 var redis_version_extractor = regexp.MustCompilePOSIX(`redis_version:([^\r\n]*)`)
 
-func NewRedisDatabase(host, port, password string) DB {
+func createRedisDatabase(addr, password string) (DB, error) {
 	var client RedisDB
 	var err error
 	var info string
 
-	log.Println("Connecting to redis...")
-
 	client.client = redis.NewClient(&redis.Options{
-		Addr:        net.JoinHostPort(host, port),
+		Addr:        addr,
 		Password:    password,
 		DB:          0, // use default DB
 		PoolTimeout: 10 * time.Second,
@@ -115,26 +113,26 @@ func NewRedisDatabase(host, port, password string) DB {
 
 	_, err = client.client.Ping().Result() //check for successful connection
 	if err != nil {
-		log.Fatalf("cannot open connection to redis: %s", err)
+		return nil, err
 	}
 
 	info, err = client.client.Info("server").Result()
 	if err != nil {
-		log.Fatalf("cannot open connection to redis: %s", err)
+		return nil, err
 	}
 
 	res := redis_version_extractor.FindStringSubmatch(info)
 
 	if len(res) != 2 {
-		log.Fatalf("cannot determin redis version")
+		return nil, errors.New("cannot determin redis version")
 	}
 	cur_version := res[1]
 
 	if version.Compare(cur_version, MIN_REDIS_VERSION, "<") {
-		log.Fatalf("Please upgrade redis. Need version %s. Have version %s.", MIN_REDIS_VERSION, cur_version)
+		return nil, errors.New(fmt.Sprintf("Please upgrade redis. Need version %s. Have version %s.", MIN_REDIS_VERSION, cur_version))
 	}
 
-	return client
+	return client, nil
 }
 
 // finalize all transactions
@@ -818,6 +816,15 @@ func (self RedisDB) GetMessageIDByCIDR(cidr *net.IPNet) (msgids []string, err er
 
 func (self RedisDB) GetMessageIDByEncryptedIP(encip string) (msgids []string, err error) {
 	msgids, err = self.client.SMembers(IP_ARTICLE_KR_PREFIX + encip).Result()
+	return
+}
+
+func (self RedisDB) GetThreadByHash(hash string) (thread model.Thread, err error) {
+	var article model.ArticleEntry
+	article, err = self.GetMessageIDByHash(hash)
+	if err == nil {
+		thread, err = self.GetThread(article.MessageID())
+	}
 	return
 }
 

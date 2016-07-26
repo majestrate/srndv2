@@ -9,15 +9,18 @@ import (
 
 // main configuration
 type Config struct {
-
-	// list of feeds to add on runtime
-	Feeds []*FeedConfig `json:"feeds"`
 	// nntp server configuration
 	NNTP *NNTPServerConfig `json:"nntp"`
 	// log level
 	Log string `json:"log"`
-
+	// article storage config
 	Store *StoreConfig `json:"storage"`
+	// user interface frontend config
+	Frontend *FrontendConfig `json:"frontend"`
+	// database backend configuration
+	Database *DatabaseConfig `json:"db"`
+	// list of feeds to add on runtime
+	Feeds []*FeedConfig `json:"feeds"`
 
 	// unexported fields ...
 
@@ -27,10 +30,12 @@ type Config struct {
 
 // default configuration
 var DefaultConfig = Config{
-	Store: &DefaultStoreConfig,
-	NNTP:  &DefaultNNTPConfig,
-	Feeds: DefaultFeeds,
-	Log:   "debug",
+	Store:    &DefaultStoreConfig,
+	NNTP:     &DefaultNNTPConfig,
+	Database: &DefaultDatabaseConfig,
+	Frontend: &DefaultFrontendConfig,
+	Feeds:    []*FeedConfig{},
+	Log:      "debug",
 }
 
 // reload configuration

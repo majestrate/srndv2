@@ -3,17 +3,21 @@
 package cache
 
 import (
-	"fmt"
+	"bytes"
+	log "github.com/Sirupsen/logrus"
 	"gopkg.in/redis.v3"
 	"io"
-	"log"
-	"net"
 	"net/http"
 	"time"
 )
 
 type RedisCache struct {
 	client *redis.Client
+}
+
+func (self *RedisCache) Has(key string) bool {
+	ts, _ := self.client.Get(key + "::Time").Result()
+	return len(ts) != 0
 }
 
 func (self *RedisCache) ServeCached(w http.ResponseWriter, r *http.Request, key string, handler RecacheHandler) {
@@ -40,10 +44,19 @@ func (self *RedisCache) ServeCached(w http.ResponseWriter, r *http.Request, key 
 
 	if err == redis.Nil || len(html) == 0 { //cache miss
 		w.Header().Set("Last-Modified", ts)
-
-		body := handler()
-		self.Cache(key, body)
-		fmt.Fprintf(w, body)
+		pr, pw := io.Pipe()
+		mw := io.MultiWriter(w, pw)
+		err = handler(mw)
+		pw.Close()
+		if err == nil {
+			go func() {
+				self.Cache(key, pr)
+				pr.Close()
+			}()
+		} else {
+			pr.Close()
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+		}
 		return
 	}
 	if err != nil {
@@ -55,29 +68,33 @@ func (self *RedisCache) ServeCached(w http.ResponseWriter, r *http.Request, key 
 }
 
 func (self *RedisCache) DeleteCache(key string) {
-	self.client.Del(key)
 	self.client.Del(key + "::Time")
 }
 
-func (self *RedisCache) Cache(key string, body string) {
+func (self *RedisCache) Cache(key string, body io.Reader) {
 	tx, err := self.client.Watch(key, key+"::Time")
 	defer tx.Close()
 
 	if err != nil {
-		log.Println("cannot cache", key, err)
+		log.Error("cannot cache", key, err)
 		return
 	}
 	t := time.Now().UTC()
 	ts := t.Format(http.TimeFormat)
 
-	tx.Set(key, body, 0)
-	tx.Set(key+"::Time", ts, 0)
-
-	_, err = tx.Exec(func() error {
-		return nil
-	})
+	var b bytes.Buffer
+	_, err = io.Copy(&b, body)
+	if err == nil {
+		tx.Set(key, b.String(), 0)
+		tx.Set(key+"::Time", ts, 0)
+	}
+	if err == nil {
+		_, err = tx.Exec(func() error {
+			return nil
+		})
+	}
 	if err != nil {
-		log.Println("cannot cache", key, err)
+		log.Error("cannot cache", key, err)
 	}
 }
 
@@ -88,12 +105,10 @@ func (self *RedisCache) Close() {
 	}
 }
 
-func NewRedisCache(host, port, password string) CacheInterface {
+func NewRedisCache(addr, password string) (CacheInterface, error) {
 	cache := new(RedisCache)
-	log.Println("Connecting to redis...")
-
 	cache.client = redis.NewClient(&redis.Options{
-		Addr:        net.JoinHostPort(host, port),
+		Addr:        addr,
 		Password:    password,
 		DB:          0, // use default DB
 		PoolTimeout: 10 * time.Second,
@@ -102,8 +117,8 @@ func NewRedisCache(host, port, password string) CacheInterface {
 
 	_, err := cache.client.Ping().Result() //check for successful connection
 	if err != nil {
-		log.Fatalf("cannot open connection to redis: %s", err)
+		return nil, err
 	}
 
-	return cache
+	return cache, nil
 }

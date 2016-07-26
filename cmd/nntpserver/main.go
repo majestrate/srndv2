@@ -1,5 +1,7 @@
 package main
 
+// simple nntp server
+
 import (
 	log "github.com/Sirupsen/logrus"
 	"github.com/majestrate/srndv2/lib/config"

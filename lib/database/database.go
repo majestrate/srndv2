@@ -3,8 +3,10 @@ package database
 import (
 	"errors"
 	"fmt"
+	"github.com/majestrate/srndv2/lib/config"
 	"github.com/majestrate/srndv2/lib/model"
 	"net"
+	"strings"
 )
 
 // generic database driver
@@ -75,6 +77,8 @@ type DB interface {
 
 	// get a thread model given root post's message id
 	GetThread(root_message_id string) (model.Thread, error)
+	// get a thread model given root post hash
+	GetThreadByHash(hash string) (model.Thread, error)
 
 	// count the number of replies to this thread
 	CountThreadReplies(root_message_id string) (int64, error)
@@ -237,4 +241,17 @@ func New(db_type, schema, host, port, user, password string) (DB, error) {
 		}
 	*/
 	return nil, errors.New(fmt.Sprintf("invalid database type: %s/%s", db_type, schema))
+}
+
+// get new database connector from configuration
+func FromConfig(c *config.DatabaseConfig) (db DB, err error) {
+	dbtype := strings.ToLower(c.Type)
+	if dbtype == "postres" {
+		err = errors.New("postgres driver not implemented")
+	} else if dbtype == "redis" {
+		db, err = createRedisDatabase(c.Addr, c.Password)
+	} else {
+		err = errors.New("no such database driver: " + c.Type)
+	}
+	return
 }

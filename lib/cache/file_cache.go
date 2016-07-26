@@ -3,14 +3,19 @@
 package cache
 
 import (
-	"fmt"
-	"log"
+	log "github.com/Sirupsen/logrus"
+	"io"
 	"net/http"
 	"os"
 	"time"
 )
 
 type FileCache struct {
+}
+
+func (self *FileCache) Has(key string) bool {
+	_, err := os.Stat(key)
+	return !os.IsNotExist(err)
 }
 
 func (self *FileCache) ServeCached(w http.ResponseWriter, r *http.Request, key string, handler RecacheHandler) {
@@ -20,10 +25,12 @@ func (self *FileCache) ServeCached(w http.ResponseWriter, r *http.Request, key s
 		ts := modtime.Format(http.TimeFormat)
 
 		w.Header().Set("Last-Modified", ts)
-
-		body := handler()
-		self.Cache(key, body)
-		fmt.Fprintf(w, body)
+		f, err := os.Create(key)
+		if err == nil {
+			defer f.Close()
+			mw := io.MultiWriter(f, w)
+			err = handler(mw)
+		}
 		return
 	}
 
@@ -33,19 +40,22 @@ func (self *FileCache) ServeCached(w http.ResponseWriter, r *http.Request, key s
 func (self *FileCache) DeleteCache(key string) {
 	err := os.Remove(key)
 	if err != nil {
-		log.Println("cannot remove file", key, err)
+		log.Warnf("cannot remove file %s: %s", key, err.Error())
 	}
 }
 
-func (self *FileCache) Cache(key string, body string) {
+func (self *FileCache) Cache(key string, body io.Reader) {
 	f, err := os.Create(key)
-	defer f.Close()
-
 	if err != nil {
-		log.Println("cannot cache", key, err)
+		log.Warnf("cannot cache %s: %s", key, err.Error())
 		return
 	}
-	fmt.Fprintf(f, body)
+	defer f.Close()
+
+	_, err = io.Copy(f, body)
+	if err != nil {
+		log.Warnf("cannot cache key %s: %s", key, err.Error())
+	}
 }
 
 func (self *FileCache) Close() {

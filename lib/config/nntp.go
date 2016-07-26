@@ -9,11 +9,13 @@ type NNTPServerConfig struct {
 	Article *ArticleConfig `json:"policy"`
 	// do we allow anonymous NNTP sync?
 	AnonNNTP bool `json:"anon-nntp"`
+	// ssl settings for nntp
+	SSL *SSLSettings
 }
 
 var DefaultNNTPConfig = NNTPServerConfig{
-	AnonNNTP: false,
-	Bind:     "127.0.0.1:1119",
+	AnonNNTP: true,
+	Bind:     "0.0.0.0:1119",
 	Name:     "nntp.server.tld",
 	Article:  &DefaultArticlePolicy,
 }

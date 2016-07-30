@@ -5,9 +5,7 @@
 package srnd
 
 import (
-	xss "github.com/microcosm-cc/bluemonday"
 	"github.com/mvdan/xurls"
-	markdown "github.com/russross/blackfriday"
 	"html"
 	"regexp"
 	"strings"
@@ -37,10 +35,15 @@ func backlink(word string) (markup string) {
 			}
 			return `<a class='backlink' backlinkhash="` + longhash + `" href="` + url + `">&gt;&gt;` + link + "</a>"
 		} else {
-			return html.EscapeString(word)
+			return escapeline(word)
 		}
 	}
-	return html.EscapeString(word)
+	return escapeline(word)
+}
+
+func escapeline(line string) (markup string) {
+	markup = html.EscapeString(line)
+	return
 }
 
 func formatline(line string) (markup string) {
@@ -50,17 +53,17 @@ func formatline(line string) (markup string) {
 		if strings.HasPrefix(line, ">") && !(strings.HasPrefix(line, ">>") && re_backlink.MatchString(strings.Split(line, " ")[0])) {
 			// le ebin meme arrows
 			markup += "<span class='memearrows'>"
-			markup += html.EscapeString(line)
+			markup += escapeline(line)
 			markup += "</span>"
 		} else if strings.HasPrefix(line, "==") && strings.HasSuffix(line, "==") {
 			// redtext
 			markup += "<span class='redtext'>"
-			markup += html.EscapeString(line[2 : len(line)-2])
+			markup += escapeline(line[2 : len(line)-2])
 			markup += "</span>"
 		} else if strings.HasPrefix(line, "@@") && strings.HasSuffix(line, "@@") {
 			// psytext
 			markup += "<span class='psy'>"
-			markup += html.EscapeString(line[2 : len(line)-2])
+			markup += escapeline(line[2 : len(line)-2])
 			markup += "</span>"
 		} else {
 			// regular line
@@ -71,7 +74,7 @@ func formatline(line string) (markup string) {
 					markup += backlink(word)
 				} else {
 					// linkify as needed
-					word = html.EscapeString(word)
+					word = escapeline(word)
 					markup += re_external_link.ReplaceAllString(word, `<a href="$1">$1</a>`)
 				}
 				markup += " "
@@ -82,17 +85,12 @@ func formatline(line string) (markup string) {
 	return
 }
 
-func memeposting(src string) (markup string) {
-	d := markdown.MarkdownCommon([]byte(src))
-	b := xss.UGCPolicy().SanitizeBytes(d)
-	markup = string(b)
-	return
-}
-
 // old parse function
-func old_memeposting(src string) (markup string) {
+func memeposting(src string) (markup string) {
+	markup = "<pre>"
 	for _, line := range strings.Split(src, "\n") {
 		markup += formatline(line)
 	}
+	markup += "</pre>"
 	return
 }

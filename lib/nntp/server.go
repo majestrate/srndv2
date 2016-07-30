@@ -38,6 +38,16 @@ type Server struct {
 	Feeds []*config.FeedConfig
 }
 
+// reload server configuration
+func (s *Server) ReloadServer(c *config.NNTPServerConfig) {
+
+}
+
+// reload feeds
+func (s *Server) ReloadFeeds(feeds []*config.FeedConfig) {
+
+}
+
 func (s *Server) GotArticle(msgid MessageID, group Newsgroup) {
 	log.WithFields(log.Fields{
 		"pkg":   "nntp-server",

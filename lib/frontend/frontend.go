@@ -8,7 +8,6 @@ import (
 	"github.com/majestrate/srndv2/lib/nntp"
 
 	"net"
-	"strings"
 )
 
 // a frontend that displays nntp posts and allows posting
@@ -28,41 +27,25 @@ type Frontend interface {
 
 	// implements nntp.EventHooks
 	SentArticleVia(msgid nntp.MessageID, feedname string)
+
+	// reload config
+	Reload(c *config.FrontendConfig)
 }
 
 // create a new http frontend give frontend config
 func NewHTTPFrontend(c *config.FrontendConfig, db database.DB) (f Frontend, err error) {
 
-	// middlware cache
 	var markupCache cache.CacheInterface
-	// set up cache
-	if c.Cache != nil {
-		// get cache backend
-		cacheBackend := strings.ToLower(c.Cache.Backend)
-		if cacheBackend == "redis" {
-			// redis cache
-			markupCache, err = cache.NewRedisCache(c.Cache.Addr, c.Cache.Password)
-			if err != nil {
-				f = nil
-				// error creating cache
-				return
-			}
-			// redis cache backend was created
-		} else {
-			// fall through
-		}
-	}
 
-	if markupCache == nil {
-		// fallback cache backend is null cache
-		markupCache = cache.NewNullCache()
+	markupCache, err = cache.FromConfig(c.Cache)
+	if err != nil {
+		return
 	}
 
 	var mid Middleware
 	if c.Middleware != nil {
 		// middleware configured
 		mid, err = OverchanMiddleware(c.Middleware, markupCache, db)
-		// error will fall through
 	}
 
 	if err == nil {

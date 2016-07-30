@@ -38,6 +38,8 @@ type overchanMiddleware struct {
 }
 
 func (m *overchanMiddleware) SetupRoutes(mux *mux.Router) {
+	// setup front page handler
+	mux.Path("/").HandlerFunc(m.ServeIndex)
 	// setup thread handler
 	mux.Path("/thread/{id}/").HandlerFunc(m.ServeThread)
 	// setup board page handler
@@ -49,6 +51,18 @@ func (m *overchanMiddleware) SetupRoutes(mux *mux.Router) {
 	m.captcha = NewCaptchaServer(200, 400, captchaPrefix, m.store)
 	// setup captcha endpoint
 	m.captcha.SetupRoutes(mux.PathPrefix(captchaPrefix).Subrouter())
+}
+
+// reload middleware
+func (m *overchanMiddleware) Reload(c *config.MiddlewareConfig) {
+	// reload templates
+	templ, err := template.ParseGlob(filepath.Join(c.Templates, "*.tmpl"))
+	if err == nil {
+		log.Infof("middleware reloaded templates")
+		m.templ = templ
+	} else {
+		log.Errorf("middleware reload failed: %s", err.Error())
+	}
 }
 
 func (m *overchanMiddleware) ServeBoardPage(w http.ResponseWriter, r *http.Request) {

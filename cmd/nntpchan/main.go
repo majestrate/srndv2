@@ -8,12 +8,16 @@ import (
 	"github.com/majestrate/srndv2/lib/nntp"
 	"github.com/majestrate/srndv2/lib/store"
 	"net"
+	"os"
+	"os/signal"
+	"syscall"
 	"time"
 )
 
 func main() {
 	log.Info("starting up nntpchan...")
-	conf, err := config.Ensure("nntpchan.json")
+	cfg_fname := "nntpchan.json"
+	conf, err := config.Ensure(cfg_fname)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -73,42 +77,53 @@ func main() {
 	go func() {
 		for {
 			faddr := fconfig.BindAddr
-			time.Sleep(time.Second)
 			log.Infof("Frontend bind to %s", faddr)
 			fl, err := net.Listen("tcp", faddr)
-			if err != nil {
+			if err == nil {
+				// run frontend
+				err = fserv.Serve(fl)
+				if err != nil {
+					fl.Close()
+					log.Errorf("frontend.serve() %s", err.Error())
+				}
+			} else {
 				log.Errorf("frontend  net.Listen failed: %s", err.Error())
-				continue
 			}
-			// run frontend
-			err = fserv.Serve(fl)
-			if err != nil {
-				fl.Close()
-				log.Errorf("frontend.serve() %s", err.Error())
-			}
+			time.Sleep(time.Second)
 		}
 	}()
 
 	// nntp server loop
 	go func() {
 		for {
-			time.Sleep(time.Second)
 			naddr := conf.NNTP.Bind
 			log.Infof("Bind nntp server to %s", naddr)
 			nl, err := net.Listen("tcp", naddr)
-			if err != nil {
+			if err == nil {
+				err = nserv.Serve(nl)
+				if err != nil {
+					nl.Close()
+					log.Errorf("nntpserver.serve() %s", err.Error())
+				}
+			} else {
 				log.Errorf("nntp server net.Listen failed: %s", err.Error())
-				continue
 			}
-			// run nntp
-			err = nserv.Serve(nl)
-			if err != nil {
-				nl.Close()
-				log.Errorf("nntpserver.serve() %s", err.Error())
-			}
+			time.Sleep(time.Second)
 		}
 	}()
+	sigchnl := make(chan os.Signal, 1)
+	signal.Notify(sigchnl, syscall.SIGTERM, syscall.SIGHUP)
 	for {
-		time.Sleep(time.Second)
+		s := <-sigchnl
+		if s == syscall.SIGHUP {
+			conf, err := config.Ensure(cfg_fname)
+			if err == nil {
+				log.Infof("reloading config: %s", cfg_fname)
+				fserv.Reload(conf.Frontend)
+
+				nserv.ReloadServer(conf.NNTP)
+				nserv.ReloadFeeds(conf.Feeds)
+			}
+		}
 	}
 }

@@ -5,7 +5,9 @@
 package srnd
 
 import (
+	xss "github.com/microcosm-cc/bluemonday"
 	"github.com/mvdan/xurls"
+	markdown "github.com/russross/blackfriday"
 	"html"
 	"regexp"
 	"strings"
@@ -81,6 +83,14 @@ func formatline(line string) (markup string) {
 }
 
 func memeposting(src string) (markup string) {
+	d := markdown.MarkdownCommon([]byte(src))
+	b := xss.UGCPolicy().SanitizeBytes(d)
+	markup = string(b)
+	return
+}
+
+// old parse function
+func old_memeposting(src string) (markup string) {
 	for _, line := range strings.Split(src, "\n") {
 		markup += formatline(line)
 	}

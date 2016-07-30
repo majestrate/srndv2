@@ -7,6 +7,7 @@ import (
 	"github.com/dchest/captcha"
 	"github.com/gorilla/mux"
 	"github.com/gorilla/sessions"
+	"github.com/majestrate/srndv2/lib/config"
 	"net/http"
 )
 
@@ -29,6 +30,10 @@ func NewCaptchaServer(w, h int, prefix string, store *sessions.CookieStore) *Cap
 		store:       store,
 		sessionName: "captcha",
 	}
+}
+
+func (cs *CaptchaServer) Reload(c *config.MiddlewareConfig) {
+
 }
 
 func (cs *CaptchaServer) SetupRoutes(m *mux.Router) {

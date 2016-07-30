@@ -2,9 +2,11 @@ package frontend
 
 import (
 	"fmt"
+	log "github.com/Sirupsen/logrus"
 	"github.com/gorilla/mux"
 	"github.com/majestrate/srndv2/lib/admin"
 	"github.com/majestrate/srndv2/lib/api"
+	"github.com/majestrate/srndv2/lib/cache"
 	"github.com/majestrate/srndv2/lib/config"
 	"github.com/majestrate/srndv2/lib/database"
 	"github.com/majestrate/srndv2/lib/model"
@@ -28,6 +30,31 @@ type httpFrontend struct {
 	apiserve *api.Server
 	// database driver
 	db database.DB
+}
+
+// reload http frontend
+// reloads middleware
+func (f *httpFrontend) Reload(c *config.FrontendConfig) {
+	if f.middleware == nil {
+		if c.Middleware != nil {
+			markupcache, err := cache.FromConfig(c.Cache)
+			if err == nil {
+				// no middleware set, create middleware
+				f.middleware, err = OverchanMiddleware(c.Middleware, markupcache, f.db)
+				if err != nil {
+					log.Errorf("overchan middleware reload failed: %s", err.Error())
+				}
+			} else {
+				// error creating cache
+				log.Errorf("failed to create cache: %s", err.Error())
+			}
+		}
+	} else {
+		// middleware exists
+		// do middleware reload
+		f.middleware.Reload(c.Middleware)
+	}
+
 }
 
 // serve http requests from net.Listener

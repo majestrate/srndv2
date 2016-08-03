@@ -87,10 +87,8 @@ func formatline(line string) (markup string) {
 
 // old parse function
 func memeposting(src string) (markup string) {
-	markup = "<pre>"
 	for _, line := range strings.Split(src, "\n") {
 		markup += formatline(line)
 	}
-	markup += "</pre>"
 	return
 }

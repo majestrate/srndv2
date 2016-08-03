@@ -111,16 +111,18 @@ func main() {
 			time.Sleep(time.Second)
 		}
 	}()
+
+	// handle signals
 	sigchnl := make(chan os.Signal, 1)
-	signal.Notify(sigchnl, syscall.SIGTERM, syscall.SIGHUP)
+	signal.Notify(sigchnl, syscall.SIGHUP)
 	for {
 		s := <-sigchnl
 		if s == syscall.SIGHUP {
+			// handle SIGHUP
 			conf, err := config.Ensure(cfg_fname)
 			if err == nil {
 				log.Infof("reloading config: %s", cfg_fname)
 				fserv.Reload(conf.Frontend)
-
 				nserv.ReloadServer(conf.NNTP)
 				nserv.ReloadFeeds(conf.Feeds)
 			}

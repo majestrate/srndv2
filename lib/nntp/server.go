@@ -20,7 +20,7 @@ type EventHooks interface {
 
 // an nntp server
 type Server struct {
-	// user callbacks
+	// user callback
 	Hooks EventHooks
 	// filters to apply
 	Filters []ArticleFilter

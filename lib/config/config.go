@@ -15,8 +15,8 @@ type Config struct {
 	Log string `json:"log"`
 	// article storage config
 	Store *StoreConfig `json:"storage"`
-	// user interface frontend config
-	Frontend *FrontendConfig `json:"frontend"`
+	// web hooks to call
+	Hooks []*WebhookConfig `json:"webhooks"`
 	// database backend configuration
 	Database *DatabaseConfig `json:"db"`
 	// list of feeds to add on runtime
@@ -33,7 +33,7 @@ var DefaultConfig = Config{
 	Store:    &DefaultStoreConfig,
 	NNTP:     &DefaultNNTPConfig,
 	Database: &DefaultDatabaseConfig,
-	Frontend: &DefaultFrontendConfig,
+	Hooks:    []*WebhookConfig{},
 	Feeds:    []*FeedConfig{},
 	Log:      "debug",
 }

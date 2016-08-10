@@ -3,10 +3,9 @@ package main
 import (
 	log "github.com/Sirupsen/logrus"
 	"github.com/majestrate/srndv2/lib/config"
-	"github.com/majestrate/srndv2/lib/database"
-	"github.com/majestrate/srndv2/lib/frontend"
 	"github.com/majestrate/srndv2/lib/nntp"
 	"github.com/majestrate/srndv2/lib/store"
+	"github.com/majestrate/srndv2/lib/webhooks"
 	"net"
 	"os"
 	"os/signal"
@@ -24,11 +23,6 @@ func main() {
 
 	if conf.Log == "debug" {
 		log.SetLevel(log.DebugLevel)
-	}
-
-	fconfig := conf.Frontend
-	if fconfig == nil {
-		log.Fatal("no frontend configured")
 	}
 
 	sconfig := conf.Store
@@ -49,22 +43,10 @@ func main() {
 		log.Fatal("no database configured")
 	}
 
-	db, err := database.FromConfig(dconfig)
-	if err != nil {
-		log.Fatalf("failed to create dabatase: %s", err.Error())
-	}
-
-	fserv, err := frontend.NewHTTPFrontend(fconfig, db)
-
-	if err != nil {
-		log.Fatalf("failed to create frontend: %s", err.Error())
-	}
-
 	// create nntp server
 	nserv := &nntp.Server{
 		Config: nconfig,
 		Feeds:  conf.Feeds,
-		Hooks:  fserv,
 	}
 
 	// create article storage
@@ -73,25 +55,10 @@ func main() {
 		log.Fatal(err)
 	}
 
-	// frontent server loop
-	go func() {
-		for {
-			faddr := fconfig.BindAddr
-			log.Infof("Frontend bind to %s", faddr)
-			fl, err := net.Listen("tcp", faddr)
-			if err == nil {
-				// run frontend
-				err = fserv.Serve(fl)
-				if err != nil {
-					fl.Close()
-					log.Errorf("frontend.serve() %s", err.Error())
-				}
-			} else {
-				log.Errorf("frontend  net.Listen failed: %s", err.Error())
-			}
-			time.Sleep(time.Second)
-		}
-	}()
+	if conf.Hooks != nil && len(conf.Hooks) > 0 {
+		// put webhooks into nntp server event hooks
+		nserv.Hooks = webhooks.NewWebhooks(conf.Hooks, nserv.Storage)
+	}
 
 	// nntp server loop
 	go func() {
@@ -122,7 +89,6 @@ func main() {
 			conf, err := config.Ensure(cfg_fname)
 			if err == nil {
 				log.Infof("reloading config: %s", cfg_fname)
-				fserv.Reload(conf.Frontend)
 				nserv.ReloadServer(conf.NNTP)
 				nserv.ReloadFeeds(conf.Feeds)
 			}

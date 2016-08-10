@@ -285,7 +285,9 @@ func (c *v1OBConn) StreamAndQuit() {
 												"bytes": n,
 											}).Debug("Article Transferred")
 											// call hooks
-											go c.C.hooks.SentArticleVia(msgid, c.C.state.FeedName)
+											if c.C.hooks != nil {
+												go c.C.hooks.SentArticleVia(msgid, c.C.state.FeedName)
+											}
 										} else {
 											// failed transfer
 											log.WithFields(log.Fields{

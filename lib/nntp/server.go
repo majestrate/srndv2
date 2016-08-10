@@ -55,8 +55,8 @@ type Server struct {
 func NewServer() *Server {
 	return &Server{
 		// XXX: buffered?
-		send: make(chan ArticleEntry),
-		regis: make(chan *nntpFeed),
+		send:    make(chan ArticleEntry),
+		regis:   make(chan *nntpFeed),
 		deregis: make(chan *nntpFeed),
 	}
 }
@@ -158,11 +158,11 @@ func (s *Server) PersistFeeds() {
 	}
 
 	feeds := make(map[string]*nntpFeed)
-	
+
 	for {
 		select {
-		case e, ok := <- s.send:
-			if ! ok {
+		case e, ok := <-s.send:
+			if !ok {
 				break
 			}
 			msgid := e.MessageID().String()
@@ -171,21 +171,21 @@ func (s *Server) PersistFeeds() {
 			anon := false
 			// TODO: determine attachments
 			attachments := false
-			
+
 			for _, f := range feeds {
-				if f.conf.Policy != nil && ! f.conf.Policy.Allow(msgid, group, anon, attachments) {
+				if f.conf.Policy != nil && !f.conf.Policy.Allow(msgid, group, anon, attachments) {
 					// not allowed in this feed
 					continue
 				}
 				log.WithFields(log.Fields{
-					"name": f.conf.Name,
+					"name":  f.conf.Name,
 					"msgid": msgid,
 					"group": group,
 				}).Debug("sending article")
 				f.send <- e
 			}
 			break
-		case f, ok := <- s.regis:
+		case f, ok := <-s.regis:
 			if ok {
 				log.WithFields(log.Fields{
 					"name": f.conf.Name,
@@ -193,7 +193,7 @@ func (s *Server) PersistFeeds() {
 				feeds[f.conf.Name] = f
 			}
 			break
-		case f, ok := <- s.deregis:
+		case f, ok := <-s.deregis:
 			if ok {
 				log.WithFields(log.Fields{
 					"name": f.conf.Name,

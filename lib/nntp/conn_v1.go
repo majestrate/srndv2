@@ -142,7 +142,7 @@ type v1OBConn struct {
 	C               v1Conn
 	supports_stream bool
 	streamChnl      chan ArticleEntry
-	conf *config.FeedConfig
+	conf            *config.FeedConfig
 }
 
 func (c *v1OBConn) IsOpen() bool {
@@ -200,7 +200,7 @@ func (c *v1OBConn) Negotiate() (err error) {
 				err = c.C.printfLine(ModeStream.String())
 				if err == nil {
 					line, err = c.C.readline()
-					if err == nil && ! strings.HasPrefix(line, RPL_PostingStreaming) {
+					if err == nil && !strings.HasPrefix(line, RPL_PostingStreaming) {
 						err = errors.New("streaiming not allowed")
 					}
 				}
@@ -580,6 +580,7 @@ func (c *v1Conn) readArticle(newpost bool, hooks EventHooks) (ps PolicyStatus, e
 		txt := new(bytes.Buffer)
 		// the article itself
 		a := new(model.Article)
+		hdr.AppendPath(c.serverName)
 		if hdr.IsMultipart() {
 			_, params, err := hdr.GetMediaType()
 			if err == nil {
@@ -869,7 +870,7 @@ func (c *v1Conn) readArticle(newpost bool, hooks EventHooks) (ps PolicyStatus, e
 		// close body pipe
 		body_w.Close()
 		// inform result
-		log.Debugf("status %s",status)
+		log.Debugf("status %s", status)
 		accept_chnl <- status
 		log.Debugf("informed")
 	}(article_r, store_w, article_body_w)

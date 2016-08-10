@@ -29,7 +29,7 @@ var DuummyFeed = FeedConfig{
 	Policy: &DefaultArticlePolicy,
 	Addr:   "nntp.dummy.tld:1119",
 	Proxy:  &DefaultTorProxy,
-	Name: "dummy",
+	Name:   "dummy",
 }
 
 var DefaultFeeds = []*FeedConfig{

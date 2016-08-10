@@ -80,7 +80,7 @@ func main() {
 
 	// start persisting feeds
 	go nserv.PersistFeeds()
-	
+
 	// handle signals
 	sigchnl := make(chan os.Signal, 1)
 	signal.Notify(sigchnl, syscall.SIGHUP)

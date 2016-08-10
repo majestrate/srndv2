@@ -50,6 +50,14 @@ func (self Header) Set(key, val string) {
 	self[key] = []string{val}
 }
 
+func (self Header) AppendPath(name string) {
+	p := self.Get("Path", name)
+	if p != name {
+		p += "!" + name
+	}
+	self.Set("Path", p)
+}
+
 // append value to key
 func (self Header) Add(key, val string) {
 	if self.Has(key) {

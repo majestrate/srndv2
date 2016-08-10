@@ -44,10 +44,9 @@ func main() {
 	}
 
 	// create nntp server
-	nserv := &nntp.Server{
-		Config: nconfig,
-		Feeds:  conf.Feeds,
-	}
+	nserv := nntp.NewServer()
+	nserv.Config = nconfig
+	nserv.Feeds = conf.Feeds
 
 	// create article storage
 	nserv.Storage, err = store.NewFilesytemStorage(sconfig.Path)
@@ -79,6 +78,9 @@ func main() {
 		}
 	}()
 
+	// start persisting feeds
+	go nserv.PersistFeeds()
+	
 	// handle signals
 	sigchnl := make(chan os.Signal, 1)
 	signal.Notify(sigchnl, syscall.SIGHUP)

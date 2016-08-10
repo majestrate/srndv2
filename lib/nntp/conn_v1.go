@@ -5,6 +5,7 @@ import (
 	"crypto/tls"
 	"encoding/base64"
 	"encoding/json"
+	"errors"
 	"fmt"
 	log "github.com/Sirupsen/logrus"
 	"github.com/majestrate/srndv2/lib/config"
@@ -141,6 +142,7 @@ type v1OBConn struct {
 	C               v1Conn
 	supports_stream bool
 	streamChnl      chan ArticleEntry
+	conf *config.FeedConfig
 }
 
 func (c *v1OBConn) IsOpen() bool {
@@ -151,12 +153,65 @@ func (c *v1OBConn) Mode() Mode {
 	return c.Mode()
 }
 
+// negioate outbound connection
 func (c *v1OBConn) Negotiate() (err error) {
+	var line string
+	// discard first line
+	_, err = c.C.readline()
+	if err == nil {
+		// request capabilities
+		err = c.C.printfLine("CAPABILITIES")
+		dr := c.C.C.DotReader()
+		var b bytes.Buffer
+		_, err = io.Copy(&b, dr)
+		if err == nil {
+			// try login if specified
+			if c.conf.Username != "" && c.conf.Password != "" {
+				err = c.C.printfLine("AUTHINFO USER %s", c.conf.Username)
+				if err != nil {
+					return
+				}
+				line, err = c.C.readline()
+				if strings.HasPrefix(line, RPL_MoreAuth) {
+					err = c.C.printfLine("AUTHINFO PASS %s", c.conf.Password)
+					if err != nil {
+						return
+					}
+					line, err = c.C.readline()
+					if err != nil {
+						return
+					}
+					if strings.HasPrefix(line, RPL_AuthAccepted) {
+						log.WithFields(log.Fields{
+							"name": c.conf.Name,
+							"user": c.conf.Username,
+						}).Info("authentication accepted")
+					} else {
+						// not accepted?
+						err = errors.New(line)
+					}
+				} else {
+					// bad user?
+					err = errors.New(line)
+				}
+			}
+			if err == nil {
+				// set mode stream
+				err = c.C.printfLine(ModeStream.String())
+				if err == nil {
+					line, err = c.C.readline()
+					if err == nil && ! strings.HasPrefix(line, RPL_PostingStreaming) {
+						err = errors.New("streaiming not allowed")
+					}
+				}
+			}
+		}
+	}
 	return
 }
 
 func (c *v1OBConn) PostingAllowed() bool {
-	return c.PostingAllowed()
+	return c.C.PostingAllowed()
 }
 
 func (c *v1OBConn) ProcessInbound(hooks EventHooks) {
@@ -257,7 +312,9 @@ func (c *v1OBConn) StreamAndQuit() {
 						"state": c.C.state,
 						"msgid": msgid,
 						"line":  line,
-					}).Warn("invalid streaming response")
+					}).Error("invalid streaming response")
+					// close
+					return
 				}
 			} else {
 				log.WithFields(log.Fields{
@@ -304,6 +361,7 @@ func newOutboundConn(c net.Conn, s *Server, conf *config.FeedConfig) Conn {
 		storage = store.NewNullStorage()
 	}
 	return &v1OBConn{
+		conf: conf,
 		C: v1Conn{
 			state: ConnState{
 				FeedName: conf.Name,
@@ -475,7 +533,7 @@ func (c *v1Conn) readArticle(newpost bool, hooks EventHooks) (ps PolicyStatus, e
 
 	accept_chnl := make(chan PolicyStatus)
 	store_info_chnl := make(chan ArticleEntry)
-	store_result_chl := make(chan error)
+	store_result_chnl := make(chan error)
 
 	hdr_chnl := make(chan message.Header)
 
@@ -503,11 +561,11 @@ func (c *v1Conn) readArticle(newpost bool, hooks EventHooks) (ps PolicyStatus, e
 		st := <-accept_chnl
 		close(accept_chnl)
 		// get result from storage
-		err2, ok := <-store_result_chl
-		if ok {
+		err2, ok := <-store_result_chnl
+		if ok && err2 != io.EOF {
 			err = err2
 		}
-		close(store_result_chl)
+		close(store_result_chnl)
 		done_chnl <- st
 	}()
 
@@ -626,7 +684,6 @@ func (c *v1Conn) readArticle(newpost bool, hooks EventHooks) (ps PolicyStatus, e
 		if err == nil {
 			// collect text
 			a.Text = txt.String()
-			log.Println("post text", a.Text)
 		} else {
 			log.WithFields(log.Fields{
 				"pkg":   "nntp-conn",
@@ -665,7 +722,8 @@ func (c *v1Conn) readArticle(newpost bool, hooks EventHooks) (ps PolicyStatus, e
 				}).Debug("stored article okay to ", fpath)
 				// we got the article
 				go hooks.GotArticle(msgid, e.Newsgroup())
-				store_result_chl <- nil
+				store_result_chnl <- io.EOF
+				log.Debugf("store informed")
 			} else {
 				// error storing article
 				log.WithFields(log.Fields{
@@ -675,7 +733,7 @@ func (c *v1Conn) readArticle(newpost bool, hooks EventHooks) (ps PolicyStatus, e
 					"version": "1",
 				}).Error("failed to store article ", err)
 				io.Copy(util.Discard, r)
-				store_result_chl <- err
+				store_result_chnl <- err
 			}
 		} else {
 			// invalid message-id
@@ -687,7 +745,7 @@ func (c *v1Conn) readArticle(newpost bool, hooks EventHooks) (ps PolicyStatus, e
 				"version": "1",
 			}).Warn("store will discard message with invalid message-id")
 			io.Copy(util.Discard, r)
-			store_result_chl <- nil
+			store_result_chnl <- io.EOF
 			r.Close()
 		}
 	}(store_r)
@@ -710,9 +768,10 @@ func (c *v1Conn) readArticle(newpost bool, hooks EventHooks) (ps PolicyStatus, e
 				if msgid.Valid() {
 					// check store fo existing article
 					err = c.storage.HasArticle(msgid.String())
-					if err == ErrArticleNotFound {
+					if err == store.ErrNoSuchArticle {
 						// we don't have the article
 						status = PolicyAccept
+						log.Infof("accept article %s", msgid)
 					} else if err == nil {
 						// we do have the article, reject it we don't need it again
 						status = PolicyReject
@@ -763,7 +822,6 @@ func (c *v1Conn) readArticle(newpost bool, hooks EventHooks) (ps PolicyStatus, e
 						var n2 int64
 						n2, err = io.CopyN(mw, r, 128)
 						n += n2
-						log.Println(n2)
 					}
 				} else {
 					// we care about the article size
@@ -811,11 +869,14 @@ func (c *v1Conn) readArticle(newpost bool, hooks EventHooks) (ps PolicyStatus, e
 		// close body pipe
 		body_w.Close()
 		// inform result
+		log.Debugf("status %s",status)
 		accept_chnl <- status
+		log.Debugf("informed")
 	}(article_r, store_w, article_body_w)
 
 	ps = <-done_chnl
 	close(done_chnl)
+	log.Debug("read article done")
 	return
 }
 
@@ -928,7 +989,7 @@ func streamingLine(c *v1Conn, line string, hooks EventHooks) (err error) {
 				status, err = c.readArticle(false, hooks)
 				if status.Accept() {
 					// this article was accepted
-					err = c.printfLine("%s %s", RPL_StreamingAccept, msgid)
+					err = c.printfLine("%s %s", RPL_StreamingTransfered, msgid)
 				} else {
 					// this article was not accepted
 					err = c.printfLine("%s %s", RPL_StreamingReject, msgid)

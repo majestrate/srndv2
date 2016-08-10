@@ -33,8 +33,8 @@ var DefaultConfig = Config{
 	Store:    &DefaultStoreConfig,
 	NNTP:     &DefaultNNTPConfig,
 	Database: &DefaultDatabaseConfig,
-	Hooks:    []*WebhookConfig{},
-	Feeds:    []*FeedConfig{},
+	Hooks:    []*WebhookConfig{DefaultWebHookConfig,},
+	Feeds:    DefaultFeeds,
 	Log:      "debug",
 }
 

@@ -18,6 +18,13 @@ type EventHooks interface {
 	SentArticleVia(msgid MessageID, feedname string)
 }
 
+// nntp outfeed state
+type nntpFeed struct {
+	conn Conn
+	send chan ArticleEntry
+	conf *config.FeedConfig
+}
+
 // an nntp server
 type Server struct {
 	// user callback
@@ -36,6 +43,22 @@ type Server struct {
 	Config *config.NNTPServerConfig
 	// outfeeds to connect to
 	Feeds []*config.FeedConfig
+
+	// send to outbound feed channel
+	send chan ArticleEntry
+	// register inbound feed channel
+	regis chan *nntpFeed
+	// deregister inbound feed channel
+	deregis chan *nntpFeed
+}
+
+func NewServer() *Server {
+	return &Server{
+		// XXX: buffered?
+		send: make(chan ArticleEntry),
+		regis: make(chan *nntpFeed),
+		deregis: make(chan *nntpFeed),
+	}
 }
 
 // reload server configuration
@@ -57,6 +80,8 @@ func (s *Server) GotArticle(msgid MessageID, group Newsgroup) {
 	if s.Hooks != nil {
 		s.Hooks.GotArticle(msgid, group)
 	}
+	// send to outbound feeds
+	s.send <- ArticleEntry{msgid.String(), group.String()}
 }
 
 func (s *Server) SentArticleVia(msgid MessageID, feedname string) {
@@ -87,13 +112,32 @@ func (s *Server) persist(cfg *config.FeedConfig) {
 			err = conn.Negotiate()
 			if err == nil {
 				// negotiation good
-
+				log.WithFields(log.Fields{
+					"name": cfg.Name,
+				}).Debug("Negotitation good")
+				// start streaming
+				var chnl chan ArticleEntry
+				chnl, err = conn.StartStreaming()
+				if err == nil {
+					// register new connection
+					f := &nntpFeed{
+						conn: conn,
+						send: chnl,
+						conf: cfg,
+					}
+					s.regis <- f
+					// start streaming
+					conn.StreamAndQuit()
+					// deregister
+					s.deregis <- f
+					continue
+				}
 			} else {
 				log.WithFields(log.Fields{
 					"name": cfg.Name,
 				}).Info("outbound nntp connection failed to negotiate ", err)
-				conn.Quit()
 			}
+			conn.Quit()
 		} else {
 			// failed dial, do exponential backoff up to 1 hour
 			if delay <= time.Hour {
@@ -111,6 +155,53 @@ func (s *Server) persist(cfg *config.FeedConfig) {
 func (s *Server) PersistFeeds() {
 	for _, f := range s.Feeds {
 		go s.persist(f)
+	}
+
+	feeds := make(map[string]*nntpFeed)
+	
+	for {
+		select {
+		case e, ok := <- s.send:
+			if ! ok {
+				break
+			}
+			msgid := e.MessageID().String()
+			group := e.Newsgroup().String()
+			// TODO: determine anon
+			anon := false
+			// TODO: determine attachments
+			attachments := false
+			
+			for _, f := range feeds {
+				if f.conf.Policy != nil && ! f.conf.Policy.Allow(msgid, group, anon, attachments) {
+					// not allowed in this feed
+					continue
+				}
+				log.WithFields(log.Fields{
+					"name": f.conf.Name,
+					"msgid": msgid,
+					"group": group,
+				}).Debug("sending article")
+				f.send <- e
+			}
+			break
+		case f, ok := <- s.regis:
+			if ok {
+				log.WithFields(log.Fields{
+					"name": f.conf.Name,
+				}).Debug("register feed")
+				feeds[f.conf.Name] = f
+			}
+			break
+		case f, ok := <- s.deregis:
+			if ok {
+				log.WithFields(log.Fields{
+					"name": f.conf.Name,
+				}).Debug("deregister feed")
+				delete(feeds, f.conf.Name)
+			}
+			break
+		}
 	}
 }
 

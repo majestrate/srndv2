@@ -16,6 +16,44 @@ type ArticleConfig struct {
 	AllowAnonAttachments bool `json:"anon-attachments"`
 }
 
+// allow an article?
+func (c *ArticleConfig) Allow(msgid, group string, anon, attachment bool) bool {
+	// check disallowed groups
+	for _, g := range c.DisallowGroups {
+		if g == group {
+			// disallowed
+			return false
+		}
+	}
+
+	allow := !c.ForceWhitelist
+	
+	// check allowed groups
+	for _, g := range c.AllowGroups {
+		if g == group {
+			allow = true
+			break
+		}
+	}
+
+	// check attachment policy
+	if allow {
+		// no anon ?
+		if anon && ! c.AllowAnon {
+			allow = false
+		}
+		// no attachments ?
+		if allow && attachment && ! c.AllowAttachments {
+			allow = false
+		}
+		// no anon attachments ?
+		if allow && attachment && anon && ! c.AllowAnonAttachments {
+			allow = false
+		}
+	}
+	return allow
+}
+
 var DefaultArticlePolicy = ArticleConfig{
 	AllowGroups:          []string{"ctl", "overchan.test"},
 	DisallowGroups:       []string{"overchan.cp"},

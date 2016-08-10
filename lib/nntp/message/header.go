@@ -53,7 +53,7 @@ func (self Header) Set(key, val string) {
 func (self Header) AppendPath(name string) {
 	p := self.Get("Path", name)
 	if p != name {
-		p += "!" + name
+		p = name + "!" + p
 	}
 	self.Set("Path", p)
 }

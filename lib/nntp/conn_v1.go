@@ -580,7 +580,6 @@ func (c *v1Conn) readArticle(newpost bool, hooks EventHooks) (ps PolicyStatus, e
 		txt := new(bytes.Buffer)
 		// the article itself
 		a := new(model.Article)
-		hdr.AppendPath(c.serverName)
 		if hdr.IsMultipart() {
 			_, params, err := hdr.GetMediaType()
 			if err == nil {
@@ -757,6 +756,8 @@ func (c *v1Conn) readArticle(newpost bool, hooks EventHooks) (ps PolicyStatus, e
 		status := PolicyAccept
 		hdr, err := c.hdrio.ReadHeader(r)
 		if err == nil {
+			// append path
+			hdr.AppendPath(c.serverName)
 			// get message-id
 			var msgid MessageID
 			if newpost {

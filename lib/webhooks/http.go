@@ -12,6 +12,7 @@ import (
 	"net/http"
 	"net/textproto"
 	"net/url"
+	"strings"
 )
 
 // web hook implementation
@@ -45,6 +46,7 @@ func (h *httpWebhook) GotArticle(msgid nntp.MessageID, group nntp.Newsgroup) {
 			if ctype == "" {
 				ctype = "text/plain"
 			}
+			ctype = strings.Replace(ctype, "multipart/mixed", "multipart/form-data", 1) 
 			var r *http.Response
 			r, err = http.Post(u.String(), ctype, c.R)
 			if err == nil {

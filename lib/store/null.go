@@ -3,6 +3,7 @@ package store
 import (
 	"github.com/majestrate/srndv2/lib/util"
 	"io"
+	"os"
 )
 
 type nullStore struct{}
@@ -33,7 +34,7 @@ func (n *nullStore) Ensure() (err error) {
 	return
 }
 
-func (n *nullStore) OpenArticle(msgid string) (r io.ReadCloser, err error) {
+func (n *nullStore) OpenArticle(msgid string) (r *os.File, err error) {
 	err = ErrNoSuchArticle
 	return
 }

@@ -244,7 +244,7 @@ func (fs FilesystemStorage) StoreAttachment(r io.Reader, filename string) (fpath
 
 // open article given message-id
 // does not check validity
-func (fs FilesystemStorage) OpenArticle(msgid string) (r io.ReadCloser, err error) {
+func (fs FilesystemStorage) OpenArticle(msgid string) (r *os.File, err error) {
 	r, err = os.Open(filepath.Join(fs.ArticleDir(), msgid))
 	return
 }

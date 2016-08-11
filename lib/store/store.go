@@ -3,6 +3,7 @@ package store
 import (
 	"errors"
 	"io"
+	"os"
 )
 
 var ErrNoSuchArticle = errors.New("no such article")
@@ -29,7 +30,7 @@ type Storage interface {
 	DeleteArticle(msgid string) error
 
 	// open article for reading
-	OpenArticle(msgid string) (io.ReadCloser, error)
+	OpenArticle(msgid string) (*os.File, error)
 
 	// ensure the underlying storage backend is created
 	Ensure() error

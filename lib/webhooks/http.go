@@ -10,6 +10,7 @@ import (
 	"io"
 	"io/ioutil"
 	"net/http"
+	"net/textproto"
 	"net/url"
 )
 
@@ -28,8 +29,9 @@ func (h *httpWebhook) SentArticleVia(msgid nntp.MessageID, name string) {
 func (h *httpWebhook) GotArticle(msgid nntp.MessageID, group nntp.Newsgroup) {
 	f, err := h.storage.OpenArticle(msgid.String())
 	if err == nil {
-		var hdr message.Header
-		hdr, err = h.hdr.ReadHeader(f)
+		c := textproto.NewConn(f)
+		var hdr textproto.MIMEHeader
+		hdr, err = c.ReadMIMEHeader()
 		if err == nil {
 			u, _ := url.Parse(h.conf.URL)
 			q := u.Query()
@@ -39,9 +41,12 @@ func (h *httpWebhook) GotArticle(msgid nntp.MessageID, group nntp.Newsgroup) {
 				}
 			}
 			u.RawQuery = q.Encode()
-			ctype := hdr.Get("Content-Type", "text/plain")
+			ctype := hdr.Get("Content-Type")
+			if ctype == "" {
+				ctype = "text/plain"
+			}
 			var r *http.Response
-			r, err = http.Post(u.String(), ctype, f)
+			r, err = http.Post(u.String(), ctype, c.R)
 			if err == nil {
 				_, err = io.Copy(ioutil.Discard, r.Body)
 				r.Body.Close()

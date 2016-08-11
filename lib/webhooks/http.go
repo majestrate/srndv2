@@ -34,6 +34,11 @@ func (h *httpWebhook) GotArticle(msgid nntp.MessageID, group nntp.Newsgroup) {
 		var hdr textproto.MIMEHeader
 		hdr, err = c.ReadMIMEHeader()
 		if err == nil {
+			ctype := hdr.Get("Content-Type")
+			if ctype == "" {
+				ctype = "text/plain"
+			}
+			ctype = strings.Replace(strings.ToLower(ctype), "multipart/mixed", "multipart/form-data", 1)
 			u, _ := url.Parse(h.conf.URL)
 			q := u.Query()
 			for k, vs := range hdr {
@@ -41,12 +46,8 @@ func (h *httpWebhook) GotArticle(msgid nntp.MessageID, group nntp.Newsgroup) {
 					q.Add(k, v)
 				}
 			}
+			q.Set("Content-Type", ctype)
 			u.RawQuery = q.Encode()
-			ctype := hdr.Get("Content-Type")
-			if ctype == "" {
-				ctype = "text/plain"
-			}
-			ctype = strings.Replace(ctype, "multipart/mixed", "multipart/form-data", 1) 
 			var r *http.Response
 			r, err = http.Post(u.String(), ctype, c.R)
 			if err == nil {

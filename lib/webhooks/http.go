@@ -14,6 +14,7 @@ import (
 	"net/http"
 	"net/textproto"
 	"net/url"
+	"regexp"
 	"strings"
 )
 
@@ -55,6 +56,7 @@ func (h *httpWebhook) GotArticle(msgid nntp.MessageID, group nntp.Newsgroup) {
 
 			if strings.HasPrefix(ctype, "multipart") {
 				pr, pw := io.Pipe()
+				log.Debug("using pipe")
 				body = pr
 				go func(in io.Reader, out io.WriteCloser) {
 					_, params, _ := mime.ParseMediaType(ctype)
@@ -76,9 +78,10 @@ func (h *httpWebhook) GotArticle(msgid nntp.MessageID, group nntp.Newsgroup) {
 								h := part.Header
 								// rewrite header part for php
 								cd := h.Get("Content-Disposition")
-								t, p, _ := mime.ParseMediaType(cd)
-								p["name"] = "attachment[]"
-								h.Set("Content-Disposition", mime.FormatMediaType(t, p))
+								r := regexp.MustCompile(`; name=".*"`)
+								cd = r.ReplaceAllString(cd, ` name="attachment[]"`)
+								log.Debug(cd)
+								h.Set("Content-Disposition", cd)
 								// make write part
 								wp, err := mpw.CreatePart(h)
 								if err == nil {

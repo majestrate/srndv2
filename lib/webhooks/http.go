@@ -31,14 +31,14 @@ func (h *httpWebhook) GotArticle(msgid nntp.MessageID, group nntp.Newsgroup) {
 		var hdr message.Header
 		hdr, err = h.hdr.ReadHeader(f)
 		if err == nil {
-			var u *url.URL
-			u, err = url.Parse(h.conf.URL)
+			u, _ := url.Parse(h.conf.URL)
 			q := u.Query()
 			for k, vs := range hdr {
 				for _, v := range vs {
 					q.Add(k, v)
 				}
 			}
+			u.RawQuery = q.Encode()
 			ctype := hdr.Get("Content-Type", "text/plain")
 			var r *http.Response
 			r, err = http.Post(u.String(), ctype, f)

@@ -47,7 +47,6 @@ func escapeline(line string) (markup string) {
 }
 
 func formatline(line string) (markup string) {
-	line = strings.Trim(line, "\t\r\n ")
 	if len(line) > 0 {
 		if strings.HasPrefix(line, ">") && !(strings.HasPrefix(line, ">>") && re_backlink.MatchString(strings.Split(line, " ")[0])) {
 			// le ebin meme arrows

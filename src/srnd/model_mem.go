@@ -454,6 +454,10 @@ func (self *post) RenderShortBody() string {
 	return memeposting(self.PostMessage)
 }
 
+func (self *post) RenderBodyPre() string {
+	return self.PostMessage
+}
+
 func (self *post) RenderBody() string {
 	// :^)
 	if len(self.message_rendered) == 0 {

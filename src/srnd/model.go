@@ -53,7 +53,7 @@ type PostModel interface {
 	RenderBody() string
 	RenderPost() string
 	RenderBodyPre() string
-	
+
 	IsI2P() bool
 	IsTor() bool
 	IsClearnet() bool

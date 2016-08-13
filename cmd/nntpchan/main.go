@@ -54,9 +54,20 @@ func main() {
 		log.Fatal(err)
 	}
 
-	if conf.Hooks != nil && len(conf.Hooks) > 0 {
+	if conf.WebHooks != nil && len(conf.WebHooks) > 0 {
 		// put webhooks into nntp server event hooks
-		nserv.Hooks = webhooks.NewWebhooks(conf.Hooks, nserv.Storage)
+		nserv.Hooks = webhooks.NewWebhooks(conf.WebHooks, nserv.Storage)
+	}
+
+	if conf.NNTPHooks != nil && len(conf.NNTPHooks) > 0 {
+		var hooks nntp.MulitHook
+		if nserv.Hooks != nil {
+			hooks = append(hooks, nserv.Hooks)
+		}
+		for _, h := range conf.NNTPHooks {
+			hooks = append(hooks, nntp.NewHook(h))
+		}
+		nserv.Hooks = hooks
 	}
 
 	// nntp server loop

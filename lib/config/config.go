@@ -16,7 +16,9 @@ type Config struct {
 	// article storage config
 	Store *StoreConfig `json:"storage"`
 	// web hooks to call
-	Hooks []*WebhookConfig `json:"webhooks"`
+	WebHooks []*WebhookConfig `json:"webhooks"`
+	// external scripts to call
+	NNTPHooks []*NNTPHookConfig `json:"nntphooks"`
 	// database backend configuration
 	Database *DatabaseConfig `json:"db"`
 	// list of feeds to add on runtime
@@ -30,12 +32,13 @@ type Config struct {
 
 // default configuration
 var DefaultConfig = Config{
-	Store:    &DefaultStoreConfig,
-	NNTP:     &DefaultNNTPConfig,
-	Database: &DefaultDatabaseConfig,
-	Hooks:    []*WebhookConfig{DefaultWebHookConfig},
-	Feeds:    DefaultFeeds,
-	Log:      "debug",
+	Store:     &DefaultStoreConfig,
+	NNTP:      &DefaultNNTPConfig,
+	Database:  &DefaultDatabaseConfig,
+	WebHooks:  []*WebhookConfig{DefaultWebHookConfig},
+	NNTPHooks: []*NNTPHookConfig{DefaultNNTPHookConfig},
+	Feeds:     DefaultFeeds,
+	Log:       "debug",
 }
 
 // reload configuration

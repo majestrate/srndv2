@@ -1,6 +1,7 @@
 package nntp
 
 import (
+	"bufio"
 	"bytes"
 	"crypto/tls"
 	"encoding/base64"
@@ -260,7 +261,20 @@ func (c *v1OBConn) StreamAndQuit() {
 									"msgid": msgid,
 								}).Debug("article accepted will send via TAKETHIS now")
 								_ = c.C.printfLine("%s %s", stream_TAKETHIS, msgid)
-								n, _ := io.Copy(c.C.C.W, r)
+								br := bufio.NewReader(r)
+								n := int64(0)
+								for err == nil {
+									var line string
+									line, err = br.ReadString(10)
+									if err == io.EOF {
+										err = nil
+										break
+									}
+									line = strings.Trim(line, "\r")
+									line = strings.Trim(line, "\n")
+									err = c.C.printfLine(line)
+									n += int64(len(line))
+								}
 								r.Close()
 								err = c.C.printfLine(".")
 								if err == nil {
@@ -297,6 +311,11 @@ func (c *v1OBConn) StreamAndQuit() {
 											}).Debug("Article Rejected")
 										}
 									}
+								} else {
+									log.WithFields(log.Fields{
+										"feed":  c.C.state.FeedName,
+										"msgid": msgid,
+									}).Errorf("failed to transfer: %s", err.Error())
 								}
 							}
 						} else {

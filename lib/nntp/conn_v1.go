@@ -373,7 +373,11 @@ func (c *v1OBConn) GetState() *ConnState {
 
 // create a new connection from an established connection
 func newOutboundConn(c net.Conn, s *Server, conf *config.FeedConfig) Conn {
-	sname := s.Name
+
+	sname := "default.value.tld"
+	if s.Config != nil {
+		sname = s.Config.Name
+	}
 	if len(sname) == 0 {
 		sname = "nntp.anon.tld"
 	}

@@ -79,7 +79,7 @@ func (h *httpWebhook) GotArticle(msgid nntp.MessageID, group nntp.Newsgroup) {
 								// rewrite header part for php
 								cd := h.Get("Content-Disposition")
 								r := regexp.MustCompile(`; name=".*"`)
-								cd = r.ReplaceAllString(cd, `; name="attachment[]"`)
+								cd = r.ReplaceAllString(cd, `; name="attachment[]; "`)
 								log.Debug(cd)
 								h.Set("Content-Disposition", cd)
 								// make write part

@@ -1,12 +1,12 @@
 package webhooks
 
 import (
+	"fmt"
 	log "github.com/Sirupsen/logrus"
 	"github.com/majestrate/srndv2/lib/config"
 	"github.com/majestrate/srndv2/lib/nntp"
 	"github.com/majestrate/srndv2/lib/nntp/message"
 	"github.com/majestrate/srndv2/lib/store"
-
 	"io"
 	"io/ioutil"
 	"mime"
@@ -78,10 +78,10 @@ func (h *httpWebhook) GotArticle(msgid nntp.MessageID, group nntp.Newsgroup) {
 								h := part.Header
 								// rewrite header part for php
 								cd := h.Get("Content-Disposition")
-								r := regexp.MustCompile(`; name=".*"`)
-								cd = r.ReplaceAllString(cd, `; name="attachment[]";`)
-								log.Debug(cd)
-								h.Set("Content-Disposition", cd)
+								r := regexp.MustCompile(`; filename="(.*)"`)
+								// YOLO
+								fname := r.FindStringSubmatch(cd)[1]
+								h.Set("Content-Disposition", fmt.Sprintf(`filename="%s"; name="attachment"`, fname))
 								// make write part
 								wp, err := mpw.CreatePart(h)
 								if err == nil {

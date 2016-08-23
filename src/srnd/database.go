@@ -114,8 +114,11 @@ type Database interface {
 	// does not load replies for thread, only gets root posts
 	GetGroupForPage(prefix, frontend, newsgroup string, pageno, perpage int) BoardModel
 
-	// get the root posts of the last N bumped threads in a given newsgroup or globally for ukko
+	// get the root posts of the last N bumped threads in a given newsgroup or "" for ukko
 	GetLastBumpedThreads(newsgroup string, threadcount int) []ArticleEntry
+
+	// get root posts of last N bumped threads with pagination offset
+	GetLastBumpedThreadsPaginated(newsgroup string, threadcount, offset int) []ArticleEntry
 
 	// get the PostModels for replies to a thread
 	// prefix is injected into the post models

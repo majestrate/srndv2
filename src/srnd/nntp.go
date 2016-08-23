@@ -270,9 +270,9 @@ func (self *nntpConnection) handleStreamEvent(ev nntpStreamEvent, daemon *NNTPDa
 				// time to send
 				dw := conn.DotWriter()
 				_, err = io.Copy(dw, rc)
-				err = dw.Close()
 				rc.Close()
-				self.messageSetPendingState(msgid, "sent")
+				err = dw.Close()
+				self.messageSetProcessed(msgid)
 			} else {
 				log.Println(self.name, "didn't send", msgid, err)
 				self.messageSetProcessed(msgid)
@@ -281,6 +281,7 @@ func (self *nntpConnection) handleStreamEvent(ev nntpStreamEvent, daemon *NNTPDa
 			}
 		} else if cmd == "CHECK" {
 			conn.PrintfLine("%s", ev)
+			self.messageSetPendingState(msgid, "check")
 		} else {
 			log.Println("invalid stream command", ev)
 		}
@@ -335,7 +336,6 @@ func (self *nntpConnection) handleStreaming(daemon *NNTPDaemon, conn *textproto.
 			return
 		case msgid := <-self.check:
 			err = self.handleStreamEvent(nntpCHECK(msgid), daemon, conn)
-			self.messageSetPendingState(msgid, "check")
 		case msgid := <-self.takethis:
 			self.messageSetPendingState(msgid, "takethis")
 			err = self.handleStreamEvent(nntpTAKETHIS(msgid), daemon, conn)
@@ -532,11 +532,9 @@ func (self *nntpConnection) handleLine(daemon *NNTPDaemon, code int, line string
 		msgid = parts[0]
 	}
 	if code == 238 {
-		if ValidMessageID(msgid) {
-			self.messageSetPendingState(msgid, "takethis")
-			// they want this article
-			self.takethis <- msgid
-		}
+		self.messageSetPendingState(msgid, "takethis")
+		// they want this article
+		self.takethis <- msgid
 		return
 	} else if code == 239 {
 		// successful TAKETHIS

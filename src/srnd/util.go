@@ -436,6 +436,20 @@ func getThreadHash(file string) (thread string) {
 	return
 }
 
+func getUkkoPage(file string) (page int) {
+	exp := regexp.MustCompilePOSIX(`ukko-([0-9]+)\.*`)
+	matches := exp.FindStringSubmatch(file)
+	if len(matches) != 2 {
+		return
+	}
+	var err error
+	page, err = strconv.Atoi(matches[1])
+	if err != nil {
+		page = 0
+	}
+	return
+}
+
 func getGroupAndPage(file string) (board string, page int) {
 	exp := regexp.MustCompilePOSIX(`(.*)-([0-9]+)\.*`)
 	matches := exp.FindStringSubmatch(file)

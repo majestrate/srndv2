@@ -932,20 +932,28 @@ func (self *PostgresDatabase) GetGroupThreads(group string, recv chan ArticleEnt
 	}
 }
 
-func (self *PostgresDatabase) GetLastBumpedThreads(newsgroup string, threads int) (roots []ArticleEntry) {
+func (self *PostgresDatabase) GetLastBumpedThreads(newsgroups string, threads int) []ArticleEntry {
+	return self.GetLastBumpedThreadsPaginated(newsgroups, threads, 0)
+}
+
+func (self *PostgresDatabase) GetLastBumpedThreadsPaginated(newsgroup string, threads, offset int) (roots []ArticleEntry) {
 	var err error
 	var rows *sql.Rows
 	if len(newsgroup) > 0 {
-		rows, err = self.conn.Query("SELECT root_message_id, newsgroup FROM ArticleThreads WHERE newsgroup = $1 ORDER BY last_bump DESC LIMIT $2", newsgroup, threads)
+		rows, err = self.conn.Query("SELECT root_message_id, newsgroup FROM ArticleThreads WHERE newsgroup = $1 ORDER BY last_bump DESC LIMIT $2", newsgroup, threads+offset)
 	} else {
-		rows, err = self.conn.Query("SELECT root_message_id, newsgroup FROM ArticleThreads WHERE newsgroup != 'ctl' ORDER BY last_bump DESC LIMIT $1", threads)
+		rows, err = self.conn.Query("SELECT root_message_id, newsgroup FROM ArticleThreads WHERE newsgroup != 'ctl' ORDER BY last_bump DESC LIMIT $1", threads+offset)
 	}
 
 	if err == nil {
 		for rows.Next() {
 			var ent ArticleEntry
 			rows.Scan(&ent[0], &ent[1])
-			roots = append(roots, ent)
+			if offset > 0 {
+				offset--
+			} else {
+				roots = append(roots, ent)
+			}
 		}
 		rows.Close()
 	} else {

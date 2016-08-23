@@ -602,21 +602,33 @@ func (self RedisDB) GetGroupThreads(group string, recv chan ArticleEntry) {
 	}
 }
 
-func (self RedisDB) GetLastBumpedThreads(newsgroup string, threads int) (roots []ArticleEntry) {
+func (self RedisDB) GetLastBumpedThreads(newsgroup string, threads int) []ArticleEntry {
+	return self.GetLastBumpedThreadsPaginated(newsgroup, threads, 0)
+}
+
+func (self RedisDB) GetLastBumpedThreadsPaginated(newsgroup string, threads, offset int) (roots []ArticleEntry) {
 	var err error
 	if len(newsgroup) > 0 {
-		threads, err := self.client.ZRevRange(GROUP_THREAD_BUMPTIME_WKR_PREFIX+newsgroup, 0, int64(threads-1)).Result()
+		threads, err := self.client.ZRevRange(GROUP_THREAD_BUMPTIME_WKR_PREFIX+newsgroup, 0, int64(offset+threads-1)).Result()
 		if err == nil {
 			for _, msgid := range threads {
-				roots = append(roots, ArticleEntry{msgid, newsgroup})
+				if offset > 0 {
+					offset--
+				} else {
+					roots = append(roots, ArticleEntry{msgid, newsgroup})
+				}
 			}
 		}
 	} else {
-		threads, err := self.client.ZRevRange(THREAD_BUMPTIME_WKR, 0, int64(threads-1)).Result()
+		threads, err := self.client.ZRevRange(THREAD_BUMPTIME_WKR, 0, int64(offset+threads-1)).Result()
 		if err == nil {
 			for _, msgid := range threads {
 				group, _ := self.GetGroupForMessage(msgid) //this seems expensive. it might be a better idea to add the group to THREAD_BUMPTIME_WKR
-				roots = append(roots, ArticleEntry{msgid, group})
+				if offset > 0 {
+					offset--
+				} else {
+					roots = append(roots, ArticleEntry{msgid, group})
+				}
 			}
 		}
 	}

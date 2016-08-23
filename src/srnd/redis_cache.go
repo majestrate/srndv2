@@ -4,6 +4,8 @@ package srnd
 
 import (
 	"bytes"
+	"encoding/json"
+	"fmt"
 	"gopkg.in/redis.v3"
 	"io"
 	"io/ioutil"
@@ -30,6 +32,7 @@ const (
 	INDEX              = CACHE_PREFIX + "Index"
 	BOARDS             = CACHE_PREFIX + "Boards"
 	UKKO               = CACHE_PREFIX + "Ukko"
+	JSON_BOARDS        = "JSON::" + BOARDS
 	JSON_UKKO          = "JSON::" + UKKO
 	THREAD_PREFIX      = CACHE_PREFIX + "Thread::"
 	JSON_THREAD_PREFIX = "JSON::" + THREAD_PREFIX
@@ -85,14 +88,21 @@ func (self *redisHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		})
 		return
 	}
+
+	if strings.HasPrefix(file, "boards.json") {
+		self.serveCached(w, r, JSON_BOARDS, self.cache.regenBoardsJSON)
+		return
+	}
+
 	if strings.HasPrefix(file, "ukko.html") {
-		self.serveCached(w, r, UKKO, self.cache.regenUkkoMarkup)
+		http.Redirect(w, r, "ukko-0.html", http.StatusMovedPermanently)
 		return
 	}
 	if strings.HasPrefix(file, "ukko.json") {
-		self.serveCached(w, r, JSON_UKKO, self.cache.regenUkkoJSON)
+		http.Redirect(w, r, "ukko-0.json", http.StatusMovedPermanently)
 		return
 	}
+
 	json := strings.HasSuffix(file, ".json")
 
 	if strings.HasPrefix(file, "thread-") {
@@ -114,6 +124,24 @@ func (self *redisHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			self.cache.regenerateThread(msg, out, json)
 		})
 		return
+	}
+	if strings.HasPrefix(file, "ukko-") {
+		page := getUkkoPage(file)
+		// TODO: make ukko pagination configurable
+		if page < 10 {
+			key := "::Page::" + strconv.Itoa(page)
+			if json {
+				key = JSON_UKKO + key
+			} else {
+				key = UKKO + key
+			}
+			self.serveCached(w, r, key, func(out io.Writer) {
+				self.cache.regenUkkoPage(page, out, json)
+			})
+			return
+		} else {
+			goto notfound
+		}
 	}
 	if strings.HasPrefix(file, "catalog-") {
 		group := getGroupForCatalog(file)
@@ -267,6 +295,12 @@ func (self *RedisCache) pollLongTerm() {
 	}
 }
 
+func (self *RedisCache) regenBoardsJSON(w io.Writer) {
+	enc := json.NewEncoder(w)
+	g := self.database.GetAllNewsgroups()
+	enc.Encode(g)
+}
+
 func (self *RedisCache) invalidateBoardPage(group string, pageno int) {
 	key := group + "::Page::" + strconv.Itoa(pageno)
 	self.client.Del(JSON_GROUP_PREFIX+key+"::Time", GROUP_PREFIX+key+"::Time")
@@ -281,8 +315,26 @@ func (self *RedisCache) invalidateThreadPage(entry ArticleEntry) {
 	self.ukkoNeedsRegen()
 }
 
+func (self *RedisCache) invalidateUkkoPage(page int) {
+	p := fmt.Sprintf("::Page::%d::Time", page)
+	self.client.Del(UKKO+p, JSON_UKKO+p)
+}
+
 func (self *RedisCache) invalidateUkko() {
-	self.client.Del(UKKO+"::Time", JSON_UKKO+"::Time")
+	p := 0
+	for p < 10 {
+		self.invalidateUkkoPage(p)
+		p++
+	}
+}
+
+func (self *RedisCache) regenUkkoPages() {
+	p := 0
+	for p < 10 {
+		self.regenUkkoPage(p, ioutil.Discard, false)
+		self.regenUkkoPage(p, ioutil.Discard, true)
+		p++
+	}
 }
 
 func (self *RedisCache) invalidateFrontPage() {
@@ -313,8 +365,7 @@ func (self *RedisCache) pollRegen() {
 		case _ = <-self.regenUkkoTicker.C:
 			if self.needsUkkoRegen() {
 				self.invalidateUkko()
-				self.regenUkkoJSON(ioutil.Discard)
-				self.regenUkkoMarkup(ioutil.Discard)
+				self.regenUkkoPages()
 				// ukko regen done
 				// TODO: atomic needed?
 				self.ukko = false
@@ -436,18 +487,23 @@ func (self *RedisCache) RegenFrontPage() {
 
 // regenerate the overboard html
 func (self *RedisCache) regenUkkoMarkup(out io.Writer) {
+	self.regenUkkoPage(0, out, false)
+}
+
+func (self *RedisCache) regenUkkoPage(page int, out io.Writer, json bool) {
 	buf := new(bytes.Buffer)
 	wr := io.MultiWriter(out, buf)
-	template.genUkko(self.prefix, self.name, wr, self.database, false)
-	self.cache(UKKO, buf)
+	template.genUkkoPaginated(self.prefix, self.name, wr, self.database, page, json)
+	k := UKKO
+	if json {
+		k = JSON_UKKO
+	}
+	self.cache(fmt.Sprintf("%s::Page::%d", k, page), buf)
 }
 
 // regenerate the overboard json
 func (self *RedisCache) regenUkkoJSON(out io.Writer) {
-	buf := new(bytes.Buffer)
-	wr := io.MultiWriter(out, buf)
-	template.genUkko(self.prefix, self.name, wr, self.database, true)
-	self.cache(JSON_UKKO, buf)
+	self.regenUkkoPage(0, out, true)
 }
 
 // regenerate pages after a mod event

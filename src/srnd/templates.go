@@ -389,7 +389,7 @@ func (self *templateEngine) genUkkoPaginated(prefix, frontend string, wr io.Writ
 			if found {
 				break
 			}
-			p ++
+			p++
 		}
 	}
 	updateLinkCache()

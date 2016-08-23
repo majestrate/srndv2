@@ -370,7 +370,7 @@ func (self *templateEngine) genUkko(prefix, frontend string, wr io.Writer, datab
 
 func (self *templateEngine) genUkkoPaginated(prefix, frontend string, wr io.Writer, database Database, page int, json bool) {
 	var threads []ThreadModel
-	for _, article := range database.GetLastBumpedThreads("", 10+(page*10)) {
+	for _, article := range database.GetLastBumpedThreadsPaginated("", 10, page*10) {
 		// get the newsgroup and root post id
 		newsgroup := article[1]
 		// get first thread

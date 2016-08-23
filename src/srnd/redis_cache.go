@@ -90,7 +90,9 @@ func (self *redisHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if strings.HasPrefix(file, "boards.json") {
-		self.serveCached(w, r, JSON_BOARDS, self.cache.regenBoardsJSON)
+		enc := json.NewEncoder(w)
+		g := self.cache.database.GetAllNewsgroups()
+		enc.Encode(g)
 		return
 	}
 
@@ -293,12 +295,6 @@ func (self *RedisCache) pollLongTerm() {
 		self.regenLongTerm(ioutil.Discard)
 		self.invalidateFrontPage()
 	}
-}
-
-func (self *RedisCache) regenBoardsJSON(w io.Writer) {
-	enc := json.NewEncoder(w)
-	g := self.database.GetAllNewsgroups()
-	enc.Encode(g)
 }
 
 func (self *RedisCache) invalidateBoardPage(group string, pageno int) {

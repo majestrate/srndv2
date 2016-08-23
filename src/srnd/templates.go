@@ -374,13 +374,22 @@ func (self *templateEngine) genUkkoPaginated(prefix, frontend string, wr io.Writ
 		// get the newsgroup and root post id
 		newsgroup := article[1]
 		// get first thread
-		page := database.GetGroupForPage(prefix, frontend, newsgroup, 0, 10)
-		for _, t := range page.Threads() {
-			if t.OP().MessageID() == article[0] {
-				t.Update(database)
-				threads = append(threads, t)
+		p := 0
+		found := false
+		for p < 10 {
+			page := database.GetGroupForPage(prefix, frontend, newsgroup, p, 10)
+			for _, t := range page.Threads() {
+				if t.OP().MessageID() == article[0] {
+					t.Update(database)
+					threads = append(threads, t)
+					found = true
+					break
+				}
+			}
+			if found {
 				break
 			}
+			p ++
 		}
 	}
 	updateLinkCache()

@@ -638,7 +638,7 @@ func (self *httpFrontend) handle_postform(wr http.ResponseWriter, r *http.Reques
 
 	s := func(nntp NNTPMessage) {
 		// send success reply
-		wr.WriteHeader(200)
+		wr.WriteHeader(201)
 		// determine the root post so we can redirect to the thread for it
 		msg_id := nntp.Headers().Get("References", nntp.MessageID())
 		// render response as success

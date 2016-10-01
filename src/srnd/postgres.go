@@ -36,7 +36,7 @@ func NewPostgresDatabase(host, port, user, password string) Database {
 	var err error
 	if len(user) > 0 {
 		if len(password) > 0 {
-			db.db_str = fmt.Sprintf("user=%s password=%s host=%s port=%s client_encoding='UTF8'", user, password, host, port)
+			db.db_str = fmt.Sprintf("user=%s password='%s' host=%s port=%s client_encoding='UTF8'", user, password, host, port)
 		} else {
 			db.db_str = fmt.Sprintf("user=%s host=%s port=%s client_encoding='UTF8'", user, host, port)
 		}

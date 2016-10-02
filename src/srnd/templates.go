@@ -436,31 +436,35 @@ func (self *templateEngine) genThread(allowFiles bool, root ArticleEntry, prefix
 			return
 		}
 	}
-	// we didn't find it D:
-	// reload everything
-	// TODO: should we reload everything!?
-	b := self.obtainBoard(prefix, frontend, newsgroup, true, db)
-	// find the thread model in question
-	for _, pagemodel := range b {
-		t := pagemodel.GetThread(msgid)
-		if t != nil {
-			// we found it
-			// render thread
-			t.Update(db)
-			if json {
-				self.renderJSON(wr, t)
-			} else {
-				form := renderPostForm(prefix, newsgroup, msgid, allowFiles)
-				self.writeTemplate("thread.mustache", map[string]interface{}{"thread": t, "board": pagemodel, "form": form}, wr)
-			}
-			self.groups_mtx.Lock()
-			self.groups[newsgroup] = b
-			self.groups_mtx.Unlock()
-			return
-		}
-	}
-	// it's not there wtf
 	log.Println("thread not found for message id", msgid)
+	return
+	/*
+		// we didn't find it D:
+		// reload everything
+		// TODO: should we reload everything!?
+		b := self.obtainBoard(prefix, frontend, newsgroup, true, db)
+		// find the thread model in question
+		for _, pagemodel := range b {
+			t := pagemodel.GetThread(msgid)
+			if t != nil {
+				// we found it
+				// render thread
+				t.Update(db)
+				if json {
+					self.renderJSON(wr, t)
+				} else {
+					form := renderPostForm(prefix, newsgroup, msgid, allowFiles)
+					self.writeTemplate("thread.mustache", map[string]interface{}{"thread": t, "board": pagemodel, "form": form}, wr)
+				}
+				self.groups_mtx.Lock()
+				self.groups[newsgroup] = b
+				self.groups_mtx.Unlock()
+				return
+			}
+		}
+		// it's not there wtf
+		log.Println("thread not found for message id", msgid)
+	*/
 }
 
 // change the directory we are using for templates

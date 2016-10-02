@@ -1,6 +1,7 @@
 package srnd
 
 import (
+	"encoding/json"
 	"fmt"
 	"log"
 	"net/http"
@@ -235,6 +236,14 @@ func (self *FileCache) RegenFrontPage() {
 	}
 
 	template.genFrontPage(10, self.prefix, self.name, indexwr, boardswr, self.database)
+
+	j_boardswr, err2 := os.Create(filepath.Join(self.webroot_dir, "boards.json"))
+	g := self.database.GetAllNewsgroups()
+	err := json.NewEncoder(j_boardswr).Encode(g)
+	if err != nil {
+		log.Println("cannot render boards.json", err)
+	}
+
 }
 
 // regenerate the overboard
@@ -259,6 +268,25 @@ func (self *FileCache) regenUkko() {
 		return
 	}
 	template.genUkko(self.prefix, self.name, wr, self.database, true)
+	i := 0
+	for i < 10 {
+		fname := fmt.Sprintf("ukko-%d.html", i)
+		jname := fmt.Sprintf("ukko-%d.json", i)
+		f, err := os.Create(fname)
+		if err != nil {
+			log.Println("Failed to create html ukko", i, err)
+			return
+		}
+		defer f.Close()
+		template.genUkkoPaginated(self.prefix, self.name, f, self.database, i, false)
+		j, err := os.Create(jname)
+		if err != nil {
+			log.Printf("failed to create json ukko", i, err)
+			return
+		}
+		defer j.Close()
+		template.genUkkoPaginated(self.prefix, self.name, j, self.database, i, true)
+	}
 }
 
 // regenerate pages after a mod event
@@ -272,6 +300,7 @@ func (self *FileCache) RegenOnModEvent(newsgroup, msgid, root string, page int) 
 		self.regenThreadChan <- ArticleEntry{root, newsgroup}
 	}
 	self.regenGroupChan <- groupRegenRequest{newsgroup, int(page)}
+	self.regenUkko()
 }
 
 func (self *FileCache) Start() {

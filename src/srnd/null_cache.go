@@ -55,6 +55,12 @@ func (self *nullHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		template.genUkko(self.cache.prefix, self.cache.name, w, self.cache.database, true)
 		return
 	}
+
+	if strings.HasPrefix(file, "ukko-") {
+		page := getUkkoPage(file)
+		template.genUkkoPaginated(self.cache.prefix, self.cache.name, w, self.cache.database, page, isjson)
+		return
+	}
 	if strings.HasPrefix(file, "thread-") {
 		hash := getThreadHash(file)
 		if len(hash) == 0 {

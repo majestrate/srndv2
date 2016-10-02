@@ -412,6 +412,12 @@ func (self *templateEngine) genUkkoPaginated(prefix, frontend string, wr io.Writ
 func (self *templateEngine) genThread(allowFiles bool, root ArticleEntry, prefix, frontend string, wr io.Writer, db Database, json bool) {
 	newsgroup := root.Newsgroup()
 	msgid := root.MessageID()
+
+	if !db.HasArticleLocal(msgid) {
+		log.Println("don't have", msgid, "locally, not regenerating")
+		return
+	}
+
 	// get the board model, don't update the board
 	board := self.obtainBoard(prefix, frontend, newsgroup, false, db)
 	// find the thread model in question

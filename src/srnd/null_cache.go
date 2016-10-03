@@ -1,6 +1,7 @@
 package srnd
 
 import (
+	"encoding/json"
 	"io/ioutil"
 	"net/http"
 	"path/filepath"
@@ -47,6 +48,13 @@ func (self *nullHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		template.genFrontPage(10, self.cache.prefix, self.cache.name, ioutil.Discard, w, self.cache.database)
 		return
 	}
+
+	if strings.HasPrefix(file, "boards.json") {
+		b := self.cache.database.GetAllNewsgroups()
+		json.NewEncoder(w).Encode(b)
+		return
+	}
+
 	if strings.HasPrefix(file, "ukko.html") {
 		template.genUkko(self.cache.prefix, self.cache.name, w, self.cache.database, false)
 		return

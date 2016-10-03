@@ -38,6 +38,7 @@ func NewCache(cache_type, host, port, user, password string, config map[string]s
 		return NewNullCache(prefix, webroot, name, attachments, db, store)
 	}
 	if cache_type == "redis" {
+		log.Fatalf("redis cache not supported, use null cache instead")
 		return NewRedisCache(prefix, webroot, name, threads, attachments, db, host, port, password)
 	}
 

@@ -615,7 +615,7 @@ func (self *httpFrontend) handle_postform(wr http.ResponseWriter, r *http.Reques
 
 	b := func() {
 		if sendJson {
-			wr.WriteHeader(200)
+			wr.WriteHeader(403)
 			json.NewEncoder(wr).Encode(map[string]interface{}{"error": "banned"})
 		} else {
 			wr.WriteHeader(403)

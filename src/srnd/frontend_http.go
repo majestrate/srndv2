@@ -1378,7 +1378,8 @@ func (self *httpFrontend) Mainloop() {
 	self.cache.Start()
 
 	// before we go further ensure all db models are loaded into template model cache
-	template.loadAllModels(self.prefix, self.name, self.daemon.database)
+	// let's actually not
+	// template.loadAllModels(self.prefix, self.name, self.daemon.database)
 
 	// poll channels
 	go self.poll()

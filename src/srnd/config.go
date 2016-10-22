@@ -30,6 +30,7 @@ type FeedConfig struct {
 	tls_off          bool
 	Name             string
 	sync_interval    time.Duration
+	connections      int
 }
 
 type APIConfig struct {
@@ -108,6 +109,7 @@ func GenFeedsConfig() error {
 	sect.Add("proxy-port", "9050")
 	sect.Add("host", "dummy")
 	sect.Add("port", "119")
+	sect.Add("connections", "1")
 
 	sect = conf.NewSection("dummy")
 	sect.Add("overchan.*", "1")
@@ -237,6 +239,7 @@ func SaveFeeds(feeds []FeedConfig) (err error) {
 		sect.Add("sync-interval", fmt.Sprintf("%d", int(interval)))
 		sect.Add("username", feed.username)
 		sect.Add("password", feed.passwd)
+		sect.Add("connections", fmt.Sprintf("%d", feed.connections))
 		sect = conf.NewSection(feed.Name)
 		for k, v := range feed.policy.rules {
 			sect.Add(k, v)
@@ -430,6 +433,9 @@ func feedParse(fname string) (confs []FeedConfig, err error) {
 				}
 				fconf.sync_interval = time.Second * time.Duration(i)
 			}
+
+			// concurrent connection count
+			fconf.connections = mapGetInt(sect.Options(), "connections", 1)
 
 			// username / password auth
 			fconf.username = sect.ValueOf("username")

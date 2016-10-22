@@ -360,7 +360,7 @@ func (self *NNTPDaemon) activeFeeds() (feeds []*feedStatus) {
 	return
 }
 
-func (self *NNTPDaemon) persistFeed(conf FeedConfig, mode string) {
+func (self *NNTPDaemon) persistFeed(conf FeedConfig, mode string, n int) {
 	log.Println(conf.Name, "persisting in", mode, "mode")
 	backoff := time.Second
 	for {
@@ -404,7 +404,7 @@ func (self *NNTPDaemon) persistFeed(conf FeedConfig, mode string) {
 			nntp := createNNTPConnection(conf.Addr)
 			nntp.policy = conf.policy
 			nntp.feedname = conf.Name
-			nntp.name = conf.Name + "-" + mode
+			nntp.name = fmt.Sprintf("%s-%d-%s", conf.Name, n, mode)
 			stream, reader, use_tls, err := nntp.outboundHandshake(textproto.NewConn(conn), &conf)
 			if err == nil {
 				if mode == "reader" && !reader {
@@ -737,10 +737,17 @@ func (self *NNTPDaemon) pollfeeds() {
 			log.Println("daemon registered feed", feedconfig.Name)
 			// persist feeds
 			if feedconfig.sync {
-				go self.persistFeed(feedconfig, "sync")
+				go self.persistFeed(feedconfig, "sync", 0)
 			}
-			go self.persistFeed(feedconfig, "stream")
-			go self.persistFeed(feedconfig, "reader")
+			n := feedconfig.connections
+			if n < 1 {
+				n = 1
+			}
+			for n > 0 {
+				go self.persistFeed(feedconfig, "stream", n)
+				go self.persistFeed(feedconfig, "reader", n)
+				n--
+			}
 		case feedname := <-self.deregister_feed:
 			_, ok := self.loadedFeeds[feedname]
 			if ok {
@@ -822,13 +829,17 @@ func (self *NNTPDaemon) poll(worker int) {
 				feeds := self.activeFeeds()
 				if feeds != nil {
 					for _, f := range feeds {
+						var send []*nntpConnection
 						for _, feed := range f.Conns {
 							if feed.policy.AllowsNewsgroup(group) {
 								if strings.HasSuffix(feed.name, "-stream") {
-									msgid := nntp.MessageID()
-									feed.offerStream(msgid)
+									send = append(send, feed)
 								}
 							}
+						}
+						minconn := lowestBacklogConnection(send)
+						if minconn != nil {
+							minconn.offerStream(nntp.MessageID())
 						}
 					}
 				}
@@ -837,18 +848,36 @@ func (self *NNTPDaemon) poll(worker int) {
 			feeds := self.activeFeeds()
 			if feeds != nil {
 				for _, f := range feeds {
+					var send []*nntpConnection
 					for _, feed := range f.Conns {
 						if feed.policy.AllowsNewsgroup(nntp.Newsgroup()) {
 							if strings.HasSuffix(feed.name, "-reader") {
-								feed.askForArticle(nntp.MessageID())
+								send = append(send, feed)
 							}
 						}
+					}
+					minconn := lowestBacklogConnection(send)
+					if minconn != nil {
+						minconn.askForArticle(nntp.MessageID())
 					}
 				}
 			}
 		}
 	}
 	log.Println("worker", worker, "done")
+}
+
+// get connection with smallest backlog
+func lowestBacklogConnection(conns []*nntpConnection) (minconn *nntpConnection) {
+	min := 10000
+	for _, c := range conns {
+		b := c.GetBacklog()
+		if b < min {
+			minconn = c
+			min = b
+		}
+	}
+	return
 }
 
 func (self *NNTPDaemon) askForArticle(e ArticleEntry) {

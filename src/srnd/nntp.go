@@ -80,6 +80,12 @@ type nntpConnection struct {
 	addr net.Addr
 }
 
+func (self *nntpConnection) GetBacklog() int {
+	self.pending_access.Lock()
+	defer self.pending_access.Unlock()
+	return len(self.pending)
+}
+
 func (self *nntpConnection) MarshalJSON() (data []byte, err error) {
 	jmap := make(map[string]interface{})
 	pending := make(map[string]string)

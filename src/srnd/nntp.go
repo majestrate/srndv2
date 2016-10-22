@@ -36,6 +36,12 @@ func nntpCHECK(msgid string) nntpStreamEvent {
 	return nntpStreamEvent(fmt.Sprintf("CHECK %s", msgid))
 }
 
+type syncEvent struct {
+	msgid string
+	sz    int64
+	state string
+}
+
 // nntp connection state
 type nntpConnection struct {
 	// the name of the feed this connection belongs to
@@ -58,13 +64,13 @@ type nntpConnection struct {
 	// ARTICLE <message-id>
 	article chan string
 	// CHECK <message-id>
-	check chan string
+	check chan syncEvent
 	// TAKETHIS <message-id>
-	takethis chan string
+	takethis chan syncEvent
 	// queue for streaming <message-id>
-	stream chan string
+	stream chan syncEvent
 	// map of message-id -> stream state
-	pending map[string]string
+	pending map[string]syncEvent
 	// lock for accessing self.pending map
 	pending_access sync.Mutex
 
@@ -78,12 +84,13 @@ type nntpConnection struct {
 	die chan chan bool
 	// remote address of this connections
 	addr net.Addr
+	// pending backlog of bytes to transfer
+	backlog int64
 }
 
-func (self *nntpConnection) GetBacklog() int {
-	self.pending_access.Lock()
-	defer self.pending_access.Unlock()
-	return len(self.pending)
+// get message backlog in bytes
+func (self *nntpConnection) GetBacklog() int64 {
+	return self.backlog
 }
 
 func (self *nntpConnection) MarshalJSON() (data []byte, err error) {
@@ -91,7 +98,7 @@ func (self *nntpConnection) MarshalJSON() (data []byte, err error) {
 	pending := make(map[string]string)
 	self.pending_access.Lock()
 	for k, v := range self.pending {
-		pending[k] = v
+		pending[k] = v.state
 	}
 	self.pending_access.Unlock()
 	jmap["pending"] = pending
@@ -99,6 +106,7 @@ func (self *nntpConnection) MarshalJSON() (data []byte, err error) {
 	jmap["name"] = self.name
 	jmap["authed"] = self.authenticated
 	jmap["group"] = self.group
+	jmap["backlog"] = self.backlog
 	data, err = json.Marshal(jmap)
 	return
 }
@@ -111,9 +119,9 @@ func createNNTPConnection(addr string) *nntpConnection {
 	return &nntpConnection{
 		hostname: host,
 		article:  make(chan string, 1024),
-		takethis: make(chan string, 1024),
-		check:    make(chan string, 1024),
-		pending:  make(map[string]string),
+		takethis: make(chan syncEvent, 1024),
+		check:    make(chan syncEvent, 1024),
+		pending:  make(map[string]syncEvent),
 	}
 }
 
@@ -254,12 +262,12 @@ func (self *nntpConnection) outboundHandshake(conn *textproto.Conn, conf *FeedCo
 }
 
 // offer up a article to sync via this connection
-func (self *nntpConnection) offerStream(msgid string) {
+func (self *nntpConnection) offerStream(msgid string, sz int64) {
 	if self.messageIsQueued(msgid) {
 		// already queued for send
 	} else {
-		self.messageSetPendingState(msgid, "queued")
-		self.check <- msgid
+		self.messageSetPendingState(msgid, "queued", sz)
+		self.check <- syncEvent{msgid, sz, "queued"}
 	}
 }
 
@@ -287,7 +295,7 @@ func (self *nntpConnection) handleStreamEvent(ev nntpStreamEvent, daemon *NNTPDa
 			}
 		} else if cmd == "CHECK" {
 			conn.PrintfLine("%s", ev)
-			self.messageSetPendingState(msgid, "check")
+			self.messageSetPendingState(msgid, "check", 0)
 		} else {
 			log.Println("invalid stream command", ev)
 		}
@@ -298,9 +306,9 @@ func (self *nntpConnection) handleStreamEvent(ev nntpStreamEvent, daemon *NNTPDa
 // get all articles give their streaming state
 func (self *nntpConnection) getArticlesInState(state string) (articles []string) {
 	self.pending_access.Lock()
-	for st, msgid := range self.pending {
-		if state == st {
-			articles = append(articles, msgid)
+	for _, ev := range self.pending {
+		if ev.state == state {
+			articles = append(articles, ev.msgid)
 		}
 	}
 	self.pending_access.Unlock()
@@ -314,16 +322,23 @@ func (self *nntpConnection) messageIsQueued(msgid string) (queued bool) {
 	return
 }
 
-func (self *nntpConnection) messageSetPendingState(msgid, state string) {
+func (self *nntpConnection) messageSetPendingState(msgid, state string, sz int64) {
 	self.pending_access.Lock()
-	self.pending[msgid] = state
+	s, has := self.pending[msgid]
+	if has {
+		s.state = state
+		self.pending[msgid] = s
+	} else {
+		self.pending[msgid] = syncEvent{msgid: msgid, sz: sz, state: state}
+	}
 	self.pending_access.Unlock()
 }
 
 func (self *nntpConnection) messageSetProcessed(msgid string) {
 	self.pending_access.Lock()
-	_, ok := self.pending[msgid]
+	ev, ok := self.pending[msgid]
 	if ok {
+		self.backlog -= ev.sz
 		delete(self.pending, msgid)
 	}
 	self.pending_access.Unlock()
@@ -340,11 +355,11 @@ func (self *nntpConnection) handleStreaming(daemon *NNTPDaemon, conn *textproto.
 			conn.Close()
 			chnl <- true
 			return
-		case msgid := <-self.check:
-			err = self.handleStreamEvent(nntpCHECK(msgid), daemon, conn)
-		case msgid := <-self.takethis:
-			self.messageSetPendingState(msgid, "takethis")
-			err = self.handleStreamEvent(nntpTAKETHIS(msgid), daemon, conn)
+		case ev := <-self.check:
+			err = self.handleStreamEvent(nntpCHECK(ev.msgid), daemon, conn)
+		case ev := <-self.takethis:
+			self.messageSetPendingState(ev.msgid, "takethis", ev.sz)
+			err = self.handleStreamEvent(nntpTAKETHIS(ev.msgid), daemon, conn)
 		}
 	}
 	return
@@ -538,9 +553,10 @@ func (self *nntpConnection) handleLine(daemon *NNTPDaemon, code int, line string
 		msgid = parts[0]
 	}
 	if code == 238 {
-		self.messageSetPendingState(msgid, "takethis")
+		self.messageSetPendingState(msgid, "takethis", 0)
 		// they want this article
-		self.takethis <- msgid
+		sz, _ := daemon.store.GetMessageSize(msgid)
+		self.takethis <- syncEvent{msgid: msgid, sz: sz}
 		return
 	} else if code == 239 {
 		// successful TAKETHIS
@@ -1208,7 +1224,7 @@ func (self *nntpConnection) askForArticle(msgid string) {
 		// already queued
 	} else {
 		log.Println(self.name, "asking for", msgid)
-		self.messageSetPendingState(msgid, "queued")
+		self.messageSetPendingState(msgid, "queued", 0)
 		self.article <- msgid
 	}
 }
@@ -1351,7 +1367,7 @@ func (self *nntpConnection) startReader(daemon *NNTPDaemon, conn *textproto.Conn
 		case msgid := <-self.article:
 			// next article to ask for
 			log.Println(self.name, "obtaining", msgid)
-			self.messageSetPendingState(msgid, "article")
+			self.messageSetPendingState(msgid, "article", 0)
 			err = self.requestArticle(daemon, conn, msgid)
 			self.messageSetProcessed(msgid)
 			if err != nil {

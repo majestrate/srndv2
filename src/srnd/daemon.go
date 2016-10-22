@@ -826,6 +826,7 @@ func (self *NNTPDaemon) poll(worker int) {
 		case nntp := <-self.send_all_feeds:
 			group := nntp.Newsgroup()
 			if self.Federate() {
+				sz, _ := self.store.GetMessageSize(nntp.MessageID())
 				feeds := self.activeFeeds()
 				if feeds != nil {
 					for _, f := range feeds {
@@ -839,7 +840,7 @@ func (self *NNTPDaemon) poll(worker int) {
 						}
 						minconn := lowestBacklogConnection(send)
 						if minconn != nil {
-							minconn.offerStream(nntp.MessageID())
+							minconn.offerStream(nntp.MessageID(), sz)
 						}
 					}
 				}
@@ -869,10 +870,10 @@ func (self *NNTPDaemon) poll(worker int) {
 
 // get connection with smallest backlog
 func lowestBacklogConnection(conns []*nntpConnection) (minconn *nntpConnection) {
-	min := 10000
+	min := int64(0)
 	for _, c := range conns {
 		b := c.GetBacklog()
-		if b < min {
+		if min == 0 || b < min {
 			minconn = c
 			min = b
 		}

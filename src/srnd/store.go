@@ -60,6 +60,9 @@ type ArticleStore interface {
 	RegisterSigned(msgid, pk string) error
 
 	GetMessage(msgid string) NNTPMessage
+
+	// get size of message on disk
+	GetMessageSize(msgid string) (int64, error)
 }
 type articleStore struct {
 	directory    string
@@ -294,6 +297,15 @@ func (self *articleStore) thumbnailAttachment(fpath string) {
 			log.Println("failed to generate thumbnail for", fpath, err)
 		}
 	}
+}
+
+func (self *articleStore) GetMessageSize(msgid string) (sz int64, err error) {
+	var info os.FileInfo
+	info, err = os.Stat(self.GetFilename(msgid))
+	if err == nil {
+		sz = info.Size()
+	}
+	return
 }
 
 // get the filepath for an attachment

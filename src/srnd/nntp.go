@@ -270,6 +270,7 @@ func (self *nntpConnection) offerStream(msgid string, sz int64) {
 	if self.messageIsQueued(msgid) {
 		// already queued for send
 	} else {
+		self.backlog += sz
 		self.messageSetPendingState(msgid, "queued", sz)
 		self.check <- syncEvent{msgid, sz, "queued"}
 	}

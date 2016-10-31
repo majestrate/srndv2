@@ -394,7 +394,7 @@ func (self *templateEngine) genUkkoPaginated(prefix, frontend string, wr io.Writ
 	}
 	updateLinkCache()
 	obj := map[string]interface{}{"prefix": prefix, "threads": threads, "page": page}
-	if page > 1 {
+	if page > 0 {
 		obj["prev"] = map[string]interface{}{"no": page - 1}
 	}
 	if page < 10 {

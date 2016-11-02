@@ -16,6 +16,7 @@ import (
 var re_external_link = xurls.Strict
 var re_backlink = regexp.MustCompile(`>> ?([0-9a-f]+)`)
 var re_boardlink = regexp.MustCompile(`>>> ?/([0-9a-zA-Z\.]+)/`)
+var re_nntpboardlink = regexp.MustCompile(`news:([0-9a-zA-Z\.]+)`)
 
 // parse backlink
 func backlink(word string) (markup string) {
@@ -42,11 +43,11 @@ func backlink(word string) (markup string) {
 	return escapeline(word)
 }
 
-func boardlink(word, prefix string) (markup string) {
-	re := re_boardlink.Copy()
+func boardlink(word, prefix string, r *regexp.Regexp) (markup string) {
+	re := r.Copy()
 	l := re.FindStringSubmatch(word)
 	if len(l[1]) > 2 {
-		link := l[1]
+		link := strings.ToLower(l[1])
 		markup = `<a class="boardlink" href="` + prefix + link + `-0.html">&gt;&gt;&gt;/` + link + `/</a>`
 		return
 	}
@@ -82,7 +83,9 @@ func formatline(line, prefix string) (markup string) {
 			// for each word
 			for _, word := range strings.Split(line, " ") {
 				if re_boardlink.MatchString(word) {
-					markup += boardlink(word, prefix)
+					markup += boardlink(word, prefix, re_boardlink)
+				} else if re_nntpboardlink.MatchString(word) {
+					markup += boardlink(word, prefix, re_nntpboardlink)
 				} else if re_backlink.MatchString(word) {
 					markup += backlink(word)
 				} else {

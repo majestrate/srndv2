@@ -1484,9 +1484,9 @@ func (self *PostgresDatabase) SearchQuery(prefix, group string, text string) (po
 	text = "%" + text + "%"
 	var rows *sql.Rows
 	if group == "" {
-		rows, err = self.conn.Query("SELECT newsgroup, message_id, ref_id, message, name, subject, time_posted FROM ArticlePosts WHERE message LIKE $1 ORDER BY time_posted ASC", text)
+		rows, err = self.conn.Query("SELECT newsgroup, message_id, ref_id, message, name, subject, time_posted FROM ArticlePosts WHERE message LIKE $1 ORDER BY time_posted DESC", text)
 	} else {
-		rows, err = self.conn.Query("SELECT newsgroup, message_id, ref_id, message, name, subject, time_posted FROM ArticlePosts WHERE newsgroup = $1 AND message LIKE $2 ORDER BY time_posted ASC", group, text)
+		rows, err = self.conn.Query("SELECT newsgroup, message_id, ref_id, message, name, subject, time_posted FROM ArticlePosts WHERE newsgroup = $1 AND message LIKE $2 ORDER BY time_posted DESC", group, text)
 	}
 	if err == nil {
 		for rows.Next() {

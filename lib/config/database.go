@@ -5,12 +5,14 @@ type DatabaseConfig struct {
 	Addr string `json:"addr"`
 	// password to use
 	Password string `json:"password"`
+	// username to use
+	Username string `json:"username"`
 	// type of database to use
 	Type string `json:"type"`
 }
 
 var DefaultDatabaseConfig = DatabaseConfig{
-	Type:     "redis",
-	Addr:     "127.0.0.1:6379",
+	Type:     "postgres",
+	Addr:     "/var/run/postgresql",
 	Password: "",
 }

@@ -31,6 +31,10 @@ func (h *httpWebhook) SentArticleVia(msgid nntp.MessageID, name string) {
 
 // we got a new article
 func (h *httpWebhook) GotArticle(msgid nntp.MessageID, group nntp.Newsgroup) {
+
+}
+
+func (h *httpWebhook) sendArticle(msgid nntp.MessageID, group nntp.Newsgroup) {
 	f, err := h.storage.OpenArticle(msgid.String())
 	if err == nil {
 		c := textproto.NewConn(f)

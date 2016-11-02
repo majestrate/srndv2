@@ -20,7 +20,7 @@ func (self ArticleEntry) MessageID() string {
 	return self[0]
 }
 
-// a ( time point, post count ) tuple
+// a ( time point, magnitude ) tuple
 type PostEntry [2]int64
 
 func (self PostEntry) Time() time.Time {
@@ -29,6 +29,24 @@ func (self PostEntry) Time() time.Time {
 
 func (self PostEntry) Count() int64 {
 	return self[1]
+}
+
+// stats about newsgroup postings
+type NewsgroupStats struct {
+	Posted []PostEntry
+	Delted []PostEntry
+	Hits   []PostEntry
+	Start  time.Time
+	End    time.Time
+	Name   string
+}
+
+type PostingStatsEntry struct {
+	Groups []NewsgroupStats
+}
+
+type PostingStats struct {
+	History []PostingStatsEntry
 }
 
 type Database interface {
@@ -266,6 +284,9 @@ type Database interface {
 
 	// get all message-id posted before a time
 	GetPostsBefore(t time.Time) ([]string, error)
+
+	// get statistics about posting in a time slice
+	GetPostingStats(granularity, begin, end int64) (PostingStats, error)
 }
 
 func NewDatabase(db_type, schema, host, port, user, password string) Database {

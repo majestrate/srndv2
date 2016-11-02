@@ -98,7 +98,7 @@ type RedisDB struct {
 
 var redis_version_extractor = regexp.MustCompilePOSIX(`redis_version:([^\r\n]*)`)
 
-func createRedisDatabase(addr, password string) (DB, error) {
+func createRedisDatabase(addr, username, password string) (DB, error) {
 	var client RedisDB
 	var err error
 	var info string
@@ -1120,6 +1120,14 @@ func (self RedisDB) GetHeadersForMessage(msgid string) (hdr model.ArticleHeader,
 
 func (self RedisDB) CountAllArticlesInGroup(group string) (count int64, err error) {
 	count, err = self.client.ZCard(GROUP_ARTICLE_POSTTIME_WKR_PREFIX + group).Result()
+	return
+}
+
+func (self RedisDB) MarkMessageSent(msgid, feedname string) (err error) {
+	return
+}
+
+func (self RedisDB) CheckMessageSent(msgid, feedname string) (sent bool, err error) {
 	return
 }
 

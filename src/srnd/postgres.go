@@ -1481,3 +1481,7 @@ func (self *PostgresDatabase) GetPostsBefore(t time.Time) (msgids []string, err 
 	}
 	return
 }
+
+func (self *PostgresDatabase) GetPostingStats(gran, begin, end int64) (st PostingStats, err error) {
+	return
+}

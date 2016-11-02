@@ -1207,6 +1207,11 @@ func (self RedisDB) GetPostsBefore(t time.Time) (msgids []string, err error) {
 	return
 }
 
+func (self RedisDB) GetPostingStats(gran, begin, end int64) (st PostingStats, err error) {
+	err = errors.New("operation not supported by backend")
+	return
+}
+
 func processHashResult(hash []string) (mapRes map[string]string) {
 	mapRes = make(map[string]string)
 	max := len(hash)

@@ -1060,6 +1060,20 @@ func (self *httpFrontend) handle_unauthed_api(wr http.ResponseWriter, r *http.Re
 		json.NewEncoder(wr).Encode(groups)
 	} else if api == "find" {
 		self.handle_api_find(wr, r)
+	} else if api == "history" {
+		var s PostingStats
+		q := r.URL.Query()
+		now := timeNow()
+		begin := queryGetInt64(q, "start", now-(48*3600000))
+		end := queryGetInt64(q, "end", now)
+		gran := queryGetInt64(q, "granularity", 3600000)
+		s, err = self.daemon.database.GetPostingStats(gran, begin, end)
+		if err == nil {
+			wr.Header().Add("Content-Type", "text/json; encoding=UTF-8")
+			json.NewEncoder(wr).Encode(s)
+		} else {
+			api_error(wr, err)
+		}
 	}
 }
 

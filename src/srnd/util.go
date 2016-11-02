@@ -17,6 +17,7 @@ import (
 	"net"
 	"net/http"
 	"net/textproto"
+	"net/url"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -308,6 +309,17 @@ func genMessageID(name string) string {
 // time now as a string timestamp
 func timeNowStr() string {
 	return time.Unix(timeNow(), 0).UTC().Format(time.RFC1123Z)
+}
+
+func queryGetInt64(q url.Values, key string, fallback int64) int64 {
+	val := q.Get(key)
+	if val != "" {
+		i, err := strconv.ParseInt(val, 10, 64)
+		if err == nil {
+			return i
+		}
+	}
+	return fallback
 }
 
 // get from a map an int given a key or fall back to a default value

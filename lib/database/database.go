@@ -2,7 +2,6 @@ package database
 
 import (
 	"errors"
-	"fmt"
 	"github.com/majestrate/srndv2/lib/config"
 	"github.com/majestrate/srndv2/lib/model"
 	"net"
@@ -227,29 +226,36 @@ type DB interface {
 	GetMessageIDByEncryptedIP(encaddr string) ([]string, error)
 }
 
-func New(db_type, schema, host, port, user, password string) (DB, error) {
-	/*
-		if db_type == "postgres" {
-			if schema == "srnd" {
-				return newPostgresDatabase(host, port, user, password)
-			}
-		}
-		if db_type == "redis" && redisEnabled() {
-			if schema == "single" {
-				return newRedisDatabase(host, port, password)
-			}
-		}
-	*/
-	return nil, errors.New(fmt.Sprintf("invalid database type: %s/%s", db_type, schema))
+// type for webhooks db backend
+type WebhookDB interface {
+
+	// mark article sent
+	MarkMessageSent(msgid, feedname string) error
+
+	// check if an article was sent
+	CheckMessageSent(msgid, feedname string) (bool, error)
 }
 
 // get new database connector from configuration
-func FromConfig(c *config.DatabaseConfig) (db DB, err error) {
+func NewDBFromConfig(c *config.DatabaseConfig) (db DB, err error) {
 	dbtype := strings.ToLower(c.Type)
-	if dbtype == "postres" {
-		err = errors.New("postgres driver not implemented")
+	if dbtype == "postgres" {
+		err = errors.New("postgres not supported")
 	} else if dbtype == "redis" {
-		db, err = createRedisDatabase(c.Addr, c.Password)
+		db, err = createRedisDatabase(c.Addr, c.Username, c.Password)
+	} else {
+		err = errors.New("no such database driver: " + c.Type)
+	}
+	return
+}
+
+func NewWebhooksDBFromConfig(c *config.DatabaseConfig) (db WebhookDB, err error) {
+	dbtype := strings.ToLower(c.Type)
+	if dbtype == "postgres" {
+		err = errors.New("postgres not supported")
+	} else if dbtype == "redis" {
+		//db, err = createRedisWebhookDatabase(c.Addr, c.Username, c.Password)
+		err = errors.New("redis not supported")
 	} else {
 		err = errors.New("no such database driver: " + c.Type)
 	}

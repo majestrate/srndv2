@@ -1489,8 +1489,8 @@ func (self *PostgresDatabase) SearchQuery(prefix, group string, text string) (po
 		rows, err = self.conn.Query("SELECT newsgroup, message_id, ref_id, message, name, subject, time_posted FROM ArticlePosts WHERE newsgroup = $1 AND message LIKE $2 ORDER BY time_posted ASC", group, text)
 	}
 	if err == nil {
-		p := new(post)
 		for rows.Next() {
+			p := new(post)
 			rows.Scan(&p.board, &p.Message_id, &p.Parent, &p.PostMessage, &p.PostName, &p.PostSubject, &p.Posted)
 			posts = append(posts, p)
 		}

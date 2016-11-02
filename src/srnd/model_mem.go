@@ -451,7 +451,7 @@ func (self *post) Truncate() PostModel {
 }
 
 func (self *post) RenderShortBody() string {
-	return memeposting(self.PostMessage)
+	return memeposting(self.PostMessage, self.prefix)
 }
 
 func (self *post) RenderBodyPre() string {
@@ -461,7 +461,7 @@ func (self *post) RenderBodyPre() string {
 func (self *post) RenderBody() string {
 	// :^)
 	if len(self.message_rendered) == 0 {
-		self.message_rendered = memeposting(self.PostMessage)
+		self.message_rendered = memeposting(self.PostMessage, self.prefix)
 	}
 	return self.message_rendered
 }

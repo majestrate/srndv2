@@ -15,10 +15,11 @@ import (
 // var re_external_link = regexp.MustCompile(`((?:(?:https?|ftp):\/\/)(?:\S+(?::\S*)?@)?(?:(?!(?:10|127)(?:\.\d{1,3}){3})(?!(?:169\.254|192\.168)(?:\.\d{1,3}){2})(?!172\.(?:1[6-9]|2\d|3[0-1])(?:\.\d{1,3}){2})(?:[1-9]\d?|1\d\d|2[01]\d|22[0-3])(?:\.(?:1?\d{1,2}|2[0-4]\d|25[0-5])){2}(?:\.(?:[1-9]\d?|1\d\d|2[0-4]\d|25[0-4]))|(?:(?:[a-z\u00a1-\uffff0-9]-*)*[a-z\u00a1-\uffff0-9]+)(?:\.(?:[a-z\u00a1-\uffff0-9]-*)*[a-z\u00a1-\uffff0-9]+)*(?:\.(?:[a-z\u00a1-\uffff]{2,}))\.?)(?::\d{2,5})?(?:[/?#]\S*)?)`);
 var re_external_link = xurls.Strict
 var re_backlink = regexp.MustCompile(`>> ?([0-9a-f]+)`)
+var re_boardlink = regexp.MustCompile(`>>> ?/([0-9a-zA-Z\.]+)/`)
 
 // parse backlink
 func backlink(word string) (markup string) {
-	re := regexp.MustCompile(`>> ?([0-9a-f]+)`)
+	re := re_backlink.Copy()
 	link := re.FindString(word)
 	if len(link) > 2 {
 		link = strings.Trim(link[2:], " ")
@@ -41,24 +42,37 @@ func backlink(word string) (markup string) {
 	return escapeline(word)
 }
 
+func boardlink(word, prefix string) (markup string) {
+	re := re_boardlink.Copy()
+	link := re.FindString(word)
+	if len(link) > 2 {
+		link = strings.Trim(link[4:], " ")
+		markup = `<a class="boardlink" href="` + prefix + link + `">&gt;&gt;&gt;` + link + `</a>`
+		return
+	}
+	markup = escapeline(word)
+	return
+}
+
 func escapeline(line string) (markup string) {
 	markup = html.EscapeString(line)
 	return
 }
 
-func formatline(line string) (markup string) {
+func formatline(line, prefix string) (markup string) {
 	if len(line) > 0 {
-		if strings.HasPrefix(line, ">") && !(strings.HasPrefix(line, ">>") && re_backlink.MatchString(strings.Split(line, " ")[0])) {
+		line_nospace := strings.Trim(line, " ")
+		if strings.HasPrefix(line_nospace, ">") && !(strings.HasPrefix(line_nospace, ">>") && re_backlink.MatchString(strings.Split(line, " ")[0])) {
 			// le ebin meme arrows
 			markup += "<span class='memearrows'>"
 			markup += escapeline(line)
 			markup += "</span>"
-		} else if strings.HasPrefix(line, "==") && strings.HasSuffix(line, "==") {
+		} else if strings.HasPrefix(line_nospace, "==") && strings.HasSuffix(line_nospace, "==") {
 			// redtext
 			markup += "<span class='redtext'>"
 			markup += escapeline(line[2 : len(line)-2])
 			markup += "</span>"
-		} else if strings.HasPrefix(line, "@@") && strings.HasSuffix(line, "@@") {
+		} else if strings.HasPrefix(line_nospace, "@@") && strings.HasSuffix(line_nospace, "@@") {
 			// psytext
 			markup += "<span class='psy'>"
 			markup += escapeline(line[2 : len(line)-2])
@@ -70,6 +84,8 @@ func formatline(line string) (markup string) {
 				// check for backlink
 				if re_backlink.MatchString(word) {
 					markup += backlink(word)
+				} else if re_boardlink.MatchString(word) {
+					markup += boardlink(word, prefix)
 				} else {
 					// linkify as needed
 					word = escapeline(word)
@@ -82,10 +98,10 @@ func formatline(line string) (markup string) {
 	return
 }
 
-// old parse function
-func memeposting(src string) (markup string) {
+func memeposting(src, prefix string) (markup string) {
 	for _, line := range strings.Split(src, "\n") {
-		markup += formatline(line) + "\n"
+		line = strings.Trim(line, "\r")
+		markup += formatline(line, prefix) + "\n"
 	}
 	return
 }

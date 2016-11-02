@@ -1431,6 +1431,7 @@ func (self *PostgresDatabase) GetMessageIDByCIDR(cidr *net.IPNet) (msgids []stri
 		if err == nil {
 			msgids = append(msgids, msgid)
 		}
+		rows.Close()
 	}
 	return
 }
@@ -1444,6 +1445,7 @@ func (self *PostgresDatabase) GetMessageIDByEncryptedIP(encaddr string) (msgids 
 		if err == nil {
 			msgids = append(msgids, msgid)
 		}
+		rows.Close()
 	}
 	return
 }
@@ -1468,10 +1470,31 @@ func (self *PostgresDatabase) GetPostsBefore(t time.Time) (msgids []string, err 
 			rows.Scan(&msgid)
 			msgids = append(msgids, msgid)
 		}
+		rows.Close()
 	}
 	return
 }
 
 func (self *PostgresDatabase) GetPostingStats(gran, begin, end int64) (st PostingStats, err error) {
+	return
+}
+
+func (self *PostgresDatabase) SearchQuery(prefix, group string, text string) (posts []PostModel, err error) {
+	posts = []PostModel{}
+	text = "%" + text + "%"
+	var rows *sql.Rows
+	if group == "" {
+		rows, err = self.conn.Query("SELECT newsgroup, message_id, ref_id, message, name, subject, time_posted FROM ArticlePosts WHERE message LIKE $1 ORDER BY time_posted ASC", text)
+	} else {
+		rows, err = self.conn.Query("SELECT newsgroup, message_id, ref_id, message, name, subject, time_posted FROM ArticlePosts WHERE newsgroup = $1 AND message LIKE $2 ORDER BY time_posted ASC", group, text)
+	}
+	if err == nil {
+		p := new(post)
+		for rows.Next() {
+			rows.Scan(&p.board, &p.Message_id, &p.Parent, &p.PostMessage, &p.PostName, &p.PostSubject, &p.Posted)
+			posts = append(posts, p)
+		}
+		rows.Close()
+	}
 	return
 }

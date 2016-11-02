@@ -193,6 +193,7 @@ func (self *boardModel) Update(db Database) {
 }
 
 type post struct {
+	truncated        bool
 	prefix           string
 	board            string
 	PostName         string
@@ -222,6 +223,10 @@ type post struct {
 
 func (self *post) Index() int {
 	return self.index + 1
+}
+
+func (self *post) NumImages() int {
+	return len(self.Files)
 }
 
 func (self *post) RepresentativeThumb() string {
@@ -306,6 +311,13 @@ func (self *post) ReferenceHash() string {
 		return HashMessageID(self.Reference())
 	}
 	return self.PostHash()
+}
+func (self *post) NumAttachments() int {
+	return len(self.Files)
+}
+
+func (self *post) RenderTruncatedBody() string {
+	return self.Truncate().RenderBody()
 }
 
 func (self *post) Reference() string {
@@ -417,6 +429,14 @@ func (self *post) RenderPost() string {
 	return template.renderTemplate("post.mustache", param)
 }
 
+func (self *post) RenderTruncatedPost() string {
+	return self.Truncate().RenderPost()
+}
+
+func (self *post) IsTruncated() bool {
+	return self.truncated
+}
+
 func (self *post) Truncate() PostModel {
 	message := self.PostMessage
 	subject := self.PostSubject
@@ -432,6 +452,7 @@ func (self *post) Truncate() PostModel {
 	}
 
 	return &post{
+		truncated:   true,
 		prefix:      self.prefix,
 		board:       self.board,
 		PostName:    name,
@@ -467,11 +488,13 @@ func (self *post) RenderBody() string {
 }
 
 type thread struct {
-	allowFiles bool
-	prefix     string
-	links      []LinkModel
-	Posts      []PostModel
-	dirty      bool
+	allowFiles          bool
+	prefix              string
+	links               []LinkModel
+	Posts               []PostModel
+	dirty               bool
+	truncatedPostCount  int
+	truncatedImageCount int
 }
 
 func (self *thread) MarshalJSON() (b []byte, err error) {
@@ -507,6 +530,17 @@ func (self *thread) Board() string {
 
 func (self *thread) BoardURL() string {
 	return fmt.Sprintf("%s%s-0.html", self.Prefix(), self.Board())
+}
+
+func (self *thread) PostCount() int {
+	return len(self.Posts)
+}
+
+func (self *thread) ImageCount() (count int) {
+	for _, p := range self.Posts {
+		count += p.NumAttachments()
+	}
+	return
 }
 
 // get our default template dir
@@ -560,15 +594,30 @@ func (self *thread) SetAllowFiles(allow bool) {
 func (self *thread) Truncate() ThreadModel {
 	trunc := 5
 	if len(self.Posts) > trunc {
-		return &thread{
+		t := &thread{
 			allowFiles: self.allowFiles,
 			links:      self.links,
 			Posts:      append([]PostModel{self.Posts[0]}, self.Posts[len(self.Posts)-trunc:]...),
 			prefix:     self.prefix,
 			dirty:      false,
 		}
+		imgs := 0
+		for _, p := range t.Posts {
+			imgs += p.NumAttachments()
+		}
+		t.truncatedPostCount = len(self.Posts) - trunc
+		t.truncatedImageCount = self.ImageCount() - imgs
+		return t
 	}
 	return self
+}
+
+func (self *thread) MissingPostCount() int {
+	return self.truncatedPostCount
+}
+
+func (self *thread) MissingImageCount() int {
+	return self.truncatedImageCount
 }
 
 func (self *thread) Update(db Database) {

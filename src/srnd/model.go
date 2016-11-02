@@ -44,6 +44,7 @@ type PostModel interface {
 	Date() string
 	OP() bool
 	Attachments() []AttachmentModel
+	NumAttachments() int
 	Board() string
 	Sage() bool
 	Pubkey() string
@@ -54,10 +55,20 @@ type PostModel interface {
 	RenderPost() string
 	RenderBodyPre() string
 
+	// replaces Truncate().RenderBody()
+	RenderTruncatedBody() string
+
+	// replaces Truncate().RenderPost()
+	RenderTruncatedPost() string
+
+	// returns true if this post was truncated
+	IsTruncated() bool
+
 	IsI2P() bool
 	IsTor() bool
 	IsClearnet() bool
 
+	// deprecated
 	// truncate body to a certain size
 	// return copy
 	Truncate() PostModel
@@ -88,6 +99,18 @@ type ThreadModel interface {
 	// return a short version of the thread
 	// does not include all replies
 	Truncate() ThreadModel
+
+	// number of posts in this thread
+	PostCount() int
+	// number of images in this thread
+	ImageCount() int
+	// number of posts excluded during truncation
+	// returns 0 if not truncated
+	MissingPostCount() int
+	// number of images excluded during truncation
+	// returns 0 if not truncated
+	MissingImageCount() int
+
 	// update the thread's replies
 	Update(db Database)
 	// is this thread dirty and needing updating?

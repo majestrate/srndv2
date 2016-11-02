@@ -81,11 +81,10 @@ func formatline(line, prefix string) (markup string) {
 			// regular line
 			// for each word
 			for _, word := range strings.Split(line, " ") {
-				// check for backlink
-				if re_backlink.MatchString(word) {
-					markup += backlink(word)
-				} else if re_boardlink.MatchString(word) {
+				if re_boardlink.MatchString(word) {
 					markup += boardlink(word, prefix)
+				} else if re_backlink.MatchString(word) {
+					markup += backlink(word)
 				} else {
 					// linkify as needed
 					word = escapeline(word)

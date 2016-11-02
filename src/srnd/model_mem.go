@@ -514,6 +514,22 @@ func defaultTemplateDir() string {
 	return filepath.Join("contrib", "templates", "default")
 }
 
+func createThreadModel(op PostModel) ThreadModel {
+	group := op.Board()
+	prefix := op.Prefix()
+	return &thread{
+		dirty:  true,
+		prefix: prefix,
+		Posts:  []PostModel{op},
+		links: []LinkModel{
+			linkModel{
+				text: group,
+				link: fmt.Sprintf("%s%s-0.html", prefix, group),
+			},
+		},
+	}
+}
+
 func (self *thread) OP() PostModel {
 	return self.Posts[0]
 }

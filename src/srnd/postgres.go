@@ -756,17 +756,7 @@ func (self *PostgresDatabase) GetGroupForPage(prefix, frontend, newsgroup string
 			if atts != nil {
 				p.Files = append(p.Files, atts...)
 			}
-			threads = append(threads, &thread{
-				dirty:  true,
-				prefix: prefix,
-				Posts:  []PostModel{p},
-				links: []LinkModel{
-					linkModel{
-						text: newsgroup,
-						link: fmt.Sprintf("%s%s-0.html", prefix, newsgroup),
-					},
-				},
-			})
+			threads = append(threads, createThreadModel(p))
 		}
 		rows.Close()
 	} else {

@@ -249,7 +249,7 @@ func (self *httpFrontend) informLiveUI(msgid, ref, group string) {
 	if ref == "" {
 		ref = msgid
 	}
-	model := template.updatePostModel(self.prefix, self.name, msgid, ref, group, self.daemon.database)
+	model := self.daemon.database.GetPostModel(self.prefix, msgid)
 	// inform liveui
 	if model != nil && self.liveui_chnl != nil {
 		self.liveui_chnl <- model
@@ -1391,9 +1391,8 @@ func (self *httpFrontend) Mainloop() {
 	// start cache
 	self.cache.Start()
 
-	// before we go further ensure all db models are loaded into template model cache
-	// let's actually not
-	// template.loadAllModels(self.prefix, self.name, self.daemon.database)
+	// this is for link cache
+	go template.loadAllModels(self.prefix, self.name, self.daemon.database)
 
 	// poll channels
 	go self.poll()

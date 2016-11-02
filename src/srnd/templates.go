@@ -126,68 +126,74 @@ func updateLinkCacheForThread(thread ThreadModel) {
 
 // get cached post model from cache after updating it
 func (self *templateEngine) updatePostModel(prefix, frontend, msgid, rootmsgid, group string, db Database) PostModel {
-	// get board
-	self.groups_mtx.Lock()
-	board := self.groups[group]
-	self.groups_mtx.Unlock()
-
-	var th ThreadModel
-	if msgid == rootmsgid {
-		// new thread
-		if len(board) > 0 {
-			page := board[0]
-			page.Update(db)
-			th = page.GetThread(rootmsgid)
-		}
-	} else {
-		// reply
-		for _, page := range board {
-			t := page.GetThread(rootmsgid)
-			if t != nil {
-				th = t
-				th.Update(db)
-				break
-			}
-		}
-	}
-	if th == nil {
-		// reload board, this will be a heavy operation
-		board.UpdateAll(db)
-		// find it
-		for _, page := range board {
-			t := page.GetThread(rootmsgid)
-			if t != nil {
-				th = t
-				th.Update(db)
-				break
-			}
-		}
-		for _, page := range board {
-			updateLinkCacheForBoard(page)
-		}
+	return db.GetPostModel(prefix, msgid)
+	/*
+		// get board
 		self.groups_mtx.Lock()
-		self.groups[group] = board
+		board := self.groups[group]
 		self.groups_mtx.Unlock()
-	}
-	if th == nil {
-		log.Println("template could not find post model for thread", rootmsgid, "in", group)
-		return nil
-	}
 
-	// found
-	m := th.OP()
-	if m.MessageID() == msgid {
-		return m
-	}
-	for _, p := range th.Replies() {
-		if p.MessageID() == msgid {
-			// found as reply
-			return p
+		var th ThreadModel
+		if msgid == rootmsgid {
+			// new thread
+			if len(board) > 0 {
+				page := board[0]
+				page.Update(db)
+				th = page.GetThread(rootmsgid)
+			}
+		} else {
+			// reply
+			for _, page := range board {
+				t := page.GetThread(rootmsgid)
+				if t != nil {
+					th = t
+					th.Update(db)
+					break
+				}
+			}
 		}
-	}
-	log.Println("template could not find post model for thread", rootmsgid, "in", group)
-	// not found
-	return nil
+		if th == nil {
+			// reload board, this will be a heavy operation
+			board.UpdateAll(db)
+			// find it
+			for _, page := range board {
+				t := page.GetThread(rootmsgid)
+				if t != nil {
+					th = t
+					th.Update(db)
+					break
+				}
+			}
+			for _, page := range board {
+				updateLinkCacheForBoard(page)
+			}
+			self.groups_mtx.Lock()
+			self.groups[group] = board
+			self.groups_mtx.Unlock()
+		}
+		if th == nil {
+			if rootmsgid == msgid {
+				return db.GetPostModel(prefix, rootmsgid)
+			}
+			log.Println("template could not find thread", rootmsgid, "in", group)
+			return nil
+		}
+
+		// found
+		m := th.OP()
+		if m.MessageID() == msgid {
+			return m
+		}
+		for _, p := range th.Replies() {
+			if p.MessageID() == msgid {
+				// found as reply
+				return p
+			}
+		}
+		log.Println("template could not find post model for thread", rootmsgid, "in", group)
+		// not found
+		return nil
+	*/
 }
 
 // get the url for a backlink
@@ -504,6 +510,7 @@ func (self *templateEngine) loadAllModels(prefix, frontend string, db Database) 
 		board := self.obtainBoard(prefix, frontend, group, true, db)
 		board.UpdateAll(db)
 	}
+	updateLinkCache()
 }
 
 func newTemplateEngine(dir string) *templateEngine {

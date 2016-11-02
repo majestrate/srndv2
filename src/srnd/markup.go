@@ -15,7 +15,7 @@ import (
 // var re_external_link = regexp.MustCompile(`((?:(?:https?|ftp):\/\/)(?:\S+(?::\S*)?@)?(?:(?!(?:10|127)(?:\.\d{1,3}){3})(?!(?:169\.254|192\.168)(?:\.\d{1,3}){2})(?!172\.(?:1[6-9]|2\d|3[0-1])(?:\.\d{1,3}){2})(?:[1-9]\d?|1\d\d|2[01]\d|22[0-3])(?:\.(?:1?\d{1,2}|2[0-4]\d|25[0-5])){2}(?:\.(?:[1-9]\d?|1\d\d|2[0-4]\d|25[0-4]))|(?:(?:[a-z\u00a1-\uffff0-9]-*)*[a-z\u00a1-\uffff0-9]+)(?:\.(?:[a-z\u00a1-\uffff0-9]-*)*[a-z\u00a1-\uffff0-9]+)*(?:\.(?:[a-z\u00a1-\uffff]{2,}))\.?)(?::\d{2,5})?(?:[/?#]\S*)?)`);
 var re_external_link = xurls.Strict
 var re_backlink = regexp.MustCompile(`>> ?([0-9a-f]+)`)
-var re_boardlink = regexp.MustCompile(`>>> ?/([0-9a-zA-Z\.]+)/`)
+var re_boardlink = regexp.MustCompile(`>>> ?([0-9a-zA-Z\.]+)`)
 
 // parse backlink
 func backlink(word string) (markup string) {
@@ -47,7 +47,7 @@ func boardlink(word, prefix string) (markup string) {
 	link := re.FindString(word)
 	if len(link) > 2 {
 		link = strings.Trim(link[4:], " ")
-		markup = `<a class="boardlink" href="` + prefix + link + `">&gt;&gt;&gt;` + link + `</a>`
+		markup = `<a class="boardlink" href="` + prefix + link + `-0.html">&gt;&gt;&gt;` + link + `</a>`
 		return
 	}
 	markup = escapeline(word)

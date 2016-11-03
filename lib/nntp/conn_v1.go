@@ -527,6 +527,7 @@ func newOutboundConn(c net.Conn, s *Server, conf *config.FeedConfig) Conn {
 	return &v1OBConn{
 		conf: conf,
 		C: v1Conn{
+			hooks: s,
 			state: ConnState{
 				FeedName: conf.Name,
 				HostName: conf.Addr,

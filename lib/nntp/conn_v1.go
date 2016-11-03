@@ -847,7 +847,7 @@ func (c *v1Conn) readArticle(newpost bool, hooks EventHooks) (ps PolicyStatus, e
 				"pkg":   "nntp-conn",
 			}).Debug("text body copied")
 		}
-		if err != nil {
+		if err != nil && err != io.EOF {
 			log.WithFields(log.Fields{
 				"pkg":   "nntp-conn",
 				"state": &c.state,

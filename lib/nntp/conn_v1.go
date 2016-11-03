@@ -154,8 +154,137 @@ func (c *v1OBConn) Mode() Mode {
 	return c.Mode()
 }
 
+func (c *v1OBConn) DownloadGroup(g Newsgroup) (err error) {
+	err = c.C.printfLine(CMD_Group(g).String())
+	if err == nil {
+		var line string
+		line, err = c.C.readline()
+		if strings.HasPrefix(line, RPL_NoSuchGroup) {
+			// group does not exist
+			// don't error this is not a network io error
+			return
+		}
+		// send XOVER
+		err = c.C.printfLine(CMD_XOver.String())
+		if err == nil {
+			line, err = c.C.readline()
+			if err == nil {
+				if !strings.HasPrefix(line, RPL_Overview) {
+					// bad response
+					// not a network io error, don't error
+					return
+				}
+				var msgids []MessageID
+				// read reply
+				for err == nil && line != "." {
+					line, err = c.C.readline()
+					parts := strings.Split(line, "\t")
+					if len(parts) != 6 {
+						// incorrect size
+						continue
+					}
+					m := MessageID(parts[4])
+					r := MessageID(parts[5])
+					// check if thread is banned
+					if c.C.acceptor.CheckMessageID(r).Ban() {
+						continue
+					}
+					// check if message is wanted
+					if c.C.acceptor.CheckMessageID(m).Accept() {
+						msgids = append(msgids, m)
+					}
+				}
+				var accepted []MessageID
+
+				for _, msgid := range msgids {
+
+					if err != nil {
+						return // io error
+					}
+
+					if !msgid.Valid() {
+						// invalid message id
+						continue
+					}
+					// get message header
+					err = c.C.printfLine(CMD_Head(msgid).String())
+					if err == nil {
+						line, err = c.C.readline()
+						if err == nil {
+							if !strings.HasPrefix(line, RPL_ArticleHeaders) {
+								// bad response
+								continue
+							}
+							// read message header
+							dr := c.C.C.DotReader()
+							var hdr message.Header
+							hdr, err = c.C.hdrio.ReadHeader(dr)
+							if err == nil {
+								if c.C.acceptor.CheckHeader(hdr).Accept() {
+									accepted = append(accepted, msgid)
+								}
+							}
+						}
+					}
+				}
+				// download wanted messages
+				for _, msgid := range accepted {
+					if err != nil {
+						// io error
+						return
+					}
+					// request message
+					err = c.C.printfLine(CMD_Article(msgid).String())
+					if err == nil {
+						line, err = c.C.readline()
+						if err == nil {
+							if !strings.HasPrefix(line, RPL_Article) {
+								// bad response
+								continue
+							}
+							// read article
+							_, err = c.C.readArticle(false, c.C.hooks)
+							if err == nil {
+								// we read it okay
+							}
+						}
+					}
+				}
+			}
+		}
+	}
+	return
+}
+
+func (c *v1OBConn) ListNewsgroups() (groups []Newsgroup, err error) {
+	err = c.C.printfLine(CMD_Newsgroups.String())
+	if err == nil {
+		var line string
+		line, err = c.C.readline()
+		if err == nil {
+			if !strings.HasPrefix(line, RPL_NewsgroupList) {
+				// bad stuff
+				err = errors.New("invalid reply for NEWSGROUPS command: " + line)
+				return
+			}
+			for err == nil && line != "." {
+				line, err = c.C.readline()
+				if err == nil {
+					parts := strings.Split(line, " ")
+					if len(parts) != 4 {
+						// bad format
+						continue
+					}
+					groups = append(groups, Newsgroup(parts[0]))
+				}
+			}
+		}
+	}
+	return
+}
+
 // negioate outbound connection
-func (c *v1OBConn) Negotiate() (err error) {
+func (c *v1OBConn) Negotiate(stream bool) (err error) {
 	var line string
 	// discard first line
 	_, err = c.C.readline()
@@ -197,12 +326,23 @@ func (c *v1OBConn) Negotiate() (err error) {
 				}
 			}
 			if err == nil {
-				// set mode stream
-				err = c.C.printfLine(ModeStream.String())
-				if err == nil {
-					line, err = c.C.readline()
-					if err == nil && !strings.HasPrefix(line, RPL_PostingStreaming) {
-						err = errors.New("streaiming not allowed")
+				if stream {
+					// set mode stream
+					err = c.C.printfLine(ModeStream.String())
+					if err == nil {
+						line, err = c.C.readline()
+						if err == nil && !strings.HasPrefix(line, RPL_PostingStreaming) {
+							err = errors.New("streaiming not allowed")
+						}
+					}
+				} else {
+					// reader mode
+					err = c.C.printfLine(ModeReader.String())
+					if err == nil {
+						_, err = c.C.readline()
+						if err == nil && !strings.HasPrefix(line, "2") {
+							err = errors.New("invalid response to reader mode: " + line)
+						}
 					}
 				}
 			}
@@ -406,12 +546,20 @@ type v1IBConn struct {
 	C v1Conn
 }
 
+func (c *v1IBConn) DownloadGroup(g Newsgroup) error {
+	return nil
+}
+
+func (c *v1IBConn) ListNewsgroups() (groups []Newsgroup, err error) {
+	return
+}
+
 func (c *v1IBConn) GetState() *ConnState {
 	return c.C.GetState()
 }
 
 // negotiate an inbound connection
-func (c *v1IBConn) Negotiate() (err error) {
+func (c *v1IBConn) Negotiate(stream bool) (err error) {
 	var line string
 	if c.PostingAllowed() {
 		line = Line_PostingAllowed

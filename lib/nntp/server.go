@@ -109,7 +109,7 @@ func (s *Server) persist(cfg *config.FeedConfig) {
 			// successful connect
 			delay = time.Second
 			conn := newOutboundConn(c, s, cfg)
-			err = conn.Negotiate()
+			err = conn.Negotiate(true)
 			if err == nil {
 				// negotiation good
 				log.WithFields(log.Fields{
@@ -151,10 +151,54 @@ func (s *Server) persist(cfg *config.FeedConfig) {
 	}
 }
 
+// download all new posts from a remote server
+func (s *Server) downloadPosts(cfg *config.FeedConfig) error {
+	dialer := network.NewDialer(cfg.Proxy)
+	c, err := dialer.Dial(cfg.Addr)
+	if err != nil {
+		return err
+	}
+	conn := newOutboundConn(c, s, cfg)
+	groups, err := conn.ListNewsgroups()
+	if err != nil {
+		conn.Quit()
+		return err
+	}
+	for _, g := range groups {
+		log.WithFields(log.Fields{
+			"group": g,
+			"pkg":   "nntp-server",
+		}).Debug("downloading group")
+		err = conn.DownloadGroup(g)
+		if err != nil {
+			conn.Quit()
+			return err
+		}
+	}
+	conn.Quit()
+	return nil
+}
+
+func (s *Server) periodicDownload(cfg *config.FeedConfig) {
+	for cfg.PullInterval > 0 {
+		err := s.downloadPosts(cfg)
+		if err != nil {
+			// report error
+			log.WithFields(log.Fields{
+				"feed":  cfg.Name,
+				"pkg":   "nntp-server",
+				"error": err,
+			}).Error("periodic download failed")
+		}
+		time.Sleep(cfg.PullInterval)
+	}
+}
+
 // persist all outbound feeds
 func (s *Server) PersistFeeds() {
 	for _, f := range s.Feeds {
 		go s.persist(f)
+		go s.periodicDownload(f)
 	}
 
 	feeds := make(map[string]*nntpFeed)
@@ -251,7 +295,7 @@ func (s *Server) handleInboundConnection(c net.Conn) {
 	}).Debug("handling inbound connection")
 	var nc Conn
 	nc = newInboundConn(s, c)
-	err := nc.Negotiate()
+	err := nc.Negotiate(true)
 	if err == nil {
 		// do they want to stream?
 		if nc.WantsStreaming() {

@@ -7,7 +7,7 @@ type Conn interface {
 	// returns nil if we negitated successfully
 	// returns ErrAuthRejected if the remote server rejected any authentication
 	// we sent or another error if one occured while negotiating
-	Negotiate() error
+	Negotiate(stream bool) error
 
 	// obtain connection state
 	GetState() *ConnState
@@ -43,4 +43,11 @@ type Conn interface {
 
 	// send quit command and close connection
 	Quit()
+
+	// download all articles in a newsgroup
+	// returns error if a network error occurs
+	DownloadGroup(g Newsgroup) error
+
+	// get list of active newsgroups
+	ListNewsgroups() ([]Newsgroup, error)
 }

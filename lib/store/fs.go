@@ -77,7 +77,7 @@ func (fs FilesystemStorage) obtainTempFile() (f *os.File, err error) {
 		"pkg":      "fs-store",
 		"filepath": fname,
 	}).Debug("opening temp file")
-	f, err = os.OpenFile(filepath.Join(fs.TempDir(), fname), os.O_RDWR, os.ModeTemporary)
+	f, err = os.OpenFile(filepath.Join(fs.TempDir(), fname), os.O_RDWR|os.O_CREATE, 0400)
 	return
 }
 
@@ -164,7 +164,11 @@ func (fs FilesystemStorage) StoreAttachment(r io.Reader, filename string) (fpath
 		// we have the temp file
 
 		// close tempfile when done
-		defer tf.Close()
+		defer func() {
+			n := tf.Name()
+			tf.Close()
+			os.Remove(n)
+		}()
 
 		// create hasher
 		h := crypto.Hash()
@@ -194,7 +198,7 @@ func (fs FilesystemStorage) StoreAttachment(r io.Reader, filename string) (fpath
 			if os.IsNotExist(err) {
 				// it's not there, let's write it
 				var f *os.File
-				f, err = os.OpenFile(fpath, os.O_WRONLY, 0644)
+				f, err = os.OpenFile(fpath, os.O_WRONLY|os.O_CREATE, 0644)
 				if err == nil {
 					// file opened
 					defer f.Close()

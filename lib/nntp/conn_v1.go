@@ -779,7 +779,7 @@ func (c *v1Conn) readArticle(newpost bool, hooks EventHooks) (ps PolicyStatus, e
 
 							// get content type
 							content_type := part_hdr.Get("Content-Type")
-							if len(content_type) > 0 {
+							if len(content_type) == 0 {
 								// assume text/plain
 								content_type = "text/plain; charset=UTF8"
 							}
@@ -821,6 +821,7 @@ func (c *v1Conn) readArticle(newpost bool, hooks EventHooks) (ps PolicyStatus, e
 									"version": "1",
 								}).Error("bad attachment in multipart message ", err)
 							}
+							err = nil
 							part.Close()
 						} else if err != io.EOF {
 							// error reading part

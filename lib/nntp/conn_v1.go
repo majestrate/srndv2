@@ -715,22 +715,18 @@ func (c *v1Conn) readArticle(newpost bool, hooks EventHooks) (ps PolicyStatus, e
 	done_chnl := make(chan PolicyStatus)
 	go func() {
 		var err error
-		br := c.C.R
-		for err == nil {
-			line, err2 := br.ReadString(10)
-			line = strings.Trim(line, "\r\n")
-			if err2 == nil {
-				if line == "." {
-					line = ""
-					// done
-					break
-				}
-				line += "\n"
-				_, err2 = io.WriteString(article_w, line)
-			}
-			err = err2
+		dr := c.C.DotReader()
+		var buff [1024]byte
+		var n int64
+		n, err = io.CopyBuffer(article_w, dr, buff[:])
+		log.WithFields(log.Fields{
+			"n": n,
+		}).Debug("read from connection")
+		if err != nil && err != io.EOF {
+			article_w.CloseWithError(err)
+		} else {
+			article_w.Close()
 		}
-		article_w.CloseWithError(err)
 		st := <-accept_chnl
 		close(accept_chnl)
 		// get result from storage
@@ -753,14 +749,17 @@ func (c *v1Conn) readArticle(newpost bool, hooks EventHooks) (ps PolicyStatus, e
 		// txt := new(bytes.Buffer)
 		// the article itself
 		// a := new(model.Article)
+		var err error
 		if hdr.IsMultipart() {
-			_, params, err := hdr.GetMediaType()
+			var params map[string]string
+			_, params, err = hdr.GetMediaType()
 			if err == nil {
 				boundary, ok := params["boundary"]
 				if ok {
 					part_r := multipart.NewReader(msgbody, boundary)
-					for {
-						part, err := part_r.NextPart()
+					for err == nil {
+						var part *multipart.Part
+						part, err = part_r.NextPart()
 						if err == io.EOF {
 							// we done
 							break
@@ -784,9 +783,9 @@ func (c *v1Conn) readArticle(newpost bool, hooks EventHooks) (ps PolicyStatus, e
 								// assume text/plain
 								content_type = "text/plain; charset=UTF8"
 							}
-
+							var part_type string
 							// extract mime type
-							part_type, _, err := mime.ParseMediaType(content_type)
+							part_type, _, err = mime.ParseMediaType(content_type)
 							if err == nil {
 
 								if part_type == "text/plain" {
@@ -823,14 +822,13 @@ func (c *v1Conn) readArticle(newpost bool, hooks EventHooks) (ps PolicyStatus, e
 								}).Error("bad attachment in multipart message ", err)
 							}
 							part.Close()
-						} else {
+						} else if err != io.EOF {
 							// error reading part
 							log.WithFields(log.Fields{
 								"pkg":     "nntp-conn",
 								"state":   &c.state,
 								"version": "1",
 							}).Error("error reading part ", err)
-							break
 						}
 					}
 				}
@@ -987,11 +985,8 @@ func (c *v1Conn) readArticle(newpost bool, hooks EventHooks) (ps PolicyStatus, e
 					// write the rest of the body
 					// we don't care about article size
 					log.WithFields(log.Fields{}).Debug("copying body")
-					for err == nil {
-						var n2 int64
-						n2, err = io.CopyN(mw, r, 128)
-						n += n2
-					}
+					var buff [128]byte
+					n, err = io.CopyBuffer(mw, r, buff[:])
 				} else {
 					// we care about the article size
 					max := c.acceptor.MaxArticleSize()

@@ -1,7 +1,6 @@
 package message
 
 import (
-	"bufio"
 	"io"
 	"mime"
 	"strings"
@@ -104,31 +103,39 @@ type HeaderIO struct {
 // read header
 func (s *HeaderIO) ReadHeader(r io.Reader) (hdr Header, err error) {
 	hdr = make(Header)
-	br := bufio.NewReader(r)
-	var line string
+	var k, v string
+	var buf [1]byte
 	for err == nil {
-		line, err = br.ReadString(s.delim)
-		if err == nil {
-			// strip out line endings
-			line = strings.Trim(line, "\r\n")
-			if len(line) > 0 {
-				// split it via :
-				idx := strings.Index(line, ": ")
-				if idx > 0 {
-					// valid line
-					k := line[:idx]
-					v := line[2+idx:]
-					hdr.Add(k, v)
+		// read key
+		for err == nil {
+			_, err = r.Read(buf[:])
+			if err != nil {
+				return
+			}
+			if buf[0] == 58 { // colin
+				for err == nil {
+					// consume spaces
+					_, err = r.Read(buf[:])
+					if buf[0] == 32 {
+						continue
+					} else if buf[0] == s.delim {
+						// got delimiter
+						hdr.Add(k, v)
+						k = ""
+						v = ""
+						break
+					} else {
+						v += string(buf[:])
+					}
 				}
-				// invalid lines are ingored
-			} else {
-				// end of header
 				break
+			} else if buf[0] == s.delim {
+				// done
+				return
+			} else {
+				k += string(buf[:])
 			}
 		}
-	}
-	if err != nil {
-		hdr = nil
 	}
 	return
 }

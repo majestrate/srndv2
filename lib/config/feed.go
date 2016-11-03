@@ -1,9 +1,5 @@
 package config
 
-import (
-	"time"
-)
-
 // configuration for 1 nntp feed
 type FeedConfig struct {
 	// feed's policy, filters articles
@@ -20,9 +16,9 @@ type FeedConfig struct {
 	TLS bool `json:"tls"`
 	// the name of this feed
 	Name string `json:"name"`
-	// how often to pull articles from the server
+	// how often to pull articles from the server in minutes
 	// 0 for never
-	PullInterval time.Duration `json:"pull"`
+	PullInterval int `json:"pull"`
 }
 
 var DuummyFeed = FeedConfig{

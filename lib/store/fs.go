@@ -99,7 +99,7 @@ func (fs FilesystemStorage) StoreArticle(r io.Reader, msgid string) (fpath strin
 		// don't have an article with this message id, write it to disk
 		var f *os.File
 		fpath = filepath.Join(fs.ArticleDir(), msgid)
-		f, err = os.OpenFile(fpath, os.O_CREATE|os.O_WRONLY, 0700)
+		f, err = os.OpenFile(fpath, os.O_CREATE|os.O_WRONLY, 0644)
 		if err == nil {
 			// file opened okay, defer the close
 			defer f.Close()
@@ -194,7 +194,7 @@ func (fs FilesystemStorage) StoreAttachment(r io.Reader, filename string) (fpath
 			if os.IsNotExist(err) {
 				// it's not there, let's write it
 				var f *os.File
-				f, err = os.OpenFile(fpath, os.O_WRONLY, 0755)
+				f, err = os.OpenFile(fpath, os.O_WRONLY, 0644)
 				if err == nil {
 					// file opened
 					defer f.Close()

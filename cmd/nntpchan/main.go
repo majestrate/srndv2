@@ -7,6 +7,8 @@ import (
 	"github.com/majestrate/srndv2/lib/store"
 	"github.com/majestrate/srndv2/lib/webhooks"
 	"net"
+	"net/http"
+	_ "net/http/pprof"
 	"os"
 	"os/signal"
 	"syscall"
@@ -14,6 +16,12 @@ import (
 )
 
 func main() {
+	go func() {
+		err := http.ListenAndServe("127.0.0.1:7700", nil)
+		if err != nil {
+			log.Fatal(err)
+		}
+	}()
 	log.Info("starting up nntpchan...")
 	cfg_fname := "nntpchan.json"
 	conf, err := config.Ensure(cfg_fname)

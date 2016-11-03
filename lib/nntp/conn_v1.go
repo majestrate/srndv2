@@ -11,7 +11,6 @@ import (
 	log "github.com/Sirupsen/logrus"
 	"github.com/majestrate/srndv2/lib/config"
 	"github.com/majestrate/srndv2/lib/database"
-	"github.com/majestrate/srndv2/lib/model"
 	"github.com/majestrate/srndv2/lib/nntp/message"
 	"github.com/majestrate/srndv2/lib/store"
 	"github.com/majestrate/srndv2/lib/util"
@@ -185,13 +184,20 @@ func (c *v1OBConn) DownloadGroup(g Newsgroup) (err error) {
 					}
 					m := MessageID(parts[4])
 					r := MessageID(parts[5])
-					// check if thread is banned
-					if c.C.acceptor.CheckMessageID(r).Ban() {
-						continue
-					}
-					// check if message is wanted
-					if c.C.acceptor.CheckMessageID(m).Accept() {
-						msgids = append(msgids, m)
+					if c.C.acceptor == nil {
+						// no acceptor take it if store doesn't have it
+						if c.C.storage.HasArticle(m.String()) == store.ErrNoSuchArticle {
+							msgids = append(msgids, m)
+						}
+					} else {
+						// check if thread is banned
+						if c.C.acceptor.CheckMessageID(r).Ban() {
+							continue
+						}
+						// check if message is wanted
+						if c.C.acceptor.CheckMessageID(m).Accept() {
+							msgids = append(msgids, m)
+						}
 					}
 				}
 				var accepted []MessageID
@@ -220,7 +226,9 @@ func (c *v1OBConn) DownloadGroup(g Newsgroup) (err error) {
 							var hdr message.Header
 							hdr, err = c.C.hdrio.ReadHeader(dr)
 							if err == nil {
-								if c.C.acceptor.CheckHeader(hdr).Accept() {
+								if c.C.acceptor == nil {
+									accepted = append(accepted, msgid)
+								} else if c.C.acceptor.CheckHeader(hdr).Accept() {
 									accepted = append(accepted, msgid)
 								}
 							}
@@ -290,7 +298,7 @@ func (c *v1OBConn) Negotiate(stream bool) (err error) {
 	_, err = c.C.readline()
 	if err == nil {
 		// request capabilities
-		err = c.C.printfLine("CAPABILITIES")
+		err = c.C.printfLine(CMD_Capabilities.String())
 		dr := c.C.C.DotReader()
 		var b bytes.Buffer
 		_, err = io.Copy(&b, dr)
@@ -333,15 +341,6 @@ func (c *v1OBConn) Negotiate(stream bool) (err error) {
 						line, err = c.C.readline()
 						if err == nil && !strings.HasPrefix(line, RPL_PostingStreaming) {
 							err = errors.New("streaiming not allowed")
-						}
-					}
-				} else {
-					// reader mode
-					err = c.C.printfLine(ModeReader.String())
-					if err == nil {
-						_, err = c.C.readline()
-						if err == nil && !strings.HasPrefix(line, "2") {
-							err = errors.New("invalid response to reader mode: " + line)
 						}
 					}
 				}
@@ -493,7 +492,7 @@ func (c *v1OBConn) StreamAndQuit() {
 }
 
 func (c *v1OBConn) Quit() {
-	c.C.printfLine("QUIT")
+	c.C.printfLine("QUIT yo")
 	c.C.readline()
 	c.C.Close()
 }
@@ -718,17 +717,18 @@ func (c *v1Conn) readArticle(newpost bool, hooks EventHooks) (ps PolicyStatus, e
 		var err error
 		br := c.C.R
 		for err == nil {
-			var line string
-			line, err = br.ReadString(10)
+			line, err2 := br.ReadString(10)
 			line = strings.Trim(line, "\r\n")
-			if err == nil {
+			if err2 == nil {
 				if line == "." {
+					line = ""
 					// done
 					break
 				}
 				line += "\n"
-				_, err = io.WriteString(article_w, line)
+				_, err2 = io.WriteString(article_w, line)
 			}
+			err = err2
 		}
 		article_w.CloseWithError(err)
 		st := <-accept_chnl
@@ -750,9 +750,9 @@ func (c *v1Conn) readArticle(newpost bool, hooks EventHooks) (ps PolicyStatus, e
 			return
 		}
 		// all text in this post
-		txt := new(bytes.Buffer)
+		// txt := new(bytes.Buffer)
 		// the article itself
-		a := new(model.Article)
+		// a := new(model.Article)
 		if hdr.IsMultipart() {
 			_, params, err := hdr.GetMediaType()
 			if err == nil {
@@ -791,7 +791,7 @@ func (c *v1Conn) readArticle(newpost bool, hooks EventHooks) (ps PolicyStatus, e
 
 								if part_type == "text/plain" {
 									// if we are plaintext save it to the text buffer
-									_, err = io.Copy(txt, part_body)
+									_, err = io.Copy(util.Discard, part_body)
 								} else {
 									var fpath string
 									fname := part.FileName()
@@ -805,11 +805,6 @@ func (c *v1Conn) readArticle(newpost bool, hooks EventHooks) (ps PolicyStatus, e
 											"filename": fname,
 											"filepath": fpath,
 										}).Debug("attachment stored")
-										a.Attachments = append(a.Attachments, model.Attachment{
-											Path: fpath,
-											Name: fname,
-											Mime: part_type,
-										})
 									} else {
 										// failed to save attachment
 										log.WithFields(log.Fields{
@@ -848,16 +843,13 @@ func (c *v1Conn) readArticle(newpost bool, hooks EventHooks) (ps PolicyStatus, e
 		} else {
 			// plaintext message
 			var n int64
-			n, err = io.Copy(txt, msgbody)
+			n, err = io.Copy(util.Discard, msgbody)
 			log.WithFields(log.Fields{
 				"bytes": n,
 				"pkg":   "nntp-conn",
 			}).Debug("text body copied")
 		}
-		if err == nil {
-			// collect text
-			a.Text = txt.String()
-		} else {
+		if err != nil {
 			log.WithFields(log.Fields{
 				"pkg":   "nntp-conn",
 				"state": &c.state,
@@ -872,6 +864,7 @@ func (c *v1Conn) readArticle(newpost bool, hooks EventHooks) (ps PolicyStatus, e
 			// failed to get info
 			// don't read anything
 			r.Close()
+			store_result_chnl <- io.EOF
 			return
 		}
 		msgid := e.MessageID()
@@ -894,7 +887,9 @@ func (c *v1Conn) readArticle(newpost bool, hooks EventHooks) (ps PolicyStatus, e
 					"state":   &c.state,
 				}).Debug("stored article okay to ", fpath)
 				// we got the article
-				go hooks.GotArticle(msgid, e.Newsgroup())
+				if hooks != nil {
+					go hooks.GotArticle(msgid, e.Newsgroup())
+				}
 				store_result_chnl <- io.EOF
 				log.Debugf("store informed")
 			} else {
@@ -918,13 +913,14 @@ func (c *v1Conn) readArticle(newpost bool, hooks EventHooks) (ps PolicyStatus, e
 				"version": "1",
 			}).Warn("store will discard message with invalid message-id")
 			io.Copy(util.Discard, r)
-			store_result_chnl <- io.EOF
+			store_result_chnl <- nil
 			r.Close()
 		}
 	}(store_r)
 
 	// acceptor function
 	go func(r io.ReadCloser, out_w, body_w io.WriteCloser) {
+		var w io.WriteCloser
 		defer r.Close()
 		status := PolicyAccept
 		hdr, err := c.hdrio.ReadHeader(r)
@@ -967,20 +963,18 @@ func (c *v1Conn) readArticle(newpost bool, hooks EventHooks) (ps PolicyStatus, e
 			if status.Accept() && c.acceptor != nil {
 				status = c.acceptor.CheckHeader(hdr)
 			}
-			// prepare to write header
-			var w io.Writer
 			if status.Accept() {
 				// we have accepted the article
 				// store to disk
 				w = out_w
-				// inform store
-				store_info_chnl <- ArticleEntry{msgid.String(), hdr.Newsgroup()}
-				hdr_chnl <- hdr
 			} else {
 				// we have not accepted the article
 				// discard
 				w = util.Discard
+				out_w.Close()
 			}
+			store_info_chnl <- ArticleEntry{msgid.String(), hdr.Newsgroup()}
+			hdr_chnl <- hdr
 			// close the channel for headers
 			close(hdr_chnl)
 			// write header out to storage
@@ -1040,7 +1034,7 @@ func (c *v1Conn) readArticle(newpost bool, hooks EventHooks) (ps PolicyStatus, e
 		}
 		// close info channel for store
 		close(store_info_chnl)
-		out_w.Close()
+		w.Close()
 		// close body pipe
 		body_w.Close()
 		// inform result

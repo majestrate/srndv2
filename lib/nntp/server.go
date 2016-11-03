@@ -159,6 +159,11 @@ func (s *Server) downloadPosts(cfg *config.FeedConfig) error {
 		return err
 	}
 	conn := newOutboundConn(c, s, cfg)
+	err = conn.Negotiate(false)
+	if err != nil {
+		conn.Quit()
+		return err
+	}
 	groups, err := conn.ListNewsgroups()
 	if err != nil {
 		conn.Quit()
@@ -190,7 +195,7 @@ func (s *Server) periodicDownload(cfg *config.FeedConfig) {
 				"error": err,
 			}).Error("periodic download failed")
 		}
-		time.Sleep(cfg.PullInterval)
+		time.Sleep(time.Minute * time.Duration(cfg.PullInterval))
 	}
 }
 

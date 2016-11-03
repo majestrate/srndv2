@@ -31,7 +31,7 @@ func (h *httpWebhook) SentArticleVia(msgid nntp.MessageID, name string) {
 
 // we got a new article
 func (h *httpWebhook) GotArticle(msgid nntp.MessageID, group nntp.Newsgroup) {
-
+	h.sendArticle(msgid, group)
 }
 
 func (h *httpWebhook) sendArticle(msgid nntp.MessageID, group nntp.Newsgroup) {

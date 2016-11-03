@@ -602,9 +602,9 @@ func (self *nntpConnection) handleLine(daemon *NNTPDaemon, code int, line string
 					log.Println(self.name, "got invalid mode request", parts[1])
 					conn.PrintfLine("501 invalid mode variant:", parts[1])
 				}
-			} else if cmd == "QUIT" {
+			} else if strings.HasPrefix(line, "QUIT") {
 				// quit command
-				conn.PrintfLine("")
+				conn.PrintfLine("205 bai")
 				// close our connection and return
 				conn.Close()
 				return
@@ -1438,13 +1438,14 @@ func (self *nntpConnection) runConnection(daemon *NNTPDaemon, inbound, stream, r
 
 	for err == nil {
 		line, err = conn.ReadLine()
+		if inbound && strings.HasPrefix(line, "QUIT") {
+			conn.PrintfLine("205 bai")
+			conn.Close()
+			return
+		}
 		if self.mode == "" {
 			if inbound {
 				if len(line) == 0 {
-					conn.Close()
-					return
-				} else if line == "QUIT" {
-					conn.PrintfLine("205 bai")
 					conn.Close()
 					return
 				}

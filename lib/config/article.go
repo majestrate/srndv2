@@ -16,8 +16,7 @@ type ArticleConfig struct {
 	AllowAnonAttachments bool `json:"anon-attachments"`
 }
 
-// allow an article?
-func (c *ArticleConfig) Allow(msgid, group string, anon, attachment bool) bool {
+func (c *ArticleConfig) AllowGroup(group string) bool {
 	// check disallowed groups
 	for _, g := range c.DisallowGroups {
 		if g == group {
@@ -35,9 +34,15 @@ func (c *ArticleConfig) Allow(msgid, group string, anon, attachment bool) bool {
 			break
 		}
 	}
+	return allow
+}
+
+// allow an article?
+func (c *ArticleConfig) Allow(msgid, group string, anon, attachment bool) bool {
 
 	// check attachment policy
-	if allow {
+	if c.AllowGroup(group) {
+		allow := true
 		// no anon ?
 		if anon && !c.AllowAnon {
 			allow = false
@@ -50,8 +55,10 @@ func (c *ArticleConfig) Allow(msgid, group string, anon, attachment bool) bool {
 		if allow && attachment && anon && !c.AllowAnonAttachments {
 			allow = false
 		}
+		return allow
+	} else {
+		return false
 	}
-	return allow
 }
 
 var DefaultArticlePolicy = ArticleConfig{

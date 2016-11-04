@@ -170,14 +170,16 @@ func (s *Server) downloadPosts(cfg *config.FeedConfig) error {
 		return err
 	}
 	for _, g := range groups {
-		log.WithFields(log.Fields{
-			"group": g,
-			"pkg":   "nntp-server",
-		}).Debug("downloading group")
-		err = conn.DownloadGroup(g)
-		if err != nil {
-			conn.Quit()
-			return err
+		if cfg.Policy != nil && cfg.Policy.AllowGroup(g.String()) {
+			log.WithFields(log.Fields{
+				"group": g,
+				"pkg":   "nntp-server",
+			}).Debug("downloading group")
+			err = conn.DownloadGroup(g)
+			if err != nil {
+				conn.Quit()
+				return err
+			}
 		}
 	}
 	conn.Quit()

@@ -1,6 +1,7 @@
 package webhooks
 
 import (
+	"encoding/json"
 	"fmt"
 	log "github.com/Sirupsen/logrus"
 	"github.com/majestrate/srndv2/lib/config"
@@ -8,7 +9,6 @@ import (
 	"github.com/majestrate/srndv2/lib/nntp/message"
 	"github.com/majestrate/srndv2/lib/store"
 	"io"
-	"io/ioutil"
 	"mime"
 	"mime/multipart"
 	"net/http"
@@ -42,7 +42,7 @@ func (h *httpWebhook) sendArticle(msgid nntp.MessageID, group nntp.Newsgroup) {
 		hdr, err = c.ReadMIMEHeader()
 		if err == nil {
 			ctype := hdr.Get("Content-Type")
-			if ctype == "" {
+			if ctype == "" || strings.HasPrefix(ctype, "text/plain") {
 				ctype = "text/plain"
 			}
 			ctype = strings.Replace(strings.ToLower(ctype), "multipart/mixed", "multipart/form-data", 1)
@@ -111,7 +111,19 @@ func (h *httpWebhook) sendArticle(msgid nntp.MessageID, group nntp.Newsgroup) {
 			var r *http.Response
 			r, err = http.Post(u.String(), ctype, body)
 			if err == nil {
-				_, err = io.Copy(ioutil.Discard, r.Body)
+				dec := json.NewDecoder(r.Body)
+				result := make(map[string]interface{})
+				err = dec.Decode(&result)
+				if err == nil || err == io.EOF {
+					msg, ok := result["error"]
+					if ok {
+						log.Warnf("hook gave error: %s", msg)
+					} else {
+						log.Debugf("hook response: %s", result)
+					}
+				} else {
+					log.Warnf("hook response does not look like json: %s", err)
+				}
 				r.Body.Close()
 				log.Infof("hook called for %s", msgid)
 			}

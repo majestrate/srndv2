@@ -1355,6 +1355,7 @@ func newInboundConn(s *Server, c net.Conn) Conn {
 				"CHECK":        streamingLine,
 				"TAKETHIS":     streamingLine,
 				"LIST":         newsgroupList,
+				"NEWSGROUPS":   newsgroupList,
 				"GROUP":        switchNewsgroup,
 			},
 		},

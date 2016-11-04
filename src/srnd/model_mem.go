@@ -620,6 +620,14 @@ func (self *thread) MissingImageCount() int {
 	return self.truncatedImageCount
 }
 
+func (self *thread) HasOmittedReplies() bool {
+	return self.truncatedPostCount > 0
+}
+
+func (self *thread) HasOmittedImages() bool {
+	return self.truncatedImageCount > 0
+}
+
 func (self *thread) Update(db Database) {
 	root := self.Posts[0].MessageID()
 	self.Posts = append([]PostModel{self.Posts[0]}, db.GetThreadReplyPostModels(self.prefix, root, 0, 0)...)

@@ -113,12 +113,11 @@ func (s *HeaderIO) ReadHeader(r io.Reader) (hdr Header, err error) {
 				return
 			}
 			if buf[0] == 58 { // colin
+				// consume space
+				_, err = r.Read(buf[:])
 				for err == nil {
-					// consume spaces
 					_, err = r.Read(buf[:])
-					if buf[0] == 32 {
-						continue
-					} else if buf[0] == s.delim {
+					if buf[0] == s.delim {
 						// got delimiter
 						hdr.Add(k, v)
 						k = ""

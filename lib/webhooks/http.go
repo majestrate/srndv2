@@ -1,6 +1,7 @@
 package webhooks
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
 	log "github.com/Sirupsen/logrus"
@@ -37,99 +38,108 @@ func (h *httpWebhook) GotArticle(msgid nntp.MessageID, group nntp.Newsgroup) {
 func (h *httpWebhook) sendArticle(msgid nntp.MessageID, group nntp.Newsgroup) {
 	f, err := h.storage.OpenArticle(msgid.String())
 	if err == nil {
-		c := textproto.NewConn(f)
-		var hdr textproto.MIMEHeader
-		hdr, err = c.ReadMIMEHeader()
-		if err == nil {
-			ctype := hdr.Get("Content-Type")
-			if ctype == "" || strings.HasPrefix(ctype, "text/plain") {
-				ctype = "text/plain"
-			}
-			ctype = strings.Replace(strings.ToLower(ctype), "multipart/mixed", "multipart/form-data", 1)
-			u, _ := url.Parse(h.conf.URL)
-			q := u.Query()
-			for k, vs := range hdr {
-				for _, v := range vs {
-					q.Add(k, v)
-				}
-			}
-			q.Set("Content-Type", ctype)
-			u.RawQuery = q.Encode()
-
-			var body io.Reader
-
-			if strings.HasPrefix(ctype, "multipart") {
-				pr, pw := io.Pipe()
-				log.Debug("using pipe")
-				body = pr
-				go func(in io.Reader, out io.WriteCloser) {
-					_, params, _ := mime.ParseMediaType(ctype)
-					if params == nil {
-						// send as whatever lol
-						io.Copy(out, in)
-					} else {
-						boundary, _ := params["boundary"]
-						mpr := multipart.NewReader(in, boundary)
-						mpw := multipart.NewWriter(out)
-						mpw.SetBoundary(boundary)
-						for {
-							part, err := mpr.NextPart()
-							if err == io.EOF {
-								err = nil
-								break
-							} else if err == nil {
-								// get part header
-								h := part.Header
-								// rewrite header part for php
-								cd := h.Get("Content-Disposition")
-								r := regexp.MustCompile(`filename="(.*)"`)
-								// YOLO
-								parts := r.FindStringSubmatch(cd)
-								if len(parts) > 1 {
-									fname := parts[1]
-									h.Set("Content-Disposition", fmt.Sprintf(`filename="%s"; name="attachment[]"`, fname))
-								}
-								// make write part
-								wp, err := mpw.CreatePart(h)
-								if err == nil {
-									// write part out
-									io.Copy(wp, part)
-								} else {
-									log.Errorf("error writng webhook part: %s", err.Error())
-								}
-							}
-							part.Close()
-						}
-						mpw.Close()
-					}
-					out.Close()
-				}(c.R, pw)
-			} else {
-				body = c.R
-			}
-
-			var r *http.Response
-			r, err = http.Post(u.String(), ctype, body)
+		u, _ := url.Parse(h.conf.URL)
+		var body io.Reader
+		var ctype string
+		if h.conf.Dialect == "vichan" {
+			c := textproto.NewConn(f)
+			var hdr textproto.MIMEHeader
+			hdr, err = c.ReadMIMEHeader()
 			if err == nil {
-				dec := json.NewDecoder(r.Body)
-				result := make(map[string]interface{})
-				err = dec.Decode(&result)
-				if err == nil || err == io.EOF {
-					msg, ok := result["error"]
-					if ok {
-						log.Warnf("hook gave error: %s", msg)
-					} else {
-						log.Debugf("hook response: %s", result)
-					}
-				} else {
-					log.Warnf("hook response does not look like json: %s", err)
+				ctype = hdr.Get("Content-Type")
+				if ctype == "" || strings.HasPrefix(ctype, "text/plain") {
+					ctype = "text/plain"
 				}
-				r.Body.Close()
-				log.Infof("hook called for %s", msgid)
+				ctype = strings.Replace(strings.ToLower(ctype), "multipart/mixed", "multipart/form-data", 1)
+				q := u.Query()
+				for k, vs := range hdr {
+					for _, v := range vs {
+						q.Add(k, v)
+					}
+				}
+				q.Set("Content-Type", ctype)
+				u.RawQuery = q.Encode()
+
+				if strings.HasPrefix(ctype, "multipart") {
+					pr, pw := io.Pipe()
+					log.Debug("using pipe")
+					body = pr
+					go func(in io.Reader, out io.WriteCloser) {
+						_, params, _ := mime.ParseMediaType(ctype)
+						if params == nil {
+							// send as whatever lol
+							io.Copy(out, in)
+						} else {
+							boundary, _ := params["boundary"]
+							mpr := multipart.NewReader(in, boundary)
+							mpw := multipart.NewWriter(out)
+							mpw.SetBoundary(boundary)
+							for {
+								part, err := mpr.NextPart()
+								if err == io.EOF {
+									err = nil
+									break
+								} else if err == nil {
+									// get part header
+									h := part.Header
+									// rewrite header part for php
+									cd := h.Get("Content-Disposition")
+									r := regexp.MustCompile(`filename="(.*)"`)
+									// YOLO
+									parts := r.FindStringSubmatch(cd)
+									if len(parts) > 1 {
+										fname := parts[1]
+										h.Set("Content-Disposition", fmt.Sprintf(`filename="%s"; name="attachment[]"`, fname))
+									}
+									// make write part
+									wp, err := mpw.CreatePart(h)
+									if err == nil {
+										// write part out
+										io.Copy(wp, part)
+									} else {
+										log.Errorf("error writng webhook part: %s", err.Error())
+									}
+								}
+								part.Close()
+							}
+							mpw.Close()
+						}
+						out.Close()
+					}(c.R, pw)
+				} else {
+					body = c.R
+				}
+
 			}
 		} else {
-			f.Close()
+			// regular webhook
+
+			b := new(bytes.Buffer)
+			io.Copy(b, f)
+			body = b
+			ctype = "text/plain; charset=UTF-8"
 		}
+		var r *http.Response
+		r, err = http.Post(u.String(), ctype, body)
+		if err == nil {
+			dec := json.NewDecoder(r.Body)
+			result := make(map[string]interface{})
+			err = dec.Decode(&result)
+			if err == nil || err == io.EOF {
+				msg, ok := result["error"]
+				if ok {
+					log.Warnf("hook gave error: %s", msg)
+				} else {
+					log.Debugf("hook response: %s", result)
+				}
+			} else {
+				log.Warnf("hook response does not look like json: %s", err)
+			}
+			r.Body.Close()
+			log.Infof("hook called for %s", msgid)
+		}
+	} else {
+		f.Close()
 	}
 	if err != nil {
 		log.Errorf("error calling web hook %s: %s", h.conf.Name, err.Error())

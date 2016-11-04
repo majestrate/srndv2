@@ -110,10 +110,10 @@ type ThreadModel interface {
 	// number of images excluded during truncation
 	// returns 0 if not truncated
 	MissingImageCount() int
-        // returns true if this thread has truncated replies
-        HasOmittedReplies() bool
-        // returns true if this thread has truncated images
-        HasOmittedImages() bool
+	// returns true if this thread has truncated replies
+	HasOmittedReplies() bool
+	// returns true if this thread has truncated images
+	HasOmittedImages() bool
 
 	// update the thread's replies
 	Update(db Database)

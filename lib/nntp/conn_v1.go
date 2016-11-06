@@ -439,7 +439,7 @@ func (c *v1OBConn) StreamAndQuit() {
 											}).Debug("Article Transferred")
 											// call hooks
 											if c.C.hooks != nil {
-												go c.C.hooks.SentArticleVia(msgid, c.C.state.FeedName)
+												c.C.hooks.SentArticleVia(msgid, c.C.state.FeedName)
 											}
 										} else {
 											// failed transfer
@@ -888,7 +888,7 @@ func (c *v1Conn) readArticle(newpost bool, hooks EventHooks) (ps PolicyStatus, e
 				}).Debug("stored article okay to ", fpath)
 				// we got the article
 				if hooks != nil {
-					go hooks.GotArticle(msgid, e.Newsgroup())
+					hooks.GotArticle(msgid, e.Newsgroup())
 				}
 				store_result_chnl <- io.EOF
 				log.Debugf("store informed")

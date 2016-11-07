@@ -13,10 +13,13 @@ import (
 )
 
 // filesystem storage of nntp articles and attachments
-type FilesystemStorage string
+type FilesystemStorage struct {
+	root               string
+	discardAttachments bool
+}
 
 func (fs FilesystemStorage) String() string {
-	return string(fs)
+	return fs.root
 }
 
 // ensure the filesystem storage exists and is well formed and read/writable
@@ -177,6 +180,10 @@ func (fs FilesystemStorage) DeleteArticle(msgid string) (err error) {
 
 // store attachment onto filesystem
 func (fs FilesystemStorage) StoreAttachment(r io.Reader, filename string) (fpath string, err error) {
+	if fs.discardAttachments {
+		_, err = io.Copy(ioutil.Discard, r)
+		return
+	}
 	// open temp file for storage
 	var tf *os.File
 	tf, err = fs.obtainTempFile()
@@ -285,14 +292,17 @@ func (fs FilesystemStorage) ForEachInGroup(group string, chnl chan string) {
 
 // create a new filesystem storage directory
 // ensure directory and subdirectories
-func NewFilesytemStorage(dirname string) (fs FilesystemStorage, err error) {
+func NewFilesytemStorage(dirname string, unpackAttachments bool) (fs FilesystemStorage, err error) {
 	dirname, err = filepath.Abs(dirname)
 	if err == nil {
 		log.WithFields(log.Fields{
 			"pkg":      "fs-store",
 			"filepath": dirname,
 		}).Info("Creating New Filesystem Storage")
-		fs = FilesystemStorage(dirname)
+		fs = FilesystemStorage{
+			root:               dirname,
+			discardAttachments: unpackAttachments,
+		}
 		err = fs.Ensure()
 	}
 	return

@@ -26,7 +26,7 @@ func main() {
 		Config: conf.NNTP,
 		Feeds:  conf.Feeds,
 	}
-	serv.Storage, err = store.NewFilesytemStorage(conf.Store.Path)
+	serv.Storage, err = store.NewFilesytemStorage(conf.Store.Path, false)
 	if err != nil {
 		log.Fatal(err)
 	}

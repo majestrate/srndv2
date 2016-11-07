@@ -61,7 +61,7 @@ func main() {
 	}
 
 	// create article storage
-	nserv.Storage, err = store.NewFilesytemStorage(sconfig.Path)
+	nserv.Storage, err = store.NewFilesytemStorage(sconfig.Path, true)
 	if err != nil {
 		log.Fatal(err)
 	}

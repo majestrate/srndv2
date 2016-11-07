@@ -1,7 +1,6 @@
 package webhooks
 
 import (
-	"bytes"
 	"encoding/json"
 	"fmt"
 	log "github.com/Sirupsen/logrus"
@@ -39,13 +38,14 @@ func (h *httpWebhook) sendArticle(msgid nntp.MessageID, group nntp.Newsgroup) {
 	f, err := h.storage.OpenArticle(msgid.String())
 	if err == nil {
 		u, _ := url.Parse(h.conf.URL)
-		var body io.Reader
+		var r *http.Response
 		var ctype string
 		if h.conf.Dialect == "vichan" {
 			c := textproto.NewConn(f)
 			var hdr textproto.MIMEHeader
 			hdr, err = c.ReadMIMEHeader()
 			if err == nil {
+				var body io.Reader
 				ctype = hdr.Get("Content-Type")
 				if ctype == "" || strings.HasPrefix(ctype, "text/plain") {
 					ctype = "text/plain"
@@ -63,7 +63,6 @@ func (h *httpWebhook) sendArticle(msgid nntp.MessageID, group nntp.Newsgroup) {
 				if strings.HasPrefix(ctype, "multipart") {
 					pr, pw := io.Pipe()
 					log.Debug("using pipe")
-					body = pr
 					go func(in io.Reader, out io.WriteCloser) {
 						_, params, _ := mime.ParseMediaType(ctype)
 						if params == nil {
@@ -106,22 +105,30 @@ func (h *httpWebhook) sendArticle(msgid nntp.MessageID, group nntp.Newsgroup) {
 						}
 						out.Close()
 					}(c.R, pw)
+					body = pr
 				} else {
-					body = c.R
+					body = f
 				}
-
+				r, err = http.Post(u.String(), ctype, body)
 			}
 		} else {
+			var sz int64
+			sz, err = f.Seek(0, 2)
+			if err != nil {
+				return
+			}
+			f.Seek(0, 0)
 			// regular webhook
-
-			b := new(bytes.Buffer)
-			io.Copy(b, f)
-			body = b
 			ctype = "text/plain; charset=UTF-8"
+			cl := new(http.Client)
+			r, err = cl.Do(&http.Request{
+				ContentLength: sz,
+				URL:           u,
+				Method:        "POST",
+				Body:          f,
+			})
 		}
-		var r *http.Response
-		r, err = http.Post(u.String(), ctype, body)
-		if err == nil {
+		if err == nil && r != nil {
 			dec := json.NewDecoder(r.Body)
 			result := make(map[string]interface{})
 			err = dec.Decode(&result)

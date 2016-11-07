@@ -1300,10 +1300,10 @@ func switchNewsgroup(c *v1Conn, line string, hooks EventHooks) (err error) {
 
 func handleAuthInfo(c *v1Conn, line string, hooks EventHooks) (err error) {
 	subcmd := line[9:]
-	if strings.HasPrefix(subcmd, "USER") {
+	if strings.HasPrefix(strings.ToUpper(subcmd), "USER") {
 		c.username = subcmd[5:]
 		err = c.printfLine("%s password required", RPL_MoreAuth)
-	} else if strings.HasPrefix(subcmd, "PASS") {
+	} else if strings.HasPrefix(strings.ToUpper(subcmd), "PASS") {
 		var success bool
 		if c.username == "" {
 			// out of order commands

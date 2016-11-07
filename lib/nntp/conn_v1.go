@@ -56,6 +56,8 @@ type v1Conn struct {
 	db database.DB
 	// event callbacks
 	hooks EventHooks
+	// inbound connection authenticator
+	auth ServerAuth
 	// command handlers
 	cmds map[string]lineHandlerFunc
 }
@@ -1296,6 +1298,41 @@ func switchNewsgroup(c *v1Conn, line string, hooks EventHooks) (err error) {
 	return
 }
 
+func handleAuthInfo(c *v1Conn, line string, hooks EventHooks) (err error) {
+	subcmd := line[9:]
+	if strings.HasPrefix(subcmd, "USER") {
+		c.username = subcmd[5:]
+		err = c.printfLine("%s password required", RPL_MoreAuth)
+	} else if strings.HasPrefix(subcmd, "PASS") {
+		var success bool
+		if c.username == "" {
+			// out of order commands
+			c.printfLine("%s auth info sent out of order yo", RPL_GenericError)
+			return
+		} else if c.auth == nil {
+			// no auth mechanism, this will be set to true if anon nntp is enabled
+			success = c.authenticated
+		} else {
+			// check login
+			success, err = c.auth.CheckLogin(c.username, subcmd[5:])
+		}
+		if success {
+			// login good
+			err = c.printfLine("%s login gud, proceed yo", RPL_AuthAccepted)
+			c.authenticated = true
+		} else if err == nil {
+			// login bad
+			err = c.printfLine("%s bad login", RPL_AuthenticateRejected)
+		} else {
+			// error
+			err = c.printfLine("%s error processing login: %s", RPL_GenericError, err.Error())
+		}
+	} else {
+		err = c.printfLine("%s only USER/PASS accepted with AUTHINFO", RPL_SyntaxError)
+	}
+	return
+}
+
 // inbound streaming start
 func (c *v1IBConn) StartStreaming() (chnl chan ArticleEntry, err error) {
 	if c.Mode().Is(MODE_STREAM) {
@@ -1338,6 +1375,7 @@ func newInboundConn(s *Server, c net.Conn) Conn {
 				HostName: c.RemoteAddr().String(),
 				Open:     true,
 			},
+			auth:          s.Auth,
 			authenticated: anon,
 			serverName:    sname,
 			storage:       storage,
@@ -1357,6 +1395,7 @@ func newInboundConn(s *Server, c net.Conn) Conn {
 				"LIST":         newsgroupList,
 				"NEWSGROUPS":   newsgroupList,
 				"GROUP":        switchNewsgroup,
+				"AUTHINFO":     handleAuthInfo,
 			},
 		},
 	}

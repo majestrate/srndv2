@@ -48,8 +48,4 @@ type Client interface {
 	// send quit and disconnects from server
 	// blocks until done
 	Quit()
-
-	// get client authentication strategy
-	// return nil if no authentication strategy is to be used
-	Auth() ClientAuth
 }

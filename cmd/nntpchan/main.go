@@ -56,6 +56,10 @@ func main() {
 	nserv.Config = nconfig
 	nserv.Feeds = conf.Feeds
 
+	if nconfig.LoginsFile != "" {
+		nserv.Auth = nntp.FlatfileAuth(nconfig.LoginsFile)
+	}
+
 	// create article storage
 	nserv.Storage, err = store.NewFilesytemStorage(sconfig.Path)
 	if err != nil {

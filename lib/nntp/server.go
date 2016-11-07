@@ -10,14 +10,6 @@ import (
 	"time"
 )
 
-// callback hooks fired on certain events
-type EventHooks interface {
-	// called when we have obtained an article given its message-id
-	GotArticle(msgid MessageID, group Newsgroup)
-	// called when we have sent an article to a single remote feed
-	SentArticleVia(msgid MessageID, feedname string)
-}
-
 // nntp outfeed state
 type nntpFeed struct {
 	conn Conn
@@ -43,7 +35,8 @@ type Server struct {
 	Config *config.NNTPServerConfig
 	// outfeeds to connect to
 	Feeds []*config.FeedConfig
-
+	// inbound authentiaction mechanism
+	Auth ServerAuth
 	// send to outbound feed channel
 	send chan ArticleEntry
 	// register inbound feed channel

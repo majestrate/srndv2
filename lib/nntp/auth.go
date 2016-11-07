@@ -1,24 +1,38 @@
 package nntp
 
 import (
-	"errors"
+	"bufio"
+	"fmt"
+	"os"
+	"strings"
 )
-
-// authentication was rejected
-var ErrAuthRejected = errors.New("authentication rejected")
-
-// defines type for nntp authentication mechanism on client side
-type ClientAuth interface {
-	// send authenticate to server connected via established nntp connection
-	// returns nil on success otherwise an error
-	// retirns ErrAuthRejected if the authentication was rejected
-	SendAuth(c Conn) error
-}
 
 // defines server side authentication mechanism
 type ServerAuth interface {
-	// handle authentication phase with an established nntp connection
+	// check plaintext login
 	// returns nil on success otherwise error if one occurs during authentication
-	// returns ErrAuthRejected if we rejected the authentication
-	HandleAuth(c Conn) error
+	// returns true if authentication was successful and an error if a network io error happens
+	CheckLogin(username, passwd string) (bool, error)
+}
+
+type FlatfileAuth string
+
+func (fname FlatfileAuth) CheckLogin(username, passwd string) (found bool, err error) {
+	cred := fmt.Sprintf("%s:%s", username, passwd)
+	var f *os.File
+	f, err = os.Open(string(fname))
+	if err == nil {
+		defer f.Close()
+		r := bufio.NewReader(f)
+		for err == nil {
+			var line string
+			line, err = r.ReadString(10)
+			line = strings.Trim(line, "\r\n")
+			if line == cred {
+				found = true
+				break
+			}
+		}
+	}
+	return
 }

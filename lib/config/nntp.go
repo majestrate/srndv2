@@ -11,11 +11,14 @@ type NNTPServerConfig struct {
 	AnonNNTP bool `json:"anon-nntp"`
 	// ssl settings for nntp
 	SSL *SSLSettings
+	// file with login credentials
+	LoginsFile string `json:"authfile"`
 }
 
 var DefaultNNTPConfig = NNTPServerConfig{
-	AnonNNTP: true,
-	Bind:     "0.0.0.0:1119",
-	Name:     "nntp.server.tld",
-	Article:  &DefaultArticlePolicy,
+	AnonNNTP:   true,
+	Bind:       "0.0.0.0:1119",
+	Name:       "nntp.server.tld",
+	Article:    &DefaultArticlePolicy,
+	LoginsFile: "",
 }

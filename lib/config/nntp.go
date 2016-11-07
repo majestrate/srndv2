@@ -16,7 +16,7 @@ type NNTPServerConfig struct {
 }
 
 var DefaultNNTPConfig = NNTPServerConfig{
-	AnonNNTP:   true,
+	AnonNNTP:   false,
 	Bind:       "0.0.0.0:1119",
 	Name:       "nntp.server.tld",
 	Article:    &DefaultArticlePolicy,

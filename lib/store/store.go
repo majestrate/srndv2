@@ -17,10 +17,10 @@ type Storage interface {
 	StoreAttachment(r io.Reader, filename string) (string, error)
 
 	// store an article that we read from an io.Reader
-	// message id is used to hint where the article is stored
+	// message id is used to hint where the article is stored as well as newsgroup
 	// returns absolute filepath to where the article was stored and nil on success
 	// returns empty string and error if an error ocurred while storing
-	StoreArticle(r io.Reader, msgid string) (string, error)
+	StoreArticle(r io.Reader, msgid, newsgroup string) (string, error)
 
 	// return nil if the article with the given message id exists in this storage
 	// return ErrNoSuchArticle if it does not exist or an error if another error occured while checking
@@ -34,4 +34,8 @@ type Storage interface {
 
 	// ensure the underlying storage backend is created
 	Ensure() error
+
+	// iterate over all messages in a newsgroup
+	// send results down a channel
+	ForEachInGroup(newsgroup string, cnhl chan string)
 }

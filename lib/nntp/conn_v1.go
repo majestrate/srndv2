@@ -19,6 +19,7 @@ import (
 	"mime/multipart"
 	"net"
 	"net/textproto"
+	"os"
 	"strings"
 )
 
@@ -99,6 +100,10 @@ func (c *v1Conn) GetState() (state *ConnState) {
 			UntrustedRequiresPoW: c.state.Policy.UntrustedRequiresPoW,
 		},
 	}
+}
+
+func (c *v1Conn) Group() string {
+	return c.state.Group.String()
 }
 
 func (c *v1Conn) IsOpen() bool {
@@ -879,7 +884,7 @@ func (c *v1Conn) readArticle(newpost bool, hooks EventHooks) (ps PolicyStatus, e
 				"state":   &c.state,
 			}).Debug("storing article")
 
-			fpath, err := c.storage.StoreArticle(r, msgid.String())
+			fpath, err := c.storage.StoreArticle(r, msgid.String(), e.Newsgroup().String())
 			r.Close()
 			if err == nil {
 				log.WithFields(log.Fields{
@@ -1179,7 +1184,7 @@ func streamingLine(c *v1Conn, line string, hooks EventHooks) (err error) {
 	return
 }
 
-func newsgroupList(c *v1Conn, line string, hooks EventHooks) (err error) {
+func newsgroupList(c *v1Conn, line string, hooks EventHooks, rpl string) (err error) {
 	var groups []string
 	if c.db == nil {
 		// no database driver available
@@ -1192,7 +1197,7 @@ func newsgroupList(c *v1Conn, line string, hooks EventHooks) (err error) {
 	if err == nil {
 		// we got newsgroups from the db
 		dw := c.C.DotWriter()
-		fmt.Fprintf(dw, "%s list of newsgroups follows\n", RPL_List)
+		fmt.Fprintf(dw, "%s list of newsgroups follows\n", rpl)
 		for _, g := range groups {
 			hi := int64(1)
 			lo := int64(0)
@@ -1333,6 +1338,52 @@ func handleAuthInfo(c *v1Conn, line string, hooks EventHooks) (err error) {
 	return
 }
 
+func handleXOVER(c *v1Conn, line string, hooks EventHooks) (err error) {
+	group := c.Group()
+	if group == "" {
+		err = c.printfLine("%s no group selected", RPL_NoGroupSelected)
+		return
+	}
+	if !Newsgroup(group).Valid() {
+		err = c.printfLine("%s Invalid Newsgroup format", RPL_GenericError)
+		return
+	}
+	err = c.printfLine("%s overview follows", RPL_Overview)
+	if err != nil {
+		return
+	}
+	chnl := make(chan string)
+	go func() {
+		c.storage.ForEachInGroup(group, chnl)
+		close(chnl)
+	}()
+	i := 0
+	for err == nil {
+		m, ok := <-chnl
+		if !ok {
+			break
+		}
+		msgid := MessageID(m)
+		if !msgid.Valid() {
+			continue
+		}
+		var f *os.File
+		f, err = c.storage.OpenArticle(m)
+		if f != nil {
+			h, e := c.hdrio.ReadHeader(f)
+			f.Close()
+			if e == nil {
+				i++
+				err = c.printfLine("%.6d\t%s\t%s\t%s\t%s\t%s", i, h.Get("Subject", "None"), h.Get("From", "anon <anon@anon.tld>"), h.Get("Date", "???"), h.MessageID(), h.Reference())
+			}
+		}
+	}
+	if err == nil {
+		err = c.printfLine(".")
+	}
+	return
+}
+
 // inbound streaming start
 func (c *v1IBConn) StartStreaming() (chnl chan ArticleEntry, err error) {
 	if c.Mode().Is(MODE_STREAM) {
@@ -1392,10 +1443,15 @@ func newInboundConn(s *Server, c net.Conn) Conn {
 				"CAPABILITIES": sendCapabilities,
 				"CHECK":        streamingLine,
 				"TAKETHIS":     streamingLine,
-				"LIST":         newsgroupList,
-				"NEWSGROUPS":   newsgroupList,
-				"GROUP":        switchNewsgroup,
-				"AUTHINFO":     handleAuthInfo,
+				"LIST": func(c *v1Conn, line string, h EventHooks) error {
+					return newsgroupList(c, line, h, RPL_List)
+				},
+				"NEWSGROUPS": func(c *v1Conn, line string, h EventHooks) error {
+					return newsgroupList(c, line, h, RPL_NewsgroupList)
+				},
+				"GROUP":    switchNewsgroup,
+				"AUTHINFO": handleAuthInfo,
+				"XOVER":    handleXOVER,
 			},
 		},
 	}

@@ -1,10 +1,12 @@
 package config
 
+import "regexp"
+
 // configration for local article policies
 type ArticleConfig struct {
-	// explicitly allow these newsgroups
+	// explicitly allow these newsgroups (regexp)
 	AllowGroups []string `json:"whitelist"`
-	// explicitly disallow these newsgroups
+	// explicitly disallow these newsgroups (regexp)
 	DisallowGroups []string `json:"blacklist"`
 	// only allow explicitly allowed groups
 	ForceWhitelist bool `json:"force-whitelist"`
@@ -17,24 +19,24 @@ type ArticleConfig struct {
 }
 
 func (c *ArticleConfig) AllowGroup(group string) bool {
-	// check disallowed groups
+
 	for _, g := range c.DisallowGroups {
-		if g == group {
+		r := regexp.MustCompile(g)
+		if r.MatchString(group) && c.ForceWhitelist {
 			// disallowed
 			return false
 		}
 	}
 
-	allow := !c.ForceWhitelist
-
-	// check allowed groups
+	// check allowed groups first
 	for _, g := range c.AllowGroups {
-		if g == group {
-			allow = true
-			break
+		r := regexp.MustCompile(g)
+		if r.MatchString(g) {
+			return true
 		}
 	}
-	return allow
+
+	return !c.ForceWhitelist
 }
 
 // allow an article?

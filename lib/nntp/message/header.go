@@ -20,6 +20,10 @@ func (self Header) MessageID() (v string) {
 	return
 }
 
+func (self Header) Reference() (ref string) {
+	return self.Get("Reference", self.MessageID())
+}
+
 // extract media type from content-type header
 func (self Header) GetMediaType() (mediatype string, params map[string]string, err error) {
 	return mime.ParseMediaType(self.Get("Content-Type", "text/plain"))

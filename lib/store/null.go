@@ -22,7 +22,7 @@ func (n *nullStore) StoreAttachment(r io.Reader, filename string) (string, error
 	return n.discard(r)
 }
 
-func (n *nullStore) StoreArticle(r io.Reader, msgid string) (string, error) {
+func (n *nullStore) StoreArticle(r io.Reader, msgid, newsgroup string) (string, error) {
 	return n.discard(r)
 }
 
@@ -31,6 +31,10 @@ func (n *nullStore) DeleteArticle(msgid string) (err error) {
 }
 
 func (n *nullStore) Ensure() (err error) {
+	return
+}
+
+func (n *nullStore) ForEachInGroup(newsgroup string, chnl chan string) {
 	return
 }
 

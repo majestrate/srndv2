@@ -82,7 +82,7 @@ func (fs FilesystemStorage) obtainTempFile() (f *os.File, err error) {
 }
 
 // store an article from a reader to disk
-func (fs FilesystemStorage) StoreArticle(r io.Reader, msgid string) (fpath string, err error) {
+func (fs FilesystemStorage) StoreArticle(r io.Reader, msgid, newsgroup string) (fpath string, err error) {
 	err = fs.HasArticle(msgid)
 	if err == nil {
 		// discard the body as we have it stored already
@@ -116,6 +116,22 @@ func (fs FilesystemStorage) StoreArticle(r io.Reader, msgid string) (fpath strin
 					"msgid":   msgid,
 					"written": n,
 				}).Debug("wrote article to disk")
+				// symlink
+				g := fs.newsgroupDir(newsgroup)
+				_, e := os.Stat(g)
+				if os.IsNotExist(e) {
+					err = os.Mkdir(g, 0700)
+				}
+				if err == nil {
+					err = os.Symlink(filepath.Join("..", msgid), filepath.Join(g, msgid))
+				}
+				if err != nil {
+					log.WithFields(log.Fields{
+						"pkg":   "fs-store",
+						"msgid": msgid,
+						"group": newsgroup,
+					}).Debug("failed to link article")
+				}
 			} else {
 				log.WithFields(log.Fields{
 					"pkg":     "fs-store",
@@ -132,6 +148,10 @@ func (fs FilesystemStorage) StoreArticle(r io.Reader, msgid string) (fpath strin
 		}
 	}
 	return
+}
+
+func (fs FilesystemStorage) newsgroupDir(group string) string {
+	return filepath.Join(fs.ArticleDir(), group)
 }
 
 // check if we have the artilce with this message id
@@ -251,6 +271,16 @@ func (fs FilesystemStorage) StoreAttachment(r io.Reader, filename string) (fpath
 func (fs FilesystemStorage) OpenArticle(msgid string) (r *os.File, err error) {
 	r, err = os.Open(filepath.Join(fs.ArticleDir(), msgid))
 	return
+}
+
+func (fs FilesystemStorage) ForEachInGroup(group string, chnl chan string) {
+	g := fs.newsgroupDir(group)
+	filepath.Walk(g, func(path string, info os.FileInfo, err error) error {
+		if info != nil {
+			chnl <- info.Name()
+		}
+		return nil
+	})
 }
 
 // create a new filesystem storage directory

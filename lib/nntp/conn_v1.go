@@ -1384,6 +1384,33 @@ func handleXOVER(c *v1Conn, line string, hooks EventHooks) (err error) {
 	return
 }
 
+func handleArticle(c *v1Conn, line string, hooks EventHooks) (err error) {
+	msgid := MessageID(line[8:])
+	if msgid.Valid() && c.storage.HasArticle(msgid.String()) == nil {
+		// valid id and we have it
+		var r io.ReadCloser
+		var buff [1024]byte
+		r, err = c.storage.OpenArticle(msgid.String())
+		if err == nil {
+			err = c.printfLine("%s %s", RPL_Article, msgid)
+			for err == nil {
+				_, err = io.CopyBuffer(c.C.W, r, buff[:])
+			}
+			if err == io.EOF {
+				err = nil
+			}
+			if err == nil {
+				err = c.printfLine(".")
+			}
+			r.Close()
+			return
+		}
+	}
+	// invalid id or we don't have it
+	err = c.printfLine("%s %s", RPL_NoArticleMsgID, msgid)
+	return
+}
+
 // inbound streaming start
 func (c *v1IBConn) StartStreaming() (chnl chan ArticleEntry, err error) {
 	if c.Mode().Is(MODE_STREAM) {
@@ -1452,6 +1479,7 @@ func newInboundConn(s *Server, c net.Conn) Conn {
 				"GROUP":    switchNewsgroup,
 				"AUTHINFO": handleAuthInfo,
 				"XOVER":    handleXOVER,
+				"ARTICLE":  handleArticle,
 			},
 		},
 	}

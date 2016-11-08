@@ -940,6 +940,7 @@ func (c *v1Conn) readArticle(newpost bool, hooks EventHooks) (ps PolicyStatus, e
 				// new post
 				// generate it
 				msgid = GenMessageID(c.serverName)
+				hdr.Set("Message-ID", msgid.String())
 			} else {
 				// not a new post, get from header
 				msgid = MessageID(hdr.MessageID())

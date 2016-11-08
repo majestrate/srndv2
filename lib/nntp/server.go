@@ -27,8 +27,6 @@ type Server struct {
 	DB database.DB
 	// global article acceptor
 	Acceptor ArticleAcceptor
-	// name of this server
-	Name string
 	// article storage
 	Storage store.Storage
 	// nntp config
@@ -86,6 +84,13 @@ func (s *Server) SentArticleVia(msgid MessageID, feedname string) {
 	if s.Hooks != nil {
 		s.Hooks.SentArticleVia(msgid, feedname)
 	}
+}
+
+func (s *Server) Name() string {
+	if s.Config == nil || s.Config.Name == "" {
+		return "nntp.anon.tld"
+	}
+	return s.Config.Name
 }
 
 // persist 1 feed forever

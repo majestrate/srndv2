@@ -1062,7 +1062,7 @@ func (self *nntpConnection) handleLine(daemon *NNTPDaemon, code int, line string
 					conn.PrintfLine("340 Yeeeh postit yo; end with <CR-LF>.<CR-LF>")
 					var hdr textproto.MIMEHeader
 					hdr, err = readMIMEHeader(conn.R)
-					var success, gotten bool
+					var success bool
 					var reason string
 					if err == nil {
 						if getMessageID(hdr) == "" {
@@ -1099,7 +1099,7 @@ func (self *nntpConnection) handleLine(daemon *NNTPDaemon, code int, line string
 							}
 						}
 					}
-					if success && gotten && err == nil {
+					if success {
 						// all gud
 						conn.PrintfLine("240 We got it, thnkxbai")
 					} else {

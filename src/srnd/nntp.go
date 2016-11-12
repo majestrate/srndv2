@@ -860,9 +860,12 @@ func (self *nntpConnection) handleLine(daemon *NNTPDaemon, code int, line string
 					if err == nil {
 						conn.PrintfLine("224 Overview information follows")
 						dw := conn.DotWriter()
-						for idx, model := range models {
+						for _, model := range models {
 							if model != nil {
-								io.WriteString(dw, fmt.Sprintf("%.6d\t%s\t\"%s\" <%s@%s>\t%s\t%s\t%s\r\n", idx+1, model.Subject(), model.Name(), model.Name(), model.Frontend(), model.Date(), model.MessageID(), model.Reference()))
+								id, err := daemon.database.GetNNTPIDForMessageID(self.group, model.MessageID())
+								if err == nil {
+									io.WriteString(dw, fmt.Sprintf("%.6d\t%s\t\"%s\" <%s@%s>\t%s\t%s\t%s\r\n", id, model.Subject(), model.Name(), model.Name(), model.Frontend(), model.Date(), model.MessageID(), model.Reference()))
+								}
 							}
 						}
 						dw.Close()
@@ -1029,6 +1032,8 @@ func (self *nntpConnection) handleLine(daemon *NNTPDaemon, code int, line string
 				} else {
 					conn.PrintfLine("500 invalid daemon state, got STAT with group set but we don't have that group now?")
 				}
+			} else if cmd == "XHDR" {
+				conn.PrintfLine("502 no permission")
 			} else {
 				log.Println(self.name, "invalid command recv'd", cmd)
 				conn.PrintfLine("500 Invalid command: %s", cmd)

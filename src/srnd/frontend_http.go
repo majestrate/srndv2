@@ -498,9 +498,9 @@ func (self *httpFrontend) handle_postform(wr http.ResponseWriter, r *http.Reques
 			// read part for attachment
 			if strings.HasPrefix(partname, "attachment_") && self.attachments {
 				if len(pr.Attachments) < self.attachmentLimit {
-					log.Println("attaching file...")
 					att := readAttachmentFromMimePartAndStore(part, nil)
-					if att != nil {
+					if att != nil && len(att.Filedata()) > 0 {
+						log.Println("attaching file", att.Filename())
 						pa := postAttachment{
 							Filename: att.Filename(),
 							Filetype: att.Mime(),

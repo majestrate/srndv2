@@ -766,6 +766,16 @@ func (self *NNTPDaemon) pollfeeds() {
 	}
 }
 
+func (self *NNTPDaemon) informHooks(group, msgid, ref string) {
+	if ValidMessageID(msgid) && ValidMessageID(ref) && ValidNewsgroup(group) {
+		for _, conf := range self.conf.hooks {
+			if conf.enable {
+				ExecHook(conf, group, msgid, ref)
+			}
+		}
+	}
+}
+
 func (self *NNTPDaemon) pump_article_requests() {
 	var articles []ArticleEntry
 	self.send_articles_mtx.Lock()
@@ -814,6 +824,8 @@ func (self *NNTPDaemon) poll(worker int) {
 				if group == "ctl" {
 					modchnl <- msgid
 				}
+				// inform callback hooks
+				self.informHooks(group, msgid, ref)
 				// federate
 				self.sendAllFeeds(ArticleEntry{msgid, group})
 				// send to frontend

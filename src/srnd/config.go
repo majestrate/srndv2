@@ -51,6 +51,12 @@ type ProfilingConfig struct {
 	enable bool
 }
 
+type HookConfig struct {
+	name   string
+	exec   string
+	enable bool
+}
+
 type SRNdConfig struct {
 	daemon   map[string]string
 	crypto   *CryptoConfig
@@ -62,6 +68,7 @@ type SRNdConfig struct {
 	system   map[string]string
 	worker   map[string]string
 	pprof    *ProfilingConfig
+	hooks    []*HookConfig
 }
 
 // check for config files
@@ -141,6 +148,11 @@ func GenSRNdConfig() *configparser.Configuration {
 	sect = conf.NewSection("pprof")
 	sect.Add("enable", "0")
 	sect.Add("bind", "127.0.0.1:17000")
+
+	// dummy hook
+	sect = conf.NewSection("hook-dummy")
+	sect.Add("enable", "0")
+	sect.Add("exec", "/bin/true")
 
 	// crypto related section
 	sect = conf.NewSection("crypto")
@@ -275,6 +287,18 @@ func ReadConfig() *SRNdConfig {
 		sconf.pprof = new(ProfilingConfig)
 		sconf.pprof.enable = opts["enable"] == "1"
 		sconf.pprof.bind = opts["bind"]
+	}
+
+	sections, _ := conf.Find("hook-*")
+	if len(sections) > 0 {
+		for _, hook := range sections {
+			opts := hook.Options()
+			sconf.hooks = append(sconf.hooks, &HookConfig{
+				exec:   opts["exec"],
+				enable: opts["enable"] == "1",
+				name:   hook.Name(),
+			})
+		}
 	}
 
 	s, err = conf.Section("crypto")

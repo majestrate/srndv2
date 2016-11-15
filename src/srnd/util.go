@@ -267,6 +267,10 @@ func newsgroupValidFormat(newsgroup string) bool {
 	return exp_valid_newsgroup.MatchString(newsgroup)
 }
 
+func ValidNewsgroup(newsgroup string) bool {
+	return newsgroupValidFormat(newsgroup)
+}
+
 // generate a new signing keypair
 // public, secret
 func newSignKeypair() (string, string) {

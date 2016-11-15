@@ -1033,7 +1033,39 @@ func (self *nntpConnection) handleLine(daemon *NNTPDaemon, code int, line string
 					conn.PrintfLine("500 invalid daemon state, got STAT with group set but we don't have that group now?")
 				}
 			} else if cmd == "XHDR" {
-				conn.PrintfLine("502 no permission")
+				if len(self.group) > 0 {
+					var msgid string
+					var hdr string
+					if len(parts) == 2 {
+						// XHDR headername
+
+					} else if len(parts) == 3 {
+						// message id
+						msgid = parts[2]
+						hdr = parts[1]
+					} else {
+						// wtf?
+						conn.PrintfLine("502 no permission")
+						return
+					}
+					if ValidMessageID(msgid) {
+						hdrs, err := daemon.database.GetHeadersForMessage(msgid)
+						if err == nil {
+							v := hdrs.Get(hdr, "")
+							conn.PrintfLine("221 header follows")
+							conn.PrintfLine(v)
+							conn.PrintfLine(".")
+						} else {
+							conn.PrintfLine("500 %s", err.Error())
+						}
+					} else {
+						conn.PrintfLine("430 no such article")
+					}
+				} else {
+					// no newsgroup
+					conn.PrintfLine("412 no newsgroup selected")
+				}
+
 			} else {
 				log.Println(self.name, "invalid command recv'd", cmd)
 				conn.PrintfLine("500 Invalid command: %s", cmd)

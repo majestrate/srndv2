@@ -290,6 +290,9 @@ type Database interface {
 
 	// peform search query
 	SearchQuery(prefix, group string, text string) ([]PostModel, error)
+
+	// get full thread model
+	GetThreadModel(prefix, root_msgid string) (ThreadModel, error)
 }
 
 func NewDatabase(db_type, schema, host, port, user, password string) Database {

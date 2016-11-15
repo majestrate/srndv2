@@ -808,6 +808,17 @@ func (self *PostgresDatabase) GetPostModel(prefix, messageID string) PostModel {
 	}
 }
 
+func (self *PostgresDatabase) GetThreadModel(prefix, msgid string) (th ThreadModel, err error) {
+	op := self.GetPostModel(prefix, msgid)
+	if op == nil {
+		err = errors.New("no such thread")
+		return
+	}
+	th = createThreadModel(op)
+	th.Update(self)
+	return
+}
+
 func (self *PostgresDatabase) DeleteThread(msgid string) (err error) {
 	_, err = self.conn.Exec("DELETE FROM ArticleThreads WHERE root_message_id = $1", msgid)
 	return

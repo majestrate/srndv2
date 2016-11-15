@@ -507,6 +507,17 @@ func (self RedisDB) GetPostModel(prefix, messageID string) PostModel {
 	}
 }
 
+func (self RedisDB) GetThreadModel(prefix, msgid string) (th ThreadModel, err error) {
+	op := self.GetPostModel(prefix, msgid)
+	if op == nil {
+		err = errors.New("thread not found")
+		return
+	}
+	th = createThreadModel(op)
+	th.Update(self)
+	return
+}
+
 func (self RedisDB) DeleteThread(msgid string) (err error) {
 	repls := self.GetThreadReplies(msgid, 0, 0)
 	for _, r := range repls {

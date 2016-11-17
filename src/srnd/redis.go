@@ -1238,5 +1238,5 @@ func processHashResult(hash []string) (mapRes map[string]string) {
 }
 
 func RedisEnabled() bool {
-	return true
+	return false
 }

@@ -175,28 +175,18 @@ func GenSRNdConfig() *configparser.Configuration {
 
 	// database backend config
 	sect = conf.NewSection("database")
-	// defaults to redis if enabled
-	if RedisEnabled() {
-		sect.Add("type", "redis")
-		sect.Add("schema", "single")
-		sect.Add("host", "localhost")
-		sect.Add("port", "6379")
-		sect.Add("user", "")
-		sect.Add("password", "")
-	} else {
-		// otherwise defaults to postgres
-		sect.Add("type", "postgres")
-		sect.Add("schema", "srnd")
-		sect.Add("host", "/var/run/postgresql")
-		sect.Add("port", "")
-		sect.Add("user", "")
-		sect.Add("password", "")
-	}
+
+	sect.Add("type", "postgres")
+	sect.Add("schema", "srnd")
+	sect.Add("host", "/var/run/postgresql")
+	sect.Add("port", "")
+	sect.Add("user", "")
+	sect.Add("password", "")
 
 	// cache backend config
 	sect = conf.NewSection("cache")
-	// defaults to file
-	sect.Add("type", "file")
+	// defaults to null
+	sect.Add("type", "null")
 
 	// baked in static html frontend
 	sect = conf.NewSection("frontend")

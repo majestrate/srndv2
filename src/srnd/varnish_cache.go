@@ -223,7 +223,6 @@ func NewVarnishCache(varnish_url, bind_addr, prefix, webroot, name string, attac
 	}
 	cache.client = &http.Client{
 		Transport: &http.Transport{
-			DialContext: nil,
 			Dial: func(network, addr string) (c net.Conn, err error) {
 				var remote_addr *net.TCPAddr
 				remote_addr, err = net.ResolveTCPAddr(network, addr)

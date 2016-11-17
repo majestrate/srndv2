@@ -1346,7 +1346,9 @@ func (self *nntpConnection) requestArticle(daemon *NNTPDaemon, conn *textproto.C
 	// send command
 	err = conn.PrintfLine("ARTICLE %s", msgid)
 	// read response
-	code, line, err := conn.ReadCodeLine(-1)
+	var code int
+	var line string
+	code, line, err = conn.ReadCodeLine(-1)
 	if code == 220 {
 		// awwww yeh we got it
 		var hdr textproto.MIMEHeader
@@ -1387,6 +1389,9 @@ func (self *nntpConnection) requestArticle(daemon *NNTPDaemon, conn *textproto.C
 	} else {
 		// invalid response
 		log.Println(self.name, "invald response to ARTICLE:", code, line)
+	}
+	if err == io.EOF {
+		conn.Close()
 	}
 	return
 }

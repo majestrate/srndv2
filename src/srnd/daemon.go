@@ -495,7 +495,7 @@ func (self *NNTPDaemon) Run() {
 
 	self.register_connection = make(chan *nntpConnection)
 	self.deregister_connection = make(chan *nntpConnection)
-	self.infeed_load = make(chan string)
+	self.infeed_load = make(chan string, 128)
 	self.send_all_feeds = make(chan ArticleEntry)
 	self.activeConnections = make(map[string]*nntpConnection)
 	self.loadedFeeds = make(map[string]*feedState)

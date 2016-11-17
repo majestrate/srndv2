@@ -900,7 +900,7 @@ func (self *httpFrontend) handle_postRequest(pr *postRequest, b bannedFunc, e er
 		err = nntp.WriteTo(f)
 		f.Close()
 		if err == nil {
-			self.daemon.loadFromInfeed(nntp.MessageID())
+			go self.daemon.loadFromInfeed(nntp.MessageID())
 			s(nntp)
 			return
 		}

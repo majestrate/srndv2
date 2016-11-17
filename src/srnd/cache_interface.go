@@ -24,7 +24,7 @@ type CacheInterface interface {
 }
 
 //TODO only pass needed config
-func NewCache(cache_type, host, port, user, password string, config map[string]string, db Database, store ArticleStore) CacheInterface {
+func NewCache(cache_type, host, port, user, password string, cache_config, config map[string]string, db Database, store ArticleStore) CacheInterface {
 	prefix := config["prefix"]
 	webroot := config["webroot"]
 	threads := mapGetInt(config, "regen_threads", 1)
@@ -38,8 +38,8 @@ func NewCache(cache_type, host, port, user, password string, config map[string]s
 		return NewNullCache(prefix, webroot, name, attachments, db, store)
 	}
 	if cache_type == "varnish" {
-		url := config["url"]
-		bind_addr := config["bind"]
+		url := cache_config["url"]
+		bind_addr := cache_config["bind"]
 		return NewVarnishCache(url, bind_addr, prefix, webroot, name, attachments, db, store)
 	}
 

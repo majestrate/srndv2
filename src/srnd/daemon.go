@@ -527,7 +527,7 @@ func (self *NNTPDaemon) Run() {
 		cache_port := self.conf.cache["port"]
 		cache_user := self.conf.cache["user"]
 		cache_passwd := self.conf.cache["password"]
-		self.cache = NewCache(self.conf.cache["type"], cache_host, cache_port, cache_user, cache_passwd, self.conf.frontend, self.database, self.store)
+		self.cache = NewCache(self.conf.cache["type"], cache_host, cache_port, cache_user, cache_passwd, self.conf.cache, self.conf.frontend, self.database, self.store)
 
 		self.frontend = NewHTTPFrontend(self, self.cache, self.conf.frontend, self.conf.worker["url"])
 		go self.frontend.Mainloop()

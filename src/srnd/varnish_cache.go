@@ -142,7 +142,7 @@ func (self *VarnishCache) DeleteBoardMarkup(group string) {
 
 // try to delete root post's page
 func (self *VarnishCache) DeleteThreadMarkup(root_post_id string) {
-	self.invalidate(fmt.Sprintf("%s%s%s.html", self.varnish_url, self.prefix, HashMessageID(root_post_id)))
+	self.invalidate(fmt.Sprintf("%s%sthread-%s.html", self.varnish_url, self.prefix, HashMessageID(root_post_id)))
 }
 
 // regen every newsgroup
@@ -168,7 +168,7 @@ func (self *VarnishCache) pollRegen() {
 			}
 		case ev := <-self.regenThreadChan:
 			{
-				self.invalidate(fmt.Sprintf("%s%s%s.html", self.varnish_url, self.prefix, HashMessageID(ev.MessageID())))
+				self.invalidate(fmt.Sprintf("%s%sthread-%s.html", self.varnish_url, self.prefix, HashMessageID(ev.MessageID())))
 			}
 		}
 	}

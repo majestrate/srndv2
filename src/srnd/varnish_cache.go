@@ -219,7 +219,7 @@ func NewVarnishCache(varnish_url, bind_addr, prefix, webroot, name string, attac
 	cache.regenGroupChan = make(chan groupRegenRequest, 8)
 	local_addr, err := net.ResolveTCPAddr("tcp", bind_addr)
 	if err != nil {
-		log.Fatalf("failed to resolve %s for varnish cache", bind_addr)
+		log.Fatalf("failed to resolve %s for varnish cache: %s", bind_addr, err)
 	}
 	cache.client = &http.Client{
 		Transport: &http.Transport{

@@ -511,7 +511,7 @@ func (self *NNTPDaemon) Run() {
 		log.Println("running in archive mode")
 		self.expire = nil
 	} else {
-		self.expire = createExpirationCore(self.database, self.store)
+		self.expire = createExpirationCore(self.database, self.store, self.informHooks)
 	}
 	self.sync_on_start = self.conf.daemon["sync_on_start"] == "1"
 	self.instance_name = self.conf.daemon["instance_name"]
@@ -555,7 +555,6 @@ func (self *NNTPDaemon) Run() {
 	if self.expire == nil {
 		log.Println("we are an archive, not expiring posts")
 	} else {
-		go self.expire.Mainloop()
 		lifetime := mapGetInt(self.conf.daemon, "article_lifetime", 0)
 		if lifetime > 0 {
 			self.article_lifetime = time.Duration(lifetime) * time.Hour

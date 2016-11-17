@@ -21,12 +21,12 @@ type ExpirationCore interface {
 	ExpireOrphans()
 	// expire all articles posted before time
 	ExpireBefore(t time.Time)
-	// run our mainloop
-	Mainloop()
 }
 
-func createExpirationCore(database Database, store ArticleStore) ExpirationCore {
-	return expire{database, store, make(chan deleteEvent, 1024)}
+type ExpireCacheFunc func(string, string, string)
+
+func createExpirationCore(database Database, store ArticleStore, ex ExpireCacheFunc) ExpirationCore {
+	return expire{database, store, ex}
 }
 
 type deleteEvent string
@@ -40,44 +40,45 @@ func (self deleteEvent) MessageID() string {
 }
 
 type expire struct {
-	database Database
-	store    ArticleStore
-	// channel to send delete requests down
-	delChan chan deleteEvent
+	database    Database
+	store       ArticleStore
+	expireCache ExpireCacheFunc
 }
 
 func (self expire) ExpirePost(messageID string) {
+	self.handleEvent(deleteEvent(self.store.GetFilename(messageID)))
 	// get article headers
 	headers := self.store.GetHeaders(messageID)
 	if headers != nil {
+		group := headers.Get("Newsgroups", "")
 		// is this a root post ?
 		ref := headers.Get("References", "")
 		if ref == "" || ref == messageID {
 			// ya, expire the entire thread
-			self.ExpireThread(messageID)
+			self.ExpireThread(group, messageID)
+		} else {
+			self.expireCache(group, messageID, ref)
 		}
 	}
-
-	self.delChan <- deleteEvent(self.store.GetFilename(messageID))
-
 }
 
 func (self expire) ExpireGroup(newsgroup string, keep int) {
 	log.Println("Expire group", newsgroup, keep)
 	threads := self.database.GetRootPostsForExpiration(newsgroup, keep)
 	for _, root := range threads {
-		self.ExpireThread(root)
+		self.ExpireThread(newsgroup, root)
 	}
 }
 
-func (self expire) ExpireThread(rootMsgid string) {
+func (self expire) ExpireThread(group, rootMsgid string) {
 	replies, err := self.database.GetMessageIDByHeader("References", rootMsgid)
 	if err == nil {
 		for _, reply := range replies {
-			self.delChan <- deleteEvent(self.store.GetFilename(reply))
+			self.handleEvent(deleteEvent(self.store.GetFilename(reply)))
 		}
 	}
 	self.database.DeleteThread(rootMsgid)
+	self.expireCache(group, rootMsgid, rootMsgid)
 }
 
 func (self expire) ExpireBefore(t time.Time) {
@@ -125,29 +126,26 @@ func (self expire) ExpireOrphans() {
 	}
 }
 
-func (self expire) Mainloop() {
-	for {
-		ev := <-self.delChan
-		log.Println("expire", ev.MessageID())
-		atts := self.database.GetPostAttachments(ev.MessageID())
-		// remove all attachments
-		if atts != nil {
-			for _, att := range atts {
-				img := self.store.AttachmentFilepath(att)
-				os.Remove(img)
-				thm := self.store.ThumbnailFilepath(att)
-				os.Remove(thm)
-			}
+func (self expire) handleEvent(ev deleteEvent) {
+	log.Println("expire", ev.MessageID())
+	atts := self.database.GetPostAttachments(ev.MessageID())
+	// remove all attachments
+	if atts != nil {
+		for _, att := range atts {
+			img := self.store.AttachmentFilepath(att)
+			os.Remove(img)
+			thm := self.store.ThumbnailFilepath(att)
+			os.Remove(thm)
 		}
-		err := self.database.BanArticle(ev.MessageID(), "expired")
-		if err != nil {
-			log.Println("failed to ban for expiration", err)
-		}
-		err = self.database.DeleteArticle(ev.MessageID())
-		if err != nil {
-			log.Println("failed to delete article", err)
-		}
-		// remove article
-		os.Remove(ev.Path())
 	}
+	err := self.database.BanArticle(ev.MessageID(), "expired")
+	if err != nil {
+		log.Println("failed to ban for expiration", err)
+	}
+	err = self.database.DeleteArticle(ev.MessageID())
+	if err != nil {
+		log.Println("failed to delete article", err)
+	}
+	// remove article
+	os.Remove(ev.Path())
 }

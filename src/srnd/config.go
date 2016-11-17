@@ -203,7 +203,7 @@ func GenSRNdConfig() *configparser.Configuration {
 	sect.Add("enable", "1")
 	sect.Add("allow_files", "1")
 	sect.Add("regen_on_start", "0")
-	sect.Add("regen_threads", "1")
+	sect.Add("regen_threads", "2")
 	sect.Add("bind", "[::]:18000")
 	sect.Add("name", "web.srndv2.test")
 	sect.Add("webroot", "webroot")

@@ -37,6 +37,12 @@ func NewCache(cache_type, host, port, user, password string, config map[string]s
 	if cache_type == "null" {
 		return NewNullCache(prefix, webroot, name, attachments, db, store)
 	}
+	if cache_type == "varnish" {
+		url := config["url"]
+		bind_addr := config["bind"]
+		return NewVarnishCache(url, bind_addr, prefix, webroot, name, attachments, db, store)
+	}
+
 	if cache_type == "redis" {
 		log.Fatalf("redis cache not supported, use null cache instead")
 		return NewRedisCache(prefix, webroot, name, threads, attachments, db, host, port, password)

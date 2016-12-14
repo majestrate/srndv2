@@ -1000,9 +1000,30 @@ func (self *NNTPDaemon) Setup() {
 	db_user := self.conf.database["user"]
 	db_passwd := self.conf.database["password"]
 
+	var ok bool
+	var val string
+
 	// set up database stuff
 	log.Println("connecting to database...")
 	self.database = NewDatabase(self.conf.database["type"], self.conf.database["schema"], db_host, db_port, db_user, db_passwd)
+	if val, ok = self.conf.database["connidle"]; ok {
+		i, _ := strconv.Atoi(val)
+		if i > 0 {
+			self.database.SetMaxIdleConns(i)
+		}
+	}
+	if val, ok = self.conf.database["maxconns"]; ok {
+		i, _ := strconv.Atoi(val)
+		if i > 0 {
+			self.database.SetMaxOpenConns(i)
+		}
+	}
+	if val, ok = self.conf.database["connlife"]; ok {
+		i, _ := strconv.Atoi(val)
+		if i > 0 {
+			self.database.SetConnectionLifetime(i)
+		}
+	}
 	log.Println("ensure that the database is created...")
 	self.database.CreateTables()
 

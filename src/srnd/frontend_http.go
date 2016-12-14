@@ -1411,6 +1411,7 @@ func (self *httpFrontend) Mainloop() {
 	go template.loadAllModels(self.prefix, self.name, self.daemon.database)
 
 	// poll channels
+
 	go self.poll()
 
 	// poll liveui

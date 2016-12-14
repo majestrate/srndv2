@@ -182,6 +182,9 @@ func GenSRNdConfig() *configparser.Configuration {
 	sect.Add("port", "")
 	sect.Add("user", "")
 	sect.Add("password", "")
+	sect.Add("maxconns", "10")
+	sect.Add("connlife", "10")
+	sect.Add("connidle", "10")
 
 	// cache backend config
 	sect = conf.NewSection("cache")

@@ -61,6 +61,10 @@ type Database interface {
 	CountAllArticlesInGroup(group string) (int64, error)
 	GetAllArticles() []ArticleEntry
 
+	SetConnectionLifetime(seconds int)
+	SetMaxOpenConns(n int)
+	SetMaxIdleConns(n int)
+
 	// check if a newsgroup is banned
 	NewsgroupBanned(group string) (bool, error)
 
@@ -299,11 +303,6 @@ func NewDatabase(db_type, schema, host, port, user, password string) Database {
 	if db_type == "postgres" {
 		if schema == "srnd" {
 			return NewPostgresDatabase(host, port, user, password)
-		}
-	}
-	if db_type == "redis" && RedisEnabled() {
-		if schema == "single" {
-			return NewRedisDatabase(host, port, password)
 		}
 	}
 	log.Fatalf("invalid database type: %s/%s", db_type, schema)

@@ -26,11 +26,13 @@ import (
 	"time"
 )
 
+// postgres database driver implementation
 type PostgresDatabase struct {
 	conn   *sql.DB
 	db_str string
 }
 
+// create postgres database driver
 func NewPostgresDatabase(host, port, user, password string) Database {
 	db := new(PostgresDatabase)
 	var err error
@@ -47,16 +49,27 @@ func NewPostgresDatabase(host, port, user, password string) Database {
 			db.db_str = fmt.Sprintf("host=%s client_encoding='UTF8'", host)
 		}
 	}
-
 	log.Println("Connecting to postgres...")
 	db.conn, err = sql.Open("postgres", db.db_str)
 	if err != nil {
 		log.Fatalf("can`not open connection to db: %s", err)
 	}
-	db.conn.SetConnMaxLifetime(time.Second * 30)
-	db.conn.SetMaxOpenConns(30)
-	db.conn.SetMaxIdleConns(10)
+	db.SetConnectionLifetime(30)
+	db.SetMaxOpenConns(30)
+	db.SetMaxIdleConns(10)
 	return db
+}
+
+func (db *PostgresDatabase) SetConnectionLifetime(seconds int) {
+	db.conn.SetConnMaxLifetime(time.Second * time.Duration(seconds))
+}
+
+func (db *PostgresDatabase) SetMaxOpenConns(n int) {
+	db.conn.SetMaxOpenConns(n)
+}
+
+func (db *PostgresDatabase) SetMaxIdleConns(n int) {
+	db.conn.SetMaxIdleConns(n)
 }
 
 // finalize all transactions

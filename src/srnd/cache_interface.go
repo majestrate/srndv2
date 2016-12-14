@@ -43,11 +43,6 @@ func NewCache(cache_type, host, port, user, password string, cache_config, confi
 		return NewVarnishCache(url, bind_addr, prefix, webroot, name, attachments, db, store)
 	}
 
-	if cache_type == "redis" {
-		log.Fatalf("redis cache not supported, use null cache instead")
-		return NewRedisCache(prefix, webroot, name, threads, attachments, db, host, port, password)
-	}
-
 	log.Fatalf("invalid cache type: %s", cache_type)
 	return nil
 }

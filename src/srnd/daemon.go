@@ -7,6 +7,7 @@ import (
 	"crypto/tls"
 	"errors"
 	"fmt"
+	"github.com/majestrate/nacl"
 	"log"
 	"net"
 	"net/http"
@@ -154,8 +155,10 @@ func (self *NNTPDaemon) WrapSign(nntp NNTPMessage) {
 		if sk_bytes == nil {
 			log.Println("invalid secretkey will not sign")
 		} else {
-			sig := msgidFrontendSign(sk_bytes, nntp.MessageID())
-			pk := getSignPubkey(sk_bytes)
+			kp := nacl.LoadSignKey(sk_bytes)
+			defer kp.Free()
+			sig := msgidFrontendSign(kp.Secret(), nntp.MessageID())
+			pk := getSignPubkey(kp.Public())
 			nntp.Headers().Add("X-Frontend-Signature", sig)
 			nntp.Headers().Add("X-Frontend-Pubkey", pk)
 			log.Println("signed", nntp.MessageID(), "as from", pk)

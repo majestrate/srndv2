@@ -1051,6 +1051,7 @@ func (self *httpFrontend) handle_api_find(wr http.ResponseWriter, r *http.Reques
 			donechnl := make(chan int)
 			go func(w io.Writer) {
 				var ok bool
+				ok = true
 				var p PostModel
 				for ok {
 					p, ok = <-chnl

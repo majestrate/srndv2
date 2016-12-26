@@ -150,11 +150,16 @@ func (self *NNTPDaemon) GetDatabase() Database {
 func (self *NNTPDaemon) WrapSign(nntp NNTPMessage) {
 	sk, ok := self.conf.daemon["secretkey"]
 	if ok {
-		sk_bytes := parseTripcodeSecret(sk)
-		sig := msgidFrontendSign(sk_bytes, nntp.MessageID())
-		pk := getSignPubkey(sk_bytes)
-		nntp.Headers().Add("X-Frontend-Signature", sig)
-		nntp.Headers().Add("X-Frontend-Pubkey", pk)
+		sk_bytes := unhex(sk)
+		if sk_bytes == nil {
+			log.Println("invalid secretkey will not sign")
+		} else {
+			sig := msgidFrontendSign(sk_bytes, nntp.MessageID())
+			pk := getSignPubkey(sk_bytes)
+			nntp.Headers().Add("X-Frontend-Signature", sig)
+			nntp.Headers().Add("X-Frontend-Pubkey", pk)
+			log.Println("signed", nntp.MessageID(), "as from", pk)
+		}
 	} else {
 		log.Println("sending", nntp.MessageID(), "unsigned")
 	}

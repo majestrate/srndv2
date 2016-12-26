@@ -1044,8 +1044,7 @@ func (self *httpFrontend) handle_api_find(wr http.ResponseWriter, r *http.Reques
 		g := q.Get("group")
 		if len(s) > 0 {
 			wr.Header().Add("Content-Type", "text/json; encoding=UTF-8")
-			chnl := make(chan PostModel, 128)
-			err := self.daemon.database.SearchQuery(self.prefix, g, s, chnl)
+			chnl := make(chan PostModel)
 			wr.WriteHeader(http.StatusOK)
 			io.WriteString(wr, "[")
 			donechnl := make(chan int)
@@ -1066,6 +1065,7 @@ func (self *httpFrontend) handle_api_find(wr http.ResponseWriter, r *http.Reques
 				}
 				donechnl <- 0
 			}(wr)
+			err := self.daemon.database.SearchQuery(self.prefix, g, s, chnl)
 			<-donechnl
 			close(donechnl)
 			io.WriteString(wr, " null ]")

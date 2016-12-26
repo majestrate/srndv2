@@ -150,7 +150,7 @@ func (self *NNTPDaemon) GetDatabase() Database {
 func (self *NNTPDaemon) WrapSign(nntp NNTPMessage) {
 	sk, ok := self.conf.daemon["secretkey"]
 	if ok {
-		sk_bytes := unhex(sk)
+		sk_bytes := parseTripcodeSecret(sk)
 		if sk_bytes == nil {
 			log.Println("invalid secretkey will not sign")
 		} else {

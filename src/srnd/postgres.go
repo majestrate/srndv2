@@ -1504,24 +1504,26 @@ func (self *PostgresDatabase) GetPostingStats(gran, begin, end int64) (st Postin
 }
 
 func (self *PostgresDatabase) SearchQuery(prefix, group string, text string, chnl chan PostModel) (err error) {
-	text = "%" + text + "%"
-	var rows *sql.Rows
-	if group == "" {
-		rows, err = self.conn.Query("SELECT newsgroup, message_id, ref_id, name, subject, time_posted FROM ArticlePosts WHERE message LIKE $1 ORDER BY time_posted DESC", text)
-	} else {
-		rows, err = self.conn.Query("SELECT newsgroup, message_id, ref_id, name, subject, time_posted FROM ArticlePosts WHERE newsgroup = $1 AND message LIKE $2 ORDER BY time_posted DESC", group, text)
-	}
-	counted := 0
-	if err == nil {
-		for rows.Next() {
-			p := new(post)
-			rows.Scan(&p.board, &p.Message_id, &p.Parent, &p.PostName, &p.PostSubject, &p.Posted)
-			chnl <- p
-			counted++
+	if text != "" && strings.Count(text, "%") == 0 {
+		text = "%" + text + "%"
+		var rows *sql.Rows
+		if group == "" {
+			rows, err = self.conn.Query("SELECT newsgroup, message_id, ref_id, name, subject, time_posted FROM ArticlePosts WHERE message LIKE $1 ORDER BY time_posted DESC", text)
+		} else {
+			rows, err = self.conn.Query("SELECT newsgroup, message_id, ref_id, name, subject, time_posted FROM ArticlePosts WHERE newsgroup = $1 AND message LIKE $2 ORDER BY time_posted DESC", group, text)
 		}
-		rows.Close()
+		counted := 0
+		if err == nil {
+			for rows.Next() {
+				p := new(post)
+				rows.Scan(&p.board, &p.Message_id, &p.Parent, &p.PostName, &p.PostSubject, &p.Posted)
+				chnl <- p
+				counted++
+			}
+			rows.Close()
+		}
+		log.Println("search yielded", counted, "results")
 	}
-	log.Println("search yielded", counted, "results")
 	close(chnl)
 	return
 }

@@ -1532,9 +1532,10 @@ func (self *PostgresDatabase) SearchByHash(prefix, group, text string, chnl chan
 		text = "%" + text + "%"
 		var rows *sql.Rows
 		if group == "" {
-			rows, err = self.conn.Query("SELECT newsgroup, message_id, ref_id, name, subject, time_posted FROM ArticlePosts WHERE message_id_hash LIKE $1 ORDER BY time_posted DESC", text)
+			rows, err = self.conn.Query("SELECT message_newsgroup, message_id, ref_id, time_obtained FROM Articles WHERE message_id_hash LIKE $1 ORDER BY time_obtained DESC", text)
 		} else {
-			rows, err = self.conn.Query("SELECT newsgroup, message_id, ref_id, name, subject, time_posted FROM ArticlePosts WHERE newsgroup = $1 AND message_id_hash LIKE $2 ORDER BY time_posted DESC", group, text)
+
+			rows, err = self.conn.Query("SELECT message_newsgroup, message_id, ref_id, time_obtained FROM Articles WHERE message_newsgroup = $2 message_id_hash LIKE $1 ORDER BY time_obtained DESC", text, group)
 		}
 		counted := 0
 		if err == nil {

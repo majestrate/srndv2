@@ -1057,8 +1057,10 @@ func (self *httpFrontend) handle_api_find(wr http.ResponseWriter, r *http.Reques
 					p, ok = <-chnl
 					if p != nil {
 						d, _ := json.Marshal(p)
-						io.WriteString(w, string(d))
-						io.WriteString(w, ", ")
+						if d != nil {
+							io.WriteString(w, string(d))
+							io.WriteString(w, ", ")
+						}
 					} else {
 						break
 					}

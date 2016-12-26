@@ -1045,16 +1045,18 @@ func (self *httpFrontend) handle_api_find(wr http.ResponseWriter, r *http.Reques
 		if len(s) > 0 {
 			wr.Header().Add("Content-Type", "text/json; encoding=UTF-8")
 			io.WriteString(wr, "[")
-			enc := json.NewEncoder(wr)
 			chnl := make(chan PostModel, 128)
 			go func() {
-				p, ok := <-chnl
-				if ok {
-					enc.Encode(p)
-					io.WriteString(wr, ", ")
-				} else {
-					io.WriteString(wr, " null]")
-					return
+				for {
+					p, ok := <-chnl
+					if ok {
+						d, _ := json.Marshal(p)
+						io.WriteString(wr, string(d))
+						io.WriteString(wr, ", ")
+					} else {
+						io.WriteString(wr, " null]")
+						return
+					}
 				}
 			}()
 			err := self.daemon.database.SearchQuery(self.prefix, g, s, chnl)

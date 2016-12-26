@@ -1511,14 +1511,17 @@ func (self *PostgresDatabase) SearchQuery(prefix, group string, text string, chn
 	} else {
 		rows, err = self.conn.Query("SELECT newsgroup, message_id, ref_id, message, name, subject, time_posted FROM ArticlePosts WHERE newsgroup = $1 AND message LIKE $2 ORDER BY time_posted DESC", group, text)
 	}
+	counted := 0
 	if err == nil {
 		for rows.Next() {
 			p := new(post)
 			rows.Scan(&p.board, &p.Message_id, &p.Parent, &p.PostMessage, &p.PostName, &p.PostSubject, &p.Posted)
 			chnl <- p
+			counted++
 		}
 		rows.Close()
 	}
+	log.Println("search yielded", counted, "results")
 	close(chnl)
 	return
 }

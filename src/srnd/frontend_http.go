@@ -1047,6 +1047,7 @@ func (self *httpFrontend) handle_api_find(wr http.ResponseWriter, r *http.Reques
 			chnl := make(chan PostModel, 128)
 			err := self.daemon.database.SearchQuery(self.prefix, g, s, chnl)
 			io.WriteString(wr, "[")
+			donechnl := make(chan int)
 			go func() {
 				var ok bool
 				var p PostModel
@@ -1056,10 +1057,14 @@ func (self *httpFrontend) handle_api_find(wr http.ResponseWriter, r *http.Reques
 						d, _ := json.Marshal(p)
 						io.WriteString(wr, string(d))
 						io.WriteString(wr, ", ")
+					} else {
+						break
 					}
 				}
-				io.WriteString(wr, " null ]")
+				donechnl <- 0
 			}()
+			<-donechnl
+			io.WriteString(wr, " null ]")
 			if err != nil {
 				api_error(wr, err)
 			}

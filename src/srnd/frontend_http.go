@@ -1050,16 +1050,17 @@ func (self *httpFrontend) handle_api_find(wr http.ResponseWriter, r *http.Reques
 			io.WriteString(wr, "[")
 			donechnl := make(chan int)
 			go func(w io.Writer) {
-				var ok bool
-				ok = true
+				ok := true
 				var p PostModel
 				for ok {
 					p, ok = <-chnl
 					if p != nil {
-						d, _ := json.Marshal(p)
-						if d != nil {
+						d, e := json.Marshal(p)
+						if e == nil {
 							io.WriteString(w, string(d))
 							io.WriteString(w, ", ")
+						} else {
+							log.Println("error marshalling post", e)
 						}
 					} else {
 						break

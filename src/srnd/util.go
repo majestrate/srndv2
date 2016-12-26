@@ -616,11 +616,13 @@ func serverPubkeyIsValid(pubkey string) bool {
 func verifyFrontendSig(pubkey, sig, msgid string) bool {
 	s := unhex(sig)
 	k := unhex(pubkey)
-	return nacl.CryptoVerifyDetached([]byte(msgid), s, k)
+	h := sha512.Sum512([]byte(msgid))
+	return nacl.CryptoVerifyDetached(h[:], s, k)
 }
 
 func msgidFrontendSign(sk []byte, msgid string) string {
-	sig := nacl.CryptoSignDetached([]byte(msgid), sk)
+	h := sha512.Sum512([]byte(msgid))
+	sig := nacl.CryptoSignDetached(h[:], sk)
 	if sig == nil {
 		return "[failed to sign]"
 	}

@@ -393,6 +393,21 @@ func (self *nntpConnection) checkMIMEHeaderNoAuth(daemon *NNTPDaemon, hdr textpr
 	is_ctl := newsgroup == "ctl" && is_signed
 	anon_poster := torposter != "" || i2paddr != "" || encaddr == ""
 
+	server_pubkey := hdr.Get("X-Frontend-Pubkey")
+	server_sig := hdr.Get("X-Frontend-Signature")
+
+	if serverPubkeyIsValid(server_pubkey) {
+		if !verifyFrontendSig(server_pubkey, server_sig, msgid) {
+			reason = "invalid frontend signature"
+			ban = true
+			return
+		}
+	} else if server_pubkey != "" {
+		reason = fmt.Sprintf("invalid server public key: %s", server_pubkey)
+		ban = true
+		return
+	}
+
 	if !newsgroupValidFormat(newsgroup) {
 		// invalid newsgroup format
 		reason = fmt.Sprintf("invalid newsgroup: %s", newsgroup)

@@ -607,3 +607,22 @@ func extractRealIP(r *http.Request) (ip string, err error) {
 	}
 	return
 }
+
+func serverPubkeyIsValid(pubkey string) bool {
+	b := unhex(pubkey)
+	return b != nil && len(b) == 32
+}
+
+func verifyFrontendSig(pubkey, sig, msgid string) bool {
+	s := unhex(sig)
+	k := unhex(pubkey)
+	return nacl.CryptoVerifyDetached([]byte(msgid), s, k)
+}
+
+func msgidFrontendSign(sk []byte, msgid string) string {
+	sig := nacl.CryptoSignDetached([]byte(msgid), sk)
+	if sig == nil {
+		return "[failed to sign]"
+	}
+	return hex.EncodeToString(sig)
+}

@@ -147,20 +147,17 @@ func (self *NNTPDaemon) GetDatabase() Database {
 }
 
 // sign an article as coming from our daemon
-func (self *NNTPDaemon) WrapSign(nntp NNTPMessage) NNTPMessage {
+func (self *NNTPDaemon) WrapSign(nntp NNTPMessage) {
 	sk, ok := self.conf.daemon["secretkey"]
-	if !ok {
-		log.Println("!!! sending", nntp.MessageID(), "unsigned, set secretkey in nntp section of srnd.ini !!!")
-		return nntp
-	}
-	sk_bytes := parseTripcodeSecret(sk)
-	new_nntp, err := signArticle(nntp, sk_bytes)
-	if err == nil {
-		nntp = new_nntp
+	if ok {
+		sk_bytes := parseTripcodeSecret(sk)
+		sig := msgidFrontendSign(sk_bytes, nntp.MessageID())
+		pk := getSignPubkey(sk_bytes)
+		nntp.Headers().Add("X-Frontend-Signature", sig)
+		nntp.Headers().Add("X-Frontend-Pubkey", pk)
 	} else {
-		log.Println("!!! failed to signed", nntp.MessageID(), err)
+		log.Println("sending", nntp.MessageID(), "unsigned")
 	}
-	return nntp
 }
 
 // for srnd tool

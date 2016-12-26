@@ -888,9 +888,8 @@ func (self *httpFrontend) handle_postRequest(pr *postRequest, b bannedFunc, e er
 		e(err)
 		return
 	}
-	// have daemon sign message
-	// DON'T Wrap sign yet
-	// wrapped := self.daemon.WrapSign(nntp)
+	// have daemon sign message-id
+	self.daemon.WrapSign(nntp)
 	// save it
 	f := self.daemon.store.CreateFile(nntp.MessageID())
 	if f == nil {

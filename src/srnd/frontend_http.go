@@ -1047,22 +1047,20 @@ func (self *httpFrontend) handle_api_find(wr http.ResponseWriter, r *http.Reques
 			io.WriteString(wr, "[")
 			chnl := make(chan PostModel, 128)
 			go func() {
-				for {
-					p, ok := <-chnl
+				var ok bool
+				var p PostModel
+				for ok {
+					p, ok = <-chnl
 					if ok {
 						d, _ := json.Marshal(p)
 						io.WriteString(wr, string(d))
 						io.WriteString(wr, ", ")
-					} else {
-						io.WriteString(wr, " null]")
-						return
 					}
 				}
+				io.WriteString(wr, " null ]")
 			}()
 			err := self.daemon.database.SearchQuery(self.prefix, g, s, chnl)
-			if err == nil {
-
-			} else {
+			if err != nil {
 				api_error(wr, err)
 			}
 			return

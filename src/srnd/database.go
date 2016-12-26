@@ -293,7 +293,7 @@ type Database interface {
 	GetPostingStats(granularity, begin, end int64) (PostingStats, error)
 
 	// peform search query
-	SearchQuery(prefix, group string, text string) ([]PostModel, error)
+	SearchQuery(prefix, group string, text string, chnl chan PostModel) error
 
 	// get full thread model
 	GetThreadModel(prefix, root_msgid string) (ThreadModel, error)

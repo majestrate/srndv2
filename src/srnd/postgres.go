@@ -1503,8 +1503,7 @@ func (self *PostgresDatabase) GetPostingStats(gran, begin, end int64) (st Postin
 	return
 }
 
-func (self *PostgresDatabase) SearchQuery(prefix, group string, text string) (posts []PostModel, err error) {
-	posts = []PostModel{}
+func (self *PostgresDatabase) SearchQuery(prefix, group string, text string, chnl chan PostModel) (err error) {
 	text = "%" + text + "%"
 	var rows *sql.Rows
 	if group == "" {
@@ -1516,9 +1515,10 @@ func (self *PostgresDatabase) SearchQuery(prefix, group string, text string) (po
 		for rows.Next() {
 			p := new(post)
 			rows.Scan(&p.board, &p.Message_id, &p.Parent, &p.PostMessage, &p.PostName, &p.PostSubject, &p.Posted)
-			posts = append(posts, p)
+			chnl <- p
 		}
 		rows.Close()
 	}
+	close(chnl)
 	return
 }

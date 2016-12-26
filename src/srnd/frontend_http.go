@@ -1043,10 +1043,23 @@ func (self *httpFrontend) handle_api_find(wr http.ResponseWriter, r *http.Reques
 		s := q.Get("text")
 		g := q.Get("group")
 		if len(s) > 0 {
-			posts, err := self.daemon.database.SearchQuery(self.prefix, g, s)
+			wr.Header().Add("Content-Type", "text/json; encoding=UTF-8")
+			io.WriteString(wr, "[")
+			enc := json.NewEncoder(wr)
+			chnl := make(chan PostModel)
+			err := self.daemon.database.SearchQuery(self.prefix, g, s, chnl)
+			go func() {
+				p, ok := <-chnl
+				if ok {
+					enc.Encode(p)
+					io.WriteString(wr, ", ")
+				} else {
+					io.WriteString(wr, " null]")
+					return
+				}
+			}()
 			if err == nil {
-				wr.Header().Add("Content-Type", "text/json; encoding=UTF-8")
-				json.NewEncoder(wr).Encode(posts)
+
 			} else {
 				api_error(wr, err)
 			}

@@ -1532,16 +1532,16 @@ func (self *PostgresDatabase) SearchByHash(prefix, group, text string, chnl chan
 		text = "%" + text + "%"
 		var rows *sql.Rows
 		if group == "" {
-			rows, err = self.conn.Query("SELECT message_newsgroup, message_id, message_ref_id, time_obtained FROM Articles WHERE message_id_hash LIKE $1 ORDER BY time_obtained DESC", text)
+			rows, err = self.conn.Query("SELECT message_newsgroup, message_id, message_ref_id FROM Articles WHERE message_id_hash LIKE $1 ORDER BY time_obtained DESC", text)
 		} else {
 
-			rows, err = self.conn.Query("SELECT message_newsgroup, message_id, message_ref_id, time_obtained FROM Articles WHERE message_newsgroup = $2 message_id_hash LIKE $1 ORDER BY time_obtained DESC", text, group)
+			rows, err = self.conn.Query("SELECT message_newsgroup, message_id, message_ref_id FROM Articles WHERE message_newsgroup = $2 message_id_hash LIKE $1 ORDER BY time_obtained DESC", text, group)
 		}
 		counted := 0
 		if err == nil {
 			for rows.Next() {
 				p := new(post)
-				rows.Scan(&p.board, &p.Message_id, &p.Parent, &p.PostName, &p.PostSubject, &p.Posted)
+				rows.Scan(&p.board, &p.Message_id, &p.Parent)
 				chnl <- p
 				counted++
 			}

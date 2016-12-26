@@ -613,7 +613,7 @@ func extractRealIP(r *http.Request) (ip string, err error) {
 
 func serverPubkeyIsValid(pubkey string) bool {
 	b := unhex(pubkey)
-	return b != nil && len(b) == 32
+	return b != nil && len(b) == nacl.CryptoSignPubKeySize()
 }
 
 func verifyFrontendSig(pubkey, sig, msgid string) bool {

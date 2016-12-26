@@ -1050,11 +1050,9 @@ func (self *httpFrontend) handle_api_find(wr http.ResponseWriter, r *http.Reques
 			io.WriteString(wr, "[")
 			donechnl := make(chan int)
 			go func(w io.Writer) {
-				ok := true
-				var p PostModel
-				for ok {
-					p, ok = <-chnl
-					if p != nil {
+				for {
+					p, ok := <-chnl
+					if ok {
 						d, e := json.Marshal(p)
 						if e == nil {
 							io.WriteString(w, string(d))

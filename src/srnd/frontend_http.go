@@ -1032,47 +1032,45 @@ func (self *httpFrontend) handle_api_find(wr http.ResponseWriter, r *http.Reques
 			} else {
 				// we found it
 				wr.Header().Add("Content-Type", "text/json; encoding=UTF-8")
-				json.NewEncoder(wr).Encode(model)
-				return
+				json.NewEncoder(wr).Encode([]PostModel{model})
 			}
-		} else {
-			wr.WriteHeader(404)
+			return
 		}
-	} else {
-		s := q.Get("text")
-		g := q.Get("group")
-
-		wr.Header().Add("Content-Type", "text/json; encoding=UTF-8")
-		chnl := make(chan PostModel)
-		wr.WriteHeader(http.StatusOK)
-		io.WriteString(wr, "[")
-		donechnl := make(chan int)
-		go func(w io.Writer) {
-			for {
-				p, ok := <-chnl
-				if ok {
-					d, e := json.Marshal(p)
-					if e == nil {
-						io.WriteString(w, string(d))
-						io.WriteString(w, ", ")
-					} else {
-						log.Println("error marshalling post", e)
-					}
-				} else {
-					break
-				}
-			}
-			donechnl <- 0
-		}(wr)
-		err := self.daemon.database.SearchQuery(self.prefix, g, s, chnl)
-		<-donechnl
-		close(donechnl)
-		io.WriteString(wr, " null ]")
-		if err != nil {
-			api_error(wr, err)
-		}
-		return
 	}
+	s := q.Get("text")
+	g := q.Get("group")
+
+	wr.Header().Add("Content-Type", "text/json; encoding=UTF-8")
+	chnl := make(chan PostModel)
+	wr.WriteHeader(http.StatusOK)
+	io.WriteString(wr, "[")
+	donechnl := make(chan int)
+	go func(w io.Writer) {
+		for {
+			p, ok := <-chnl
+			if ok {
+				d, e := json.Marshal(p)
+				if e == nil {
+					io.WriteString(w, string(d))
+					io.WriteString(w, ", ")
+				} else {
+					log.Println("error marshalling post", e)
+				}
+			} else {
+				break
+			}
+		}
+		donechnl <- 0
+	}(wr)
+	if len(h) > 0 {
+		self.daemon.database.SearchByHash(self.prefix, g, h, chnl)
+	} else {
+		self.daemon.database.SearchQuery(self.prefix, g, s, chnl)
+	}
+	<-donechnl
+	close(donechnl)
+	io.WriteString(wr, " null ]")
+	return
 }
 
 // handle un authenticated part of api

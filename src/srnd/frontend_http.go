@@ -1044,14 +1044,15 @@ func (self *httpFrontend) handle_api_find(wr http.ResponseWriter, r *http.Reques
 		g := q.Get("group")
 		if len(s) > 0 {
 			wr.Header().Add("Content-Type", "text/json; encoding=UTF-8")
-			io.WriteString(wr, "[")
 			chnl := make(chan PostModel, 128)
+			err := self.daemon.database.SearchQuery(self.prefix, g, s, chnl)
+			io.WriteString(wr, "[")
 			go func() {
 				var ok bool
 				var p PostModel
 				for ok {
 					p, ok = <-chnl
-					if ok {
+					if p != nil {
 						d, _ := json.Marshal(p)
 						io.WriteString(wr, string(d))
 						io.WriteString(wr, ", ")
@@ -1059,7 +1060,6 @@ func (self *httpFrontend) handle_api_find(wr http.ResponseWriter, r *http.Reques
 				}
 				io.WriteString(wr, " null ]")
 			}()
-			err := self.daemon.database.SearchQuery(self.prefix, g, s, chnl)
 			if err != nil {
 				api_error(wr, err)
 			}

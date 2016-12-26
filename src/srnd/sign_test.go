@@ -1,6 +1,7 @@
 package srnd
 
 import "testing"
+import "fmt"
 import "github.com/majestrate/nacl"
 
 func TestSignVerify(t *testing.T) {
@@ -13,6 +14,7 @@ func TestSignVerify(t *testing.T) {
 	pubkey := hexify(kp.Public())
 	seckey := kp.Secret()
 	sig := msgidFrontendSign(seckey, msgid)
+	fmt.Println(sig, pubkey, msgid)
 	if !verifyFrontendSig(pubkey, sig, msgid) {
 		t.Fail()
 	}

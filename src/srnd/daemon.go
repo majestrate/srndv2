@@ -151,14 +151,15 @@ func (self *NNTPDaemon) GetDatabase() Database {
 func (self *NNTPDaemon) WrapSign(nntp NNTPMessage) {
 	sk, ok := self.conf.daemon["secretkey"]
 	if ok {
-		sk_bytes := parseTripcodeSecret(sk)
-		if sk_bytes == nil {
+		seed := parseTripcodeSecret(sk)
+		if seed == nil {
 			log.Println("invalid secretkey will not sign")
 		} else {
-			kp := nacl.LoadSignKey(sk_bytes)
+			kp := nacl.LoadSignKey(seed)
 			defer kp.Free()
-			sig := msgidFrontendSign(kp.Secret(), nntp.MessageID())
-			pk := getSignPubkey(kp.Public())
+			sec := kp.Secret()
+			sig := msgidFrontendSign(sec, nntp.MessageID())
+			pk := hexify(kp.Public())
 			nntp.Headers().Add("X-Frontend-Signature", sig)
 			nntp.Headers().Add("X-Frontend-Pubkey", pk)
 			log.Println("signed", nntp.MessageID(), "as from", pk)

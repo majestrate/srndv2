@@ -353,17 +353,20 @@ func hexify(data []byte) string {
 }
 
 // extract pubkey from secret key
-// return as base32
+// return as hex
 func getSignPubkey(sk []byte) string {
 	k, _ := nacl.GetSignPubkey(sk)
 	return hexify(k)
 }
 
 // sign data with secret key the fucky srnd way
-// return signature as base32
+// return signature as hex
 func cryptoSign(h, sk []byte) string {
 	// sign
 	sig := nacl.CryptoSignFucky(h, sk)
+	if sig == nil {
+		return "[failed to sign]"
+	}
 	return hexify(sig)
 }
 
@@ -617,14 +620,10 @@ func verifyFrontendSig(pubkey, sig, msgid string) bool {
 	s := unhex(sig)
 	k := unhex(pubkey)
 	h := sha512.Sum512([]byte(msgid))
-	return nacl.CryptoVerifyDetached(h[:], s, k)
+	return nacl.CryptoVerifyFucky(h[:], s, k)
 }
 
 func msgidFrontendSign(sk []byte, msgid string) string {
 	h := sha512.Sum512([]byte(msgid))
-	sig := nacl.CryptoSignDetached(h[:], sk)
-	if sig == nil {
-		return "[failed to sign]"
-	}
-	return hex.EncodeToString(sig)
+	return cryptoSign(h[:], sk)
 }

@@ -397,6 +397,12 @@ func (self *nntpConnection) checkMIMEHeaderNoAuth(daemon *NNTPDaemon, hdr textpr
 	server_sig := hdr.Get("X-Frontend-Signature")
 
 	if serverPubkeyIsValid(server_pubkey) {
+		b, _ := daemon.database.PubkeyIsBanned(server_pubkey)
+		if b {
+			reason = "server's pubkey is banned"
+			ban = true
+			return
+		}
 		if !verifyFrontendSig(server_pubkey, server_sig, msgid) {
 			reason = "invalid frontend signature"
 			ban = true

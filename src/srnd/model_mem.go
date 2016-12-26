@@ -246,7 +246,9 @@ func (self *post) MarshalJSON() (b []byte, err error) {
 	if len(self.Key) > 0 {
 		self.Tripcode = makeTripcode(self.Key)
 	}
-	self.PostMarkup = self.RenderPost()
+	if len(self.PostMarkup) > 0 {
+		self.PostMarkup = self.RenderPost()
+	}
 	self.PostPrefix = self.Prefix()
 	// for liveui
 	self.Type = "Post"

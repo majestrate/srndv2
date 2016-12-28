@@ -912,6 +912,10 @@ func (self *httpFrontend) handle_postRequest(pr *postRequest, b bannedFunc, e er
 // handle posting / postform
 func (self httpFrontend) handle_poster(wr http.ResponseWriter, r *http.Request) {
 	path := r.URL.Path
+	sendJSON := false
+	if strings.Contains(r.URL.String(), "json") {
+		sendJSON = true
+	}
 	var board string
 	// extract board
 	parts := strings.Count(path, "/")
@@ -921,9 +925,7 @@ func (self httpFrontend) handle_poster(wr http.ResponseWriter, r *http.Request) 
 
 	// this is a POST request
 	if r.Method == "POST" && self.AllowNewsgroup(board) && newsgroupValidFormat(board) {
-		// do we send json reply?
-		sendJson := strings.Count(r.URL.RawQuery, "json") > 0
-		self.handle_postform(wr, r, board, sendJson, true)
+		self.handle_postform(wr, r, board, sendJSON, true)
 	} else {
 		wr.WriteHeader(403)
 		io.WriteString(wr, "Nope")

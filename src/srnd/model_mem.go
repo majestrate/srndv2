@@ -45,6 +45,10 @@ func (self *catalogModel) MarshalJSON() (b []byte, err error) {
 	return nil, nil
 }
 
+func (self *catalogModel) JSON() string {
+	return "null"
+}
+
 func (self *catalogModel) Frontend() string {
 	return self.frontend
 }
@@ -85,6 +89,15 @@ type boardModel struct {
 
 func (self *boardModel) MarshalJSON() (b []byte, err error) {
 	return json.Marshal(self.threads)
+}
+
+func (self *boardModel) JSON() string {
+	d, err := self.MarshalJSON()
+	if err == nil {
+		return string(d)
+	} else {
+		return "null"
+	}
 }
 
 func (self *boardModel) SetAllowFiles(allow bool) {
@@ -242,7 +255,6 @@ func (self *post) MarshalJSON() (b []byte, err error) {
 	// TODO: don't do this
 	self.HashLong = self.PostHash()
 	self.HashShort = self.ShortHash()
-	self.URL = self.PostURL()
 	if len(self.Key) > 0 {
 		self.Tripcode = makeTripcode(self.Key)
 	}
@@ -253,7 +265,17 @@ func (self *post) MarshalJSON() (b []byte, err error) {
 	// for liveui
 	self.Type = "Post"
 	self.Newsgroup = self.board
+	self.URL = self.PostURL()
 	return json.Marshal(*self)
+}
+
+func (self *post) JSON() string {
+	d, err := self.MarshalJSON()
+	if err == nil {
+		return string(d)
+	} else {
+		return "null"
+	}
 }
 
 type attachment struct {
@@ -264,6 +286,15 @@ type attachment struct {
 
 func (self *attachment) MarshalJSON() (b []byte, err error) {
 	return json.Marshal(*self)
+}
+
+func (self *attachment) JSON() string {
+	d, err := self.MarshalJSON()
+	if err == nil {
+		return string(d)
+	} else {
+		return "null"
+	}
 }
 
 func (self *attachment) Hash() string {
@@ -503,6 +534,15 @@ func (self *thread) MarshalJSON() (b []byte, err error) {
 	posts := []PostModel{self.OP()}
 	posts = append(posts, self.Replies()...)
 	return json.Marshal(posts)
+}
+
+func (self *thread) JSON() string {
+	d, err := self.MarshalJSON()
+	if err == nil {
+		return string(d)
+	} else {
+		return "null"
+	}
 }
 
 func (self *thread) IsDirty() bool {

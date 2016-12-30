@@ -1508,21 +1508,18 @@ func (self *PostgresDatabase) SearchQuery(prefix, group string, text string, chn
 		text = "%" + text + "%"
 		var rows *sql.Rows
 		if group == "" {
-			rows, err = self.conn.Query("SELECT newsgroup, message_id, ref_id, name, subject, time_posted FROM ArticlePosts WHERE message LIKE $1 ORDER BY time_posted DESC", text)
+			rows, err = self.conn.Query("SELECT newsgroup, message_id, ref_id FROM ArticlePosts WHERE message LIKE $1 ORDER BY time_posted DESC", text)
 		} else {
-			rows, err = self.conn.Query("SELECT newsgroup, message_id, ref_id, name, subject, time_posted FROM ArticlePosts WHERE newsgroup = $1 AND message LIKE $2 ORDER BY time_posted DESC", group, text)
+			rows, err = self.conn.Query("SELECT newsgroup, message_id, ref_id FROM ArticlePosts WHERE newsgroup = $1 AND message LIKE $2 ORDER BY time_posted DESC", group, text)
 		}
-		counted := 0
 		if err == nil {
 			for rows.Next() {
 				p := new(post)
-				rows.Scan(&p.board, &p.Message_id, &p.Parent, &p.PostName, &p.PostSubject, &p.Posted)
+				rows.Scan(&p.board, &p.Message_id, &p.Parent)
 				chnl <- p
-				counted++
 			}
 			rows.Close()
 		}
-		log.Println("search yielded", counted, "results")
 	}
 	close(chnl)
 	return

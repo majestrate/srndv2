@@ -16,6 +16,9 @@ type BaseModel interface {
 
 	// impelements json.Marshaller
 	MarshalJSON() ([]byte, error)
+
+	// to json string
+	JSON() string
 }
 
 // for attachments

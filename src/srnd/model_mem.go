@@ -88,7 +88,11 @@ type boardModel struct {
 }
 
 func (self *boardModel) MarshalJSON() (b []byte, err error) {
-	return json.Marshal(self.threads)
+	j := make(map[string]interface{})
+	j["posts"] = self.threads
+	j["page"] = self.page
+	j["name"] = self.board
+	return json.Marshal(j)
 }
 
 func (self *boardModel) JSON() string {

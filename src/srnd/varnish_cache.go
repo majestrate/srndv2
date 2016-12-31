@@ -158,6 +158,11 @@ func (self *VarnishCache) RegenFrontPage() {
 	self.invalidate(fmt.Sprintf("%s%s", self.varnish_url, self.prefix))
 }
 
+func (self *VarnishCache) invalidateUkko() {
+	// TODO: invalidate paginated ukko
+	self.invalidate(fmt.Sprintf("%s%sukko.html", self.varnish_url, self.prefix))
+}
+
 func (self *VarnishCache) pollRegen() {
 	for {
 		select {
@@ -168,7 +173,7 @@ func (self *VarnishCache) pollRegen() {
 			}
 		case ev := <-self.regenThreadChan:
 			{
-				self.invalidate(fmt.Sprintf("%s%sthread-%s.html", self.varnish_url, self.prefix, HashMessageID(ev.MessageID())))
+				self.Regen(ev)
 			}
 		}
 	}
@@ -195,6 +200,8 @@ func (self *VarnishCache) Start() {
 
 func (self *VarnishCache) Regen(msg ArticleEntry) {
 	self.invalidate(fmt.Sprintf("%s%s%s-%d.html", self.varnish_url, self.prefix, msg.Newsgroup(), 0))
+	self.invalidate(fmt.Sprintf("%s%sthread-%s.html", self.varnish_url, self.prefix, HashMessageID(msg.MessageID())))
+	self.invalidateUkko()
 }
 
 func (self *VarnishCache) GetThreadChan() chan ArticleEntry {

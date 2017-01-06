@@ -1117,10 +1117,10 @@ func (self *PostgresDatabase) RegisterArticle(message NNTPMessage) (err error) {
 			if err == nil && posts <= BumpLimit {
 				// bump it nigguh
 				_, err = self.conn.Exec("UPDATE ArticleThreads SET last_bump = $2 WHERE root_message_id = $1", ref, message.Posted())
-				if err != nil {
-					log.Println("failed to bump thread", ref, err)
-					return
-				}
+			}
+			if err != nil {
+				log.Println("failed to bump thread", ref, err)
+				return
 			}
 		}
 		// update last posted

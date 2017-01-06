@@ -5,6 +5,8 @@
 //
 package srnd
 
+const BumpLimit = 300
+
 // ( message-id, references, newsgroup )
 type frontendPost [3]string
 

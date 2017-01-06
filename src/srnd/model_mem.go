@@ -594,13 +594,14 @@ func defaultTemplateDir() string {
 	return filepath.Join("contrib", "templates", "default")
 }
 
-func createThreadModel(op PostModel) ThreadModel {
+func createThreadModel(posts ...PostModel) ThreadModel {
+	op := posts[0]
 	group := op.Board()
 	prefix := op.Prefix()
 	return &thread{
 		dirty:  true,
 		prefix: prefix,
-		Posts:  []PostModel{op},
+		Posts:  posts,
 		links: []LinkModel{
 			linkModel{
 				text: group,

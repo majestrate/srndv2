@@ -822,13 +822,43 @@ func (self *PostgresDatabase) GetPostModel(prefix, messageID string) PostModel {
 }
 
 func (self *PostgresDatabase) GetThreadModel(prefix, msgid string) (th ThreadModel, err error) {
-	op := self.GetPostModel(prefix, msgid)
-	if op == nil {
-		err = errors.New("no such thread")
-		return
+
+	var posts []PostModel
+	var rows *sql.Rows
+	pmap := make(map[string]*post)
+	rows, err = self.conn.Query("SELECT ArticlePosts.newsgroup, ArticlePosts.message_id, ArticlePosts.name, ArticlePosts.subject, ArticlePosts.time_posted, ArticlePosts.message, ArticlePosts.addr FROM ArticlePosts WHERE ArticlePosts.message_id = $1 OR ArticlePosts.ref_id = $1 ORDER BY ArticlePosts.time_posted", msgid)
+	for err == nil && rows.Next() {
+		p := new(post)
+		p.Parent = msgid
+		err = rows.Scan(&p.board, &p.Message_id, &p.PostName, &p.PostSubject, &p.Posted, &p.PostMessage, &p.addr)
+		pmap[p.Message_id] = p
+		posts = append(posts, p)
 	}
-	th = createThreadModel(op)
-	th.Update(self)
+	rows.Close()
+	rows, err = self.conn.Query("SELECT filename, filepath, message_id from ArticleAttachments WHERE message_id IN ( SELECT message_id FROM ArticlePosts WHERE ref_id = $1 OR message_id = $1 )", msgid)
+	for err == nil && rows.Next() {
+		att := &attachment{
+			prefix: prefix,
+		}
+		var att_msgid string
+		rows.Scan(&att.Name, &att.Path, &att_msgid)
+		p, ok := pmap[att_msgid]
+		if ok {
+			p.Files = append(p.Files, att)
+		}
+	}
+	rows.Close()
+	rows, err = self.conn.Query("SELECT pubkey, message_id from ArticleKeys WHERE message_id IN ( SELECT message_id FROM ArticlePosts WHERE ref_id = $1 OR message_id = $1 )", msgid)
+	for err == nil && rows.Next() {
+		var key_msgid, key string
+		rows.Scan(&key, &key_msgid)
+		p, ok := pmap[key_msgid]
+		if ok {
+			p.Key = key_msgid
+		}
+	}
+	rows.Close()
+	th = createThreadModel(posts...)
 	return
 }
 

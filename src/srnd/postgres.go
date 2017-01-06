@@ -1114,6 +1114,7 @@ func (self *PostgresDatabase) RegisterArticle(message NNTPMessage) (err error) {
 		if !message.Sage() {
 			var posts int64
 			err = self.conn.QueryRow("SELECT COUNT(*) FROM ArticlePosts WHERE message_id = $1", ref).Scan(&posts)
+			log.Println("thread has", posts, "posts")
 			if err == nil && posts <= BumpLimit {
 				// bump it nigguh
 				_, err = self.conn.Exec("UPDATE ArticleThreads SET last_bump = $2 WHERE root_message_id = $1", ref, message.Posted())

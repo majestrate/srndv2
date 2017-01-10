@@ -656,9 +656,9 @@ func (self *httpFrontend) generateThreadURL(msgid string) (url string) {
 
 func (self *httpFrontend) generateBoardURL(newsgroup string, pageno int) (url string) {
 	if pageno > 0 {
-		url = fmt.Sprintf("%s/%s/%d/", self.prefix, newsgroup, pageno)
+		url = fmt.Sprintf("%sb/%s/%d/", self.prefix, newsgroup, pageno)
 	} else {
-		url = fmt.Sprintf("%s/%s/", self.prefix, newsgroup)
+		url = fmt.Sprintf("%sb/%s/", self.prefix, newsgroup)
 	}
 	return
 }
@@ -1412,8 +1412,8 @@ func (self *httpFrontend) Mainloop() {
 	m.Path("/img/{f}").Handler(http.FileServer(http.Dir(self.webroot_dir)))
 	m.Path("/{f}.html").Handler(cache_handler).Methods("GET", "HEAD")
 	m.Path("/{f}.json").Handler(cache_handler).Methods("GET", "HEAD")
-	m.Path("/t/{thread}/").Handler(cache_handler).Methods("GET", "HEAD")
-	m.Path("/b/{board}/").Handler(cache_handler).Methods("GET", "HEAD")
+	m.PathPrefix("/t/").Handler(cache_handler).Methods("GET", "HEAD")
+	m.PathPrefix("/b/").Handler(cache_handler).Methods("GET", "HEAD")
 	m.PathPrefix("/static/").Handler(http.FileServer(http.Dir(self.static_dir)))
 	m.Path("/post/{f}").HandlerFunc(self.handle_poster).Methods("POST")
 	m.Path("/captcha/new").HandlerFunc(self.new_captcha_json).Methods("GET")

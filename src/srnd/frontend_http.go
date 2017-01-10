@@ -1414,6 +1414,7 @@ func (self *httpFrontend) Mainloop() {
 	m.Path("/{f}.json").Handler(cache_handler).Methods("GET", "HEAD")
 	m.PathPrefix("/t/").Handler(cache_handler).Methods("GET", "HEAD")
 	m.PathPrefix("/b/").Handler(cache_handler).Methods("GET", "HEAD")
+	m.PathPrefix("/overboard/").Handler(cache_handler).Methods("GET", "HEAD")
 	m.PathPrefix("/static/").Handler(http.FileServer(http.Dir(self.static_dir)))
 	m.Path("/post/{f}").HandlerFunc(self.handle_poster).Methods("POST")
 	m.Path("/captcha/new").HandlerFunc(self.new_captcha_json).Methods("GET")

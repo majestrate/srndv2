@@ -486,8 +486,7 @@ func (self *httpFrontend) handle_postform(wr http.ResponseWriter, r *http.Reques
 
 	var captcha_retry bool
 	var captcha_solution, captcha_id string
-	var url string
-	url = fmt.Sprintf("%s-0.html", board)
+	url := self.generateBoardURL(board, 0)
 	var part_buff bytes.Buffer
 	for {
 		part, err := mp_reader.NextPart()
@@ -522,10 +521,8 @@ func (self *httpFrontend) handle_postform(wr http.ResponseWriter, r *http.Reques
 				pr.Message = part_buff.String()
 			} else if partname == "reference" {
 				pr.Reference = part_buff.String()
-				if len(pr.Reference) == 0 {
-					url = fmt.Sprintf("%s-0.html", board)
-				} else {
-					url = fmt.Sprintf("thread-%s.html", HashMessageID(pr.Reference))
+				if len(pr.Reference) != 0 {
+					url = self.generateThreadURL(pr.Reference)
 				}
 			} else if partname == "captcha_id" {
 				captcha_id = part_buff.String()
@@ -588,7 +585,7 @@ func (self *httpFrontend) handle_postform(wr http.ResponseWriter, r *http.Reques
 	// set redirect url
 	if len(url) > 0 {
 		// if we explicitly know the url use that
-		resp_map["redirect_url"] = self.prefix + url
+		resp_map["redirect_url"] = url
 	} else {
 		// if our referer is saying we are from /new/ page use that
 		// otherwise use prefix
@@ -606,7 +603,7 @@ func (self *httpFrontend) handle_postform(wr http.ResponseWriter, r *http.Reques
 			// retry the post with a new captcha
 			resp_map = make(map[string]interface{})
 			resp_map["prefix"] = self.prefix
-			resp_map["redirect_url"] = self.prefix + url
+			resp_map["redirect_url"] = url
 			resp_map["reason"] = "captcha incorrect"
 			io.WriteString(wr, template.renderTemplate("post_fail.mustache", resp_map))
 		}
@@ -631,7 +628,7 @@ func (self *httpFrontend) handle_postform(wr http.ResponseWriter, r *http.Reques
 		} else {
 			resp_map["reason"] = err.Error()
 			resp_map["prefix"] = self.prefix
-			resp_map["redirect_url"] = self.prefix + url
+			resp_map["redirect_url"] = url
 			io.WriteString(wr, template.renderTemplate("post_fail.mustache", resp_map))
 		}
 	}
@@ -642,7 +639,7 @@ func (self *httpFrontend) handle_postform(wr http.ResponseWriter, r *http.Reques
 		// determine the root post so we can redirect to the thread for it
 		msg_id := nntp.Headers().Get("References", nntp.MessageID())
 		// render response as success
-		url := fmt.Sprintf("%sthread-%s.html", self.prefix, HashMessageID(msg_id))
+		url := self.generateThreadURL(msg_id)
 		if sendJson {
 			json.NewEncoder(wr).Encode(map[string]interface{}{"message_id": nntp.MessageID(), "url": url, "error": nil})
 		} else {
@@ -650,6 +647,16 @@ func (self *httpFrontend) handle_postform(wr http.ResponseWriter, r *http.Reques
 		}
 	}
 	self.handle_postRequest(pr, b, e, s, self.enableBoardCreation)
+}
+
+func (self *httpFrontend) generateThreadURL(msgid string) (url string) {
+	url = fmt.Sprintf("%sthread-%s.html", self.prefix, HashMessageID(msgid))
+	return
+}
+
+func (self *httpFrontend) generateBoardURL(newsgroup string, pageno int) (url string) {
+	url = fmt.Sprintf("%s%s-%d.html", self.prefix, newsgroup, pageno)
+	return
 }
 
 // turn a post request into an nntp article write it to temp dir and tell daemon
@@ -1401,6 +1408,8 @@ func (self *httpFrontend) Mainloop() {
 	m.Path("/img/{f}").Handler(http.FileServer(http.Dir(self.webroot_dir)))
 	m.Path("/{f}.html").Handler(cache_handler).Methods("GET", "HEAD")
 	m.Path("/{f}.json").Handler(cache_handler).Methods("GET", "HEAD")
+	m.Path("/t/{thread}/").Handler(cache_handler).Methods("GET", "HEAD")
+	m.Path("/b/{board}/").Handler(cache_handler).Methods("GET", "HEAD")
 	m.PathPrefix("/static/").Handler(http.FileServer(http.Dir(self.static_dir)))
 	m.Path("/post/{f}").HandlerFunc(self.handle_poster).Methods("POST")
 	m.Path("/captcha/new").HandlerFunc(self.new_captcha_json).Methods("GET")

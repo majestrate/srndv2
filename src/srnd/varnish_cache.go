@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"net/url"
 	"path/filepath"
+	"strconv"
 	"strings"
 )
 
@@ -17,13 +18,56 @@ type varnishHandler struct {
 }
 
 func (self *varnishHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	_, file := filepath.Split(r.URL.Path)
+	path := r.URL.Path
+	_, file := filepath.Split(path)
+
+	isjson := strings.HasSuffix(file, ".json")
+
+	if strings.HasPrefix(path, "/t/") {
+		// thread handler
+		hash := strings.Trim(path[3:], "/")
+		msg, err := self.cache.database.GetMessageIDByHash(hash)
+		if err == nil {
+			template.genThread(self.cache.attachments, msg, self.cache.prefix, self.cache.name, w, self.cache.database, isjson)
+			return
+		} else {
+			goto notfound
+		}
+	}
+	if strings.Trim(path, "/") == "overboard" {
+		// generate ukko aka overboard
+		template.genUkko(self.cache.prefix, self.cache.name, w, self.cache.database, isjson)
+		return
+	}
+
+	if strings.HasPrefix(path, "/b/") {
+		// board handler
+		parts := strings.Split(path[3:], "/")
+		page := 0
+		group := parts[0]
+		if len(parts) == 2 {
+			var err error
+			page, err = strconv.Atoi(parts[1])
+			if err != nil {
+				goto notfound
+			}
+		}
+		hasgroup := self.cache.database.HasNewsgroup(group)
+		if !hasgroup {
+			goto notfound
+		}
+		pages := self.cache.database.GetGroupPageCount(group)
+		if page >= int(pages) {
+			goto notfound
+		}
+		template.genBoardPage(self.cache.attachments, self.cache.prefix, self.cache.name, group, page, w, self.cache.database, isjson)
+		return
+	}
+
 	if len(file) == 0 || file == "index.html" {
 		template.genFrontPage(10, self.cache.prefix, self.cache.name, w, ioutil.Discard, self.cache.database)
 		return
 	}
-
-	isjson := strings.HasSuffix(file, ".json")
 
 	if file == "index.json" {
 		// TODO: index.json
@@ -135,14 +179,17 @@ func (self *VarnishCache) invalidate(r string) {
 func (self *VarnishCache) DeleteBoardMarkup(group string) {
 	n, _ := self.database.GetPagesPerBoard(group)
 	for n > 0 {
-		self.invalidate(fmt.Sprintf("%s%s%s-%d.html", self.varnish_url, self.prefix, group, n))
+		go self.invalidate(fmt.Sprintf("%s%s%s-%d.html", self.varnish_url, self.prefix, group, n))
+		go self.invalidate(fmt.Sprintf("%s%sb/%s/%d/", self.varnish_url, self.prefix, group, n))
 		n--
 	}
+	self.invalidate(fmt.Sprintf("%s%sb/%s/", self.varnish_url, self.prefix, group))
 }
 
 // try to delete root post's page
 func (self *VarnishCache) DeleteThreadMarkup(root_post_id string) {
 	self.invalidate(fmt.Sprintf("%s%sthread-%s.html", self.varnish_url, self.prefix, HashMessageID(root_post_id)))
+	self.invalidate(fmt.Sprintf("%s%st/%s/", self.varnish_url, self.prefix, HashMessageID(root_post_id)))
 }
 
 // regen every newsgroup
@@ -161,6 +208,7 @@ func (self *VarnishCache) RegenFrontPage() {
 func (self *VarnishCache) invalidateUkko() {
 	// TODO: invalidate paginated ukko
 	self.invalidate(fmt.Sprintf("%s%sukko.html", self.varnish_url, self.prefix))
+	self.invalidate(fmt.Sprintf("%s%soverboard/", self.varnish_url, self.prefix))
 }
 
 func (self *VarnishCache) pollRegen() {
@@ -170,6 +218,10 @@ func (self *VarnishCache) pollRegen() {
 		case ev := <-self.regenGroupChan:
 			{
 				self.invalidate(fmt.Sprintf("%s%s%s-%d.html", self.varnish_url, self.prefix, ev.group, ev.page))
+				self.invalidate(fmt.Sprintf("%s%sb/%s/%d/", self.varnish_url, self.prefix, ev.group, ev.page))
+				if ev.page == 0 {
+					self.invalidate(fmt.Sprintf("%s%sb/%s/", self.varnish_url, self.prefix, ev.group))
+				}
 			}
 		case ev := <-self.regenThreadChan:
 			{
@@ -183,9 +235,11 @@ func (self *VarnishCache) pollRegen() {
 func (self *VarnishCache) RegenerateBoard(group string) {
 	n, _ := self.database.GetPagesPerBoard(group)
 	for n > 0 {
-		self.invalidate(fmt.Sprintf("%s%s%s-%d.html", self.varnish_url, self.prefix, group, n))
+		go self.invalidate(fmt.Sprintf("%s%s%s-%d.html", self.varnish_url, self.prefix, group, n))
+		go self.invalidate(fmt.Sprintf("%s%s%s/%d/", self.varnish_url, self.prefix, group, n))
 		n--
 	}
+	self.invalidate(fmt.Sprintf("%s%sb/%s/", self.varnish_url, self.prefix, group))
 }
 
 // regenerate pages after a mod event
@@ -199,8 +253,10 @@ func (self *VarnishCache) Start() {
 }
 
 func (self *VarnishCache) Regen(msg ArticleEntry) {
-	self.invalidate(fmt.Sprintf("%s%s%s-%d.html", self.varnish_url, self.prefix, msg.Newsgroup(), 0))
-	self.invalidate(fmt.Sprintf("%s%sthread-%s.html", self.varnish_url, self.prefix, HashMessageID(msg.MessageID())))
+	go self.invalidate(fmt.Sprintf("%s%s%s-%d.html", self.varnish_url, self.prefix, msg.Newsgroup(), 0))
+	go self.invalidate(fmt.Sprintf("%s%s%s/%d/", self.varnish_url, self.prefix, msg.Newsgroup(), 0))
+	go self.invalidate(fmt.Sprintf("%s%sthread-%s.html", self.varnish_url, self.prefix, HashMessageID(msg.MessageID())))
+	go self.invalidate(fmt.Sprintf("%s%st/%s/", self.varnish_url, self.prefix, HashMessageID(msg.MessageID())))
 	self.invalidateUkko()
 }
 

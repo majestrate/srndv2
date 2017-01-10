@@ -650,12 +650,16 @@ func (self *httpFrontend) handle_postform(wr http.ResponseWriter, r *http.Reques
 }
 
 func (self *httpFrontend) generateThreadURL(msgid string) (url string) {
-	url = fmt.Sprintf("%sthread-%s.html", self.prefix, HashMessageID(msgid))
+	url = fmt.Sprintf("%st/%s/", self.prefix, HashMessageID(msgid))
 	return
 }
 
 func (self *httpFrontend) generateBoardURL(newsgroup string, pageno int) (url string) {
-	url = fmt.Sprintf("%s%s-%d.html", self.prefix, newsgroup, pageno)
+	if pageno > 0 {
+		url = fmt.Sprintf("%s/%s/%d/", self.prefix, newsgroup, pageno)
+	} else {
+		url = fmt.Sprintf("%s/%s/", self.prefix, newsgroup)
+	}
 	return
 }
 

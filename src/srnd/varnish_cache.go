@@ -45,6 +45,7 @@ func (self *varnishHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		parts := strings.Split(path[3:], "/")
 		page := 0
 		group := parts[0]
+		log.Println(parts)
 		if len(parts) == 2 && len(parts[1]) > 0 {
 			var err error
 			page, err = strconv.Atoi(parts[1])

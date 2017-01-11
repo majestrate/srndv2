@@ -21,7 +21,7 @@ func (self *varnishHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	path := r.URL.Path
 	_, file := filepath.Split(path)
 
-	isjson := strings.HasSuffix(file, ".json")
+	isjson := strings.HasSuffix(file, "json")
 
 	if strings.HasPrefix(path, "/t/") {
 		// thread handler
@@ -46,7 +46,7 @@ func (self *varnishHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		page := 0
 		group := parts[0]
 		log.Println(parts)
-		if len(parts) == 2 && len(parts[1]) > 0 {
+		if len(parts) == 2 {
 			var err error
 			page, err = strconv.Atoi(parts[1])
 			if err != nil {

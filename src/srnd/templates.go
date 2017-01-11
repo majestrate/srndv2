@@ -331,6 +331,7 @@ func (self *templateEngine) genBoardPage(allowFiles bool, prefix, frontend, news
 	// get the board page model
 	perpage, _ := db.GetThreadsPerPage(newsgroup)
 	boardPage := db.GetGroupForPage(prefix, frontend, newsgroup, page, int(perpage))
+	boardPage.Update(db)
 	// update link cache
 	updateLinkCacheForBoard(boardPage)
 	// render it

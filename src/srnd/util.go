@@ -115,8 +115,8 @@ func timeNow() int64 {
 func nntpSanitize(data string) (ret string) {
 	parts := strings.Split(data, "\n")
 	for _, part := range parts {
-		part = strings.Trim(part, "\n")
-		part = strings.Trim(part, "\r")
+		part = strings.Replace(part, "\n", "", -1)
+		part = strings.Replace(part, "\r", "", -1)
 		if part == "." {
 			part = "  ."
 		}

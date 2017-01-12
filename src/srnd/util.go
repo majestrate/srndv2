@@ -120,7 +120,7 @@ func nntpSanitize(data string) (ret string) {
 		if part == "." {
 			part = "  ."
 		}
-		ret += part + "\n"
+		ret += "\n" + part
 	}
 	return ret
 }

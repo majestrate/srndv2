@@ -878,6 +878,7 @@ func (self *httpFrontend) handle_postRequest(pr *postRequest, b bannedFunc, e er
 	nntp.Pack()
 	// sign if needed
 	if len(tripcode_privkey) == nacl.CryptoSignSeedLen() {
+		nntp.Headers().Set("X-PubKey-Ed25519", getSignPubkey(tripcode_privkey))
 		err = self.daemon.store.RegisterPost(nntp)
 		if err != nil {
 			e(err)

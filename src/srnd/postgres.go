@@ -849,6 +849,9 @@ func (self *PostgresDatabase) GetThreadModel(prefix, msgid string) (th ThreadMod
 	}
 	rows.Close()
 	rows, err = self.conn.Query("SELECT pubkey, message_id from ArticleKeys WHERE message_id IN ( SELECT message_id FROM ArticlePosts WHERE ref_id = $1 OR message_id = $1 )", msgid)
+	if err != nil {
+		log.Println(err)
+	}
 	for err == nil && rows.Next() {
 		var key_msgid, key string
 		rows.Scan(&key, &key_msgid)

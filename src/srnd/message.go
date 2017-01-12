@@ -105,7 +105,7 @@ type nntpArticle struct {
 	// multipart boundary
 	boundary string
 	// the text part of the message
-	message NNTPAttachment
+	message string
 	// any attachments
 	attachments []NNTPAttachment
 	// the inner nntp message to be verified
@@ -115,10 +115,7 @@ type nntpArticle struct {
 func (self *nntpArticle) Reset() {
 	self.headers = nil
 	self.boundary = ""
-	if self.message != nil {
-		self.message.Reset()
-		self.message = nil
-	}
+	self.message = ""
 	if self.attachments != nil {
 		for idx, _ := range self.attachments {
 			self.attachments[idx].Reset()
@@ -151,7 +148,7 @@ func newPlaintextArticle(message, email, subject, name, instance, message_id, ne
 	// posted now
 	nntp.headers.Set("Date", timeNowStr())
 	nntp.headers.Set("Newsgroups", newsgroup)
-	nntp.message = createPlaintextAttachment([]byte(message))
+	nntp.message = strings.Trim(message, "\r")
 	nntp.Pack()
 	return nntp
 }
@@ -320,10 +317,7 @@ func (self *nntpArticle) Posted() int64 {
 }
 
 func (self *nntpArticle) Message() string {
-	if self.message == nil {
-		return ""
-	}
-	return strings.Trim(self.message.AsString(), "\x00")
+	return strings.Trim(self.message, "\x00")
 }
 
 func (self *nntpArticle) Path() string {
@@ -384,7 +378,7 @@ func (self *nntpArticle) WriteBody(wr io.Writer) (err error) {
 
 		err = w.SetBoundary(boundary)
 		if err == nil {
-			attachments := []NNTPAttachment{self.message}
+			attachments := []NNTPAttachment{createPlaintextAttachment([]byte(self.message))}
 			attachments = append(attachments, self.attachments...)
 			for _, att := range attachments {
 				if att == nil {
@@ -413,7 +407,7 @@ func (self *nntpArticle) WriteBody(wr io.Writer) (err error) {
 		w = nil
 	} else {
 		// write out message
-		_, err = wr.Write(self.message.Bytes())
+		_, err = io.WriteString(wr, self.message)
 	}
 	return err
 }

@@ -827,7 +827,7 @@ func (self *httpFrontend) handle_postRequest(pr *postRequest, b bannedFunc, e er
 	nntp.headers.Set("Message-ID", msgid)
 
 	// set message
-	nntp.message = createPlaintextAttachment([]byte(pr.Message))
+	nntp.message = nntpSanitize(pr.Message)
 	// set date
 	nntp.headers.Set("Date", timeNowStr())
 	// append path from frontend

@@ -464,7 +464,7 @@ func read_message_body(body io.Reader, hdr map[string][]string, store ArticleSto
 						} else {
 							if att.Filename() == "" {
 								// message part
-								nntp.message = att
+								nntp.message = att.AsString()
 							} else {
 								// plaintext attachment
 								nntp.Attach(att)
@@ -517,7 +517,7 @@ func read_message_body(body io.Reader, hdr map[string][]string, store ArticleSto
 		b := new(bytes.Buffer)
 		_, err = io.Copy(b, body)
 		if err == nil {
-			nntp.message = createPlaintextAttachment(b.Bytes())
+			nntp.message = b.String()
 			callback(nntp)
 		}
 	}

@@ -875,7 +875,6 @@ func (self *httpFrontend) handle_postRequest(pr *postRequest, b bannedFunc, e er
 		}
 	}
 	// pack it before sending so that the article is well formed
-	nntp.Pack()
 	// sign if needed
 	if len(tripcode_privkey) == nacl.CryptoSignSeedLen() {
 		kp := nacl.LoadSignKey(tripcode_privkey)
@@ -885,6 +884,7 @@ func (self *httpFrontend) handle_postRequest(pr *postRequest, b bannedFunc, e er
 		}
 		defer kp.Free()
 		nntp.headers.Set("X-PubKey-Ed25519", hexify(kp.Public()))
+		nntp.Pack()
 		err = self.daemon.store.RegisterPost(nntp)
 		if err != nil {
 			e(err)
@@ -900,6 +900,7 @@ func (self *httpFrontend) handle_postRequest(pr *postRequest, b bannedFunc, e er
 			err = self.daemon.store.RegisterSigned(nntp.MessageID(), nntp.Pubkey())
 		}
 	} else {
+		nntp.Pack()
 		err = self.daemon.store.RegisterPost(nntp)
 	}
 	if err != nil {

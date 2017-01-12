@@ -112,9 +112,17 @@ func timeNow() int64 {
 }
 
 // sanitize data for nntp
-func nntpSanitize(data string) string {
-	parts := strings.Split(data, "\n.\n")
-	return parts[0]
+func nntpSanitize(data string) (ret string) {
+	parts := strings.Split(data, "\n")
+	for _, part := range parts {
+		part = strings.Trim(part, "\n")
+		part = strings.Trim(part, "\r")
+		if part == "." {
+			part = "  ."
+		}
+		ret += part + "\n"
+	}
+	return ret
 }
 
 type int64Sorter []int64

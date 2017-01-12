@@ -114,13 +114,17 @@ func timeNow() int64 {
 // sanitize data for nntp
 func nntpSanitize(data string) (ret string) {
 	parts := strings.Split(data, "\n")
-	for _, part := range parts {
+	lines := len(parts)
+	for idx, part := range parts {
 		part = strings.Replace(part, "\n", "", -1)
 		part = strings.Replace(part, "\r", "", -1)
 		if part == "." {
 			part = "  ."
 		}
-		ret += "\n" + part
+		ret += part
+		if idx+1 < lines {
+			ret += "\n"
+		}
 	}
 	return ret
 }

@@ -433,6 +433,11 @@ func (self *nntpConnection) checkMIMEHeaderNoAuth(daemon *NNTPDaemon, hdr textpr
 		reason = "invalid reference or message id is '" + msgid + "' reference is '" + reference + "'"
 		ban = true
 		return
+	} else if daemon.database.HasArticle(msgid) {
+		// we have already seen this article
+		reason = "already seen"
+		// don't ban
+		return
 	} else if daemon.database.ArticleBanned(msgid) {
 		reason = "article banned"
 		ban = true
@@ -444,11 +449,6 @@ func (self *nntpConnection) checkMIMEHeaderNoAuth(daemon *NNTPDaemon, hdr textpr
 	} else if daemon.database.HasArticleLocal(msgid) {
 		// we already have this article locally
 		reason = "have this article locally"
-		// don't ban
-		return
-	} else if daemon.database.HasArticle(msgid) {
-		// we have already seen this article
-		reason = "already seen"
 		// don't ban
 		return
 	} else if is_ctl {

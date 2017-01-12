@@ -518,7 +518,7 @@ func (self *httpFrontend) handle_postform(wr http.ResponseWriter, r *http.Reques
 			} else if partname == "name" {
 				pr.Name = part_buff.String()
 			} else if partname == "message" {
-				pr.Message = part_buff.String()
+				pr.Message = strings.Trim(part_buff.String(), "\r")
 			} else if partname == "reference" {
 				pr.Reference = part_buff.String()
 				if len(pr.Reference) != 0 {

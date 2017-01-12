@@ -33,7 +33,7 @@ func (self *catalogModel) Navbar() string {
 	param["frontend"] = self.frontend
 	var links []LinkModel
 	links = append(links, linkModel{
-		link: fmt.Sprintf("%s%s-%d.html", self.prefix, self.board, 0),
+		link: fmt.Sprintf("%sb/%s/", self.prefix, self.board),
 		text: "Board index",
 	})
 	param["prefix"] = self.prefix
@@ -129,15 +129,8 @@ func (self *boardModel) Navbar() string {
 	param := make(map[string]interface{})
 	param["name"] = fmt.Sprintf("page %d for %s", self.page, self.board)
 	param["frontend"] = self.frontend
-	var links []LinkModel
-	for i := 0; i < self.pages; i++ {
-		links = append(links, linkModel{
-			link: fmt.Sprintf("%s%s-%d.html", self.prefix, self.board, i),
-			text: fmt.Sprintf("[ %d ]", i),
-		})
-	}
 	param["prefix"] = self.prefix
-	param["links"] = links
+	param["links"] = self.PageList()
 	return template.renderTemplate("navbar.mustache", param)
 }
 
@@ -148,9 +141,13 @@ func (self *boardModel) Board() string {
 func (self *boardModel) PageList() []LinkModel {
 	var links []LinkModel
 	for i := 0; i < self.pages; i++ {
+		board := fmt.Sprintf("%sb/%s/%d/", self.prefix, self.board, i)
+		if i == 0 {
+			board = fmt.Sprintf("%sb/%s/", self.prefix, self.board)
+		}
 		links = append(links, linkModel{
-			link: fmt.Sprintf("%s%s-%d.html", self.prefix, self.board, i),
-			text: fmt.Sprintf("%d", i),
+			link: board,
+			text: fmt.Sprintf("[ %d ]", i),
 		})
 	}
 	return links
@@ -433,7 +430,7 @@ func (self *post) Attachments() []AttachmentModel {
 }
 
 func (self *post) PostURL() string {
-	return fmt.Sprintf("%sthread-%s.html#%s", self.Prefix(), HashMessageID(self.Parent), self.PostHash())
+	return fmt.Sprintf("%st/%s/#%s", self.Prefix(), HashMessageID(self.Parent), self.PostHash())
 }
 
 func (self *post) Prefix() string {
@@ -575,7 +572,7 @@ func (self *thread) Board() string {
 }
 
 func (self *thread) BoardURL() string {
-	return fmt.Sprintf("%s%s-0.html", self.Prefix(), self.Board())
+	return fmt.Sprintf("%sb/%s/", self.Prefix(), self.Board())
 }
 
 func (self *thread) PostCount() int {
@@ -605,7 +602,7 @@ func createThreadModel(posts ...PostModel) ThreadModel {
 		links: []LinkModel{
 			linkModel{
 				text: group,
-				link: fmt.Sprintf("%s%s-0.html", prefix, group),
+				link: fmt.Sprintf("%sb/%s/", prefix, group),
 			},
 		},
 	}

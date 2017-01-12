@@ -328,32 +328,18 @@ func (self *templateEngine) genCatalog(prefix, frontend, group string, wr io.Wri
 
 // generate a board page
 func (self *templateEngine) genBoardPage(allowFiles bool, prefix, frontend, newsgroup string, page int, wr io.Writer, db Database, json bool) {
-	// get the board model
-	board := self.obtainBoard(prefix, frontend, newsgroup, false, db)
-	// update the board page
-	if len(board) > 0 {
-		board.Update(page, db)
-		if page >= len(board) {
-			log.Println("board page should not exist", newsgroup, "page", page)
-			return
-		}
-	} else {
-		// get the entire board
-		board = self.obtainBoard(prefix, frontend, newsgroup, true, db)
-		if page >= len(board) {
-			log.Println("board page should not exist", newsgroup, "page", page, "tried 2 times to generate page")
-			return
-		}
-	}
+	// get the board page model
+	perpage, _ := db.GetThreadsPerPage(newsgroup)
+	boardPage := db.GetGroupForPage(prefix, frontend, newsgroup, page, int(perpage))
+	boardPage.Update(db)
 	// update link cache
-	updateLinkCacheForBoard(board[page])
+	updateLinkCacheForBoard(boardPage)
 	// render it
 	if json {
-		p := board[page]
-		self.renderJSON(wr, p)
+		self.renderJSON(wr, boardPage)
 	} else {
 		form := renderPostForm(prefix, newsgroup, "", allowFiles)
-		self.writeTemplate("board.mustache", map[string]interface{}{"board": board[page], "page": page, "form": form}, wr)
+		self.writeTemplate("board.mustache", map[string]interface{}{"board": boardPage, "page": page, "form": form}, wr)
 	}
 }
 

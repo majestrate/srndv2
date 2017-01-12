@@ -114,9 +114,8 @@ func (self *nntpAttachment) Write(b []byte) (int, error) {
 }
 
 func (self *nntpAttachment) AsString() string {
-	if self.header.Get("Content-Transfer-Encoding") == "base64" {
-		str, _ := base64.StdEncoding.DecodeString(self.body.String())
-		return string(str)
+	if self.body == nil {
+		return ""
 	}
 	return string(self.Bytes())
 }

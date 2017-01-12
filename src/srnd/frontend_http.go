@@ -884,7 +884,7 @@ func (self *httpFrontend) handle_postRequest(pr *postRequest, b bannedFunc, e er
 			return
 		}
 		defer kp.Free()
-		nntp.Headers().Set("X-PubKey-Ed25519", hexify(kp.Public()))
+		nntp.Headers().Set("X-Pubkey-Ed25519", hexify(kp.Public()))
 		err = self.daemon.store.RegisterPost(nntp)
 		if err != nil {
 			e(err)

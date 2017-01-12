@@ -857,7 +857,7 @@ func (self *PostgresDatabase) GetThreadModel(prefix, msgid string) (th ThreadMod
 		rows.Scan(&key, &key_msgid)
 		p, ok := pmap[key_msgid]
 		if ok {
-			p.Key = key_msgid
+			p.Key = key
 		}
 	}
 	rows.Close()

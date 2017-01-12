@@ -182,6 +182,7 @@ func createPlaintextAttachment(msg []byte) NNTPAttachment {
 		ext:    ".txt",
 		header: header,
 	}
+	msg = bytes.Trim(msg, "\r")
 	att.Write(msg)
 	return att
 }

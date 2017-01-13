@@ -21,7 +21,7 @@ func (self *varnishHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	path := r.URL.Path
 	_, file := filepath.Split(path)
 
-	isjson := strings.HasSuffix(file, "json")
+	isjson := strings.HasSuffix(path, "json")
 
 	if strings.HasPrefix(path, "/t/") {
 		// thread handler

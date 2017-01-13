@@ -21,12 +21,15 @@ func (self *varnishHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	path := r.URL.Path
 	_, file := filepath.Split(path)
 
-	isjson := strings.HasSuffix(path, "json")
+	isjson := strings.HasSuffix(path, "/json") || strings.HasSuffix(path, "/json/")
 
 	if strings.HasPrefix(path, "/t/") {
 		// thread handler
-		hash := strings.Trim(path[3:], "/")
-		hash = strings.Replace(hash, "json", "", -1)
+		parts := strings.Split(path, "/")
+		if len(parts) == 1 {
+			goto notfound
+		}
+		hash := parts[1]
 		msg, err := self.cache.database.GetMessageIDByHash(hash)
 		if err == nil {
 			template.genThread(self.cache.attachments, msg, self.cache.prefix, self.cache.name, w, self.cache.database, isjson)
@@ -46,7 +49,7 @@ func (self *varnishHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		parts := strings.Split(path[3:], "/")
 		page := 0
 		group := parts[0]
-		if len(parts) > 1 && parts[1] != "" {
+		if len(parts) > 1 && parts[1] != "" && parts[1] != "json" {
 			var err error
 			page, err = strconv.Atoi(parts[1])
 			if err != nil {
@@ -66,14 +69,16 @@ func (self *varnishHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if strings.HasPrefix(path, "/o/") {
-		page_str := strings.Trim(path[3:], "/")
-		page_str = strings.Replace(page_str, "json", "", -1)
 		page := 0
-		if page_str != "" {
-			var err error
-			page, err = strconv.Atoi(page_str)
-			if err != nil {
-				goto notfound
+		parts := strings.Split(path, "/")
+		if len(parts) > 1 {
+			if parts[1] != "json" {
+				var err error
+				page, err = strconv.Atoi(parts[1])
+				if err != nil {
+					goto notfound
+				}
+
 			}
 		}
 		template.genUkkoPaginated(self.cache.prefix, self.cache.name, w, self.cache.database, page, isjson)

@@ -25,7 +25,7 @@ func (self *varnishHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 	if strings.HasPrefix(path, "/t/") {
 		// thread handler
-		parts := strings.Split(path, "/")
+		parts := strings.Split(path[3:], "/")
 		if len(parts) == 1 {
 			goto notfound
 		}

@@ -26,6 +26,7 @@ func (self *varnishHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	if strings.HasPrefix(path, "/t/") {
 		// thread handler
 		hash := strings.Trim(path[3:], "/")
+		hash = strings.Replace(hash, "json", "", -1)
 		msg, err := self.cache.database.GetMessageIDByHash(hash)
 		if err == nil {
 			template.genThread(self.cache.attachments, msg, self.cache.prefix, self.cache.name, w, self.cache.database, isjson)
@@ -52,7 +53,6 @@ func (self *varnishHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 				goto notfound
 			}
 		}
-		log.Println(group, page)
 		hasgroup := self.cache.database.HasNewsgroup(group)
 		if !hasgroup {
 			goto notfound
@@ -62,6 +62,21 @@ func (self *varnishHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			goto notfound
 		}
 		template.genBoardPage(self.cache.attachments, self.cache.prefix, self.cache.name, group, page, w, self.cache.database, isjson)
+		return
+	}
+
+	if strings.HasPrefix(path, "/o/") {
+		page_str := strings.Trim(path[3:], "/")
+		page_str = strings.Replace(page_str, "json", "", -1)
+		page := 0
+		if page_str != "" {
+			var err error
+			page, err = strconv.Atoi(page_str)
+			if err != nil {
+				goto notfound
+			}
+		}
+		template.genUkkoPaginated(self.cache.prefix, self.cache.name, w, self.cache.database, page, isjson)
 		return
 	}
 

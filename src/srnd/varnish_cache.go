@@ -68,7 +68,7 @@ func (self *varnishHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	if strings.HasPrefix(path, "/o/") {
 		page := 0
 		parts := strings.Split(path[3:], "/")
-		if parts[0] != "json" {
+		if parts[0] != "json" && parts[0] != "" {
 			var err error
 			page, err = strconv.Atoi(parts[0])
 			if err != nil {

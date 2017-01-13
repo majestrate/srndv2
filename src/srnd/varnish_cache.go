@@ -26,10 +26,7 @@ func (self *varnishHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	if strings.HasPrefix(path, "/t/") {
 		// thread handler
 		parts := strings.Split(path[3:], "/")
-		if len(parts) == 1 {
-			goto notfound
-		}
-		hash := parts[1]
+		hash := parts[0]
 		msg, err := self.cache.database.GetMessageIDByHash(hash)
 		if err == nil {
 			template.genThread(self.cache.attachments, msg, self.cache.prefix, self.cache.name, w, self.cache.database, isjson)

@@ -48,7 +48,7 @@ func boardlink(word, prefix string, r *regexp.Regexp) (markup string) {
 	l := re.FindStringSubmatch(word)
 	if len(l[1]) > 2 {
 		link := strings.ToLower(l[1])
-		markup = `<a class="boardlink" href="` + prefix + link + `-0.html">&gt;&gt;&gt;/` + link + `/</a>`
+		markup = `<a class="boardlink" href="` + prefix + "b/" + link + `">&gt;&gt;&gt;/` + link + `/</a>`
 		return
 	}
 	markup = escapeline(word)

@@ -506,7 +506,7 @@ func (self *post) Truncate() PostModel {
 }
 
 func (self *post) RenderShortBody() string {
-	return memeposting(self.PostMessage, self.prefix)
+	return memeposting(self.PostMessage, self.Prefix())
 }
 
 func (self *post) RenderBodyPre() string {

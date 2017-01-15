@@ -516,7 +516,7 @@ func (self *post) RenderBodyPre() string {
 func (self *post) RenderBody() string {
 	// :^)
 	if len(self.message_rendered) == 0 {
-		self.message_rendered = memeposting(self.PostMessage, self.prefix)
+		self.message_rendered = memeposting(self.PostMessage, self.Prefix())
 	}
 	return self.message_rendered
 }

@@ -932,7 +932,7 @@ func (self *httpFrontend) handle_postRequest(pr *postRequest, b bannedFunc, e er
 func (self httpFrontend) handle_poster(wr http.ResponseWriter, r *http.Request) {
 	path := r.URL.Path
 	sendJSON := false
-	if strings.Contains(r.URL.String(), "json") {
+	if strings.HasSuffix(path, "/json") || strings.HasSuffix(path, "/json/") {
 		sendJSON = true
 	}
 	var board string
@@ -1426,7 +1426,7 @@ func (self *httpFrontend) Mainloop() {
 	m.PathPrefix("/o/").Handler(cache_handler).Methods("GET", "HEAD")
 	m.PathPrefix("/overboard/").Handler(cache_handler).Methods("GET", "HEAD")
 	m.PathPrefix("/static/").Handler(http.FileServer(http.Dir(self.static_dir)))
-	m.Path("/post/{f}").HandlerFunc(self.handle_poster).Methods("POST")
+	m.PathPrefix("/post/").HandlerFunc(self.handle_poster).Methods("POST")
 	m.Path("/captcha/new").HandlerFunc(self.new_captcha_json).Methods("GET")
 	m.Path("/captcha/img").HandlerFunc(self.new_captcha).Methods("GET")
 	m.Path("/captcha/{f}").Handler(captcha.Server(350, 175)).Methods("GET")

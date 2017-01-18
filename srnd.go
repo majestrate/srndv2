@@ -2,10 +2,10 @@ package main
 
 import (
 	"fmt"
-	"github.com/majestrate/srndv2/src/srnd"
 	"log"
 	"os"
 	"os/signal"
+	"srnd"
 	"syscall"
 )
 

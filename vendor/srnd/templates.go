@@ -621,3 +621,8 @@ func (self *templateEngine) genFrontPage(top_count int, prefix, frontend_name st
 		log.Println("error writing board list page", err)
 	}
 }
+
+func ReloadTemplates() {
+	log.Println("reload templates")
+	template.reloadAllTemplates()
+}

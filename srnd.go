@@ -23,9 +23,15 @@ func main() {
 			daemon.Setup()
 			c := make(chan os.Signal, 1)
 			signal.Notify(c, os.Interrupt)
-			signal.Notify(c, syscall.SIGTERM)
+			signal.Notify(c, syscall.SIGTERM, syscall.SIGHUP)
 			go func() {
-				<-c
+				for {
+					sig := <-c
+					if sig != syscall.SIGHUP {
+						break
+					}
+					srnd.ReloadTemplates()
+				}
 				log.Println("Shutting down...")
 				daemon.End()
 				os.Exit(0)

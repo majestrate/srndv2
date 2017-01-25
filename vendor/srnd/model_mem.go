@@ -280,9 +280,11 @@ func (self *post) JSON() string {
 }
 
 type attachment struct {
-	prefix string
-	Path   string
-	Name   string
+	prefix      string
+	Path        string
+	Name        string
+	ThumbWidth  int
+	ThumbHeight int
 }
 
 func (self *attachment) MarshalJSON() (b []byte, err error) {
@@ -300,6 +302,13 @@ func (self *attachment) JSON() string {
 
 func (self *attachment) Hash() string {
 	return strings.Split(self.Path, ".")[0]
+}
+
+func (self *attachment) ThumbInfo() ThumbInfo {
+	return ThumbInfo{
+		Width:  self.ThumbWidth,
+		Height: self.ThumbHeight,
+	}
 }
 
 func (self *attachment) Prefix() string {

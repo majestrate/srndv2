@@ -5,7 +5,9 @@ import (
 	"log"
 	"os"
 	"os/signal"
+	"runtime"
 	"srnd"
+	"strings"
 	"syscall"
 )
 
@@ -64,7 +66,19 @@ func main() {
 						fmt.Fprintf(os.Stdout, "usage: %s tool mod [add|del] pubkey\n", os.Args[0])
 					}
 				} else if tool == "rethumb" {
-					srnd.ThumbnailTool()
+					if len(os.Args) >= 4 {
+						threads := runtime.NumCPU()
+						arg := strings.ToLower(os.Args[3])
+						switch arg {
+						case "missing":
+							srnd.ThumbnailTool(threads, true)
+							return
+						case "all":
+							srnd.ThumbnailTool(threads, false)
+							return
+						}
+					}
+					fmt.Fprintf(os.Stdout, "usage: %s tool rethumb [missing|all]\n", os.Args[0])
 				} else if tool == "keygen" {
 					srnd.KeygenTool()
 				} else if tool == "nntp" {

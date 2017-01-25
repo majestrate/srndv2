@@ -7,8 +7,7 @@ import (
 )
 
 func makeBenchmarkDB() Database {
-	//return NewDatabase("postgres", "srnd", "/var/run/postgresql", "", "", "")
-	return NewDatabase("redis", "single", "localhost", "6379", "", "")
+	return NewDatabase("postgres", "srnd", "/var/run/postgresql", "", "", "")
 }
 
 func BenchmarkRenderBoardPage(b *testing.B) {

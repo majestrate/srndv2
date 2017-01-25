@@ -21,6 +21,11 @@ type BaseModel interface {
 	JSON() string
 }
 
+type ThumbInfo struct {
+	Width  int
+	Height int
+}
+
 // for attachments
 type AttachmentModel interface {
 	BaseModel
@@ -29,6 +34,7 @@ type AttachmentModel interface {
 	Source() string
 	Filename() string
 	Hash() string
+	ThumbInfo() ThumbInfo
 }
 
 // for individual posts

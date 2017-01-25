@@ -7,7 +7,6 @@ import (
 	_ "github.com/lib/pq"
 	"github.com/majestrate/configparser"
 	"golang.org/x/text/language"
-	"gopkg.in/redis.v3"
 	"gopkg.in/tylerb/graceful.v1"
 	"log"
 	"net"
@@ -45,9 +44,6 @@ type Installer struct {
 func handleDBTypePost(self *dialogNode, form url.Values, conf *configparser.Configuration) (*dialogNode, error) {
 	db := form.Get("db")
 	log.Println("DB chosen: ", db)
-	if db == "redis" {
-		return self.children["redis"], nil
-	}
 	if db == "postgres" {
 		return self.children["postgres"], nil
 	}
@@ -57,37 +53,6 @@ func handleDBTypePost(self *dialogNode, form url.Values, conf *configparser.Conf
 func prepareDefaultModel(self *dialogNode, err error, conf *configparser.Configuration) templateModel {
 	param := make(map[string]interface{})
 	param["dialog"] = &BaseDialogModel{ErrorModel{err}, StepModel{self}}
-	return param
-}
-
-func handleRedisDBPost(self *dialogNode, form url.Values, conf *configparser.Configuration) (*dialogNode, error) {
-	if form.Get("back") == "true" {
-		return self.parent, nil
-	}
-	sect, _ := conf.Section("database")
-	host := form.Get("host")
-	port := form.Get("port")
-	passwd := form.Get("password")
-
-	err := checkRedisConnection(host, port, passwd)
-	if err != nil {
-		return self, err
-	}
-	sect.Add("type", "redis")
-	sect.Add("schema", "single")
-	sect.Add("host", host)
-	sect.Add("port", port)
-	sect.Add("password", passwd)
-
-	return self.children["next"], nil
-}
-
-func prepareRedisDBModel(self *dialogNode, err error, conf *configparser.Configuration) templateModel {
-	param := make(map[string]interface{})
-	sect, _ := conf.Section("database")
-	host := sect.ValueOf("host")
-	port := sect.ValueOf("port")
-	param["dialog"] = &DBModel{ErrorModel{err}, StepModel{self}, "", host, port}
 	return param
 }
 
@@ -242,44 +207,11 @@ func handleCacheTypePost(self *dialogNode, form url.Values, conf *configparser.C
 	cache := form.Get("cache")
 	log.Println("Cache chosen: ", cache)
 	sect.Add("type", cache)
-	if cache == "redis" {
-		return self.children["redis"], nil
-	}
-	if cache == "file" || cache == "null" {
+	if cache == "file" || cache == "null" || cache == "varnish" {
 		return self.children["next"], nil
 	}
 
 	return self, nil
-}
-
-func handleRedisCachePost(self *dialogNode, form url.Values, conf *configparser.Configuration) (*dialogNode, error) {
-	if form.Get("back") == "true" {
-		return self.parent, nil
-	}
-	sect, _ := conf.Section("cache")
-	host := form.Get("host")
-	port := form.Get("port")
-	passwd := form.Get("password")
-
-	err := checkRedisConnection(host, port, passwd)
-	if err != nil {
-		return self, err
-	}
-	sect.Add("type", "redis")
-	sect.Add("host", host)
-	sect.Add("port", port)
-	sect.Add("password", passwd)
-
-	return self.children["next"], nil
-}
-
-func prepareRedisCacheModel(self *dialogNode, err error, conf *configparser.Configuration) templateModel {
-	param := make(map[string]interface{})
-	sect, _ := conf.Section("cache")
-	host := sect.ValueOf("host")
-	port := sect.ValueOf("port")
-	param["dialog"] = &DBModel{ErrorModel{err}, StepModel{self}, "", host, port}
-	return param
 }
 
 func prepareFrontendModel(self *dialogNode, err error, conf *configparser.Configuration) templateModel {
@@ -439,15 +371,6 @@ func initInstallerTree() *dialogNode {
 		templateName: "inst_db.mustache",
 	}
 
-	redisDB := &dialogNode{
-		parent:       root,
-		children:     make(map[string]*dialogNode),
-		post:         handleRedisDBPost,
-		model:        prepareRedisDBModel,
-		templateName: "inst_redis_db.mustache",
-	}
-	root.children["redis"] = redisDB
-
 	postgresDB := &dialogNode{
 		parent:       root,
 		children:     make(map[string]*dialogNode),
@@ -464,7 +387,6 @@ func initInstallerTree() *dialogNode {
 		model:        prepareNNTPModel,
 		templateName: "inst_nntp.mustache",
 	}
-	redisDB.children["next"] = nntp
 	postgresDB.children["next"] = nntp
 
 	crypto := &dialogNode{
@@ -494,15 +416,6 @@ func initInstallerTree() *dialogNode {
 	}
 	bins.children["next"] = cache
 
-	redisCache := &dialogNode{
-		parent:       cache,
-		children:     make(map[string]*dialogNode),
-		post:         handleRedisCachePost,
-		model:        prepareRedisCacheModel,
-		templateName: "inst_redis_cache.mustache",
-	}
-	cache.children["redis"] = redisCache
-
 	frontend := &dialogNode{
 		parent:       cache,
 		children:     make(map[string]*dialogNode),
@@ -511,7 +424,6 @@ func initInstallerTree() *dialogNode {
 		templateName: "inst_frontend.mustache",
 	}
 	cache.children["next"] = frontend
-	redisCache.children["next"] = frontend
 
 	api := &dialogNode{
 		parent:       frontend,
@@ -533,17 +445,6 @@ func initInstallerTree() *dialogNode {
 	api.children["next"] = key
 
 	return root
-}
-
-func checkRedisConnection(host, port, passwd string) error {
-	client := redis.NewClient(&redis.Options{
-		Addr:     net.JoinHostPort(host, port),
-		Password: passwd,
-	})
-	defer client.Close()
-
-	_, err := client.Ping().Result() //check for successful connection
-	return err
 }
 
 func checkPostgresConnection(host, port, user, password string) error {

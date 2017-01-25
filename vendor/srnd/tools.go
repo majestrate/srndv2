@@ -9,31 +9,31 @@ import (
 )
 
 // worker for thumbnailer tool
-func rethumb(chnl chan string, store ArticleStore) {
+func rethumb(chnl chan string, store ArticleStore, missing bool) {
 	for {
 		fname, has := <-chnl
 		if !has {
 			return
 		}
 		thm := store.ThumbnailFilepath(fname)
-		if CheckFile(thm) {
+		if CheckFile(thm) && missing {
 			log.Println("remove old thumbnail", thm)
 			os.Remove(thm)
 		}
 		log.Println("generate thumbnail for", fname)
-		_ = store.GenerateThumbnail(fname)
+		store.GenerateThumbnail(fname)
 	}
 }
 
-// run thumbnailer with 4 threads
-func ThumbnailTool() {
+// run thumbnailer
+func ThumbnailTool(threads int, missing bool) {
 	conf := ReadConfig()
 	if conf == nil {
 		log.Println("cannot load config, ReadConfig() returned nil")
 		return
 	}
 	store := createArticleStore(conf.store, nil)
-	reThumbnail(4, store)
+	reThumbnail(threads, store, missing)
 }
 
 func RegenTool() {
@@ -58,12 +58,12 @@ func regenGroup(name string, db Database) {
 }
 
 // run thumbnailer tool with unspecified number of threads
-func reThumbnail(threads int, store ArticleStore) {
+func reThumbnail(threads int, store ArticleStore, missing bool) {
 
 	chnl := make(chan string)
 
 	for threads > 0 {
-		go rethumb(chnl, store)
+		go rethumb(chnl, store, missing)
 		threads--
 	}
 

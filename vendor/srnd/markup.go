@@ -18,6 +18,19 @@ var re_backlink = regexp.MustCompile(`>> ?([0-9a-f]+)`)
 var re_boardlink = regexp.MustCompile(`>>> ?/([0-9a-zA-Z\.]+)/`)
 var re_nntpboardlink = regexp.MustCompile(`news:([0-9a-zA-Z\.]+)`)
 
+// find all backlinks in string
+func findBacklinks(msg string) (cites []string) {
+	re := re_backlink.Copy()
+	cmap := make(map[string]string)
+	for _, cite := range re.FindAllString(msg, -1) {
+		cmap[cite] = cite
+	}
+	for _, c := range cmap {
+		cites = append(cites, c)
+	}
+	return
+}
+
 // parse backlink
 func backlink(word string) (markup string) {
 	re := re_backlink.Copy()

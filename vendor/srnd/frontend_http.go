@@ -854,7 +854,7 @@ func (self *httpFrontend) handle_postRequest(pr *postRequest, b bannedFunc, e er
 					delfiles = append(delfiles, a.Filepath())
 					// check if we need to thumbnail it
 					if !CheckFile(self.daemon.store.ThumbnailFilepath(a.Filepath())) {
-						err = self.daemon.store.GenerateThumbnail(a.Filepath())
+						_, err = self.daemon.store.GenerateThumbnail(a.Filepath())
 					}
 					if err == nil {
 						delfiles = append(delfiles, self.daemon.store.ThumbnailFilepath(a.Filepath()))

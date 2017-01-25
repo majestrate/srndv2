@@ -17,6 +17,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strconv"
 	"strings"
 )
 
@@ -45,9 +46,9 @@ type ArticleStore interface {
 	// get a list of all the attachments we have
 	GetAllAttachments() ([]string, error)
 	// generate a thumbnail
-	GenerateThumbnail(fname string) error
+	GenerateThumbnail(fname string) (ThumbInfo, error)
 	// generate all thumbanils for this message
-	ThumbnailMessage(msgid string)
+	ThumbnailMessage(msgid string) []ThumbInfo
 	// did we enable compression?
 	Compression() bool
 	// process body of nntp message, register attachments and the article
@@ -63,33 +64,38 @@ type ArticleStore interface {
 
 	// get size of message on disk
 	GetMessageSize(msgid string) (int64, error)
+
+	// get thumbnail info of file by path
+	ThumbInfo(fpath string) (ThumbInfo, error)
 }
 type articleStore struct {
-	directory    string
-	temp         string
-	attachments  string
-	thumbs       string
-	database     Database
-	convert_path string
-	ffmpeg_path  string
-	sox_path     string
-	placeholder  string
-	compression  bool
-	compWriter   *gzip.Writer
+	directory     string
+	temp          string
+	attachments   string
+	thumbs        string
+	database      Database
+	convert_path  string
+	ffmpeg_path   string
+	sox_path      string
+	identify_path string
+	placeholder   string
+	compression   bool
+	compWriter    *gzip.Writer
 }
 
 func createArticleStore(config map[string]string, database Database) ArticleStore {
 	store := &articleStore{
-		directory:    config["store_dir"],
-		temp:         config["incoming_dir"],
-		attachments:  config["attachments_dir"],
-		thumbs:       config["thumbs_dir"],
-		convert_path: config["convert_bin"],
-		ffmpeg_path:  config["ffmpegthumbnailer_bin"],
-		sox_path:     config["sox_bin"],
-		placeholder:  config["placeholder_thumbnail"],
-		database:     database,
-		compression:  config["compression"] == "1",
+		directory:     config["store_dir"],
+		temp:          config["incoming_dir"],
+		attachments:   config["attachments_dir"],
+		thumbs:        config["thumbs_dir"],
+		convert_path:  config["convert_bin"],
+		identify_path: config["identify_path"],
+		ffmpeg_path:   config["ffmpegthumbnailer_bin"],
+		sox_path:      config["sox_bin"],
+		placeholder:   config["placeholder_thumbnail"],
+		database:      database,
+		compression:   config["compression"] == "1",
 	}
 	store.Init()
 	return store
@@ -145,14 +151,18 @@ func (self *articleStore) isAudio(fname string) bool {
 	return false
 }
 
-func (self *articleStore) ThumbnailMessage(msgid string) {
+func (self *articleStore) ThumbnailMessage(msgid string) (infos []ThumbInfo) {
 	atts := self.database.GetPostAttachments(msgid)
 	for _, att := range atts {
 		if CheckFile(self.ThumbnailFilepath(att)) {
 			continue
 		}
-		self.GenerateThumbnail(att)
+		info, err := self.GenerateThumbnail(att)
+		if err == nil {
+			infos = append(infos, info)
+		}
 	}
+	return
 }
 
 // is this an image format we need convert for?
@@ -175,19 +185,37 @@ func (self *articleStore) isVideo(fname string) bool {
 	return false
 }
 
-func (self *articleStore) GenerateThumbnail(fname string) error {
+func (self *articleStore) ThumbInfo(fpath string) (ThumbInfo, error) {
+	var info ThumbInfo
+	log.Println("made thumbnail for", fpath)
+	cmd := exec.Command(self.identify_path, "-format", "%[fx:w] %[fx:h]", fpath)
+	output, err := cmd.Output()
+	if err == nil {
+		parts := strings.Split(string(output), " ")
+		if len(parts) == 2 {
+			info.Width, err = strconv.Atoi(parts[0])
+			if err == nil {
+				info.Height, err = strconv.Atoi(parts[1])
+			}
+		}
+	} else {
+		log.Println("failed to determine size of thumbnail")
+	}
+	return info, err
+}
+
+func (self *articleStore) GenerateThumbnail(fname string) (info ThumbInfo, err error) {
 	outfname := self.ThumbnailFilepath(fname)
 	infname := self.AttachmentFilepath(fname)
+	tmpfname := ""
 	var cmd *exec.Cmd
-	var err error
 	if self.isImage(fname) {
 		if strings.HasSuffix(infname, ".gif") {
 			infname += "[0]"
 		}
 		cmd = exec.Command(self.convert_path, "-thumbnail", "200", infname, outfname)
-
 	} else if self.isAudio(fname) {
-		tmpfname := infname + ".wav"
+		tmpfname = infname + ".wav"
 		cmd = exec.Command(self.ffmpeg_path, "-i", infname, tmpfname)
 		var out []byte
 
@@ -195,15 +223,10 @@ func (self *articleStore) GenerateThumbnail(fname string) error {
 
 		if err == nil {
 			cmd = exec.Command(self.sox_path, tmpfname, "-n", "spectrogram", "-a", "-d", "0:10", "-r", "-p", "6", "-x", "200", "-y", "150", "-o", outfname)
-			out, err = cmd.CombinedOutput()
-		}
-		if err == nil {
-			log.Println("generated audio thumbnail to", outfname)
 		} else {
-			log.Println("error generating audio thumbnail", err, string(out))
+			log.Println("error making thumbnail", string(out))
 		}
-		DelFile(tmpfname)
-		return err
+
 	} else if self.isVideo(fname) || strings.HasSuffix(fname, ".txt") {
 		cmd = exec.Command(self.ffmpeg_path, "-i", infname, "-vf", "scale=300:200", "-vframes", "1", outfname)
 	}
@@ -218,7 +241,10 @@ func (self *articleStore) GenerateThumbnail(fname string) error {
 			log.Println("error generating thumbnail", string(exec_out))
 		}
 	}
-	return err
+	if len(tmpfname) > 0 {
+		DelFile(tmpfname)
+	}
+	return info, err
 }
 
 func (self *articleStore) GetAllAttachments() (names []string, err error) {
@@ -289,10 +315,9 @@ func (self *articleStore) saveAttachment(att NNTPAttachment) {
 
 // generate attachment thumbnail
 func (self *articleStore) thumbnailAttachment(fpath string) {
-	var err error
 	thumb := self.ThumbnailFilepath(fpath)
 	if !CheckFile(thumb) {
-		err = self.GenerateThumbnail(fpath)
+		_, err := self.GenerateThumbnail(fpath)
 		if err != nil {
 			log.Println("failed to generate thumbnail for", fpath, err)
 		}

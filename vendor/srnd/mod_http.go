@@ -102,7 +102,7 @@ func (self httpModUI) getAdminFunc(funcname string) AdminFunc {
 				}(a)
 				return fmt.Sprintf("regenerating %d thumbnails for %s", len(a), msgid), nil
 			}
-			go reThumbnail(t, self.articles)
+			go reThumbnail(t, self.articles, true)
 			return fmt.Sprintf("started rethumbnailing with %d threads", t), nil
 		}
 	} else if funcname == "frontend.add" {

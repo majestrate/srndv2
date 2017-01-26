@@ -18,7 +18,7 @@ func rethumb(chnl chan string, store ArticleStore, missing bool) {
 		thm := store.ThumbnailFilepath(fname)
 		if CheckFile(thm) {
 			if missing {
-				return
+				continue
 			}
 			log.Println("remove old thumbnail", thm)
 			os.Remove(thm)

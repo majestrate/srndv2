@@ -391,10 +391,11 @@ func (self *PostgresDatabase) upgrade6to7() {
 	for msgid, citelist := range cites {
 		for _, cite := range citelist {
 			cite = cite[2:]
+			citeLike := cite + "%"
 			var cite_msgid string
-			err = self.conn.QueryRow("SELECT message_id FROM ArticlePosts WHERE message_id LIKE %$1% LIMIT 1", cite).Scan(&cite_msgid)
+			err = self.conn.QueryRow("SELECT message_id FROM ArticlePosts WHERE message_id LIKE $1 LIMIT 1", citeLike).Scan(&cite_msgid)
 			if err != nil {
-				log.Fatalf("failed to select cite like %s: %s", cite, err)
+				log.Fatalf("failed to select cite like %s: %s", citeLike, err)
 			}
 			cites_insert[msgid+cite_msgid] = [2]string{msgid, cite_msgid}
 			citemap_counter++

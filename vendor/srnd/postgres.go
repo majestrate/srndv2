@@ -16,7 +16,7 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
-	"github.com/lib/pq"
+	_ "github.com/lib/pq"
 	"log"
 	"math"
 	"net"

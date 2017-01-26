@@ -328,8 +328,8 @@ func (self *PostgresDatabase) upgrade6to7() {
                           )`
 
 	tables["Cites"] = `(
-                            post_msgid VARCHAR(255) PRIMARY KEY,
-                            cite_msgid VARCHAR(255) PRIMARY KEY
+                            post_msgid VARCHAR(255) NOT NULL,
+                            cite_msgid VARCHAR(255) NOT NULL
                      )`
 
 	var err error

@@ -395,7 +395,8 @@ func (self *PostgresDatabase) upgrade6to7() {
 			var cite_msgid string
 			err = self.conn.QueryRow("SELECT message_id FROM Articles WHERE message_id_hash LIKE $1 LIMIT 1", citeLike).Scan(&cite_msgid)
 			if err != nil {
-				log.Fatalf("failed to select cite like %s: %s", citeLike, err)
+				continue
+				//log.Fatalf("failed to select cite like %s: %s", citeLike, err)
 			}
 			cites_insert[msgid+cite_msgid] = [2]string{msgid, cite_msgid}
 			citemap_counter++

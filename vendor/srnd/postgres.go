@@ -390,6 +390,7 @@ func (self *PostgresDatabase) upgrade6to7() {
 
 	for msgid, citelist := range cites {
 		for _, cite := range citelist {
+			cite = cite[2:]
 			citelike := "%" + cite + "%"
 			var cite_msgid string
 			err = self.conn.QueryRow("SELECT message_id FROM ArticlePosts WHERE message_id LIKE $1 LIMIT 1", citelike).Scan(&cite_msgid)

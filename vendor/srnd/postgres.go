@@ -384,7 +384,7 @@ func (self *PostgresDatabase) upgrade6to7() {
 
 	log.Printf("calculating %d cites ...", cite_counter)
 
-	var cites_insert map[string][2]string
+	cites_insert := make(map[string][2]string)
 
 	citemap_counter := 0
 

@@ -16,7 +16,7 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
-	"github.com/lib/pq"
+	_ "github.com/lib/pq"
 	"log"
 	"math"
 	"net"
@@ -328,8 +328,8 @@ func (self *PostgresDatabase) upgrade6to7() {
                           )`
 
 	tables["Cites"] = `(
-                            post_msgid VARCHAR(255) PRIMARY KEY,
-                            cite_msgid VARCHAR(255) PRIMARY KEY
+                            post_msgid VARCHAR(255) NOT NULL,
+                            cite_msgid VARCHAR(255) NOT NULL
                      )`
 
 	var err error
@@ -355,96 +355,99 @@ func (self *PostgresDatabase) upgrade6to7() {
 		checkError(err)
 	}
 
-	// rebuild ALL cites
-	log.Println("!!! Building Cites table, this will take a long time. Do NOT interrupt !!!")
+	/*
+		// rebuild ALL cites
+		log.Println("!!! Building Cites table, this will take a long time. Do NOT interrupt !!!")
 
-	post_counter := 0
-	cite_counter := 0
-	var rows *sql.Rows
-	rows, err = self.conn.Query("SELECT message, message_id FROM ArticlePosts")
-	if err != nil {
-		log.Fatalf("error migrating: %s", err)
-	}
-
-	cites := make(map[string][]string)
-
-	for rows.Next() {
-		var msg, msgid string
-		rows.Scan(&msg, &msgid)
-		c := findBacklinks(msg)
-		cite_counter += len(c)
-		cites[msgid] = c
-		post_counter++
-		if post_counter%100 == 0 {
-			log.Printf("selected %d messages %d cites", post_counter, cite_counter)
-		}
-	}
-
-	rows.Close()
-
-	log.Printf("calculating %d cites ...", cite_counter)
-
-	var cites_insert map[string][2]string
-
-	citemap_counter := 0
-
-	for msgid, citelist := range cites {
-		for _, cite := range citelist {
-			citelike := "%" + cite + "%"
-			var cite_msgid string
-			err = self.conn.QueryRow("SELECT message_id FROM ArticlePosts WHERE message_id LIKE $1 LIMIT 1", citelike).Scan(&cite_msgid)
-			if err != nil {
-				log.Fatalf("failed to select cite like %s: %s", cite, err)
-			}
-			cites_insert[msgid+cite_msgid] = [2]string{msgid, cite_msgid}
-			citemap_counter++
-			if cite_counter%100 == 0 {
-				log.Printf("calculated %d cites", cite_counter)
-			}
-		}
-	}
-
-	log.Printf("inserting %d cites ...", cite_counter)
-
-	txn, err := self.conn.Begin()
-	if err != nil {
-		log.Fatalf("failed to begin insert: %s", err)
-	}
-
-	st, err := txn.Prepare(pq.CopyIn("Cites", "post_msgid", "cite_msgid"))
-
-	if err != nil {
-		log.Fatalf("failed to prepare statement: %s", err)
-	}
-
-	for _, ct := range cites_insert {
-		_, err = st.Exec(ct[0], ct[1])
+		post_counter := 0
+		cite_counter := 0
+		var rows *sql.Rows
+		rows, err = self.conn.Query("SELECT message, message_id FROM ArticlePosts")
 		if err != nil {
-			log.Fatalf("failed to insert with prepared statement: %s", err)
+			log.Fatalf("error migrating: %s", err)
 		}
-	}
 
-	_, err = st.Exec()
+		cites := make(map[string][]string)
 
-	if err != nil {
-		log.Fatalf("failed to excute statement: %s", err)
-	}
+		for rows.Next() {
+			var msg, msgid string
+			rows.Scan(&msg, &msgid)
+			c := findBacklinks(msg)
+			cite_counter += len(c)
+			cites[msgid] = c
+			post_counter++
+			if post_counter%100 == 0 {
+				log.Printf("selected %d messages %d cites", post_counter, cite_counter)
+			}
+		}
 
-	err = st.Close()
+		rows.Close()
 
-	if err != nil {
-		log.Fatalf("failed to close statement: %s", err)
-	}
+		log.Printf("calculating %d cites ...", cite_counter)
 
-	log.Println("committing...")
+		cites_insert := make(map[string][2]string)
 
-	err = txn.Commit()
-	if err != nil {
-		log.Fatalf("failed to commit transaction: %s", err)
-	}
+		citemap_counter := 0
 
-	log.Println("insertion done")
+		for msgid, citelist := range cites {
+			for _, cite := range citelist {
+				cite = cite[2:]
+				citeLike := cite + "%"
+				var cite_msgid string
+				err = self.conn.QueryRow("SELECT message_id FROM Articles WHERE message_id_hash LIKE $1 LIMIT 1", citeLike).Scan(&cite_msgid)
+				if err != nil {
+					continue
+					//log.Fatalf("failed to select cite like %s: %s", citeLike, err)
+				}
+				cites_insert[msgid+cite_msgid] = [2]string{msgid, cite_msgid}
+				citemap_counter++
+				if cite_counter%100 == 0 {
+					log.Printf("calculated %d cites", cite_counter)
+				}
+			}
+		}
 
+		log.Printf("inserting %d cites ...", cite_counter)
+
+		txn, err := self.conn.Begin()
+		if err != nil {
+			log.Fatalf("failed to begin insert: %s", err)
+		}
+
+		st, err := txn.Prepare(pq.CopyIn("Cites", "post_msgid", "cite_msgid"))
+
+		if err != nil {
+			log.Fatalf("failed to prepare statement: %s", err)
+		}
+
+		for _, ct := range cites_insert {
+			_, err = st.Exec(ct[0], ct[1])
+			if err != nil {
+				log.Fatalf("failed to insert with prepared statement: %s", err)
+			}
+		}
+
+		_, err = st.Exec()
+
+		if err != nil {
+			log.Fatalf("failed to excute statement: %s", err)
+		}
+
+		err = st.Close()
+
+		if err != nil {
+			log.Fatalf("failed to close statement: %s", err)
+		}
+
+		log.Println("committing...")
+
+		err = txn.Commit()
+		if err != nil {
+			log.Fatalf("failed to commit transaction: %s", err)
+		}
+
+		log.Println("insertion done")
+	*/
 	self.setDBVersion(7)
 }
 

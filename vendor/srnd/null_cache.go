@@ -5,6 +5,7 @@ import (
 	"io/ioutil"
 	"net/http"
 	"path/filepath"
+	"strconv"
 	"strings"
 )
 
@@ -28,13 +29,71 @@ type nullHandler struct {
 }
 
 func (self *nullHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	_, file := filepath.Split(r.URL.Path)
+	path := r.URL.Path
+	_, file := filepath.Split(path)
+
+	isjson := strings.HasSuffix(path, "/json") || strings.HasSuffix(path, "/json/")
+
+	if strings.HasPrefix(path, "/t/") {
+		// thread handler
+		parts := strings.Split(path[3:], "/")
+		hash := parts[0]
+		msg, err := self.cache.database.GetMessageIDByHash(hash)
+		if err == nil {
+			template.genThread(self.cache.attachments, msg, self.cache.prefix, self.cache.name, w, self.cache.database, isjson)
+			return
+		} else {
+			goto notfound
+		}
+	}
+	if strings.Trim(path, "/") == "overboard" {
+		// generate ukko aka overboard
+		template.genUkko(self.cache.prefix, self.cache.name, w, self.cache.database, isjson)
+		return
+	}
+
+	if strings.HasPrefix(path, "/b/") {
+		// board handler
+		parts := strings.Split(path[3:], "/")
+		page := 0
+		group := parts[0]
+		if len(parts) > 1 && parts[1] != "" && parts[1] != "json" {
+			var err error
+			page, err = strconv.Atoi(parts[1])
+			if err != nil {
+				goto notfound
+			}
+		}
+		hasgroup := self.cache.database.HasNewsgroup(group)
+		if !hasgroup {
+			goto notfound
+		}
+		pages := self.cache.database.GetGroupPageCount(group)
+		if page >= int(pages) {
+			goto notfound
+		}
+		template.genBoardPage(self.cache.attachments, self.cache.prefix, self.cache.name, group, page, w, self.cache.database, isjson)
+		return
+	}
+
+	if strings.HasPrefix(path, "/o/") {
+		page := 0
+		parts := strings.Split(path[3:], "/")
+		if parts[0] != "json" && parts[0] != "" {
+			var err error
+			page, err = strconv.Atoi(parts[0])
+			if err != nil {
+				goto notfound
+			}
+		}
+		template.genUkkoPaginated(self.cache.prefix, self.cache.name, w, self.cache.database, page, isjson)
+		return
+	}
+
 	if len(file) == 0 || file == "index.html" {
 		template.genFrontPage(10, self.cache.prefix, self.cache.name, w, ioutil.Discard, self.cache.database)
 		return
 	}
-
-	isjson := strings.HasSuffix(file, ".json")
 
 	if file == "index.json" {
 		// TODO: index.json

@@ -1418,11 +1418,10 @@ func (self *httpFrontend) Mainloop() {
 
 	m.Path("/thm/{f}").Handler(http.FileServer(http.Dir(self.webroot_dir)))
 	m.Path("/img/{f}").Handler(http.FileServer(http.Dir(self.webroot_dir)))
-	m.Path("/{f}.html").Handler(cache_handler).Methods("GET", "HEAD")
-	m.Path("/{f}.json").Handler(cache_handler).Methods("GET", "HEAD")
 	m.PathPrefix("/b/").Handler(cache_handler).Methods("GET", "HEAD")
 	m.PathPrefix("/t/").Handler(cache_handler).Methods("GET", "HEAD")
-	//            /f/ :^)
+	m.Path("/{f}.html").Handler(cache_handler).Methods("GET", "HEAD")
+	m.Path("/{f}.json").Handler(cache_handler).Methods("GET", "HEAD")
 	m.PathPrefix("/o/").Handler(cache_handler).Methods("GET", "HEAD")
 	m.PathPrefix("/overboard/").Handler(cache_handler).Methods("GET", "HEAD")
 	m.PathPrefix("/static/").Handler(http.FileServer(http.Dir(self.static_dir)))

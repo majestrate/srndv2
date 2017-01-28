@@ -23,7 +23,7 @@ import (
 
 // the state of a feed that we are persisting
 type feedState struct {
-	Config  FeedConfig
+	Config  *FeedConfig
 	Paused  bool
 	Exiting bool
 }
@@ -101,7 +101,7 @@ type NNTPDaemon struct {
 	// for modifying feed's policies
 	modify_feed_policy chan *modifyFeedPolicyEvent
 	// for registering a new feed to persist
-	register_feed chan FeedConfig
+	register_feed chan *FeedConfig
 	// for degregistering an existing feed from persistance given name
 	deregister_feed chan string
 	// map of name -> NNTPConnection
@@ -293,7 +293,7 @@ func (self *NNTPDaemon) storeFeedsConfig() (err error) {
 	feeds := self.activeFeeds()
 	var feedconfigs []FeedConfig
 	for _, status := range feeds {
-		feedconfigs = append(feedconfigs, status.State.Config)
+		feedconfigs = append(feedconfigs, *status.State.Config)
 	}
 	err = SaveFeeds(feedconfigs)
 	return
@@ -345,7 +345,7 @@ func (self *NNTPDaemon) getFeedStatus(feedname string) (status *feedStatus) {
 
 // add a feed to be persisted by the daemon
 // does not modify feeds.ini
-func (self *NNTPDaemon) addFeed(conf FeedConfig) (err error) {
+func (self *NNTPDaemon) addFeed(conf *FeedConfig) (err error) {
 	self.register_feed <- conf
 	return
 }
@@ -362,7 +362,7 @@ func (self *NNTPDaemon) activeFeeds() (feeds []*feedStatus) {
 	return
 }
 
-func (self *NNTPDaemon) persistFeed(conf FeedConfig, mode string, n int) {
+func (self *NNTPDaemon) persistFeed(conf *FeedConfig, mode string, n int) {
 	log.Println(conf.Name, "persisting in", mode, "mode")
 	backoff := time.Second
 	for {
@@ -412,7 +412,7 @@ func (self *NNTPDaemon) persistFeed(conf FeedConfig, mode string, n int) {
 			nntp.policy = conf.policy
 			nntp.feedname = conf.Name
 			nntp.name = fmt.Sprintf("%s-%d-%s", conf.Name, n, mode)
-			stream, reader, use_tls, err := nntp.outboundHandshake(textproto.NewConn(conn), &conf)
+			stream, reader, use_tls, err := nntp.outboundHandshake(textproto.NewConn(conn), conf)
 			if err == nil {
 				if mode == "reader" && !reader {
 					log.Println(nntp.name, "we don't support reader on this feed, dropping")
@@ -422,7 +422,7 @@ func (self *NNTPDaemon) persistFeed(conf FeedConfig, mode string, n int) {
 					// success connecting, reset backoff
 					backoff = time.Second
 					// run connection
-					nntp.runConnection(self, false, stream, reader, use_tls, mode, conn, &conf)
+					nntp.runConnection(self, false, stream, reader, use_tls, mode, conn, conf)
 					// deregister connection
 					self.deregister_connection <- nntp
 				}
@@ -506,7 +506,7 @@ func (self *NNTPDaemon) Run() {
 	self.send_all_feeds = make(chan ArticleEntry)
 	self.activeConnections = make(map[string]*nntpConnection)
 	self.loadedFeeds = make(map[string]*feedState)
-	self.register_feed = make(chan FeedConfig)
+	self.register_feed = make(chan *FeedConfig)
 	self.deregister_feed = make(chan string)
 	self.get_feeds = make(chan chan []*feedStatus)
 	self.get_feed = make(chan *feedStatusQuery)
@@ -629,7 +629,7 @@ func (self *NNTPDaemon) Run() {
 	// register feeds from config
 	log.Println("registering feeds")
 	for _, f := range self.conf.feeds {
-		self.register_feed <- f
+		self.register_feed <- &f
 	}
 
 	for threads > 0 {
@@ -679,6 +679,10 @@ func (self *NNTPDaemon) Reload() {
 		self.removeFeed(feed.State.Config.Name)
 	}
 	self.conf = conf
+	for _, feed := range self.conf.feeds {
+		self.addFeed(&feed)
+	}
+
 	log.Println("reload daemon okay")
 }
 

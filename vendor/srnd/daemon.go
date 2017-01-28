@@ -376,10 +376,6 @@ func (self *NNTPDaemon) persistFeed(conf *FeedConfig, mode string, n int) {
 				return
 			}
 
-			if status.State.Exiting {
-				return
-			}
-
 			if status.State.Paused {
 				// we are paused
 				// sleep for a bit

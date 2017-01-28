@@ -801,7 +801,7 @@ func (self *NNTPDaemon) pollfeeds() {
 				st.Exiting = true
 				for _, conn := range self.activeConnections {
 					if conn.feedname == feedname {
-						conn.QuitAndWait()
+						go conn.QuitAndWait()
 					}
 				}
 				delete(self.loadedFeeds, feedname)

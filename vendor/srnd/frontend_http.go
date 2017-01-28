@@ -1451,7 +1451,7 @@ func (self *httpFrontend) Mainloop() {
 	self.cache.Start()
 
 	// this is for link cache
-	go template.loadAllModels(self.prefix, self.name, self.daemon.database)
+	// go template.loadAllModels(self.prefix, self.name, self.daemon.database)
 
 	// poll channels
 

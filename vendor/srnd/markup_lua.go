@@ -99,7 +99,7 @@ func createLua() (l *Lua) {
 
 var luaInt *Lua
 
-func MEMEPosting(src, prefix string) string {
+func extraMemePosting(src, prefix string) string {
 	if luaInt == nil {
 		return markupErrorText
 	}

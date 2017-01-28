@@ -113,5 +113,11 @@ func SetMarkupScriptFile(fname string) error {
 		luaInt = nil
 	}
 	luaInt = createLua()
-	return luaInt.LoadFile(fname)
+	err := luaInt.LoadFile(fname)
+	if err == nil {
+		return nil
+	}
+	luaInt.Close()
+	luaInt = nil
+	return err
 }

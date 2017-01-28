@@ -33,6 +33,7 @@ func main() {
 						break
 					}
 					srnd.ReloadTemplates()
+					daemon.Reload()
 				}
 				log.Println("Shutting down...")
 				daemon.End()

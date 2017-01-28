@@ -205,6 +205,7 @@ func GenSRNdConfig() *configparser.Configuration {
 	sect.Add("static_files", "contrib")
 	sect.Add("templates", "contrib/templates/default")
 	sect.Add("translations", "contrib/translations")
+	sect.Add("markup_script", "contrib/lua/memeposting.lua")
 	sect.Add("locale", "en")
 	sect.Add("domain", "localhost")
 	sect.Add("json-api", "0")

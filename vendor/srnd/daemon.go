@@ -324,21 +324,6 @@ func (self *NNTPDaemon) modifyFeedPolicy(feedname string, policy FeedPolicy) (er
 	return
 }
 
-func (self *NNTPDaemon) reloadFeeds() {
-	log.Println("close all feeds")
-	// close all feeds
-	feeds := self.activeFeeds()
-	for _, feed := range feeds {
-		self.removeFeed(feed.State.Config.Name)
-	}
-	// register feeds from config
-	log.Println("registering feeds")
-	for _, f := range self.conf.feeds {
-		self.register_feed <- f
-	}
-
-}
-
 // remove a persisted feed from the daemon
 // does not modify feeds.ini
 func (self *NNTPDaemon) removeFeed(feedname string) (err error) {
@@ -689,8 +674,11 @@ func (self *NNTPDaemon) Reload() {
 			log.Println("failed to reload script file", err)
 		}
 	}
+	feeds := self.activeFeeds()
+	for _, feed := range feeds {
+		self.removeFeed(feed.State.Config.Name)
+	}
 	self.conf = conf
-	self.reloadFeeds()
 	log.Println("reload daemon okay")
 }
 

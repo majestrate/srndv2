@@ -680,9 +680,16 @@ func (self *NNTPDaemon) Reload() {
 	}
 	for {
 		time.Sleep(time.Second)
-		f := self.activeFeeds()
-		log.Println("have", f, "active feeds waiting for full feed shutdown")
-		if len(f) == 0 {
+		feeds = self.activeFeeds()
+		log.Println("have", len(feeds), "active feeds waiting for full feed shutdown")
+		for _, f := range feeds {
+			for _, conn := range f.Conns {
+				if conn.abort != nil {
+					conn.abort()
+				}
+			}
+		}
+		if len(feeds) == 0 {
 			break
 		}
 	}

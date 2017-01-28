@@ -86,6 +86,8 @@ type nntpConnection struct {
 	addr net.Addr
 	// pending backlog of bytes to transfer
 	backlog int64
+	// function used to close connection abruptly
+	abort func()
 }
 
 // get message backlog in bytes
@@ -1186,6 +1188,14 @@ func (self *nntpConnection) startStreaming(daemon *NNTPDaemon, reader bool, conn
 // scrape all posts in a newsgroup
 // download ones we do not have
 func (self *nntpConnection) scrapeGroup(daemon *NNTPDaemon, conn *textproto.Conn, group string) (err error) {
+	self.abort = func() {
+		conn.Close()
+	}
+
+	// reset abort func
+	defer func() {
+		self.abort = nil
+	}()
 	log.Println(self.name, "scrape newsgroup", group)
 	// send GROUP command
 	err = conn.PrintfLine("GROUP %s", group)

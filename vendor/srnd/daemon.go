@@ -553,7 +553,9 @@ func (self *NNTPDaemon) Run() {
 		script, ok := self.conf.frontend["markup_script"]
 		if ok {
 			err = SetMarkupScriptFile(script)
-			log.Fatalf("failed to load markup script: %s", err)
+			if err != nil {
+				log.Println("failed to load markup script", err)
+			}
 		}
 
 		self.frontend = NewHTTPFrontend(self, self.cache, self.conf.frontend, self.conf.worker["url"])

@@ -23,8 +23,9 @@ import (
 
 // the state of a feed that we are persisting
 type feedState struct {
-	Config FeedConfig
-	Paused bool
+	Config  FeedConfig
+	Paused  bool
+	Exiting bool
 }
 
 // the status of a feed that we are persisting
@@ -343,12 +344,6 @@ func (self *NNTPDaemon) reloadFeeds() {
 func (self *NNTPDaemon) removeFeed(feedname string) (err error) {
 	// deregister feed first so it doesn't reconnect immediately
 	self.deregister_feed <- feedname
-	// deregister all connections for this feed
-	status := self.getFeedStatus(feedname)
-	status.Exists = false
-	for _, nntp := range status.Conns {
-		nntp.QuitAndWait()
-	}
 	return
 }
 
@@ -395,6 +390,11 @@ func (self *NNTPDaemon) persistFeed(conf FeedConfig, mode string, n int) {
 				log.Println(conf.Name, "ended", mode, "mode")
 				return
 			}
+
+			if status.State.Exiting {
+				return
+			}
+
 			if status.State.Paused {
 				// we are paused
 				// sleep for a bit
@@ -780,8 +780,6 @@ func (self *NNTPDaemon) pollfeeds() {
 		case feedconfig := <-self.register_feed:
 			self.loadedFeeds[feedconfig.Name] = &feedState{
 				Config: feedconfig,
-				// TODO: make starting paused configurable
-				Paused: false,
 			}
 			log.Println("daemon registered feed", feedconfig.Name)
 			// persist feeds
@@ -798,8 +796,14 @@ func (self *NNTPDaemon) pollfeeds() {
 				n--
 			}
 		case feedname := <-self.deregister_feed:
-			_, ok := self.loadedFeeds[feedname]
+			st, ok := self.loadedFeeds[feedname]
 			if ok {
+				st.Exiting = true
+				for _, conn := range self.activeConnections {
+					if conn.feedname == feedname {
+						conn.QuitAndWait()
+					}
+				}
 				delete(self.loadedFeeds, feedname)
 				log.Println("daemon deregistered feed", feedname)
 			} else {

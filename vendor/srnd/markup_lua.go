@@ -101,7 +101,7 @@ var luaInt *Lua
 
 func extraMemePosting(src, prefix string) string {
 	if luaInt == nil {
-		return markupErrorText
+		return src
 	}
 	defer luaInt.GC()
 	return luaInt.MEMEPosting(src, prefix)

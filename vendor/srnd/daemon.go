@@ -775,14 +775,8 @@ func (self *NNTPDaemon) pollfeeds() {
 				n--
 			}
 		case feedname := <-self.deregister_feed:
-			st, ok := self.loadedFeeds[feedname]
+			_, ok := self.loadedFeeds[feedname]
 			if ok {
-				st.Exiting = true
-				for _, conn := range self.activeConnections {
-					if conn.feedname == feedname {
-						go conn.QuitAndWait()
-					}
-				}
 				delete(self.loadedFeeds, feedname)
 				log.Println("daemon deregistered feed", feedname)
 			} else {

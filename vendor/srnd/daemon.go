@@ -674,30 +674,6 @@ func (self *NNTPDaemon) Reload() {
 			log.Println("failed to reload script file", err)
 		}
 	}
-	feeds := self.activeFeeds()
-	for _, feed := range feeds {
-		self.removeFeed(feed.State.Config.Name)
-	}
-	for {
-		time.Sleep(time.Second)
-		feeds = self.activeFeeds()
-		log.Println("have", len(feeds), "active feeds waiting for full feed shutdown")
-		for _, f := range feeds {
-			for _, conn := range f.Conns {
-				if conn.abort != nil {
-					conn.abort()
-				}
-			}
-		}
-		if len(feeds) == 0 {
-			break
-		}
-	}
-	self.conf = conf
-	for _, feed := range self.conf.feeds {
-		self.addFeed(&feed)
-	}
-
 	log.Println("reload daemon okay")
 }
 

@@ -2,7 +2,7 @@
 
 package srnd
 
-// #cgo pkg-config: lua52
+// #cgo pkg-config: lua5.2
 // #include <lua.h>
 // #include <lauxlib.h>
 // #include <lualib.h>

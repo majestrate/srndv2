@@ -1,7 +1,9 @@
-//
 // markup.go
 // memeposting markup parser
 //
+
+// +build !lua
+
 package srnd
 
 import (
@@ -113,10 +115,15 @@ func formatline(line, prefix string) (markup string) {
 	return
 }
 
-func memeposting(src, prefix string) (markup string) {
+func MEMEPosting(src, prefix string) (markup string) {
 	for _, line := range strings.Split(src, "\n") {
 		line = strings.Trim(line, "\r")
 		markup += formatline(line, prefix) + "\n"
 	}
 	return
+}
+
+func SetMarkupScriptFile(fname string) error {
+	// does nothing for non lua
+	return nil
 }

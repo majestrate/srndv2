@@ -535,6 +535,12 @@ func (self *NNTPDaemon) Run() {
 		cache_passwd := self.conf.cache["password"]
 		self.cache = NewCache(self.conf.cache["type"], cache_host, cache_port, cache_user, cache_passwd, self.conf.cache, self.conf.frontend, self.database, self.store)
 
+		script, ok := self.conf.frontend["markup_script"]
+		if ok {
+			err = SetMarkupScriptFile(script)
+			log.Fatalf("failed to load markup script: %s", err)
+		}
+
 		self.frontend = NewHTTPFrontend(self, self.cache, self.conf.frontend, self.conf.worker["url"])
 		go self.frontend.Mainloop()
 	}

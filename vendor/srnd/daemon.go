@@ -678,6 +678,13 @@ func (self *NNTPDaemon) Reload() {
 	for _, feed := range feeds {
 		self.removeFeed(feed.State.Config.Name)
 	}
+	for {
+		time.Sleep(time.Second)
+		f := self.activeFeeds()
+		if len(f) == 0 {
+			break
+		}
+	}
 	self.conf = conf
 	for _, feed := range self.conf.feeds {
 		self.addFeed(&feed)

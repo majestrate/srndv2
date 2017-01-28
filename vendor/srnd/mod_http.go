@@ -290,7 +290,7 @@ func (self httpModUI) getAdminFunc(funcname string) AdminFunc {
 				return "", errors.New("please specific host, port and name")
 			}
 			// make new config
-			conf := &FeedConfig{
+			conf := FeedConfig{
 				policy: FeedPolicy{
 					// default rules for default policy
 					rules: map[string]string{"overchan.*": "0", "ctl": "1"},

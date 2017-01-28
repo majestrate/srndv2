@@ -101,7 +101,7 @@ type NNTPDaemon struct {
 	// for modifying feed's policies
 	modify_feed_policy chan *modifyFeedPolicyEvent
 	// for registering a new feed to persist
-	register_feed chan *FeedConfig
+	register_feed chan FeedConfig
 	// for degregistering an existing feed from persistance given name
 	deregister_feed chan string
 	// map of name -> NNTPConnection
@@ -345,7 +345,7 @@ func (self *NNTPDaemon) getFeedStatus(feedname string) (status *feedStatus) {
 
 // add a feed to be persisted by the daemon
 // does not modify feeds.ini
-func (self *NNTPDaemon) addFeed(conf *FeedConfig) (err error) {
+func (self *NNTPDaemon) addFeed(conf FeedConfig) (err error) {
 	self.register_feed <- conf
 	return
 }
@@ -502,7 +502,7 @@ func (self *NNTPDaemon) Run() {
 	self.send_all_feeds = make(chan ArticleEntry)
 	self.activeConnections = make(map[string]*nntpConnection)
 	self.loadedFeeds = make(map[string]*feedState)
-	self.register_feed = make(chan *FeedConfig)
+	self.register_feed = make(chan FeedConfig)
 	self.deregister_feed = make(chan string)
 	self.get_feeds = make(chan chan []*feedStatus)
 	self.get_feed = make(chan *feedStatusQuery)
@@ -625,7 +625,7 @@ func (self *NNTPDaemon) Run() {
 	// register feeds from config
 	log.Println("registering feeds")
 	for _, f := range self.conf.feeds {
-		self.register_feed <- &f
+		self.register_feed <- f
 	}
 
 	for threads > 0 {
@@ -758,20 +758,20 @@ func (self *NNTPDaemon) pollfeeds() {
 			chnl <- feeds
 		case feedconfig := <-self.register_feed:
 			self.loadedFeeds[feedconfig.Name] = &feedState{
-				Config: feedconfig,
+				Config: &feedconfig,
 			}
 			log.Println("daemon registered feed", feedconfig.Name)
 			// persist feeds
 			if feedconfig.sync {
-				go self.persistFeed(feedconfig, "sync", 0)
+				go self.persistFeed(&feedconfig, "sync", 0)
 			}
 			n := feedconfig.connections
 			if n < 1 {
 				n = 1
 			}
 			for n > 0 {
-				go self.persistFeed(feedconfig, "stream", n)
-				go self.persistFeed(feedconfig, "reader", n)
+				go self.persistFeed(&feedconfig, "stream", n)
+				go self.persistFeed(&feedconfig, "reader", n)
 				n--
 			}
 		case feedname := <-self.deregister_feed:

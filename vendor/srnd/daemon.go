@@ -345,8 +345,9 @@ func (self *NNTPDaemon) removeFeed(feedname string) (err error) {
 	self.deregister_feed <- feedname
 	// deregister all connections for this feed
 	status := self.getFeedStatus(feedname)
+	status.Exists = false
 	for _, nntp := range status.Conns {
-		go nntp.QuitAndWait()
+		nntp.QuitAndWait()
 	}
 	return
 }

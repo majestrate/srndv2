@@ -80,16 +80,6 @@ func formatline(line, prefix string) (markup string) {
 			markup += "<span class='memearrows'>"
 			markup += escapeline(line)
 			markup += "</span>"
-		} else if strings.HasPrefix(line_nospace, "==") && strings.HasSuffix(line_nospace, "==") {
-			// redtext
-			markup += "<div class='redtext'>"
-			markup += escapeline(line[2 : len(line)-2])
-			markup += "</div>"
-		} else if strings.HasPrefix(line_nospace, "@@") && strings.HasSuffix(line_nospace, "@@") {
-			// psytext
-			markup += "<div class='psy'>"
-			markup += escapeline(line[2 : len(line)-2])
-			markup += "</div>"
 		} else {
 			// regular line
 			// for each word

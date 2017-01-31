@@ -6,6 +6,7 @@ package srnd
 import (
 	"bufio"
 	"crypto/sha512"
+	"encoding/base64"
 	"errors"
 	"fmt"
 	"github.com/majestrate/nacl"
@@ -385,6 +386,7 @@ func (self *nntpArticle) WriteBody(wr io.Writer) (err error) {
 					continue
 				}
 				hdr := att.Header()
+				hdr.Add("Content-Transfer-Encoding", "base64")
 				part, err := w.CreatePart(hdr)
 				if err != nil {
 					log.Println("failed to create part?", err)
@@ -393,8 +395,10 @@ func (self *nntpArticle) WriteBody(wr io.Writer) (err error) {
 				var b io.ReadCloser
 				b, err = att.OpenBody()
 				if err == nil {
-					_, err = io.CopyBuffer(part, b, buff[:])
+					enc := base64.NewEncoder(base64.StdEncoding, part)
+					_, err = io.CopyBuffer(enc, b, buff[:])
 					b.Close()
+					enc.Close()
 					if err != nil {
 						break
 					}

@@ -496,6 +496,19 @@ func (self *NNTPDaemon) Run() {
 		}()
 	}
 
+	// write pid file
+	pidfile := self.conf.daemon["pidfile"]
+	if pidfile != "" {
+		f, err := os.OpenFile(pidfile, os.O_CREATE|os.O_WRONLY, 0644)
+		if err == nil {
+			pid := os.Getpid()
+			fmt.Fprintf(f, "%d", pid)
+			f.Close()
+		} else {
+			log.Fatalf("failed to open pidfile %s: %s", pidfile, err)
+		}
+	}
+
 	self.register_connection = make(chan *nntpConnection)
 	self.deregister_connection = make(chan *nntpConnection)
 	self.infeed_load = make(chan string, 128)
@@ -634,9 +647,14 @@ func (self *NNTPDaemon) Run() {
 		log.Println("started worker", threads)
 		threads--
 	}
+
 	// start accepting incoming connections
 	self.acceptloop()
 	<-self.done
+	// clean up pidfile if it was specified
+	if pidfile != "" {
+		os.Remove(pidfile)
+	}
 }
 
 func (self *NNTPDaemon) syncAllMessages() {

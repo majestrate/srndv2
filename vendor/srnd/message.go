@@ -389,13 +389,15 @@ func (self *nntpArticle) WriteBody(wr io.Writer) (err error) {
 				if err != nil {
 					log.Println("failed to create part?", err)
 				}
-				str := att.Filedata()
-				dat := []byte(str)
-				_, err = part.Write(dat)
-				str = ""
-				dat = nil
-				if err != nil {
-					break
+				var buff [1024]byte
+				var b io.ReadCloser
+				b, err = att.OpenBody()
+				if err == nil {
+					_, err = io.CopyBuffer(part, b, buff[:])
+					b.Close()
+					if err != nil {
+						break
+					}
 				}
 				part = nil
 			}

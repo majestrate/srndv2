@@ -32,9 +32,11 @@ type successFunc func(NNTPMessage)
 
 // an attachment in a post
 type postAttachment struct {
-	Filename string `json:"name"`
-	Filedata string `json:"data"`
-	Filetype string `json:"type"`
+	DeleteFile func()
+	NNTP       NNTPAttachment
+	Filename   string `json:"name"`
+	Filedata   string `json:"data"`
+	Filetype   string `json:"type"`
 }
 
 // an api post request
@@ -497,13 +499,18 @@ func (self *httpFrontend) handle_postform(wr http.ResponseWriter, r *http.Reques
 			// read part for attachment
 			if strings.HasPrefix(partname, "attachment_") && self.attachments {
 				if len(pr.Attachments) < self.attachmentLimit {
-					att := readAttachmentFromMimePartAndStore(part, nil)
-					if att != nil && len(att.Filedata()) > 0 {
+					att := readAttachmentFromMimePartAndStore(part, self.daemon.store)
+					if att != nil {
 						log.Println("attaching file", att.Filename())
 						pa := postAttachment{
 							Filename: att.Filename(),
 							Filetype: att.Mime(),
-							Filedata: att.Filedata(),
+							NNTP:     att,
+							DeleteFile: func() {
+								f := att.Filepath()
+								DelFile(self.daemon.store.AttachmentFilepath(f))
+								DelFile(self.daemon.store.ThumbnailFilepath(f))
+							},
 						}
 						pr.Attachments = append(pr.Attachments, pa)
 					}
@@ -537,6 +544,11 @@ func (self *httpFrontend) handle_postform(wr http.ResponseWriter, r *http.Reques
 			part_buff.Reset()
 		} else {
 			if err != io.EOF {
+				for _, att := range pr.Attachments {
+					if att.DeleteFile != nil {
+						att.DeleteFile()
+					}
+				}
 				// TODO: we need to delete uploaded files somehow since they are unregistered at this point
 				errmsg := fmt.Sprintf("httpfrontend post handler error reading multipart: %s", err)
 				log.Println(errmsg)
@@ -597,6 +609,11 @@ func (self *httpFrontend) handle_postform(wr http.ResponseWriter, r *http.Reques
 	}
 
 	if captcha_retry {
+		for _, att := range pr.Attachments {
+			if att.DeleteFile != nil {
+				att.DeleteFile()
+			}
+		}
 		if sendJson {
 			json.NewEncoder(wr).Encode(map[string]interface{}{"error": "bad captcha"})
 		} else {
@@ -611,6 +628,11 @@ func (self *httpFrontend) handle_postform(wr http.ResponseWriter, r *http.Reques
 	}
 
 	b := func() {
+		for _, att := range pr.Attachments {
+			if att.DeleteFile != nil {
+				att.DeleteFile()
+			}
+		}
 		if sendJson {
 			wr.WriteHeader(403)
 			json.NewEncoder(wr).Encode(map[string]interface{}{"error": "banned"})
@@ -621,6 +643,11 @@ func (self *httpFrontend) handle_postform(wr http.ResponseWriter, r *http.Reques
 	}
 
 	e := func(err error) {
+		for _, att := range pr.Attachments {
+			if att.DeleteFile != nil {
+				att.DeleteFile()
+			}
+		}
 		log.Println("frontend error:", err)
 		wr.WriteHeader(200)
 		if sendJson {
@@ -847,7 +874,7 @@ func (self *httpFrontend) handle_postRequest(pr *postRequest, b bannedFunc, e er
 		for _, att := range pr.Attachments {
 			// add attachment
 			if len(att.Filedata) > 0 {
-				a := createAttachment(att.Filetype, att.Filename, strings.NewReader(att.Filedata))
+				a := createAttachment(att.Filetype, att.Filetype, strings.NewReader(att.Filedata))
 				nntp.Attach(a)
 				err = a.Save(self.daemon.store.AttachmentDir())
 				if err == nil {
@@ -863,12 +890,19 @@ func (self *httpFrontend) handle_postRequest(pr *postRequest, b bannedFunc, e er
 				if err != nil {
 					break
 				}
+			} else {
+				nntp.Attach(att.NNTP)
 			}
 		}
 		if err != nil {
 			// nuke files
 			for _, fname := range delfiles {
 				DelFile(fname)
+			}
+			for _, att := range pr.Attachments {
+				if att.DeleteFile != nil {
+					att.DeleteFile()
+				}
 			}
 			e(err)
 			return

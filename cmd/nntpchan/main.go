@@ -7,7 +7,6 @@ import (
 	"github.com/majestrate/srndv2/lib/store"
 	"github.com/majestrate/srndv2/lib/webhooks"
 	"net"
-	"net/http"
 	_ "net/http/pprof"
 	"os"
 	"os/signal"
@@ -15,13 +14,26 @@ import (
 	"time"
 )
 
+type runStatus struct {
+	nntpListener net.Listener
+	run          bool
+	done         chan error
+}
+
+func (st *runStatus) Stop() {
+	st.run = false
+	if st.nntpListener != nil {
+		st.nntpListener.Close()
+	}
+	st.nntpListener = nil
+	log.Info("stopping daemon process")
+}
+
 func main() {
-	go func() {
-		err := http.ListenAndServe("127.0.0.1:7700", nil)
-		if err != nil {
-			log.Fatal(err)
-		}
-	}()
+	st := &runStatus{
+		run:  true,
+		done: make(chan error),
+	}
 	log.Info("starting up nntpchan...")
 	cfg_fname := "nntpchan.json"
 	conf, err := config.Ensure(cfg_fname)
@@ -82,13 +94,41 @@ func main() {
 		nserv.Hooks = hooks
 	}
 
-	// nntp server loop
+	// start persisting feeds
+	go nserv.PersistFeeds()
+
+	// handle signals
+	sigchnl := make(chan os.Signal, 1)
+	signal.Notify(sigchnl, syscall.SIGHUP, os.Interrupt)
 	go func() {
 		for {
+			s := <-sigchnl
+			if s == syscall.SIGHUP {
+				// handle SIGHUP
+				conf, err := config.Ensure(cfg_fname)
+				if err == nil {
+					log.Infof("reloading config: %s", cfg_fname)
+					nserv.ReloadServer(conf.NNTP)
+					nserv.ReloadFeeds(conf.Feeds)
+				} else {
+					log.Errorf("failed to reload config: %s", err)
+				}
+			} else if s == os.Interrupt {
+				// handle interrupted, clean close
+				st.Stop()
+				return
+			}
+		}
+	}()
+	go func() {
+		var err error
+		for st.run {
+			var nl net.Listener
 			naddr := conf.NNTP.Bind
 			log.Infof("Bind nntp server to %s", naddr)
-			nl, err := net.Listen("tcp", naddr)
+			nl, err = net.Listen("tcp", naddr)
 			if err == nil {
+				st.nntpListener = nl
 				err = nserv.Serve(nl)
 				if err != nil {
 					nl.Close()
@@ -99,24 +139,11 @@ func main() {
 			}
 			time.Sleep(time.Second)
 		}
+		st.done <- err
 	}()
-
-	// start persisting feeds
-	go nserv.PersistFeeds()
-
-	// handle signals
-	sigchnl := make(chan os.Signal, 1)
-	signal.Notify(sigchnl, syscall.SIGHUP)
-	for {
-		s := <-sigchnl
-		if s == syscall.SIGHUP {
-			// handle SIGHUP
-			conf, err := config.Ensure(cfg_fname)
-			if err == nil {
-				log.Infof("reloading config: %s", cfg_fname)
-				nserv.ReloadServer(conf.NNTP)
-				nserv.ReloadFeeds(conf.Feeds)
-			}
-		}
+	e := <-st.done
+	if e != nil {
+		log.Fatal(e)
 	}
+	log.Info("ended")
 }

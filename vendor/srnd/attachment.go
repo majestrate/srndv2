@@ -50,6 +50,8 @@ type NNTPAttachment interface {
 	Bytes() []byte
 	// save to directory, filename is decided by the attachment
 	Save(dir string) error
+	// get body as io.ReadCloser
+	OpenBody() (io.ReadCloser, error)
 }
 
 type nntpAttachment struct {
@@ -60,6 +62,12 @@ type nntpAttachment struct {
 	hash     []byte
 	header   textproto.MIMEHeader
 	body     *bytes.Buffer
+	rawpath  string
+	store    ArticleStore
+}
+
+func (self *nntpAttachment) OpenBody() (io.ReadCloser, error) {
+	return os.Open(self.store.AttachmentFilepath(self.filepath))
 }
 
 func (self *nntpAttachment) Reset() {
@@ -70,6 +78,7 @@ func (self *nntpAttachment) Reset() {
 	self.filename = ""
 	self.mime = ""
 	self.ext = ""
+	self.store = nil
 }
 
 func (self *nntpAttachment) ToModel(prefix string) AttachmentModel {
@@ -220,6 +229,7 @@ func createAttachment(content_type, fname string, body io.Reader) NNTPAttachment
 func readAttachmentFromMimePartAndStore(part *multipart.Part, store ArticleStore) NNTPAttachment {
 	hdr := part.Header
 	att := &nntpAttachment{}
+	att.store = store
 	att.header = hdr
 	content_type := hdr.Get("Content-Type")
 	var err error

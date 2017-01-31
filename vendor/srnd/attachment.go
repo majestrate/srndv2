@@ -66,8 +66,27 @@ type nntpAttachment struct {
 	store    ArticleStore
 }
 
+type byteBufferReadCloser struct {
+	b *bytes.Buffer
+}
+
+func (b *byteBufferReadCloser) Close() error {
+	b.b.Reset()
+	return nil
+}
+
+func (b *byteBufferReadCloser) Read(d []byte) (int, error) {
+	return b.b.Read(d)
+}
+
 func (self *nntpAttachment) OpenBody() (io.ReadCloser, error) {
-	return os.Open(self.store.AttachmentFilepath(self.filepath))
+	if self.store != nil {
+		return os.Open(self.store.AttachmentFilepath(self.filepath))
+	} else {
+		return &byteBufferReadCloser{
+			self.body,
+		}, nil
+	}
 }
 
 func (self *nntpAttachment) Reset() {

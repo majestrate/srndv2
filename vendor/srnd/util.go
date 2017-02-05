@@ -257,7 +257,7 @@ func decAddr(encaddr, key string) string {
 		log.Println("decAddr() encaddr base64 decode", err)
 		return ""
 	}
-	if len(encaddr_bytes) != len(key) {
+	if len(encaddr) != len(key) {
 		log.Println("decAddr() len(encaddr_bytes) != len(key)")
 		return ""
 	}

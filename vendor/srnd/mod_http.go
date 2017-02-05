@@ -571,7 +571,7 @@ func (self httpModUI) handleBanAddress(msg ArticleEntry, r *http.Request) map[st
 		resp["error"] = fmt.Sprintf("could not load headers for %s: %s", msgid, err.Error())
 	} else {
 		// get the associated encrypted ip
-		encip := hdr.Get("X-Encrypted-Ip", hdr.Get("X-Encrypted-IP", ""))
+		encip := hdr.Get("x-encrypted-ip", "")
 		encip = strings.Trim(encip, "\t ")
 
 		if len(encip) == 0 {

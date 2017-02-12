@@ -13,6 +13,7 @@ import "C"
 import (
 	"errors"
 	"log"
+	"sync"
 	"unsafe"
 )
 
@@ -22,6 +23,7 @@ const markupErrorText = "[failed to render ur meme D:]"
 
 // lua interpreter
 type Lua struct {
+	mtx   sync.RWMutex
 	state *C.lua_State
 }
 
@@ -56,6 +58,8 @@ func (l *Lua) LoadFile(fname string) (err error) {
 }
 
 func (l *Lua) MEMEPosting(prefix, body string) (meme string) {
+	l.mtx.Lock()
+	defer l.mtx.Unlock()
 	cf := C.CString(luaFuncName)
 	C.lua_getglobal(l.state, cf)
 	cp := C.CString(prefix)

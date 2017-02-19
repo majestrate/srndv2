@@ -172,7 +172,7 @@ func (self *PostgresDatabase) prepareStatements() {
 		DeleteThread:                    "DELETE FROM ArticleThreads WHERE root_message_id = $1",
 		GetThreadReplyPostModels_1:      "SELECT newsgroup, message_id, ref_id, name, subject, path, time_posted, message, addr FROM ArticlePosts WHERE message_id IN ( SELECT message_id FROM ArticlePosts WHERE ref_id = $1 ORDER BY time_posted DESC LIMIT $2 ) ORDER BY time_posted ASC",
 		GetThreadReplyPostModels_2:      "SELECT newsgroup, message_id, ref_id, name, subject, path, time_posted, message, addr FROM ArticlePosts WHERE message_id IN ( SELECT message_id FROM ArticlePosts WHERE ref_id = $1 ) ORDER BY time_posted ASC",
-		GetThreadReplies_1:              "SELECT message_id FROM ArticlePosts WHERE message_id IN ( SELECT message_id FROM ArticlesPosts WHERE ref_id = $1 ORDER BY time_posted DESC LIMIT $2 ) ORDER BY time_posted ASC",
+		GetThreadReplies_1:              "SELECT message_id FROM ArticlePosts WHERE message_id IN ( SELECT message_id FROM ArticlePosts WHERE ref_id = $1 ORDER BY time_posted DESC LIMIT $2 ) ORDER BY time_posted ASC",
 		GetThreadReplies_2:              "SELECT message_id FROM ArticlePosts WHERE message_id IN ( SELECT message_id FROM ArticlePosts WHERE ref_id = $1 ) ORDER BY time_posted ASC",
 		GetGroupThreads:                 "SELECT message_id FROM ArticlePosts WHERE newsgroup = $1 AND ref_id = '' ",
 		GetLastBumpedThreadsPaginated_1: "SELECT root_message_id, newsgroup FROM ArticleThreads WHERE newsgroup = $1 ORDER BY last_bump DESC LIMIT $2",

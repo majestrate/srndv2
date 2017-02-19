@@ -1447,6 +1447,9 @@ func (self *PostgresDatabase) RegisterArticle(message NNTPMessage) (err error) {
 	if err == nil {
 		var st *sql.Stmt
 		st, err = tx.Prepare(pq.CopyIn("NNTPHeaders", "header_name", "header_value", "header_article_message_id"))
+		if err != nil {
+			log.Printf("error with copyin: %s", err)
+		}
 		// register article header key value pairs
 		for k, val := range message.Headers() {
 			k = strings.ToLower(k)

@@ -16,7 +16,7 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
-	_ "github.com/lib/pq"
+	"github.com/lib/pq"
 	"log"
 	"math"
 	"net"
@@ -30,6 +30,7 @@ import (
 type PostgresDatabase struct {
 	conn   *sql.DB
 	db_str string
+	preped map[string]*sql.Stmt
 }
 
 // create postgres database driver
@@ -75,9 +76,154 @@ func (db *PostgresDatabase) SetMaxIdleConns(n int) {
 // finalize all transactions
 // close database connections
 func (self *PostgresDatabase) Close() {
+	for _, stmt := range self.preped {
+		stmt.Close()
+	}
 	if self.conn != nil {
 		self.conn.Close()
 		self.conn = nil
+	}
+}
+
+const NewsgroupBanned = "NewsgroupBanned"
+const ArticleBanned = "ArticleBanned"
+const GetAllNewsgroups = "GetAllNewsgroups"
+const GetPostsInGroup = "GetPostsInGroup"
+const GetPostModel = "GetPostModel"
+const GetArticlePubkey = "GetArticlePubkey"
+const GetThreadModel = "GetThreadModel"
+const GetThreadModelPubkeys = "GetThreadModelPubkeys"
+const GetThreadModelAttachments = "GetThreadModelAttachments"
+const DeleteArticle_1 = "DeleteArticle_1"
+const DeleteArticle_2 = "DeleteArticle_2"
+const DeleteArticle_3 = "DeleteArticle_3"
+const DeleteArticle_4 = "DeleteArticle_4"
+const DeleteArticle_5 = "DeleteArticle_5"
+const DeleteThread = "DeleteThread"
+const GetThreadReplyPostModels_1 = "GetThreadReplyPostModels_1"
+const GetThreadReplyPostModels_2 = "GetThreadReplyPostModels_2"
+const GetThreadReplies_1 = "GetThreadReplies_1"
+const GetThreadReplies_2 = "GetThreadReplies_2"
+const GetGroupThreads = "GetGroupThreads"
+const GetLastBumpedThreadsPaginated_1 = "GetLastBumpedThreadsPaginated_1"
+const GetLastBumpedThreadsPaginated_2 = "GetLastBumpedThreadsPaginated_2"
+const HasNewsgroup = "HasNewsgroup"
+const HasArticle = "HasArticle"
+const HasArticleLocal = "HasArticleLocal"
+const GetPostAttachments = "GetPostAttachments"
+const GetPostAttachmentModels = "GetPostAttachmentModels"
+const RegisterArticle_1 = "RegisterArticle_1"
+const RegisterArticle_2 = "RegisterArticle_2"
+const RegisterArticle_3 = "RegisterArticle_3"
+const RegisterArticle_4 = "RegisterArticle_4"
+const RegisterArticle_5 = "RegisterArticle_5"
+const RegisterArticle_6 = "RegisterArticle_6"
+const RegisterArticle_7 = "RegisterArticle_7"
+const RegisterArticle_8 = "RegisterArticle_8"
+const GetMessageIDByHeader = "GetMessageIDByHeader"
+const RegisterSigned = "RegisterSigned"
+const GetAllArticlesInGroup = "GetAllArticlesInGroup"
+const GetAllArticles = "GetAllArticles"
+const GetMessageIDByHash = "GetMessageIDByHash"
+const CheckEncIPBanned = "CheckEncIPBanned"
+const GetFirstAndLastForGroup = "GetFirstAndLastForGroup"
+const GetMessageIDForNNTPID = "GetMessageIDForNNTPID"
+const GetNNTPIDForMessageID = "GetNNTPIDForMessageID"
+const IsExpired = "IsExpired"
+const GetLastDaysPostsForGroup = "GetLastDaysPostsForGroup"
+const GetLastDaysPosts = "GetLastDaysPosts"
+const GetLastPostedPostModels = "GetLastPostedPostModels"
+const GetMonthlyPostHistory = "GetMonthlyPostHistory"
+const CheckNNTPLogin = "CheckNNTPLogin"
+const CheckNNTPUserExists = "CheckNNTPUserExists"
+const GetHeadersForMessage = "GetHeadersForMessage"
+const CountAllArticlesInGroup = "CountAllArticlesInGroup"
+const GetMessageIDByCIDR = "GetMessageIDByCIDR"
+const GetMessageIDByEncryptedIP = "GetMessageIDByEncryptedIP"
+const GetPostsBefore = "GetPostsBefore"
+const SearchQuery_1 = "SearchQuery_1"
+const SearchQuery_2 = "SearchQuery_2"
+const SearchByHash_1 = "SearchByHash_1"
+const SearchByHash_2 = "SearchByHash_2"
+
+func (self *PostgresDatabase) prepStmt(name, query string) (err error) {
+	self.preped[name], err = self.conn.Prepare(query)
+	return
+}
+
+func (self *PostgresDatabase) prepareStatements() {
+	var err error
+	self.preped = make(map[string]*sql.Stmt)
+	q := map[string]string{
+		NewsgroupBanned:                 "SELECT COUNT(newsgroup) FROM BannedGroups WHERE newsgroup = $1",
+		ArticleBanned:                   "SELECT COUNT(message_id) FROM BannedArticles WHERE message_id = $1",
+		GetAllNewsgroups:                "SELECT name FROM Newsgroups",
+		GetPostsInGroup:                 "SELECT newsgroup, message_id, ref_id, name, subject, path, time_posted, message, addr FROM ArticlePosts WHERE newsgroup = $1 ORDER BY time_posted",
+		GetPostModel:                    "SELECT newsgroup, message_id, ref_id, name, subject, path, time_posted, message, addr FROM ArticlePosts WHERE message_id = $1 LIMIT 1",
+		GetArticlePubkey:                "SELECT pubkey FROM ArticleKeys WHERE message_id = $1",
+		GetThreadModel:                  "SELECT ArticlePosts.newsgroup, ArticlePosts.message_id, ArticlePosts.name, ArticlePosts.subject, ArticlePosts.time_posted, ArticlePosts.message, ArticlePosts.addr FROM ArticlePosts WHERE ArticlePosts.message_id = $1 OR ArticlePosts.ref_id = $1 ORDER BY ArticlePosts.time_posted",
+		GetThreadModelPubkeys:           "SELECT pubkey, message_id from ArticleKeys WHERE message_id IN ( SELECT message_id FROM ArticlePosts WHERE ref_id = $1 OR message_id = $1 )",
+		GetThreadModelAttachments:       "SELECT filename, filepath, message_id from ArticleAttachments WHERE message_id IN ( SELECT message_id FROM ArticlePosts WHERE ref_id = $1 OR message_id = $1 )",
+		DeleteArticle_1:                 "DELETE FROM NNTPHeaders WHERE header_article_message_id = $1",
+		DeleteArticle_2:                 "DELETE FROM ArticleNumbers WHERE message_id = $1",
+		DeleteArticle_3:                 "DELETE FROM ArticlePosts WHERE message_id = $1",
+		DeleteArticle_4:                 "DELETE FROM ArticleKeys WHERE message_id = $1",
+		DeleteArticle_5:                 "DELETE FROM ArticleAttachments WHERE message_id = $1",
+		DeleteThread:                    "DELETE FROM ArticleThreads WHERE root_message_id = $1",
+		GetThreadReplyPostModels_1:      "SELECT newsgroup, message_id, ref_id, name, subject, path, time_posted, message, addr FROM ArticlePosts WHERE message_id IN ( SELECT message_id FROM ArticlePosts WHERE ref_id = $1 ORDER BY time_posted DESC LIMIT $2 ) ORDER BY time_posted ASC",
+		GetThreadReplyPostModels_2:      "SELECT newsgroup, message_id, ref_id, name, subject, path, time_posted, message, addr FROM ArticlePosts WHERE message_id IN ( SELECT message_id FROM ArticlePosts WHERE ref_id = $1 ) ORDER BY time_posted ASC",
+		GetThreadReplies_1:              "SELECT message_id FROM ArticlePosts WHERE message_id IN ( SELECT message_id FROM ArticlesPosts WHERE ref_id = $1 ORDER BY time_posted DESC LIMIT $2 ) ORDER BY time_posted ASC",
+		GetThreadReplies_2:              "SELECT message_id FROM ArticlePosts WHERE message_id IN ( SELECT message_id FROM ArticlePosts WHERE ref_id = $1 ) ORDER BY time_posted ASC",
+		GetGroupThreads:                 "SELECT message_id FROM ArticlePosts WHERE newsgroup = $1 AND ref_id = '' ",
+		GetLastBumpedThreadsPaginated_1: "SELECT root_message_id, newsgroup FROM ArticleThreads WHERE newsgroup = $1 ORDER BY last_bump DESC LIMIT $2",
+		GetLastBumpedThreadsPaginated_2: "SELECT root_message_id, newsgroup FROM ArticleThreads WHERE newsgroup != 'ctl' ORDER BY last_bump DESC LIMIT $1",
+		HasNewsgroup:                    "SELECT COUNT(name) FROM Newsgroups WHERE name = $1",
+		HasArticle:                      "SELECT COUNT(message_id) FROM Articles WHERE message_id = $1",
+		HasArticleLocal:                 "SELECT COUNT(message_id) FROM ArticlePosts WHERE message_id = $1",
+		GetPostAttachments:              "SELECT filepath FROM ArticleAttachments WHERE message_id = $1",
+		GetPostAttachmentModels:         "SELECT filepath, filename FROM ArticleAttachments WHERE message_id = $1",
+		RegisterArticle_1:               "INSERT INTO Articles (message_id, message_id_hash, message_newsgroup, time_obtained, message_ref_id) VALUES($1, $2, $3, $4, $5)",
+		RegisterArticle_2:               "UPDATE Newsgroups SET last_post = $1 WHERE name = $2",
+		RegisterArticle_3:               "INSERT INTO ArticlePosts(newsgroup, message_id, ref_id, name, subject, path, time_posted, message, addr) VALUES($1, $2, $3, $4, $5, $6, $7, $8, $9)",
+		RegisterArticle_4:               "INSERT INTO ArticleThreads(root_message_id, last_bump, last_post, newsgroup) VALUES($1, $2, $2, $3)",
+		RegisterArticle_5:               "SELECT COUNT(*) FROM ArticlePosts WHERE ref_id = $1",
+		RegisterArticle_6:               "UPDATE ArticleThreads SET last_bump = $2 WHERE root_message_id = $1",
+		RegisterArticle_7:               "UPDATE ArticleThreads SET last_post = $2 WHERE root_message_id = $1",
+		RegisterArticle_8:               "INSERT INTO ArticleAttachments(message_id, sha_hash, filename, filepath) VALUES($1, $2, $3, $4)",
+		GetMessageIDByHeader:            "SELECT header_article_message_id FROM NNTPHeaders WHERE header_name = $1 AND header_value = $2",
+		RegisterSigned:                  "INSERT INTO ArticleKeys(message_id, pubkey) VALUES ($1, $2)",
+		GetAllArticlesInGroup:           "SELECT message_id FROM ArticlePosts WHERE newsgroup = $1",
+		GetAllArticles:                  "SELECT message_id, newsgroup FROM ArticlePosts",
+		GetMessageIDByHash:              "SELECT message_id, message_newsgroup FROM Articles WHERE message_id_hash = $1 LIMIT 1",
+		CheckEncIPBanned:                "SELECT COUNT(*) FROM EncIPBans WHERE encaddr = $1",
+		GetFirstAndLastForGroup:         "WITH x(min_no, max_no) AS ( SELECT MIN(message_no) AS min_no, MAX(message_no) AS max_no FROM ArticleNumbers WHERE newsgroup = $1) SELECT CASE WHEN min_no IS NULL THEN 0 ELSE min_no END AS mn FROM x UNION SELECT CASE WHEN max_no IS NULL THEN 1 ELSE max_no END AS max_no FROM x",
+		GetMessageIDForNNTPID:           "SELECT message_id FROM ArticleNumbers WHERE newsgroup = $1 AND message_no = $2 LIMIT 1",
+		GetNNTPIDForMessageID:           "SELECT message_no FROM ArticleNumbers WHERE newsgroup = $1 AND message_id = $2 LIMIT 1",
+		IsExpired:                       "WITH x(msgid) AS ( SELECT message_id FROM Articles WHERE message_id = $1 INTERSECT ( SELECT message_id FROM ArticlePosts WHERE message_id = $1 ) ) SELECT COUNT(*) FROM x",
+		GetLastDaysPostsForGroup:        "SELECT COUNT(*) FROM ArticlePosts WHERE time_posted < $1 AND time_posted > $2 AND newsgroup = $3",
+		GetLastDaysPosts:                "SELECT COUNT(*) FROM ArticlePosts WHERE time_posted < $1 AND time_posted > $2",
+		GetLastPostedPostModels:         "SELECT newsgroup, message_id, ref_id, name, subject, path, time_posted, message, addr FROM ArticlePosts WHERE newsgroup != 'ctl' ORDER BY time_posted DESC LIMIT $1",
+		GetMonthlyPostHistory:           "SELECT time_posted FROM ArticlePosts WHERE time_posted > 0 ORDER BY time_posted ASC LIMIT 1",
+		CheckNNTPLogin:                  "SELECT login_hash, login_salt FROM NNTPUsers WHERE username = $1",
+		CheckNNTPUserExists:             "SELECT COUNT(username) FROM NNTPUsers WHERE username = $1",
+		GetHeadersForMessage:            "SELECT header_name, header_value FROM NNTPHeaders WHERE header_article_message_id = $1",
+		CountAllArticlesInGroup:         "SELECT COUNT(message_id) FROM ArticlePosts WHERE newsgroup = $1",
+		GetMessageIDByCIDR:              "SELECT message_id FROM ArticlePosts WHERE addr IN ( SELECT encaddr FROM EncryptedAddrs WHERE addr_cidr <<= cidr($1) )",
+		GetMessageIDByEncryptedIP:       "SELECT message_id FROM ArticlePosts WHERE addr = $1",
+		GetPostsBefore:                  "SELECT message_id FROM ArticlePosts WHERE time_posted < $1",
+		SearchQuery_1:                   "SELECT newsgroup, message_id, ref_id FROM ArticlePosts WHERE message LIKE $1 ORDER BY time_posted DESC",
+		SearchQuery_2:                   "SELECT newsgroup, message_id, ref_id FROM ArticlePosts WHERE newsgroup = $1 AND message LIKE $2 ORDER BY time_posted DESC",
+		SearchByHash_1:                  "SELECT message_newsgroup, message_id, message_ref_id FROM Articles WHERE message_id_hash LIKE $1 ORDER BY time_obtained DESC",
+		SearchByHash_2:                  "SELECT message_newsgroup, message_id, message_ref_id FROM Articles WHERE message_newsgroup = $2 message_id_hash LIKE $1 ORDER BY time_obtained DESC",
+	}
+
+	log.Printf("making %d prepared statements...", len(q))
+
+	for k, v := range q {
+		err = self.prepStmt(k, v)
+		if err != nil {
+			log.Fatalf("failed to prepare %s, %s", k, err)
+		}
 	}
 }
 
@@ -112,9 +258,10 @@ func (self *PostgresDatabase) CreateTables() {
 		} else if version == 7 {
 			// we are up to date
 			log.Println("we are up to date at version", version)
-			return
+			break
 		}
 	}
+	self.prepareStatements()
 }
 
 func (self *PostgresDatabase) upgrade1to2() {
@@ -483,7 +630,7 @@ func (self *PostgresDatabase) createTablesV0() {
                            )`
 
 	// table for storing nntp article meta data
-	tables["Articles"] = `( 
+	tables["Articles"] = `(
                           message_id VARCHAR(255) PRIMARY KEY,
                           message_id_hash VARCHAR(40) UNIQUE NOT NULL,
                           message_newsgroup VARCHAR(255),
@@ -617,7 +764,7 @@ func (self *PostgresDatabase) UnbanNewsgroup(group string) (err error) {
 
 func (self *PostgresDatabase) NewsgroupBanned(group string) (banned bool, err error) {
 	var count int64
-	err = self.conn.QueryRow("SELECT COUNT(newsgroup) FROM BannedGroups WHERE newsgroup = $1", group).Scan(&count)
+	err = self.preped[NewsgroupBanned].QueryRow(group).Scan(&count)
 	banned = count > 0
 	return
 }
@@ -733,7 +880,7 @@ func (self *PostgresDatabase) BanArticle(messageID, reason string) error {
 func (self *PostgresDatabase) ArticleBanned(messageID string) (result bool) {
 
 	var count int64
-	err := self.conn.QueryRow("SELECT COUNT(message_id) FROM BannedArticles WHERE message_id = $1", messageID).Scan(&count)
+	err := self.preped[ArticleBanned].QueryRow(messageID).Scan(&count)
 	if err == nil {
 		result = count > 0
 	} else {
@@ -863,7 +1010,7 @@ func (self *PostgresDatabase) registerNNTPNumber(group, msgid string) (err error
 
 func (self *PostgresDatabase) GetAllNewsgroups() (groups []string) {
 
-	rows, err := self.conn.Query("SELECT name FROM Newsgroups")
+	rows, err := self.preped[GetAllNewsgroups].Query()
 	if err == nil {
 		for rows.Next() {
 			var group string
@@ -923,8 +1070,7 @@ func (self *PostgresDatabase) GetGroupForPage(prefix, frontend, newsgroup string
 }
 
 func (self *PostgresDatabase) GetPostsInGroup(newsgroup string) (models []PostModel, err error) {
-
-	rows, err := self.conn.Query("SELECT newsgroup, message_id, ref_id, name, subject, path, time_posted, message, addr FROM ArticlePosts WHERE newsgroup = $1 ORDER BY time_posted", newsgroup)
+	rows, err := self.preped[GetPostsInGroup].Query(newsgroup)
 	if err == nil {
 		for rows.Next() {
 			model := new(post)
@@ -938,7 +1084,7 @@ func (self *PostgresDatabase) GetPostsInGroup(newsgroup string) (models []PostMo
 
 func (self *PostgresDatabase) GetPostModel(prefix, messageID string) PostModel {
 	model := new(post)
-	err := self.conn.QueryRow("SELECT newsgroup, message_id, ref_id, name, subject, path, time_posted, message, addr FROM ArticlePosts WHERE message_id = $1 LIMIT 1", messageID).Scan(&model.board, &model.Message_id, &model.Parent, &model.PostName, &model.PostSubject, &model.MessagePath, &model.Posted, &model.PostMessage, &model.addr)
+	err := self.preped[GetPostModel].QueryRow(messageID).Scan(&model.board, &model.Message_id, &model.Parent, &model.PostName, &model.PostSubject, &model.MessagePath, &model.Posted, &model.PostMessage, &model.addr)
 	if err == nil {
 		model.op = len(model.Parent) == 0
 		if len(model.Parent) == 0 {
@@ -950,7 +1096,7 @@ func (self *PostgresDatabase) GetPostModel(prefix, messageID string) PostModel {
 			model.Files = append(model.Files, atts...)
 		}
 		// quiet fail
-		self.conn.QueryRow("SELECT pubkey FROM ArticleKeys WHERE message_id = $1", messageID).Scan(&model.Key)
+		self.preped[GetArticlePubkey].QueryRow(messageID).Scan(&model.Key)
 		return model
 	} else {
 		log.Println("failed to prepare query for geting post model for", messageID, err)
@@ -963,7 +1109,7 @@ func (self *PostgresDatabase) GetThreadModel(prefix, msgid string) (th ThreadMod
 	var posts []PostModel
 	var rows *sql.Rows
 	pmap := make(map[string]*post)
-	rows, err = self.conn.Query("SELECT ArticlePosts.newsgroup, ArticlePosts.message_id, ArticlePosts.name, ArticlePosts.subject, ArticlePosts.time_posted, ArticlePosts.message, ArticlePosts.addr FROM ArticlePosts WHERE ArticlePosts.message_id = $1 OR ArticlePosts.ref_id = $1 ORDER BY ArticlePosts.time_posted", msgid)
+	rows, err = self.preped[GetThreadModel].Query(msgid)
 	for err == nil && rows.Next() {
 		p := new(post)
 		p.Parent = msgid
@@ -972,7 +1118,7 @@ func (self *PostgresDatabase) GetThreadModel(prefix, msgid string) (th ThreadMod
 		posts = append(posts, p)
 	}
 	rows.Close()
-	rows, err = self.conn.Query("SELECT filename, filepath, message_id from ArticleAttachments WHERE message_id IN ( SELECT message_id FROM ArticlePosts WHERE ref_id = $1 OR message_id = $1 )", msgid)
+	rows, err = self.preped[GetThreadModelAttachments].Query(msgid)
 	for err == nil && rows.Next() {
 		att := &attachment{
 			prefix: prefix,
@@ -985,7 +1131,7 @@ func (self *PostgresDatabase) GetThreadModel(prefix, msgid string) (th ThreadMod
 		}
 	}
 	rows.Close()
-	rows, err = self.conn.Query("SELECT pubkey, message_id from ArticleKeys WHERE message_id IN ( SELECT message_id FROM ArticlePosts WHERE ref_id = $1 OR message_id = $1 )", msgid)
+	rows, err = self.preped[GetThreadModelPubkeys].Query(msgid)
 	if err != nil {
 		log.Println(err)
 	}
@@ -1003,22 +1149,15 @@ func (self *PostgresDatabase) GetThreadModel(prefix, msgid string) (th ThreadMod
 }
 
 func (self *PostgresDatabase) DeleteThread(msgid string) (err error) {
-	_, err = self.conn.Exec("DELETE FROM ArticleThreads WHERE root_message_id = $1", msgid)
+	_, err = self.preped[DeleteThread].Exec(msgid)
 	return
 }
 
 func (self *PostgresDatabase) DeleteArticle(msgid string) (err error) {
-	_, err = self.conn.Exec("DELETE FROM NNTPHeaders WHERE header_article_message_id = $1", msgid)
-	if err == nil {
-		_, err = self.conn.Exec("DELETE FROM ArticleNumbers WHERE message_id = $1", msgid)
-		if err == nil {
-			_, err = self.conn.Exec("DELETE FROM ArticlePosts WHERE message_id = $1", msgid)
-			if err == nil {
-				_, err = self.conn.Exec("DELETE FROM ArticleKeys WHERE message_id = $1", msgid)
-				if err == nil {
-					_, err = self.conn.Exec("DELETE FROM ArticleAttachments WHERE message_id = $1", msgid)
-				}
-			}
+	for _, q := range []string{DeleteArticle_1, DeleteArticle_2, DeleteArticle_3, DeleteArticle_4, DeleteArticle_5} {
+		_, err = self.preped[q].Exec(msgid)
+		if err != nil {
+			break
 		}
 	}
 	return
@@ -1028,9 +1167,9 @@ func (self *PostgresDatabase) GetThreadReplyPostModels(prefix, rootpost string, 
 	var rows *sql.Rows
 	var err error
 	if limit > 0 {
-		rows, err = self.conn.Query("SELECT newsgroup, message_id, ref_id, name, subject, path, time_posted, message, addr FROM ArticlePosts WHERE message_id IN ( SELECT message_id FROM ArticlePosts WHERE ref_id = $1 ORDER BY time_posted DESC LIMIT $2 ) ORDER BY time_posted ASC", rootpost, limit)
+		rows, err = self.preped[GetThreadReplyPostModels_1].Query(rootpost, limit)
 	} else {
-		rows, err = self.conn.Query("SELECT newsgroup, message_id, ref_id, name, subject, path, time_posted, message, addr FROM ArticlePosts WHERE message_id IN ( SELECT message_id FROM ArticlePosts WHERE ref_id = $1 ) ORDER BY time_posted ASC", rootpost)
+		rows, err = self.preped[GetThreadReplyPostModels_2].Query(rootpost)
 	}
 	offset := start
 	if err == nil {
@@ -1054,7 +1193,7 @@ func (self *PostgresDatabase) GetThreadReplyPostModels(prefix, rootpost string, 
 			}
 			// get pubkey if it exists
 			// quiet fail
-			_ = self.conn.QueryRow("SELECT pubkey FROM ArticleKeys WHERE message_id = $1", model.Message_id).Scan(&model.Key)
+			self.preped[GetArticlePubkey].QueryRow(model.Message_id).Scan(model.Key)
 			repls = append(repls, model)
 		}
 		rows.Close()
@@ -1070,9 +1209,9 @@ func (self *PostgresDatabase) GetThreadReplies(rootpost string, start, limit int
 	var rows *sql.Rows
 	var err error
 	if limit > 0 {
-		rows, err = self.conn.Query("SELECT message_id FROM ArticlePosts WHERE message_id IN ( SELECT message_id FROM ArticlesPosts WHERE ref_id = $1 ORDER BY time_posted DESC LIMIT $2 ) ORDER BY time_posted ASC", rootpost, limit)
+		rows, err = self.preped[GetThreadReplies_1].Query(rootpost, limit)
 	} else {
-		rows, err = self.conn.Query("SELECT message_id FROM ArticlePosts WHERE message_id IN ( SELECT message_id FROM ArticlePosts WHERE ref_id = $1 ) ORDER BY time_posted ASC", rootpost)
+		rows, err = self.preped[GetThreadReplies_2].Query(rootpost)
 	}
 	offset := start
 	if err == nil {
@@ -1103,7 +1242,7 @@ func (self *PostgresDatabase) ThreadHasReplies(rootpost string) bool {
 }
 
 func (self *PostgresDatabase) GetGroupThreads(group string, recv chan ArticleEntry) {
-	rows, err := self.conn.Query("SELECT message_id FROM ArticlePosts WHERE newsgroup = $1 AND ref_id = '' ", group)
+	rows, err := self.preped[GetGroupThreads].Query(group)
 	if err == nil {
 		for rows.Next() {
 			var msgid string
@@ -1124,9 +1263,9 @@ func (self *PostgresDatabase) GetLastBumpedThreadsPaginated(newsgroup string, th
 	var err error
 	var rows *sql.Rows
 	if len(newsgroup) > 0 {
-		rows, err = self.conn.Query("SELECT root_message_id, newsgroup FROM ArticleThreads WHERE newsgroup = $1 ORDER BY last_bump DESC LIMIT $2", newsgroup, threads+offset)
+		rows, err = self.preped[GetLastBumpedThreadsPaginated_1].Query(newsgroup, threads+offset)
 	} else {
-		rows, err = self.conn.Query("SELECT root_message_id, newsgroup FROM ArticleThreads WHERE newsgroup != 'ctl' ORDER BY last_bump DESC LIMIT $1", threads+offset)
+		rows, err = self.preped[GetLastBumpedThreadsPaginated_2].Query(threads + offset)
 	}
 
 	if err == nil {
@@ -1159,7 +1298,7 @@ func (self *PostgresDatabase) GroupHasPosts(group string) bool {
 // check if a newsgroup exists
 func (self *PostgresDatabase) HasNewsgroup(group string) bool {
 	var count int64
-	err := self.conn.QueryRow("SELECT COUNT(name) FROM Newsgroups WHERE name = $1", group).Scan(&count)
+	err := self.preped[HasNewsgroup].QueryRow(group).Scan(&count)
 	if err != nil {
 		log.Println("failed to check for newsgroup", group, err)
 	}
@@ -1169,7 +1308,7 @@ func (self *PostgresDatabase) HasNewsgroup(group string) bool {
 // check if an article exists
 func (self *PostgresDatabase) HasArticle(message_id string) bool {
 	var count int64
-	err := self.conn.QueryRow("SELECT COUNT(message_id) FROM Articles WHERE message_id = $1", message_id).Scan(&count)
+	err := self.preped[HasArticle].QueryRow(message_id).Scan(&count)
 	if err != nil {
 		log.Println("failed to check for article", message_id, err)
 	}
@@ -1179,7 +1318,7 @@ func (self *PostgresDatabase) HasArticle(message_id string) bool {
 // check if an article exists locally
 func (self *PostgresDatabase) HasArticleLocal(message_id string) bool {
 	var count int64
-	err := self.conn.QueryRow("SELECT COUNT(message_id) FROM ArticlePosts WHERE message_id = $1", message_id).Scan(&count)
+	err := self.preped[HasArticleLocal].QueryRow(message_id).Scan(&count)
 	if err != nil {
 		log.Println("failed to check for local article", message_id, err)
 	}
@@ -1205,7 +1344,7 @@ func (self *PostgresDatabase) RegisterNewsgroup(group string) {
 }
 
 func (self *PostgresDatabase) GetPostAttachments(messageID string) (atts []string) {
-	rows, err := self.conn.Query("SELECT filepath FROM ArticleAttachments WHERE message_id = $1", messageID)
+	rows, err := self.preped[GetPostAttachments].Query(messageID)
 	if err == nil {
 		for rows.Next() {
 			var val string
@@ -1220,7 +1359,7 @@ func (self *PostgresDatabase) GetPostAttachments(messageID string) (atts []strin
 }
 
 func (self *PostgresDatabase) GetPostAttachmentModels(prefix, messageID string) (atts []AttachmentModel) {
-	rows, err := self.conn.Query("SELECT filepath, filename FROM ArticleAttachments WHERE message_id = $1", messageID)
+	rows, err := self.preped[GetPostAttachmentModels].Query(messageID)
 	if err == nil {
 		for rows.Next() {
 			var fpath, fname string
@@ -1252,19 +1391,19 @@ func (self *PostgresDatabase) RegisterArticle(message NNTPMessage) (err error) {
 	}
 	now := timeNow()
 	// insert article metadata
-	_, err = self.conn.Exec("INSERT INTO Articles (message_id, message_id_hash, message_newsgroup, time_obtained, message_ref_id) VALUES($1, $2, $3, $4, $5)", msgid, HashMessageID(msgid), group, now, message.Reference())
+	_, err = self.preped[RegisterArticle_1].Exec(msgid, HashMessageID(msgid), group, now, message.Reference())
 	if err != nil {
 		log.Println("failed to insert article metadata", err)
 		return
 	}
 	// update newsgroup
-	_, err = self.conn.Exec("UPDATE Newsgroups SET last_post = $1 WHERE name = $2", now, group)
+	_, err = self.preped[RegisterArticle_2].Exec(now, group)
 	if err != nil {
 		log.Println("failed to update newsgroup last post", err)
 		return
 	}
 	// insert article post
-	_, err = self.conn.Exec("INSERT INTO ArticlePosts(newsgroup, message_id, ref_id, name, subject, path, time_posted, message, addr) VALUES($1, $2, $3, $4, $5, $6, $7, $8, $9)", group, msgid, message.Reference(), message.Name(), message.Subject(), message.Path(), message.Posted(), message.Message(), message.Addr())
+	_, err = self.preped[RegisterArticle_3].Exec(group, msgid, message.Reference(), message.Name(), message.Subject(), message.Path(), message.Posted(), message.Message(), message.Addr())
 	if err != nil {
 		log.Println("cannot insert article post", err)
 		return
@@ -1273,7 +1412,7 @@ func (self *PostgresDatabase) RegisterArticle(message NNTPMessage) (err error) {
 	// set / update thread state
 	if message.OP() {
 		// insert new thread for op
-		_, err = self.conn.Exec("INSERT INTO ArticleThreads(root_message_id, last_bump, last_post, newsgroup) VALUES($1, $2, $2, $3)", message.MessageID(), message.Posted(), group)
+		_, err = self.preped[RegisterArticle_4].Exec(message.MessageID(), message.Posted(), group)
 
 		if err != nil {
 			log.Println("cannot register thread", msgid, err)
@@ -1282,11 +1421,12 @@ func (self *PostgresDatabase) RegisterArticle(message NNTPMessage) (err error) {
 	} else {
 		ref := message.Reference()
 		if !message.Sage() {
+			// TODO: this could be 1 query possibly?
 			var posts int64
-			err = self.conn.QueryRow("SELECT COUNT(*) FROM ArticlePosts WHERE ref_id = $1", ref).Scan(&posts)
+			err = self.preped[RegisterArticle_5].QueryRow(ref).Scan(&posts)
 			if err == nil && posts <= BumpLimit {
 				// bump it nigguh
-				_, err = self.conn.Exec("UPDATE ArticleThreads SET last_bump = $2 WHERE root_message_id = $1", ref, message.Posted())
+				_, err = self.preped[RegisterArticle_6].Exec(ref, message.Posted())
 			}
 			if err != nil {
 				log.Println("failed to bump thread", ref, err)
@@ -1294,22 +1434,39 @@ func (self *PostgresDatabase) RegisterArticle(message NNTPMessage) (err error) {
 			}
 		}
 		// update last posted
-		_, err = self.conn.Exec("UPDATE ArticleThreads SET last_post = $2 WHERE root_message_id = $1", ref, message.Posted())
+		_, err = self.preped[RegisterArticle_7].Exec(ref, message.Posted())
 		if err != nil {
 			log.Println("failed to update post time for", ref, err)
 			return
 		}
 	}
 
-	// register article header
-	for k, val := range message.Headers() {
-		k = strings.ToLower(k)
-		for _, v := range val {
-			_, err = self.conn.Exec("INSERT INTO NNTPHeaders(header_name, header_value, header_article_message_id) VALUES($1, $2, $3)", k, v, msgid)
-			if err != nil {
-				log.Println("failed to register nntp article header", err)
-				continue
+	var tx *sql.Tx
+	tx, err = self.conn.Begin()
+	if err == nil {
+		var st *sql.Stmt
+		st, err = tx.Prepare(pq.CopyIn("NNTPHeaders", "header_name", "header_value", "header_article_message_id"))
+		// register article header key value pairs
+		for k, val := range message.Headers() {
+			k = strings.ToLower(k)
+			for _, v := range val {
+				_, err = st.Exec(k, v, msgid)
+				if err != nil {
+					log.Println("failed to register nntp article header in transaction", err)
+					break
+				}
 			}
+		}
+		_, err = st.Exec()
+		if err == nil {
+			st.Close()
+			err = tx.Commit()
+			if err != nil {
+				log.Println("failed to commit nntp article header values:", err)
+				return
+			}
+		} else {
+			log.Println("failed to execute prepared statement for nntp article header values:", err)
 		}
 	}
 	err = self.registerNNTPNumber(group, msgid)
@@ -1325,7 +1482,7 @@ func (self *PostgresDatabase) RegisterArticle(message NNTPMessage) (err error) {
 	}
 	for _, att := range atts {
 		h := hex.EncodeToString(att.Hash())
-		_, err = self.conn.Exec("INSERT INTO ArticleAttachments(message_id, sha_hash, filename, filepath) VALUES($1, $2, $3, $4)", msgid, h, att.Filename(), att.Filepath())
+		_, err = self.preped[RegisterArticle_8].Exec(msgid, h, att.Filename(), att.Filepath())
 		if err != nil {
 			log.Println("failed to register attachment", err)
 			continue
@@ -1340,7 +1497,7 @@ func (self *PostgresDatabase) RegisterArticle(message NNTPMessage) (err error) {
 func (self *PostgresDatabase) GetMessageIDByHeader(name, val string) (msgids []string, err error) {
 	var rows *sql.Rows
 	name = strings.ToLower(name)
-	rows, err = self.conn.Query("SELECT header_article_message_id FROM NNTPHeaders WHERE header_name = $1 AND header_value = $2", name, val)
+	rows, err = self.preped[GetMessageIDByHeader].Query(name, val)
 	if err == nil {
 		for rows.Next() {
 			var msgid string
@@ -1353,14 +1510,14 @@ func (self *PostgresDatabase) GetMessageIDByHeader(name, val string) (msgids []s
 }
 
 func (self *PostgresDatabase) RegisterSigned(message_id, pubkey string) (err error) {
-	_, err = self.conn.Exec("INSERT INTO ArticleKeys(message_id, pubkey) VALUES ($1, $2)", message_id, pubkey)
+	_, err = self.preped[RegisterSigned].Exec(message_id, pubkey)
 	return
 }
 
 // get all articles in a newsgroup
 // send result down a channel
 func (self *PostgresDatabase) GetAllArticlesInGroup(group string, recv chan ArticleEntry) {
-	rows, err := self.conn.Query("SELECT message_id FROM ArticlePosts WHERE newsgroup = $1", group)
+	rows, err := self.preped[GetAllArticlesInGroup].Query(group)
 	if err != nil {
 		log.Printf("failed to get all articles in %s: %s", group, err)
 		return
@@ -1376,7 +1533,7 @@ func (self *PostgresDatabase) GetAllArticlesInGroup(group string, recv chan Arti
 // get all articles
 // send result down a channel
 func (self *PostgresDatabase) GetAllArticles() (articles []ArticleEntry) {
-	rows, err := self.conn.Query("SELECT message_id, newsgroup FROM ArticlePosts")
+	rows, err := self.preped[GetAllArticles].Query()
 	if err == nil {
 		for rows.Next() {
 			var entry ArticleEntry
@@ -1401,7 +1558,7 @@ func (self *PostgresDatabase) GetThreadsPerPage(group string) (int, error) {
 }
 
 func (self *PostgresDatabase) GetMessageIDByHash(hash string) (article ArticleEntry, err error) {
-	err = self.conn.QueryRow("SELECT message_id, message_newsgroup FROM Articles WHERE message_id_hash = $1 LIMIT 1", hash).Scan(&article[0], &article[1])
+	err = self.preped[GetMessageIDByHash].QueryRow(hash).Scan(&article[0], &article[1])
 	return
 }
 
@@ -1418,7 +1575,7 @@ func (self *PostgresDatabase) UnbanAddr(addr string) (err error) {
 
 func (self *PostgresDatabase) CheckEncIPBanned(encaddr string) (banned bool, err error) {
 	var result int64
-	err = self.conn.QueryRow("SELECT COUNT(*) FROM EncIPBans WHERE encaddr = $1", encaddr).Scan(&result)
+	err = self.preped[CheckEncIPBanned].QueryRow(encaddr).Scan(&result)
 	banned = result > 0
 	return
 }
@@ -1430,7 +1587,7 @@ func (self *PostgresDatabase) BanEncAddr(encaddr string) (err error) {
 
 func (self *PostgresDatabase) GetLastAndFirstForGroup(group string) (last, first int64, err error) {
 	var rows *sql.Rows
-	rows, err = self.conn.Query("WITH x(min_no, max_no) AS ( SELECT MIN(message_no) AS min_no, MAX(message_no) AS max_no FROM ArticleNumbers WHERE newsgroup = $1) SELECT CASE WHEN min_no IS NULL THEN 0 ELSE min_no END AS mn FROM x UNION SELECT CASE WHEN max_no IS NULL THEN 1 ELSE max_no END AS max_no FROM x", group)
+	rows, err = self.preped[GetFirstAndLastForGroup].Query(group)
 	if rows.Next() {
 		err = rows.Scan(&first)
 		if err == nil {
@@ -1444,12 +1601,12 @@ func (self *PostgresDatabase) GetLastAndFirstForGroup(group string) (last, first
 }
 
 func (self *PostgresDatabase) GetMessageIDForNNTPID(group string, id int64) (msgid string, err error) {
-	err = self.conn.QueryRow("SELECT message_id FROM ArticleNumbers WHERE newsgroup = $1 AND message_no = $2 LIMIT 1", group, id).Scan(&msgid)
+	err = self.preped[GetMessageIDForNNTPID].QueryRow(group, id).Scan(&msgid)
 	return
 }
 
 func (self *PostgresDatabase) GetNNTPIDForMessageID(group, msgid string) (id int64, err error) {
-	err = self.conn.QueryRow("SELECT message_no FROM ArticleNumbers WHERE newsgroup = $1 AND message_id = $2 LIMIT 1", group, msgid).Scan(&id)
+	err = self.preped[GetNNTPIDForMessageID].QueryRow(group, msgid).Scan(&id)
 	return
 }
 
@@ -1464,7 +1621,12 @@ func (self *PostgresDatabase) UnMarkModPubkeyCanModGroup(pubkey, group string) (
 }
 
 func (self *PostgresDatabase) IsExpired(root_message_id string) bool {
-	return self.HasArticle(root_message_id) && !self.HasArticleLocal(root_message_id)
+	var count int
+	err := self.preped[IsExpired].QueryRow(root_message_id).Scan(&count)
+	if err != nil {
+		log.Println("error checking for expired article:", err)
+	}
+	return count == 0
 }
 
 func (self *PostgresDatabase) GetLastDaysPostsForGroup(newsgroup string, n int64) (posts []PostEntry) {
@@ -1474,7 +1636,7 @@ func (self *PostgresDatabase) GetLastDaysPostsForGroup(newsgroup string, n int64
 	now = time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, time.UTC)
 	for n > 0 {
 		var num int64
-		err := self.conn.QueryRow("SELECT COUNT(*) FROM ArticlePosts WHERE time_posted < $1 AND time_posted > $2 AND newsgroup = $3", now.Add(day).Unix(), now.Unix(), newsgroup).Scan(&num)
+		err := self.preped[GetLastDaysPostsForGroup].QueryRow(now.Add(day).Unix(), now.Unix(), newsgroup).Scan(&num)
 		if err == nil {
 			posts = append(posts, PostEntry{now.Unix(), num})
 			now = now.Add(-day)
@@ -1494,7 +1656,7 @@ func (self *PostgresDatabase) GetLastDaysPosts(n int64) (posts []PostEntry) {
 	now = time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, time.UTC)
 	for n > 0 {
 		var num int64
-		err := self.conn.QueryRow("SELECT COUNT(*) FROM ArticlePosts WHERE time_posted < $1 AND time_posted > $2", now.Add(day).Unix(), now.Unix()).Scan(&num)
+		err := self.preped[GetLastDaysPosts].QueryRow(now.Add(day).Unix(), now.Unix()).Scan(&num)
 		if err == nil {
 			posts = append(posts, PostEntry{now.Unix(), num})
 			now = now.Add(-day)
@@ -1509,7 +1671,7 @@ func (self *PostgresDatabase) GetLastDaysPosts(n int64) (posts []PostEntry) {
 
 func (self *PostgresDatabase) GetLastPostedPostModels(prefix string, n int64) (posts []PostModel) {
 
-	rows, err := self.conn.Query("SELECT newsgroup, message_id, ref_id, name, subject, path, time_posted, message, addr FROM ArticlePosts WHERE newsgroup != 'ctl' ORDER BY time_posted DESC LIMIT $1", n)
+	rows, err := self.preped[GetLastPostedPostModels].Query(n)
 	if err == nil {
 		for rows.Next() {
 			model := new(post)
@@ -1524,7 +1686,7 @@ func (self *PostgresDatabase) GetLastPostedPostModels(prefix string, n int64) (p
 				model.Files = append(model.Files, atts...)
 			}
 			// quiet fail
-			self.conn.QueryRow("SELECT pubkey FROM ArticleKeys WHERE message_id = $1", model.Message_id).Scan(&model.Key)
+			self.preped[GetArticlePubkey].QueryRow(model.Message_id).Scan(&model.Key)
 			posts = append(posts, model)
 		}
 		rows.Close()
@@ -1539,7 +1701,7 @@ func (self *PostgresDatabase) GetMonthlyPostHistory() (posts []PostEntry) {
 	var oldest int64
 	now := time.Now()
 	now = time.Date(now.Year(), now.Month(), 1, 0, 0, 0, 0, time.UTC)
-	err := self.conn.QueryRow("SELECT time_posted FROM ArticlePosts WHERE time_posted > 0 ORDER BY time_posted ASC LIMIT 1").Scan(&oldest)
+	err := self.preped[GetMonthlyPostHistory].QueryRow().Scan(&oldest)
 	if err == nil {
 		// we got the oldest
 		// convert it to the oldest year/date
@@ -1555,7 +1717,7 @@ func (self *PostgresDatabase) GetMonthlyPostHistory() (posts []PostEntry) {
 				next_month = time.Date(old.Year()+1, 1, 1, 0, 0, 0, 0, time.UTC)
 			}
 			// get the post count in that montth
-			err = self.conn.QueryRow("SELECT COUNT(*) FROM ArticlePosts WHERE time_posted > $1 AND time_posted < $2", old.Unix(), next_month.Unix()).Scan(&count)
+			err = self.preped[GetLastDaysPosts].QueryRow(old.Unix(), next_month.Unix()).Scan(&count)
 			if err == nil {
 				posts = append(posts, PostEntry{old.Unix(), count})
 				old = next_month
@@ -1573,7 +1735,7 @@ func (self *PostgresDatabase) GetMonthlyPostHistory() (posts []PostEntry) {
 
 func (self *PostgresDatabase) CheckNNTPLogin(username, passwd string) (valid bool, err error) {
 	var login_hash, login_salt string
-	err = self.conn.QueryRow("SELECT login_hash, login_salt FROM NNTPUsers WHERE username = $1", username).Scan(&login_hash, &login_salt)
+	err = self.preped[CheckNNTPLogin].QueryRow(username).Scan(&login_hash, &login_salt)
 	if err == nil {
 		// no errors
 		if len(login_hash) > 0 && len(login_salt) > 0 {
@@ -1597,14 +1759,14 @@ func (self *PostgresDatabase) RemoveNNTPLogin(username string) (err error) {
 
 func (self *PostgresDatabase) CheckNNTPUserExists(username string) (exists bool, err error) {
 	var count int64
-	err = self.conn.QueryRow("SELECT COUNT(username) FROM NNTPUsers WHERE username = $1", username).Scan(&count)
+	err = self.preped[CheckNNTPUserExists].QueryRow(username).Scan(&count)
 	exists = count > 0
 	return
 }
 
 func (self *PostgresDatabase) GetHeadersForMessage(msgid string) (hdr ArticleHeaders, err error) {
 	var rows *sql.Rows
-	rows, err = self.conn.Query("SELECT header_name, header_value FROM NNTPHeaders WHERE header_article_message_id = $1", msgid)
+	rows, err = self.preped[GetHeadersForMessage].Query(msgid)
 	if err == nil {
 		hdr = make(ArticleHeaders)
 		for rows.Next() {
@@ -1612,18 +1774,19 @@ func (self *PostgresDatabase) GetHeadersForMessage(msgid string) (hdr ArticleHea
 			rows.Scan(&k, &v)
 			hdr.Add(k, v)
 		}
+		rows.Close()
 	}
 	return
 }
 
 func (self *PostgresDatabase) CountAllArticlesInGroup(group string) (count int64, err error) {
-	err = self.conn.QueryRow("SELECT COUNT(message_id) FROM ArticlePosts WHERE newsgroup = $1", group).Scan(&count)
+	err = self.preped[CountAllArticlesInGroup].QueryRow(group).Scan(&count)
 	return
 }
 
 func (self *PostgresDatabase) GetMessageIDByCIDR(cidr *net.IPNet) (msgids []string, err error) {
 	var rows *sql.Rows
-	rows, err = self.conn.Query("SELECT message_id FROM ArticlePosts WHERE addr IN ( SELECT encaddr FROM EncryptedAddrs WHERE addr_cidr <<= cidr($1) )", cidr.String())
+	rows, err = self.preped[GetMessageIDByCIDR].Query(cidr.String())
 	for err == nil && rows.Next() {
 		var msgid string
 		err = rows.Scan(&msgid)
@@ -1637,13 +1800,16 @@ func (self *PostgresDatabase) GetMessageIDByCIDR(cidr *net.IPNet) (msgids []stri
 
 func (self *PostgresDatabase) GetMessageIDByEncryptedIP(encaddr string) (msgids []string, err error) {
 	var rows *sql.Rows
-	rows, err = self.conn.Query("SELECT message_id FROM ArticlePosts WHERE addr = $1", encaddr)
+	rows, err = self.preped[GetMessageIDByEncryptedIP].Query(encaddr)
 	for err == nil && rows.Next() {
 		var msgid string
 		err = rows.Scan(&msgid)
 		if err == nil {
 			msgids = append(msgids, msgid)
 		}
+
+	}
+	if rows != nil {
 		rows.Close()
 	}
 	return
@@ -1662,7 +1828,7 @@ func (self *PostgresDatabase) PubkeyIsBanned(pubkey string) (bool, error) {
 
 func (self *PostgresDatabase) GetPostsBefore(t time.Time) (msgids []string, err error) {
 	var rows *sql.Rows
-	rows, err = self.conn.Query("SELECT message_id FROM ArticlePosts WHERE time_posted < $1", t.Unix())
+	rows, err = self.preped[GetPostsBefore].Query(t.Unix())
 	if err == nil {
 		for rows.Next() {
 			var msgid string
@@ -1683,9 +1849,9 @@ func (self *PostgresDatabase) SearchQuery(prefix, group string, text string, chn
 		text = "%" + text + "%"
 		var rows *sql.Rows
 		if group == "" {
-			rows, err = self.conn.Query("SELECT newsgroup, message_id, ref_id FROM ArticlePosts WHERE message LIKE $1 ORDER BY time_posted DESC", text)
+			rows, err = self.preped[SearchQuery_2].Query(text)
 		} else {
-			rows, err = self.conn.Query("SELECT newsgroup, message_id, ref_id FROM ArticlePosts WHERE newsgroup = $1 AND message LIKE $2 ORDER BY time_posted DESC", group, text)
+			rows, err = self.preped[SearchQuery_2].Query(group, text)
 		}
 		if err == nil {
 			for rows.Next() {
@@ -1704,10 +1870,10 @@ func (self *PostgresDatabase) SearchByHash(prefix, group, text string, chnl chan
 		text = "%" + text + "%"
 		var rows *sql.Rows
 		if group == "" {
-			rows, err = self.conn.Query("SELECT message_newsgroup, message_id, message_ref_id FROM Articles WHERE message_id_hash LIKE $1 ORDER BY time_obtained DESC", text)
+			rows, err = self.preped[SearchByHash_1].Query(text)
 		} else {
 
-			rows, err = self.conn.Query("SELECT message_newsgroup, message_id, message_ref_id FROM Articles WHERE message_newsgroup = $2 message_id_hash LIKE $1 ORDER BY time_obtained DESC", text, group)
+			rows, err = self.preped[SearchByHash_2].Query(text, group)
 		}
 		counted := 0
 		if err == nil {

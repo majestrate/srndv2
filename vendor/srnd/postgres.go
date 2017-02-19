@@ -220,6 +220,7 @@ func (self *PostgresDatabase) prepareStatements() {
 	log.Printf("making %d prepared statements...", len(q))
 
 	for k, v := range q {
+		log.Println(k)
 		err = self.prepStmt(k, v)
 		if err != nil {
 			log.Fatalf("failed to prepare %s, %s", k, err)

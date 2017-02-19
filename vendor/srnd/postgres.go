@@ -1446,7 +1446,7 @@ func (self *PostgresDatabase) RegisterArticle(message NNTPMessage) (err error) {
 	tx, err = self.conn.Begin()
 	if err == nil {
 		var st *sql.Stmt
-		st, err = tx.Prepare(pq.CopyIn("NNTPHeaders", "header_name", "header_value", "header_article_message_id"))
+		st, err = tx.Prepare(pq.CopyIn("nntpheaders", "header_name", "header_value", "header_article_message_id"))
 		if err != nil {
 			log.Printf("error with copyin: %s", err)
 		}

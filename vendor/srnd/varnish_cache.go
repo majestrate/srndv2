@@ -224,6 +224,7 @@ func (self *VarnishCache) invalidateUkko() {
 	// TODO: invalidate paginated ukko
 	self.invalidate(fmt.Sprintf("%s%sukko.html", self.varnish_url, self.prefix))
 	self.invalidate(fmt.Sprintf("%s%soverboard/", self.varnish_url, self.prefix))
+	self.invalidate(fmt.Sprintf("%s%so/", self.varnish_url, self.prefix))
 }
 
 func (self *VarnishCache) pollRegen() {

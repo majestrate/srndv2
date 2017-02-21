@@ -435,9 +435,9 @@ func (self *nntpConnection) checkMIMEHeaderNoAuth(daemon *NNTPDaemon, hdr textpr
 		reason = "invalid reference or message id is '" + msgid + "' reference is '" + reference + "'"
 		ban = true
 		return
-	} else if daemon.database.HasArticle(msgid) {
-		// we have already seen this article
-		reason = "already seen"
+	} else if daemon.store.HasArticle(msgid) {
+		// we have already obtain this article locally
+		reason = "we have this article locally"
 		// don't ban
 		return
 	} else if daemon.database.ArticleBanned(msgid) {
@@ -448,9 +448,9 @@ func (self *nntpConnection) checkMIMEHeaderNoAuth(daemon *NNTPDaemon, hdr textpr
 		reason = "thread banned"
 		ban = true
 		return
-	} else if daemon.database.HasArticleLocal(msgid) {
-		// we already have this article locally
-		reason = "have this article locally"
+	} else if daemon.database.IsExpired(msgid) {
+		// this article is too old
+		reason = "this message is too old or has expired"
 		// don't ban
 		return
 	} else if is_ctl {
@@ -494,7 +494,7 @@ func (self *nntpConnection) checkMIMEHeaderNoAuth(daemon *NNTPDaemon, hdr textpr
 			if err == nil {
 				if ban {
 					// this address is banned
-					reason = "address banned"
+					reason = "poster remote address is banned"
 					return
 				} else {
 					// not banned
@@ -556,6 +556,8 @@ func (self *nntpConnection) storeMessage(daemon *NNTPDaemon, hdr textproto.MIMEH
 		if err == nil {
 			// tell daemon
 			daemon.loadFromInfeed(msgid)
+		} else {
+			log.Println("error processing message body", err)
 		}
 	}
 	f.Close()
@@ -564,6 +566,7 @@ func (self *nntpConnection) storeMessage(daemon *NNTPDaemon, hdr textproto.MIMEH
 		if ValidMessageID(msgid) {
 			DelFile(daemon.store.GetFilename(msgid))
 		}
+		log.Println("error processing message", err)
 	}
 	return
 }
@@ -678,7 +681,7 @@ func (self *nntpConnection) handleLine(daemon *NNTPDaemon, code int, line string
 					return
 				}
 				// have we seen this article?
-				if daemon.database.HasArticle(msgid) {
+				if daemon.store.HasArticle(msgid) {
 					// yeh don't want it
 					conn.PrintfLine("438 %s", msgid)
 				} else if daemon.database.ArticleBanned(msgid) {
@@ -923,14 +926,14 @@ func (self *nntpConnection) handleLine(daemon *NNTPDaemon, code int, line string
 							// is a number
 							msgid, err = daemon.database.GetMessageIDForNNTPID(self.group, n)
 							if err == nil && len(msgid) > 0 {
-								has = daemon.database.HasArticleLocal(msgid)
+								has = daemon.store.HasArticle(msgid)
 							}
 							if !has {
 								code = 423
 							}
 						} else if ValidMessageID(parts[1]) {
 							msgid = parts[1]
-							has = daemon.database.HasArticleLocal(msgid)
+							has = daemon.store.HasArticle(msgid)
 							if has {
 								n, err = daemon.database.GetNNTPIDForMessageID(self.group, parts[1])
 							} else {
@@ -1009,7 +1012,7 @@ func (self *nntpConnection) handleLine(daemon *NNTPDaemon, code int, line string
 						// parameter given
 						msgid := parts[1]
 						// check for article
-						if ValidMessageID(msgid) && daemon.database.HasArticleLocal(msgid) {
+						if ValidMessageID(msgid) && daemon.store.HasArticle(msgid) {
 							// valid message id
 							var n int64
 							n, err = daemon.database.GetNNTPIDForMessageID(self.group, msgid)
@@ -1040,7 +1043,7 @@ func (self *nntpConnection) handleLine(daemon *NNTPDaemon, code int, line string
 							// message id
 							msgid = parts[1]
 						}
-						if ValidMessageID(msgid) && daemon.database.HasArticleLocal(msgid) {
+						if ValidMessageID(msgid) && daemon.store.HasArticle(msgid) {
 							conn.PrintfLine("223 %d %s", n, msgid)
 						} else if n == 0 {
 							// was a message id
@@ -1072,14 +1075,14 @@ func (self *nntpConnection) handleLine(daemon *NNTPDaemon, code int, line string
 						return
 					}
 					if ValidMessageID(msgid) {
-						hdrs, err := daemon.database.GetHeadersForMessage(msgid)
-						if err == nil {
+						hdrs := daemon.store.GetHeaders(msgid)
+						if hdrs != nil {
 							v := hdrs.Get(hdr, "")
 							conn.PrintfLine("221 header follows")
 							conn.PrintfLine(v)
 							conn.PrintfLine(".")
 						} else {
-							conn.PrintfLine("500 %s", err.Error())
+							conn.PrintfLine("500 could not fetch headers for %s", msgid)
 						}
 					} else {
 						conn.PrintfLine("430 no such article")

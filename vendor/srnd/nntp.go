@@ -448,7 +448,7 @@ func (self *nntpConnection) checkMIMEHeaderNoAuth(daemon *NNTPDaemon, hdr textpr
 		reason = "thread banned"
 		ban = true
 		return
-	} else if daemon.database.IsExpired(msgid) {
+	} else if daemon.database.HasArticle(msgid) {
 		// this article is too old
 		reason = "this message is too old or has expired"
 		// don't ban

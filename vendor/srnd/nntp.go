@@ -450,7 +450,7 @@ func (self *nntpConnection) checkMIMEHeaderNoAuth(daemon *NNTPDaemon, hdr textpr
 		return
 	} else if daemon.database.HasArticle(msgid) {
 		// this article is too old
-		reason = "this message is too old or has expired"
+		reason = "we have this article already"
 		// don't ban
 		return
 	} else if is_ctl {

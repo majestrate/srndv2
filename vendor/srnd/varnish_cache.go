@@ -225,6 +225,8 @@ func (self *VarnishCache) invalidateUkko() {
 	self.invalidate(fmt.Sprintf("%s%sukko.html", self.varnish_url, self.prefix))
 	self.invalidate(fmt.Sprintf("%s%soverboard/", self.varnish_url, self.prefix))
 	self.invalidate(fmt.Sprintf("%s%so/", self.varnish_url, self.prefix))
+	// TODO: this is lazy af
+	self.RegenFrontPage()
 }
 
 func (self *VarnishCache) pollRegen() {

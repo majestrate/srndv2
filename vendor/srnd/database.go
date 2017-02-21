@@ -300,6 +300,9 @@ type Database interface {
 
 	// get full thread model
 	GetThreadModel(prefix, root_msgid string) (ThreadModel, error)
+
+	// get post models with nntp id in a newsgroup
+	GetNNTPPostsInGroup(newsgroup string) ([]PostModel, error)
 }
 
 func NewDatabase(db_type, schema, host, port, user, password string) Database {

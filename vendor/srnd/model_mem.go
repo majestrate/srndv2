@@ -233,6 +233,11 @@ type post struct {
 	PostPrefix       string
 	index            int
 	Type             string
+	nntp_id          int
+}
+
+func (self *post) NNTPID() int {
+	return self.nntp_id
 }
 
 func (self *post) Index() int {

@@ -145,6 +145,7 @@ const SearchQuery_1 = "SearchQuery_1"
 const SearchQuery_2 = "SearchQuery_2"
 const SearchByHash_1 = "SearchByHash_1"
 const SearchByHash_2 = "SearchByHash_2"
+const GetNNTPPostsInGroup = "GetNNTPPostsInGroup"
 
 func (self *PostgresDatabase) prepStmt(name, query string) (err error) {
 	self.preped[name], err = self.conn.Prepare(query)
@@ -215,6 +216,7 @@ func (self *PostgresDatabase) prepareStatements() {
 		SearchQuery_2:                   "SELECT newsgroup, message_id, ref_id FROM ArticlePosts WHERE newsgroup = $1 AND message LIKE $2 ORDER BY time_posted DESC",
 		SearchByHash_1:                  "SELECT message_newsgroup, message_id, message_ref_id FROM Articles WHERE message_id_hash LIKE $1 ORDER BY time_obtained DESC",
 		SearchByHash_2:                  "SELECT message_newsgroup, message_id, message_ref_id FROM Articles WHERE message_newsgroup = $2 AND message_id_hash LIKE $1 ORDER BY time_obtained DESC",
+		GetNNTPPostsInGroup:             "SELECT message_no, ArticlePosts.message_id, subject, time_posted, ref_id, name, path FROM ArticleNumbers INNER JOIN ArticlePosts ON ArticleNumbers.message_id = ArticlePosts.message_id WHERE ArticlePosts.newsgroup = $1 ORDER BY message_no",
 	}
 
 	log.Printf("making %d prepared statements...", len(q))
@@ -1068,6 +1070,20 @@ func (self *PostgresDatabase) GetGroupForPage(prefix, frontend, newsgroup string
 		pages:    int(pages),
 		threads:  threads,
 	}
+}
+
+func (self *PostgresDatabase) GetNNTPPostsInGroup(newsgroup string) (models []PostModel, err error) {
+	rows, err := self.preped[GetNNTPPostsInGroup].Query(newsgroup)
+	if err == nil {
+		for rows.Next() {
+			model := new(post)
+			model.Newsgroup = newsgroup
+			rows.Scan(&model.nntp_id, &model.Message_id, &model.PostSubject, &model.Posted, &model.Parent, &model.PostName, &model.MessagePath)
+			models = append(models, model)
+		}
+		rows.Close()
+	}
+	return
 }
 
 func (self *PostgresDatabase) GetPostsInGroup(newsgroup string) (models []PostModel, err error) {

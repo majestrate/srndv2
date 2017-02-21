@@ -882,15 +882,14 @@ func (self *nntpConnection) handleLine(daemon *NNTPDaemon, code int, line string
 				} else {
 					// handle xover command
 					// right now it's every article in group
-					models, err := daemon.database.GetPostsInGroup(self.group)
+					models, err := daemon.database.GetNNTPPostsInGroup(self.group)
 					if err == nil {
 						conn.PrintfLine("224 Overview information follows")
 						dw := conn.DotWriter()
 						for _, model := range models {
 							if model != nil {
-								id, err := daemon.database.GetNNTPIDForMessageID(self.group, model.MessageID())
 								if err == nil {
-									io.WriteString(dw, fmt.Sprintf("%.6d\t%s\t\"%s\" <%s@%s>\t%s\t%s\t%s\r\n", id, model.Subject(), model.Name(), model.Name(), model.Frontend(), model.Date(), model.MessageID(), model.Reference()))
+									io.WriteString(dw, fmt.Sprintf("%.6d\t%s\t\"%s\" <%s@%s>\t%s\t%s\t%s\r\n", model.NNTPID(), model.Subject(), model.Name(), model.Name(), model.Frontend(), model.Date(), model.MessageID(), model.Reference()))
 								}
 							}
 						}

@@ -87,6 +87,9 @@ type PostModel interface {
 	Index() int
 	// set post index
 	SetIndex(idx int)
+
+	// nntp id number
+	NNTPID() int
 }
 
 // interface for models that have a navbar

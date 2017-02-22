@@ -197,7 +197,7 @@ func (self *PostgresDatabase) prepareStatements() {
 		GetAllArticles:                  "SELECT message_id, newsgroup FROM ArticlePosts",
 		GetMessageIDByHash:              "SELECT message_id, message_newsgroup FROM Articles WHERE message_id_hash = $1 LIMIT 1",
 		CheckEncIPBanned:                "SELECT COUNT(*) FROM EncIPBans WHERE encaddr = $1",
-		GetFirstAndLastForGroup:         "WITH x(min_no, max_no) AS ( SELECT MIN(message_no) AS min_no, MAX(message_no) AS max_no FROM ArticleNumbers WHERE newsgroup = $1) SELECT CASE WHEN min_no IS NULL THEN 0 ELSE min_no END AS mn FROM x UNION SELECT CASE WHEN max_no IS NULL THEN 1 ELSE max_no END AS max_no FROM x",
+		GetFirstAndLastForGroup:         "WITH x(min_no, max_no) AS ( SELECT MIN(message_no) AS min_no, MAX(message_no) AS max_no FROM ArticleNumbers WHERE newsgroup = $1) SELECT CASE WHEN min_no IS NULL THEN 0 ELSE min_no END AS min_no FROM x UNION SELECT CASE WHEN max_no IS NULL THEN 1 ELSE max_no END AS max_no FROM x",
 		GetMessageIDForNNTPID:           "SELECT message_id FROM ArticleNumbers WHERE newsgroup = $1 AND message_no = $2 LIMIT 1",
 		GetNNTPIDForMessageID:           "SELECT message_no FROM ArticleNumbers WHERE newsgroup = $1 AND message_id = $2 LIMIT 1",
 		IsExpired:                       "WITH x(msgid) AS ( SELECT message_id FROM Articles WHERE message_id = $1 INTERSECT ( SELECT message_id FROM ArticlePosts WHERE message_id = $1 ) ) SELECT COUNT(*) FROM x",
@@ -1608,15 +1608,17 @@ func (self *PostgresDatabase) BanEncAddr(encaddr string) (err error) {
 func (self *PostgresDatabase) GetLastAndFirstForGroup(group string) (last, first int64, err error) {
 	var rows *sql.Rows
 	rows, err = self.preped[GetFirstAndLastForGroup].Query(group)
-	if rows.Next() {
-		err = rows.Scan(&first)
-		if err == nil {
-			if rows.Next() {
-				err = rows.Scan(&last)
+	if err == nil {
+		if rows.Next() {
+			err = rows.Scan(&first)
+			if err == nil {
+				if rows.Next() {
+					err = rows.Scan(&last)
+				}
 			}
 		}
+		rows.Close()
 	}
-	rows.Close()
 	return
 }
 
@@ -1869,7 +1871,7 @@ func (self *PostgresDatabase) SearchQuery(prefix, group string, text string, chn
 		text = "%" + text + "%"
 		var rows *sql.Rows
 		if group == "" {
-			rows, err = self.preped[SearchQuery_2].Query(text)
+			rows, err = self.preped[SearchQuery_1].Query(text)
 		} else {
 			rows, err = self.preped[SearchQuery_2].Query(group, text)
 		}

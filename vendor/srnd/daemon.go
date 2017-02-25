@@ -784,7 +784,7 @@ func (self *NNTPDaemon) pollfeeds() {
 				go self.persistFeed(&feedconfig, "sync", 0)
 			}
 			n := feedconfig.connections
-			if n < 1 {
+			if n < 0 {
 				n = 1
 			}
 			for n > 0 {

@@ -1119,9 +1119,6 @@ func (self *nntpConnection) handleLine(daemon *NNTPDaemon, code int, line string
 				}
 
 			} else {
-				if self.ivo {
-					return
-				}
 				log.Println(self.name, "invalid command recv'd", cmd)
 				conn.PrintfLine("500 Invalid command: %s", cmd)
 			}

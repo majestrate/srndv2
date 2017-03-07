@@ -593,6 +593,10 @@ func (self *nntpConnection) storeMessage(daemon *NNTPDaemon, hdr textproto.MIMEH
 }
 
 func (self *nntpConnection) handleLine(daemon *NNTPDaemon, code int, line string, conn *textproto.Conn) (err error) {
+	if self.ivo {
+		// ivo hack ;=DDD
+		return
+	}
 	parts := strings.Split(line, " ")
 	var msgid string
 	if code == 0 && len(parts) > 1 {
@@ -601,9 +605,6 @@ func (self *nntpConnection) handleLine(daemon *NNTPDaemon, code int, line string
 		msgid = parts[0]
 	}
 	if code == 238 {
-		if self.ivo && msgid == "<nop@nop.nop>" {
-			return
-		}
 		self.messageSetPendingState(msgid, "takethis", 0)
 		// they want this article
 		sz, _ := daemon.store.GetMessageSize(msgid)

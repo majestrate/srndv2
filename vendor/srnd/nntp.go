@@ -606,7 +606,7 @@ func (self *nntpConnection) handleLine(daemon *NNTPDaemon, code int, line string
 	} else {
 		msgid = parts[0]
 	}
-	if code == 238 {
+	if code == 238 && msgid != "<nop@nop.nop>" {
 		self.messageSetPendingState(msgid, "takethis", 0)
 		// they want this article
 		sz, _ := daemon.store.GetMessageSize(msgid)

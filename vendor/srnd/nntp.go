@@ -309,12 +309,6 @@ func (self *nntpConnection) handleStreamEvent(ev nntpStreamEvent, daemon *NNTPDa
 				_, err = io.Copy(dw, rc)
 				rc.Close()
 				err = dw.Close()
-				var code int
-				var line string
-				code, line, err = conn.ReadCodeLine(-1)
-				if err == nil {
-					err = self.handleLine(daemon, code, line, conn)
-				}
 				self.access.Unlock()
 				self.messageSetProcessed(msgid)
 			} else {
@@ -607,6 +601,9 @@ func (self *nntpConnection) handleLine(daemon *NNTPDaemon, code int, line string
 		msgid = parts[0]
 	}
 	if code == 238 {
+		if self.ivo && msgid == "<nop@nop.nop>" {
+			return
+		}
 		self.messageSetPendingState(msgid, "takethis", 0)
 		// they want this article
 		sz, _ := daemon.store.GetMessageSize(msgid)

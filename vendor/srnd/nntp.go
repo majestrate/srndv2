@@ -16,6 +16,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"time"
 )
 
 type nntpStreamEvent string
@@ -178,6 +179,17 @@ func (self *nntpConnection) inboundHandshake(conn *textproto.Conn) (err error) {
 	return err
 }
 
+// keep alive loop for ivo's nntpd
+func (self *nntpConnection) pointlessCheckLoop(conn *textproto.Conn) {
+	var err error
+	for err == nil {
+		time.Sleep(time.Second * 10)
+		self.access.Lock()
+		err = conn.PrintfLine("NOOP")
+		self.access.Unlock()
+	}
+}
+
 // outbound setup, check capabilities and set mode
 // returns (supports stream, supports reader, supports tls) + error
 func (self *nntpConnection) outboundHandshake(conn *textproto.Conn, conf *FeedConfig) (stream, reader, tls bool, err error) {
@@ -217,6 +229,9 @@ func (self *nntpConnection) outboundHandshake(conn *textproto.Conn, conf *FeedCo
 								stream = true
 								reader = false
 								log.Println(self.name, "is SRNd")
+							} else if strings.HasPrefix(line, "IMPLEMENTATION UMailed") {
+								// umaild, ivo's nntp server, needs to send periodic requests for keep alive
+								go self.pointlessCheckLoop(conn)
 							}
 						} else {
 							// we got an error
@@ -276,6 +291,7 @@ func (self *nntpConnection) offerStream(msgid string, sz int64) {
 
 // handle sending 1 stream event
 func (self *nntpConnection) handleStreamEvent(ev nntpStreamEvent, daemon *NNTPDaemon, conn *textproto.Conn) (err error) {
+	self.access.Lock()
 	if ValidMessageID(ev.MessageID()) {
 		cmd, msgid := ev.Command(), ev.MessageID()
 		if cmd == "TAKETHIS" {
@@ -303,6 +319,7 @@ func (self *nntpConnection) handleStreamEvent(ev nntpStreamEvent, daemon *NNTPDa
 			log.Println("invalid stream command", ev)
 		}
 	}
+	self.access.Unlock()
 	return
 }
 

@@ -36,11 +36,22 @@ func HandleStartTLS(conn net.Conn, config *tls.Config) (econn *textproto.Conn, s
 		if err == nil {
 			// begin tls crap here
 			tconn := tls.Server(conn, config)
+			err = tconn.Handshake()
+			state = tconn.ConnectionState()
 			if err == nil {
-				state = tconn.ConnectionState()
 				econn = textproto.NewConn(tconn)
 				return
 			} else {
+				certs := state.PeerCertificates
+				if len(certs) == 0 {
+					log.Println("starttls failed, no peer certs provided")
+				} else {
+					for _, cert := range certs {
+						for _, dns := range cert.DNSNames {
+							log.Println("starttls peer cert from", dns, "not valid")
+						}
+					}
+				}
 				tconn.Close()
 			}
 		}

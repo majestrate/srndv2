@@ -295,7 +295,6 @@ func (self *nntpConnection) offerStream(msgid string, sz int64) {
 
 // handle sending 1 stream event
 func (self *nntpConnection) handleStreamEvent(ev nntpStreamEvent, daemon *NNTPDaemon, conn *textproto.Conn) (err error) {
-	self.access.Lock()
 	if ValidMessageID(ev.MessageID()) {
 		cmd, msgid := ev.Command(), ev.MessageID()
 		if cmd == "TAKETHIS" {
@@ -303,12 +302,14 @@ func (self *nntpConnection) handleStreamEvent(ev nntpStreamEvent, daemon *NNTPDa
 			var rc io.ReadCloser
 			rc, err = daemon.store.OpenMessage(msgid)
 			if err == nil {
+				self.access.Lock()
 				err = conn.PrintfLine("%s", ev)
 				// time to send
 				dw := conn.DotWriter()
 				_, err = io.Copy(dw, rc)
 				rc.Close()
 				err = dw.Close()
+				self.access.Unlock()
 				self.messageSetProcessed(msgid)
 			} else {
 				log.Println(self.name, "didn't send", msgid, err)
@@ -323,7 +324,6 @@ func (self *nntpConnection) handleStreamEvent(ev nntpStreamEvent, daemon *NNTPDa
 			log.Println("invalid stream command", ev)
 		}
 	}
-	self.access.Unlock()
 	return
 }
 

@@ -89,6 +89,8 @@ type nntpConnection struct {
 	backlog int64
 	// function used to close connection abruptly
 	abort func()
+	// ivo hack flag
+	ivo bool
 }
 
 // get message backlog in bytes
@@ -232,6 +234,7 @@ func (self *nntpConnection) outboundHandshake(conn *textproto.Conn, conf *FeedCo
 								log.Println(self.name, "is SRNd")
 							} else if strings.HasPrefix(line, "IMPLEMENTATION UMailed") {
 								// umaild, ivo's nntp server, needs to send periodic requests for keep alive
+								self.ivo = true
 								go self.pointlessCheckLoop(conn)
 							}
 						} else {
@@ -590,6 +593,10 @@ func (self *nntpConnection) storeMessage(daemon *NNTPDaemon, hdr textproto.MIMEH
 }
 
 func (self *nntpConnection) handleLine(daemon *NNTPDaemon, code int, line string, conn *textproto.Conn) (err error) {
+	if self.ivo {
+		// ivo hack ;=DDD
+		return
+	}
 	parts := strings.Split(line, " ")
 	var msgid string
 	if code == 0 && len(parts) > 1 {

@@ -186,7 +186,6 @@ func (self *nntpConnection) pointlessCheckLoop(conn *textproto.Conn) {
 		time.Sleep(time.Second * 10)
 		self.access.Lock()
 		err = conn.PrintfLine("CHECK <nop@nop.nop>")
-		_, err = conn.ReadLine()
 		self.access.Unlock()
 	}
 }

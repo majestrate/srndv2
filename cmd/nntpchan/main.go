@@ -35,8 +35,8 @@ func main() {
 		done: make(chan error),
 	}
 	log.Info("starting up nntpchan...")
-	cfg_fname := "nntpchan.json"
-	conf, err := config.Ensure(cfg_fname)
+	cfgFname := "nntpchan.json"
+	conf, err := config.Ensure(cfgFname)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -105,9 +105,9 @@ func main() {
 			s := <-sigchnl
 			if s == syscall.SIGHUP {
 				// handle SIGHUP
-				conf, err := config.Ensure(cfg_fname)
+				conf, err := config.Ensure(cfgFname)
 				if err == nil {
-					log.Infof("reloading config: %s", cfg_fname)
+					log.Infof("reloading config: %s", cfgFname)
 					nserv.ReloadServer(conf.NNTP)
 					nserv.ReloadFeeds(conf.Feeds)
 				} else {

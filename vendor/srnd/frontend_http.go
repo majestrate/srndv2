@@ -212,6 +212,9 @@ type httpFrontend struct {
 	// maps uuid -> liveChan
 	liveui_chans     map[string]*liveChan
 	liveui_usercount int
+
+	// this is a very important thing by the way
+	requireCaptcha bool
 }
 
 // do we allow this newsgroup?
@@ -978,7 +981,7 @@ func (self httpFrontend) handle_poster(wr http.ResponseWriter, r *http.Request) 
 
 	// this is a POST request
 	if r.Method == "POST" && self.AllowNewsgroup(board) && newsgroupValidFormat(board) {
-		self.handle_postform(wr, r, board, sendJSON, true)
+		self.handle_postform(wr, r, board, sendJSON, self.requireCaptcha)
 	} else {
 		wr.WriteHeader(403)
 		io.WriteString(wr, "Nope")
@@ -1528,6 +1531,7 @@ func NewHTTPFrontend(daemon *NNTPDaemon, cache CacheInterface, config map[string
 	front.prefix = config["prefix"]
 	front.regen_on_start = config["regen_on_start"] == "1"
 	front.enableBoardCreation = config["board_creation"] == "1"
+	front.requireCaptcha = config["rapeme"] != "omgyesplz"
 	if config["json-api"] == "1" {
 		front.jsonUsername = config["json-api-username"]
 		front.jsonPassword = config["json-api-password"]

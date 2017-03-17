@@ -431,9 +431,9 @@ func verifyMessage(pk, sig string, body io.Reader, innerHandler func(map[string]
 	// handle inner body
 	go func(hdr_reader *io.PipeReader) {
 		r := bufio.NewReader(hdr_reader)
-		hdr, err := readMIMEHeader(r)
+		msg, err := readMIMEHeader(r)
 		if err == nil {
-			innerHandler(hdr, r)
+			innerHandler(msg.Header, msg.Body)
 		}
 		hdr_reader.Close()
 	}(pr)

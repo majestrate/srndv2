@@ -13,6 +13,7 @@ import (
 	"log"
 	"mime"
 	"mime/multipart"
+	"net/mail"
 	"net/textproto"
 	"os"
 	"os/exec"
@@ -397,8 +398,10 @@ func (self *articleStore) getMIMEHeader(messageID string) (hdr textproto.MIMEHea
 		f, err := os.Open(fname)
 		if f != nil {
 			r := bufio.NewReader(f)
-			hdr, err = readMIMEHeader(r)
+			var msg *mail.Message
+			msg, err = readMIMEHeader(r)
 			f.Close()
+			hdr = textproto.MIMEHeader(msg.Header)
 		}
 		if err != nil {
 			log.Println("failed to load article headers for", messageID, err)
@@ -431,10 +434,11 @@ func (self *articleStore) GetMessage(msgid string) (nntp NNTPMessage) {
 	if err == nil {
 		defer r.Close()
 		br := bufio.NewReader(r)
-		hdr, err := readMIMEHeader(br)
+		msg, err := readMIMEHeader(br)
 		if err == nil {
 			chnl := make(chan NNTPMessage)
-			err = read_message_body(br, hdr, nil, nil, true, func(nntp NNTPMessage) {
+			hdr := textproto.MIMEHeader(msg.Header)
+			err = read_message_body(msg.Body, hdr, nil, nil, true, func(nntp NNTPMessage) {
 				c := chnl
 				// inject pubkey for mod
 				nntp.Headers().Set("X-PubKey-Ed25519", hdr.Get("X-PubKey-Ed25519"))

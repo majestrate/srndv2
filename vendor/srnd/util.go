@@ -16,6 +16,7 @@ import (
 	"log"
 	"net"
 	"net/http"
+	"net/mail"
 	"net/textproto"
 	"net/url"
 	"os"
@@ -528,29 +529,32 @@ func getMessageIDFromArticleHeaders(hdr ArticleHeaders) (msgid string) {
 	return
 }
 
-func readMIMEHeader(r *bufio.Reader) (hdr textproto.MIMEHeader, err error) {
-	hdr = make(textproto.MIMEHeader)
-	for {
-		var str string
-		str, err = r.ReadString(10)
-		if err != nil {
-			hdr = nil
-			return
+func readMIMEHeader(r *bufio.Reader) (msg *mail.Message, err error) {
+	msg, err = mail.ReadMessage(r)
+	/*
+		hdr = make(textproto.MIMEHeader)
+		for {
+			var str string
+			str, err = r.ReadString(10)
+			if err != nil {
+				hdr = nil
+				return
+			}
+			str = strings.Trim(str, "\r")
+			str = strings.Trim(str, "\n")
+			if str == "" {
+				break
+			}
+			idx := strings.Index(str, ": ")
+			if idx > 0 {
+				hdrname := strings.Trim(str[:idx], " ")
+				hdrval := strings.Trim(str[idx+2:], "\r\n")
+				hdr.Add(hdrname, hdrval)
+			} else {
+				log.Println("invalid header", str)
+			}
 		}
-		str = strings.Trim(str, "\r")
-		str = strings.Trim(str, "\n")
-		if str == "" {
-			break
-		}
-		idx := strings.Index(str, ": ")
-		if idx > 0 {
-			hdrname := strings.Trim(str[:idx], " ")
-			hdrval := strings.Trim(str[idx+2:], "\r\n")
-			hdr.Add(hdrname, hdrval)
-		} else {
-			log.Println("invalid header", str)
-		}
-	}
+	*/
 	return
 }
 

@@ -12,6 +12,7 @@ import (
 	"io/ioutil"
 	"log"
 	"net"
+	"net/mail"
 	"net/textproto"
 	"strconv"
 	"strings"
@@ -370,12 +371,12 @@ func (self *nntpConnection) handleStreaming(daemon *NNTPDaemon, conn *textproto.
 
 // check if we want the article given its mime header
 // returns empty string if it's okay otherwise an error message
-func (self *nntpConnection) checkMIMEHeader(daemon *NNTPDaemon, hdr textproto.MIMEHeader) (reason string, allow bool, err error) {
-
+func (self *nntpConnection) checkMIMEHeader(daemon *NNTPDaemon, h map[string][]string) (reason string, allow bool, err error) {
 	if !self.authenticated {
 		reason = "not authenticated"
 		return
 	}
+	hdr := textproto.MIMEHeader(h)
 	reason, allow, err = self.checkMIMEHeaderNoAuth(daemon, hdr)
 	return
 }
@@ -693,20 +694,21 @@ func (self *nntpConnection) handleLine(daemon *NNTPDaemon, code int, line string
 				}
 			} else if cmd == "TAKETHIS" {
 				// handle takethis command
-				var hdr textproto.MIMEHeader
+				var msg *mail.Message
 				var reason string
 				var ban bool
 				// read the article header
 				r := bufio.NewReader(conn.DotReader())
-				hdr, err = readMIMEHeader(r)
+				msg, err = readMIMEHeader(r)
 				if err == nil {
+					hdr := textproto.MIMEHeader(msg.Header)
 					// check the header
 					reason, ban, err = self.checkMIMEHeader(daemon, hdr)
 					if len(reason) > 0 {
 						// discard, we do not want
 						code = 439
 						log.Println(self.name, "rejected", msgid, reason)
-						_, err = io.Copy(ioutil.Discard, r)
+						_, err = io.Copy(ioutil.Discard, msg.Body)
 						if ban {
 							err = daemon.database.BanArticle(msgid, reason)
 						}
@@ -719,7 +721,7 @@ func (self *nntpConnection) handleLine(daemon *NNTPDaemon, code int, line string
 							go daemon.askForArticle(ArticleEntry{reference, newsgroup})
 						}
 						// store message
-						err = self.storeMessage(daemon, hdr, r)
+						err = self.storeMessage(daemon, hdr, msg.Body)
 						if err == nil {
 							code = 239
 							reason = "gotten"
@@ -732,7 +734,7 @@ func (self *nntpConnection) handleLine(daemon *NNTPDaemon, code int, line string
 						// discard, we do not want
 						code = 439
 						log.Println(self.name, "rejected", msgid, reason)
-						_, err = io.Copy(ioutil.Discard, r)
+						_, err = io.Copy(ioutil.Discard, msg.Body)
 						if ban {
 							err = daemon.database.BanArticle(msgid, reason)
 						}
@@ -782,9 +784,10 @@ func (self *nntpConnection) handleLine(daemon *NNTPDaemon, code int, line string
 						// gib we want
 						conn.PrintfLine("335 Send it plz")
 						r := bufio.NewReader(conn.DotReader())
-						hdr, err := readMIMEHeader(r)
+						msg, err := readMIMEHeader(r)
 						if err == nil {
 							// check the header
+							hdr := textproto.MIMEHeader(msg.Header)
 							var reason string
 							var ban bool
 							reason, ban, err = self.checkMIMEHeader(daemon, hdr)
@@ -1117,11 +1120,12 @@ func (self *nntpConnection) handleLine(daemon *NNTPDaemon, code int, line string
 				} else {
 					// handle POST command
 					conn.PrintfLine("340 Yeeeh postit yo; end with <CR-LF>.<CR-LF>")
-					var hdr textproto.MIMEHeader
-					hdr, err = readMIMEHeader(conn.R)
+					var msg *mail.Message
+					msg, err = readMIMEHeader(bufio.NewReader(conn.DotReader()))
 					var success bool
 					var reason string
 					if err == nil {
+						hdr := textproto.MIMEHeader(msg.Header)
 						if getMessageID(hdr) == "" {
 							hdr.Set("Message-ID", genMessageID(daemon.instance_name))
 						}
@@ -1138,7 +1142,6 @@ func (self *nntpConnection) handleLine(daemon *NNTPDaemon, code int, line string
 						reason, _, err = self.checkMIMEHeader(daemon, hdr)
 						success = reason == "" && err == nil
 						if success {
-							r := bufio.NewReader(conn.DotReader())
 							reference := hdr.Get("References")
 							newsgroup := hdr.Get("Newsgroups")
 							if reference != "" && ValidMessageID(reference) {
@@ -1152,7 +1155,7 @@ func (self *nntpConnection) handleLine(daemon *NNTPDaemon, code int, line string
 								success = false
 							}
 							if success && daemon.database.HasNewsgroup(newsgroup) {
-								err = self.storeMessage(daemon, hdr, r)
+								err = self.storeMessage(daemon, hdr, msg.Body)
 							}
 						}
 					}
@@ -1384,25 +1387,25 @@ func (self *nntpConnection) requestArticle(daemon *NNTPDaemon, conn *textproto.C
 	code, line, err = conn.ReadCodeLine(-1)
 	if code == 220 {
 		// awwww yeh we got it
-		var hdr textproto.MIMEHeader
+		var msg *mail.Message
 		// read header
-		hdr, err = readMIMEHeader(conn.R)
+		msg, err = readMIMEHeader(bufio.NewReader(conn.DotReader()))
 		if err == nil {
+			hdr := textproto.MIMEHeader(msg.Header)
 			// prepare to read body
-			dr := conn.DotReader()
 			// check header and decide if we want this
 			reason, ban, err := self.checkMIMEHeaderNoAuth(daemon, hdr)
 			if err == nil {
 				if len(reason) > 0 {
 					log.Println(self.name, "discarding", msgid, reason)
 					// we don't want it, discard
-					io.Copy(ioutil.Discard, dr)
+					io.Copy(ioutil.Discard, msg.Body)
 					if ban {
 						daemon.database.BanArticle(msgid, reason)
 					}
 				} else {
 					// yeh we want it open up a file to store it in
-					err = self.storeMessage(daemon, hdr, dr)
+					err = self.storeMessage(daemon, hdr, msg.Body)
 					if err != nil {
 						log.Println(self.name, "failed to obtain article", err)
 						// probably an invalid signature or format

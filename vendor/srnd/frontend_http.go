@@ -21,6 +21,7 @@ import (
 	"log"
 	"mime"
 	"net/http"
+	"net/mail"
 	"net/textproto"
 	"strings"
 	"time"
@@ -385,12 +386,12 @@ func (self *httpFrontend) poll() {
 				err := nntp.WriteTo(b)
 				if err == nil {
 					r := bufio.NewReader(b)
-					var hdr textproto.MIMEHeader
-					hdr, err = readMIMEHeader(r)
+					var msg *mail.Message
+					msg, err = readMIMEHeader(r)
 					if err == nil {
-						err = writeMIMEHeader(f, hdr)
+						err = writeMIMEHeader(f, msg.Header)
 						if err == nil {
-							err = self.daemon.store.ProcessMessageBody(f, hdr, r)
+							err = self.daemon.store.ProcessMessageBody(f, textproto.MIMEHeader(msg.Header), msg.Body)
 						}
 					}
 				}

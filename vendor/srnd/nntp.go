@@ -1142,7 +1142,8 @@ func (self *nntpConnection) handleLine(daemon *NNTPDaemon, code int, line string
 						reason, _, err = self.checkMIMEHeader(daemon, hdr)
 						success = reason == "" && err == nil
 						if success {
-							reference := hdr.Get("References")
+							refs := strings.Split(hdr.Get("References"), " ")
+							reference := refs[0]
 							newsgroup := hdr.Get("Newsgroups")
 							if reference != "" && ValidMessageID(reference) {
 								if !daemon.store.HasArticle(reference) && !daemon.database.IsExpired(reference) {

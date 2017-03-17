@@ -468,7 +468,7 @@ func read_message_body(body io.Reader, hdr map[string][]string, store ArticleSto
 		body = io.TeeReader(body, wr)
 	}
 	boundary, ok := params["boundary"]
-	if ok {
+	if ok || content_type == "multipart/mixed" {
 		partReader := multipart.NewReader(body, boundary)
 		for {
 			part, err := partReader.NextPart()

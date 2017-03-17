@@ -42,6 +42,8 @@ type ArticleStore interface {
 	OpenMessage(msgid string) (io.ReadCloser, error)
 	// get article headers only
 	GetHeaders(msgid string) ArticleHeaders
+	// get mime header
+	GetMIMEHeader(msgid string) textproto.MIMEHeader
 	// get our temp directory for articles
 	TempDir() string
 	// get a list of all the attachments we have
@@ -389,6 +391,10 @@ func (self *articleStore) GetHeaders(messageID string) (hdr ArticleHeaders) {
 		}
 	}
 	return
+}
+
+func (self *articleStore) GetMIMEHeader(messageID string) textproto.MIMEHeader {
+	return self.getMIMEHeader(messageID)
 }
 
 // get article with headers only

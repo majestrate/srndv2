@@ -1143,17 +1143,22 @@ func (self *nntpConnection) handleLine(daemon *NNTPDaemon, code int, line string
 						success = reason == "" && err == nil
 						if success {
 							refs := strings.Split(hdr.Get("References"), " ")
-							reference := refs[0]
 							newsgroup := hdr.Get("Newsgroups")
-							if reference != "" && ValidMessageID(reference) {
-								if !daemon.store.HasArticle(reference) && !daemon.database.IsExpired(reference) {
-									log.Println(self.name, "got reply to", reference, "but we don't have it")
-									go daemon.askForArticle(ArticleEntry{reference, newsgroup})
+							for _, reference := range refs {
+								if reference != "" && ValidMessageID(reference) {
+									if !daemon.store.HasArticle(reference) && !daemon.database.IsExpired(reference) {
+										log.Println(self.name, "got reply to", reference, "but we don't have it")
+										go daemon.askForArticle(ArticleEntry{reference, newsgroup})
+									}
+									h := daemon.store.GetMIMEHeader(reference)
+									if strings.Trim(h.Get("References"), " ") == "" {
+										hdr.Set("References", getMessageID(h))
+									}
+								} else if reference != "" {
+									// bad message id
+									reason = "cannot reply with invalid reference, maybe you are replying to a reply?"
+									success = false
 								}
-							} else if reference != "" {
-								// bad message id
-								reason = "cannot reply with invalid reference, maybe you are replying to a reply?"
-								success = false
 							}
 							if success && daemon.database.HasNewsgroup(newsgroup) {
 								err = self.storeMessage(daemon, hdr, msg.Body)

@@ -1149,10 +1149,11 @@ func (self *nntpConnection) handleLine(daemon *NNTPDaemon, code int, line string
 									if !daemon.store.HasArticle(reference) && !daemon.database.IsExpired(reference) {
 										log.Println(self.name, "got reply to", reference, "but we don't have it")
 										go daemon.askForArticle(ArticleEntry{reference, newsgroup})
-									}
-									h := daemon.store.GetMIMEHeader(reference)
-									if strings.Trim(h.Get("References"), " ") == "" {
-										hdr.Set("References", getMessageID(h))
+									} else {
+										h := daemon.store.GetMIMEHeader(reference)
+										if strings.Trim(h.Get("References"), " ") == "" {
+											hdr.Set("References", getMessageID(h))
+										}
 									}
 								} else if reference != "" {
 									// bad message id

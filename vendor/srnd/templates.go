@@ -7,6 +7,7 @@ package srnd
 import (
 	"bytes"
 	"encoding/json"
+	"fmt"
 	"github.com/cbroglie/mustache"
 	tinyhtml "github.com/whyrusleeping/tinyhtml"
 	"io"
@@ -20,26 +21,16 @@ import (
 )
 
 type templateEngine struct {
-	// posthash -> url
-	links map[string]string
-	// shorthash -> posthash
-	links_short map[string]string
-	// every newsgroup
-	groups map[string]GroupModel
 	// loaded templates
 	templates map[string]string
 	// root directory for templates
 	template_dir string
-	// mutex for accessing links
-	links_mtx sync.RWMutex
-	// mutex for accessing shortlinks
-	links_short_mtx sync.RWMutex
-	// mutex for accessing groups
-	groups_mtx sync.RWMutex
 	// mutex for accessing templates
 	templates_mtx sync.RWMutex
 	// do we want to minimize the html generated?
 	Minimize bool
+	// database
+	DB Database
 }
 
 func (self *templateEngine) templateCached(name string) (ok bool) {
@@ -74,54 +65,6 @@ func (self *templateEngine) reloadAllTemplates() {
 	for _, tname := range loadThese {
 		self.reloadTemplate(tname)
 	}
-}
-
-// update the link -> url cache given our current model
-func updateLinkCache() {
-	// clear existing cache
-	template.links = make(map[string]string)
-	// for each group
-	template.groups_mtx.Lock()
-	for _, group := range template.groups {
-		// for each page in group
-		for _, page := range group {
-			// for each thread in page
-			updateLinkCacheForBoard(page)
-		}
-	}
-	template.groups_mtx.Unlock()
-}
-
-// update the link -> url cache given a board page
-func updateLinkCacheForBoard(page BoardModel) {
-	// for each thread in page
-	for _, thread := range page.Threads() {
-		updateLinkCacheForThread(thread)
-	}
-}
-
-// update link -> url cache given a thread
-func updateLinkCacheForThread(thread ThreadModel) {
-	m := thread.OP().MessageID()
-	u := thread.OP().PostURL()
-	s := ShorterHashMessageID(m)
-	h := ShortHashMessageID(m)
-	template.links_mtx.Lock()
-	template.links_short_mtx.Lock()
-	template.links_short[s] = u
-	template.links[h] = u
-	// for each reply
-	for _, p := range thread.Replies() {
-		// put reply entry
-		m = p.MessageID()
-		u = p.PostURL()
-		s = ShorterHashMessageID(m)
-		h = ShortHashMessageID(m)
-		template.links_short[s] = u
-		template.links[h] = u
-	}
-	template.links_mtx.Unlock()
-	template.links_short_mtx.Unlock()
 }
 
 // get cached post model from cache after updating it
@@ -196,22 +139,6 @@ func (self *templateEngine) updatePostModel(prefix, frontend, msgid, rootmsgid, 
 	*/
 }
 
-// get the url for a backlink
-func (self *templateEngine) findLink(hash string) (url string) {
-	if len(hash) == 10 {
-
-		template.links_short_mtx.Lock()
-		// short version of hash
-		url, _ = self.links_short[hash]
-		template.links_short_mtx.Unlock()
-	} else {
-		template.links_mtx.Lock()
-		url, _ = self.links[hash]
-		template.links_mtx.Unlock()
-	}
-	return
-}
-
 // get the filepath to a template
 func (self *templateEngine) templateFilepath(name string) string {
 	if strings.Count(name, "..") > 0 {
@@ -279,39 +206,24 @@ func (self *templateEngine) renderJSON(wr io.Writer, obj interface{}) {
 
 // get a board model given a newsgroup
 // load un updated board model if we don't have it
-func (self *templateEngine) obtainBoard(prefix, frontend, group string, update bool, db Database) (model GroupModel) {
+func (self *templateEngine) obtainBoard(prefix, frontend, group string, db Database) (model GroupModel) {
 	// warning, we attempt to do smart reloading
 	// dark magic may lurk here
-	self.groups_mtx.Lock()
-	var ok bool
-	model, ok = self.groups[group]
-	self.groups_mtx.Unlock()
-	if ok && !update {
-		// we gud
-		return
-	}
 	p := db.GetGroupPageCount(group)
 	pages := int(p)
-	// model is not up to date
-	if update || (!ok) || len(model) < pages {
-		perpage, _ := db.GetThreadsPerPage(group)
-		// reload all the pages
-		var newModel GroupModel
-		for page := 0; page < pages; page++ {
-			newModel = append(newModel, db.GetGroupForPage(prefix, frontend, group, page, int(perpage)))
-		}
-		model = newModel
+	perpage, _ := db.GetThreadsPerPage(group)
+	// reload all the pages
+	var newModel GroupModel
+	for page := 0; page < pages; page++ {
+		newModel = append(newModel, db.GetGroupForPage(prefix, frontend, group, page, int(perpage)))
 	}
-
-	self.groups_mtx.Lock()
-	self.groups[group] = model
-	self.groups_mtx.Unlock()
+	model = newModel
 
 	return
 }
 
 func (self *templateEngine) genCatalog(prefix, frontend, group string, wr io.Writer, db Database) {
-	board := self.obtainBoard(prefix, frontend, group, false, db)
+	board := self.obtainBoard(prefix, frontend, group, db)
 	catalog := new(catalogModel)
 	catalog.prefix = prefix
 	catalog.frontend = frontend
@@ -332,8 +244,6 @@ func (self *templateEngine) genBoardPage(allowFiles bool, prefix, frontend, news
 	perpage, _ := db.GetThreadsPerPage(newsgroup)
 	boardPage := db.GetGroupForPage(prefix, frontend, newsgroup, page, int(perpage))
 	boardPage.Update(db)
-	// update link cache
-	updateLinkCacheForBoard(boardPage)
 	// render it
 	if json {
 		self.renderJSON(wr, boardPage)
@@ -341,19 +251,6 @@ func (self *templateEngine) genBoardPage(allowFiles bool, prefix, frontend, news
 		form := renderPostForm(prefix, newsgroup, "", allowFiles)
 		self.writeTemplate("board.mustache", map[string]interface{}{"board": boardPage, "page": page, "form": form}, wr)
 	}
-}
-
-// prepare generation of every page for a board
-func (self *templateEngine) prepareGenBoard(allowFiles bool, prefix, frontend, newsgroup string, db Database) int {
-	// get the board model
-	board := self.obtainBoard(prefix, frontend, newsgroup, true, db)
-	// save the model
-	self.groups_mtx.Lock()
-	self.groups[newsgroup] = board
-	self.groups_mtx.Unlock()
-	updateLinkCache()
-
-	return len(board)
 }
 
 func (self *templateEngine) genUkko(prefix, frontend string, wr io.Writer, database Database, json bool) {
@@ -369,7 +266,6 @@ func (self *templateEngine) genUkkoPaginated(prefix, frontend string, wr io.Writ
 			threads = append(threads, thread)
 		}
 	}
-	updateLinkCache()
 	obj := map[string]interface{}{"prefix": prefix, "threads": threads, "page": page}
 	if page > 0 {
 		obj["prev"] = map[string]interface{}{"no": page - 1}
@@ -485,25 +381,19 @@ func (self *templateEngine) renderNotFound(wr http.ResponseWriter, r *http.Reque
 	self.writeTemplate("404.mustache", opts, wr)
 }
 
-// preload all boards / threads / replies
-func (self *templateEngine) loadAllModels(prefix, frontend string, db Database) {
-	groups := db.GetAllNewsgroups()
-	for _, group := range groups {
-		log.Println("preload models for", group)
-		board := self.obtainBoard(prefix, frontend, group, true, db)
-		board.UpdateAll(db)
-	}
-	updateLinkCache()
-}
-
 func newTemplateEngine(dir string) *templateEngine {
 	return &templateEngine{
-		groups:       make(map[string]GroupModel),
 		templates:    make(map[string]string),
 		template_dir: dir,
-		links:        make(map[string]string),
-		links_short:  make(map[string]string),
 	}
+}
+
+func (self *templateEngine) findLink(prefix, hash string) (url string) {
+	ents, _ := self.DB.GetCitesByPostHashLike(hash)
+	if len(ents) > 0 {
+		url = fmt.Sprintf("%st/%s/#%s", prefix, HashMessageID(ents[0].Reference()), HashMessageID(ents[0].MessageID()))
+	}
+	return
 }
 
 var template = newTemplateEngine(defaultTemplateDir())

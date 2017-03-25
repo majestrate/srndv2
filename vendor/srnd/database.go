@@ -6,6 +6,7 @@ package srnd
 import (
 	"log"
 	"net"
+	"strings"
 	"time"
 )
 
@@ -18,6 +19,21 @@ func (self ArticleEntry) Newsgroup() string {
 
 func (self ArticleEntry) MessageID() string {
 	return self[0]
+}
+
+// a (messageID , parent messageID) tuple
+type MessageIDTuple [2]string
+
+func (self MessageIDTuple) MessageID() string {
+	return strings.Trim(self[0], " ")
+}
+
+func (self MessageIDTuple) Reference() string {
+	r := strings.Trim(self[1], " ")
+	if len(r) == 0 {
+		return self.MessageID()
+	}
+	return r
 }
 
 // a ( time point, magnitude ) tuple
@@ -303,6 +319,9 @@ type Database interface {
 
 	// get post models with nntp id in a newsgroup
 	GetNNTPPostsInGroup(newsgroup string) ([]PostModel, error)
+
+	// get post message-id where hash is similar to string
+	GetCitesByPostHashLike(like string) ([]MessageIDTuple, error)
 }
 
 func NewDatabase(db_type, schema, host, port, user, password string) Database {

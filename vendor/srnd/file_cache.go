@@ -172,7 +172,7 @@ func (self *FileCache) pollRegen() {
 
 // regen every page of the board
 func (self *FileCache) RegenerateBoard(group string) {
-	pages := template.prepareGenBoard(self.attachments, self.prefix, self.name, group, self.database)
+	pages, _ := self.database.GetPagesPerBoard(group)
 	for page := 0; page < pages; page++ {
 		self.regenerateBoardPage(group, page, false)
 		self.regenerateBoardPage(group, page, true)

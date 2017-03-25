@@ -1086,4 +1086,6 @@ func (self *NNTPDaemon) Setup() {
 		database: self.database,
 		chnl:     make(chan string),
 	}
+	// inject DB into template engine
+	template.DB = self.database
 }

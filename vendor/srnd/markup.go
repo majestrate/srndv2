@@ -31,13 +31,13 @@ func findBacklinks(msg string) (cites []string) {
 }
 
 // parse backlink
-func backlink(word string) (markup string) {
+func backlink(word, prefix string) (markup string) {
 	re := re_backlink.Copy()
 	link := re.FindString(word)
 	if len(link) > 2 {
 		link = strings.Trim(link[2:], " ")
 		if len(link) > 2 {
-			url := template.findLink(link)
+			url := template.findLink(prefix, link)
 			if len(url) == 0 {
 				return "<span class='memearrows'>&gt;&gt;" + link + "</span>"
 			}
@@ -89,7 +89,7 @@ func formatline(line, prefix string) (markup string) {
 				} else if re_nntpboardlink.MatchString(word) {
 					markup += boardlink(word, prefix, re_nntpboardlink)
 				} else if re_backlink.MatchString(word) {
-					markup += backlink(word)
+					markup += backlink(word, prefix)
 				} else {
 					// linkify as needed
 					word = escapeline(word)

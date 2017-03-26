@@ -10,7 +10,6 @@ import (
 	"fmt"
 	log "github.com/Sirupsen/logrus"
 	"github.com/majestrate/srndv2/lib/config"
-	"github.com/majestrate/srndv2/lib/database"
 	"github.com/majestrate/srndv2/lib/nntp/message"
 	"github.com/majestrate/srndv2/lib/store"
 	"github.com/majestrate/srndv2/lib/util"
@@ -53,8 +52,6 @@ type v1Conn struct {
 	hdrio *message.HeaderIO
 	// article storage
 	storage store.Storage
-	// database driver
-	db database.DB
 	// event callbacks
 	hooks EventHooks
 	// inbound connection authenticator
@@ -1185,12 +1182,12 @@ func streamingLine(c *v1Conn, line string, hooks EventHooks) (err error) {
 
 func newsgroupList(c *v1Conn, line string, hooks EventHooks, rpl string) (err error) {
 	var groups []string
-	if c.db == nil {
+	if c.storage == nil {
 		// no database driver available
 		// let's say we carry overchan.test for now
 		groups = append(groups, "overchan.test")
 	} else {
-		groups, err = c.db.GetAllNewsgroups()
+		groups, err = c.storage.GetAllNewsgroups()
 	}
 
 	if err == nil {
@@ -1198,10 +1195,10 @@ func newsgroupList(c *v1Conn, line string, hooks EventHooks, rpl string) (err er
 		dw := c.C.DotWriter()
 		fmt.Fprintf(dw, "%s list of newsgroups follows\n", rpl)
 		for _, g := range groups {
-			hi := int64(1)
-			lo := int64(0)
-			if c.db != nil {
-				hi, lo, err = c.db.GetLastAndFirstForGroup(g)
+			hi := uint64(1)
+			lo := uint64(0)
+			if c.storage != nil {
+				hi, lo, err = c.storage.GetWatermark(g)
 			}
 			if err != nil {
 				// log error if it occurs
@@ -1261,21 +1258,20 @@ func switchNewsgroup(c *v1Conn, line string, hooks EventHooks) (err error) {
 		group = Newsgroup(parts[1])
 		if group.Valid() {
 			// correct format
-			if c.db == nil {
-				// no database driver
-				has = true
+			if c.storage == nil {
+				has = false
 			} else {
-				has, err = c.db.HasNewsgroup(group.String())
+				has, err = c.storage.HasNewsgroup(group.String())
 			}
 		}
 	}
 	if has {
 		// we have it
-		hi := int64(1)
-		lo := int64(0)
-		if c.db != nil {
+		hi := uint64(1)
+		lo := uint64(0)
+		if c.storage != nil {
 			// check database for water marks
-			hi, lo, err = c.db.GetLastAndFirstForGroup(group.String())
+			hi, lo, err = c.storage.GetWatermark(group.String())
 		}
 		if err == nil {
 			// XXX: ensure hi > lo

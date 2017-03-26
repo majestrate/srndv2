@@ -3,6 +3,8 @@ package main
 import (
 	log "github.com/Sirupsen/logrus"
 	"github.com/majestrate/srndv2/lib/config"
+	"github.com/majestrate/srndv2/lib/database"
+	"github.com/majestrate/srndv2/lib/frontend"
 	"github.com/majestrate/srndv2/lib/nntp"
 	"github.com/majestrate/srndv2/lib/store"
 	"github.com/majestrate/srndv2/lib/webhooks"
@@ -92,6 +94,15 @@ func main() {
 			hooks = append(hooks, nntp.NewHook(h))
 		}
 		nserv.Hooks = hooks
+	}
+
+	var db database.Database
+	for _, fconf := range conf.Frontends {
+		var f frontend.Frontend
+		f, err = frontend.NewHTTPFrontend(fconf, db)
+		if err == nil {
+			go f.Serve()
+		}
 	}
 
 	// start persisting feeds

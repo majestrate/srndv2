@@ -1,20 +1,17 @@
 package frontend
 
 import (
-	"github.com/majestrate/srndv2/lib/cache"
 	"github.com/majestrate/srndv2/lib/config"
 	"github.com/majestrate/srndv2/lib/database"
 	"github.com/majestrate/srndv2/lib/model"
 	"github.com/majestrate/srndv2/lib/nntp"
-
-	"net"
 )
 
 // a frontend that displays nntp posts and allows posting
 type Frontend interface {
 
-	// run mainloop using net.Listener
-	Serve(l net.Listener) error
+	// run mainloop
+	Serve()
 
 	// do we accept this inbound post?
 	AllowPost(p model.PostReference) bool
@@ -33,19 +30,12 @@ type Frontend interface {
 }
 
 // create a new http frontend give frontend config
-func NewHTTPFrontend(c *config.FrontendConfig, db database.DB) (f Frontend, err error) {
-
-	var markupCache cache.CacheInterface
-
-	markupCache, err = cache.FromConfig(c.Cache)
-	if err != nil {
-		return
-	}
+func NewHTTPFrontend(c *config.FrontendConfig, db database.Database) (f Frontend, err error) {
 
 	var mid Middleware
 	if c.Middleware != nil {
 		// middleware configured
-		mid, err = OverchanMiddleware(c.Middleware, markupCache, db)
+		mid, err = OverchanMiddleware(c.Middleware, db)
 	}
 
 	if err == nil {

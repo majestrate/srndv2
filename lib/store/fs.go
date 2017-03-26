@@ -7,10 +7,15 @@ import (
 	"github.com/majestrate/srndv2/lib/crypto"
 	"io"
 	"io/ioutil"
+	"net/textproto"
 	"os"
 	"path/filepath"
+	"strconv"
 	"time"
 )
+
+const HighWaterHeader = "X-High-Water"
+const LowWaterHeader = "X-Low-Water"
 
 // filesystem storage of nntp articles and attachments
 type FilesystemStorage struct {
@@ -20,6 +25,106 @@ type FilesystemStorage struct {
 
 func (fs FilesystemStorage) String() string {
 	return fs.root
+}
+
+func (fs FilesystemStorage) NewsgroupsDir() string {
+	return filepath.Join(fs.root, "newsgroups")
+}
+
+func (fs FilesystemStorage) metadataFileForNewsgroup(newsgroup string) string {
+	return filepath.Join(fs.newsgroupDir(newsgroup), "metadata")
+}
+
+func (fs FilesystemStorage) GetWatermark(newsgroup string) (hi, lo uint64, err error) {
+	var hdr textproto.MIMEHeader
+	hdr, err = fs.getMetadataForNewsgroup(newsgroup)
+	if err == nil {
+		hi, err = strconv.ParseUint(hdr.Get(HighWaterHeader), 10, 64)
+		if err == nil {
+			lo, err = strconv.ParseUint(hdr.Get(LowWaterHeader), 10, 64)
+		}
+	}
+	return
+}
+
+func (fs FilesystemStorage) getMetadataForNewsgroup(newsgroup string) (hdr textproto.MIMEHeader, err error) {
+	var f *os.File
+	fp := fs.metadataFileForNewsgroup(newsgroup)
+	_, err = os.Stat(fp)
+	if os.IsNotExist(err) {
+		f, err = os.OpenFile(fp, os.O_RDWR|os.O_CREATE, 0600)
+		if err == nil {
+			h := make(textproto.MIMEHeader)
+			h.Set(HighWaterHeader, "0")
+			c := textproto.NewConn(f)
+			for k := range hdr {
+				for _, v := range h[k] {
+					err = c.PrintfLine("%s: %s", k, v)
+					if err != nil {
+						c.Close()
+						return
+					}
+				}
+			}
+			c.Close()
+		}
+	}
+	f, err = os.OpenFile(fp, os.O_RDWR, 0600)
+	if err == nil {
+		c := textproto.NewConn(f)
+		hdr, err = c.ReadMIMEHeader()
+		c.Close()
+	}
+	return
+}
+
+func (fs FilesystemStorage) nextIDForNewsgroup(newsgroup string) (id uint64, err error) {
+	id, _, err = fs.GetWatermark(newsgroup)
+
+	if err == nil {
+		id++
+		var hdr textproto.MIMEHeader
+		hdr, err = fs.getMetadataForNewsgroup(newsgroup)
+		if err == nil {
+			hdr.Set(HighWaterHeader, fmt.Sprintf("%d", id))
+			var f *os.File
+			f, err = os.OpenFile(fs.metadataFileForNewsgroup(newsgroup), os.O_WRONLY, 0600)
+			if err == nil {
+				c := textproto.NewConn(f)
+				for k := range hdr {
+					for _, v := range hdr[k] {
+						err = c.PrintfLine("%s: %s", k, v)
+						if err != nil {
+							c.Close()
+							return
+						}
+					}
+				}
+				c.Close()
+			}
+		}
+	}
+	return
+}
+
+func (fs FilesystemStorage) GetAllNewsgroups() (newsgroups []string, err error) {
+	err = filepath.Walk(fs.NewsgroupsDir(), filepath.WalkFunc(func(f string, info os.FileInfo, e error) (er error) {
+		if e != nil {
+			er = e
+			newsgroups = nil
+		}
+		if info.IsDir() && err == nil {
+			newsgroups = append(newsgroups, f)
+		}
+		return er
+	}))
+	return
+}
+
+func (fs FilesystemStorage) HasNewsgroup(newsgroup string) (has bool, err error) {
+	_, err = os.Stat(fs.newsgroupDir(newsgroup))
+	has = err == nil
+	return
 }
 
 // ensure the filesystem storage exists and is well formed and read/writable
@@ -39,7 +144,7 @@ func (fs FilesystemStorage) Ensure() (err error) {
 	}
 
 	// ensure subdirectories
-	for _, subdir := range []string{"att", "thm", "articles", "tmp"} {
+	for _, subdir := range []string{"att", "thm", "articles", "tmp", "newsgroups"} {
 		fpath := filepath.Join(fs.String(), subdir)
 		_, err = os.Stat(fpath)
 		if os.IsNotExist(err) {
@@ -125,8 +230,10 @@ func (fs FilesystemStorage) StoreArticle(r io.Reader, msgid, newsgroup string) (
 				if os.IsNotExist(e) {
 					err = os.Mkdir(g, 0700)
 				}
+				var nntpid uint64
+				nntpid, err = fs.nextIDForNewsgroup(newsgroup)
 				if err == nil {
-					err = os.Symlink(filepath.Join("..", msgid), filepath.Join(g, msgid))
+					err = os.Symlink(filepath.Join("..", "..", "articles", msgid), filepath.Join(g, fmt.Sprintf("%d", nntpid)))
 				}
 				if err != nil {
 					log.WithFields(log.Fields{
@@ -154,7 +261,7 @@ func (fs FilesystemStorage) StoreArticle(r io.Reader, msgid, newsgroup string) (
 }
 
 func (fs FilesystemStorage) newsgroupDir(group string) string {
-	return filepath.Join(fs.ArticleDir(), group)
+	return filepath.Join(fs.NewsgroupsDir(), group)
 }
 
 // check if we have the artilce with this message id
@@ -286,7 +393,7 @@ func (fs FilesystemStorage) ForEachInGroup(group string, chnl chan string) {
 		if info != nil {
 			chnl <- info.Name()
 		}
-		return nil
+		return err
 	})
 }
 

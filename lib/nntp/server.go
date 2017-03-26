@@ -3,7 +3,6 @@ package nntp
 import (
 	log "github.com/Sirupsen/logrus"
 	"github.com/majestrate/srndv2/lib/config"
-	"github.com/majestrate/srndv2/lib/database"
 	"github.com/majestrate/srndv2/lib/network"
 	"github.com/majestrate/srndv2/lib/store"
 	"net"
@@ -23,8 +22,6 @@ type Server struct {
 	Hooks EventHooks
 	// filters to apply
 	Filters []ArticleFilter
-	// database driver
-	DB database.DB
 	// global article acceptor
 	Acceptor ArticleAcceptor
 	// article storage

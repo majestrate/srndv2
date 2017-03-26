@@ -38,4 +38,13 @@ type Storage interface {
 	// iterate over all messages in a newsgroup
 	// send results down a channel
 	ForEachInGroup(newsgroup string, cnhl chan string)
+
+	// get a list of all newsgroups
+	GetAllNewsgroups() ([]string, error)
+
+	// determine if we have a newsgroup
+	HasNewsgroup(newsgroup string) (bool, error)
+
+	// get hi/lo watermark for newsgroup
+	GetWatermark(newsgroup string) (uint64, uint64, error)
 }

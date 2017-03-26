@@ -23,7 +23,8 @@ type Config struct {
 	Database *DatabaseConfig `json:"db"`
 	// list of feeds to add on runtime
 	Feeds []*FeedConfig `json:"feeds"`
-
+	// frontend config
+	Frontends []*FrontendConfig `json:"frontends"`
 	// unexported fields ...
 
 	// absolute filepath to configuration
@@ -38,6 +39,7 @@ var DefaultConfig = Config{
 	WebHooks:  []*WebhookConfig{DefaultWebHookConfig},
 	NNTPHooks: []*NNTPHookConfig{DefaultNNTPHookConfig},
 	Feeds:     DefaultFeeds,
+	Frontends: []*FrontendConfig{&DefaultFrontendConfig},
 	Log:       "debug",
 }
 

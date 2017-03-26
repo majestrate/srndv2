@@ -43,6 +43,19 @@ func (n *nullStore) OpenArticle(msgid string) (r *os.File, err error) {
 	return
 }
 
+func (n *nullStore) HasNewsgroup(newsgroup string) (has bool, err error) {
+	has = true
+	return
+}
+
+func (n *nullStore) GetAllNewsgroups() (list []string, err error) {
+	return
+}
+
+func (n *nullStore) GetWatermark(newsgroup string) (hi, lo uint64, err error) {
+	return
+}
+
 // create a storage backend that does nothing
 func NewNullStorage() Storage {
 	return &nullStore{}

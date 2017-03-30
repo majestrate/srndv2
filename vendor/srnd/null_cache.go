@@ -10,22 +10,17 @@ import (
 )
 
 type NullCache struct {
-	database Database
-	store    ArticleStore
-
-	webroot_dir string
-	name        string
-
-	regen_threads int
-	attachments   bool
-
-	prefix          string
 	regenThreadChan chan ArticleEntry
 	regenGroupChan  chan groupRegenRequest
+	handler         *nullHandler
 }
 
 type nullHandler struct {
-	cache *NullCache
+	database       Database
+	attachments    bool
+	requireCaptcha bool
+	name           string
+	prefix         string
 }
 
 func (self *nullHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
@@ -38,9 +33,9 @@ func (self *nullHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		// thread handler
 		parts := strings.Split(path[3:], "/")
 		hash := parts[0]
-		msg, err := self.cache.database.GetMessageIDByHash(hash)
+		msg, err := self.database.GetMessageIDByHash(hash)
 		if err == nil {
-			template.genThread(self.cache.attachments, msg, self.cache.prefix, self.cache.name, w, self.cache.database, isjson)
+			template.genThread(self.attachments, self.requireCaptcha, msg, self.prefix, self.name, w, self.database, isjson)
 			return
 		} else {
 			goto notfound
@@ -48,7 +43,7 @@ func (self *nullHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 	if strings.Trim(path, "/") == "overboard" {
 		// generate ukko aka overboard
-		template.genUkko(self.cache.prefix, self.cache.name, w, self.cache.database, isjson)
+		template.genUkko(self.prefix, self.name, w, self.database, isjson)
 		return
 	}
 
@@ -64,15 +59,15 @@ func (self *nullHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 				goto notfound
 			}
 		}
-		hasgroup := self.cache.database.HasNewsgroup(group)
+		hasgroup := self.database.HasNewsgroup(group)
 		if !hasgroup {
 			goto notfound
 		}
-		pages := self.cache.database.GetGroupPageCount(group)
+		pages := self.database.GetGroupPageCount(group)
 		if page >= int(pages) {
 			goto notfound
 		}
-		template.genBoardPage(self.cache.attachments, self.cache.prefix, self.cache.name, group, page, w, self.cache.database, isjson)
+		template.genBoardPage(self.attachments, self.requireCaptcha, self.prefix, self.name, group, page, w, self.database, isjson)
 		return
 	}
 
@@ -86,12 +81,12 @@ func (self *nullHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 				goto notfound
 			}
 		}
-		template.genUkkoPaginated(self.cache.prefix, self.cache.name, w, self.cache.database, page, isjson)
+		template.genUkkoPaginated(self.prefix, self.name, w, self.database, page, isjson)
 		return
 	}
 
 	if len(file) == 0 || file == "index.html" {
-		template.genFrontPage(10, self.cache.prefix, self.cache.name, w, ioutil.Discard, self.cache.database)
+		template.genFrontPage(10, self.prefix, self.name, w, ioutil.Discard, self.database)
 		return
 	}
 
@@ -100,32 +95,32 @@ func (self *nullHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		goto notfound
 	}
 	if strings.HasPrefix(file, "history.html") {
-		template.genGraphs(self.cache.prefix, w, self.cache.database)
+		template.genGraphs(self.prefix, w, self.database)
 		return
 	}
 	if strings.HasPrefix(file, "boards.html") {
-		template.genFrontPage(10, self.cache.prefix, self.cache.name, ioutil.Discard, w, self.cache.database)
+		template.genFrontPage(10, self.prefix, self.name, ioutil.Discard, w, self.database)
 		return
 	}
 
 	if strings.HasPrefix(file, "boards.json") {
-		b := self.cache.database.GetAllNewsgroups()
+		b := self.database.GetAllNewsgroups()
 		json.NewEncoder(w).Encode(b)
 		return
 	}
 
 	if strings.HasPrefix(file, "ukko.html") {
-		template.genUkko(self.cache.prefix, self.cache.name, w, self.cache.database, false)
+		template.genUkko(self.prefix, self.name, w, self.database, false)
 		return
 	}
 	if strings.HasPrefix(file, "ukko.json") {
-		template.genUkko(self.cache.prefix, self.cache.name, w, self.cache.database, true)
+		template.genUkko(self.prefix, self.name, w, self.database, true)
 		return
 	}
 
 	if strings.HasPrefix(file, "ukko-") {
 		page := getUkkoPage(file)
-		template.genUkkoPaginated(self.cache.prefix, self.cache.name, w, self.cache.database, page, isjson)
+		template.genUkkoPaginated(self.prefix, self.name, w, self.database, page, isjson)
 		return
 	}
 	if strings.HasPrefix(file, "thread-") {
@@ -133,11 +128,11 @@ func (self *nullHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		if len(hash) == 0 {
 			goto notfound
 		}
-		msg, err := self.cache.database.GetMessageIDByHash(hash)
+		msg, err := self.database.GetMessageIDByHash(hash)
 		if err != nil {
 			goto notfound
 		}
-		template.genThread(self.cache.attachments, msg, self.cache.prefix, self.cache.name, w, self.cache.database, isjson)
+		template.genThread(self.attachments, self.requireCaptcha, msg, self.prefix, self.name, w, self.database, isjson)
 		return
 	}
 	if strings.HasPrefix(file, "catalog-") {
@@ -145,31 +140,31 @@ func (self *nullHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		if len(group) == 0 {
 			goto notfound
 		}
-		hasgroup := self.cache.database.HasNewsgroup(group)
+		hasgroup := self.database.HasNewsgroup(group)
 		if !hasgroup {
 			goto notfound
 		}
-		template.genCatalog(self.cache.prefix, self.cache.name, group, w, self.cache.database)
+		template.genCatalog(self.prefix, self.name, group, w, self.database)
 		return
 	} else {
 		group, page := getGroupAndPage(file)
 		if len(group) == 0 || page < 0 {
 			goto notfound
 		}
-		hasgroup := self.cache.database.HasNewsgroup(group)
+		hasgroup := self.database.HasNewsgroup(group)
 		if !hasgroup {
 			goto notfound
 		}
-		pages := self.cache.database.GetGroupPageCount(group)
+		pages := self.database.GetGroupPageCount(group)
 		if page >= int(pages) {
 			goto notfound
 		}
-		template.genBoardPage(self.cache.attachments, self.cache.prefix, self.cache.name, group, page, w, self.cache.database, isjson)
+		template.genBoardPage(self.attachments, self.requireCaptcha, self.prefix, self.name, group, page, w, self.database, isjson)
 		return
 	}
 
 notfound:
-	template.renderNotFound(w, r, self.cache.prefix, self.cache.name)
+	template.renderNotFound(w, r, self.prefix, self.name)
 }
 
 func (self *NullCache) DeleteBoardMarkup(group string) {
@@ -181,14 +176,13 @@ func (self *NullCache) DeleteThreadMarkup(root_post_id string) {
 
 // regen every newsgroup
 func (self *NullCache) RegenAll() {
-	// we will do this as it's used by rengen on start for frontend
-	groups := self.database.GetAllNewsgroups()
-	for _, group := range groups {
-		self.database.GetGroupThreads(group, self.regenThreadChan)
-	}
 }
 
 func (self *NullCache) RegenFrontPage() {
+}
+
+func (self *NullCache) SetRequireCaptcha(required bool) {
+	self.handler.requireCaptcha = required
 }
 
 func (self *NullCache) pollRegen() {
@@ -229,7 +223,7 @@ func (self *NullCache) GetGroupChan() chan groupRegenRequest {
 }
 
 func (self *NullCache) GetHandler() http.Handler {
-	return &nullHandler{self}
+	return self.handler
 }
 
 func (self *NullCache) Close() {
@@ -240,13 +234,13 @@ func NewNullCache(prefix, webroot, name string, attachments bool, db Database, s
 	cache := new(NullCache)
 	cache.regenThreadChan = make(chan ArticleEntry, 16)
 	cache.regenGroupChan = make(chan groupRegenRequest, 8)
-
-	cache.prefix = prefix
-	cache.webroot_dir = webroot
-	cache.name = name
-	cache.attachments = attachments
-	cache.database = db
-	cache.store = store
+	cache.handler = &nullHandler{
+		prefix:         prefix,
+		name:           name,
+		attachments:    attachments,
+		requireCaptcha: true,
+		database:       db,
+	}
 
 	return cache
 }

@@ -239,7 +239,7 @@ func (self *templateEngine) genCatalog(prefix, frontend, group string, wr io.Wri
 }
 
 // generate a board page
-func (self *templateEngine) genBoardPage(allowFiles bool, prefix, frontend, newsgroup string, page int, wr io.Writer, db Database, json bool) {
+func (self *templateEngine) genBoardPage(allowFiles, requireCaptcha bool, prefix, frontend, newsgroup string, page int, wr io.Writer, db Database, json bool) {
 	// get the board page model
 	perpage, _ := db.GetThreadsPerPage(newsgroup)
 	boardPage := db.GetGroupForPage(prefix, frontend, newsgroup, page, int(perpage))
@@ -248,7 +248,7 @@ func (self *templateEngine) genBoardPage(allowFiles bool, prefix, frontend, news
 	if json {
 		self.renderJSON(wr, boardPage)
 	} else {
-		form := renderPostForm(prefix, newsgroup, "", allowFiles)
+		form := renderPostForm(prefix, newsgroup, "", allowFiles, requireCaptcha)
 		self.writeTemplate("board.mustache", map[string]interface{}{"board": boardPage, "page": page, "form": form}, wr)
 	}
 }
@@ -288,7 +288,7 @@ func (self *templateEngine) genUkkoPaginated(prefix, frontend string, wr io.Writ
 	}
 }
 
-func (self *templateEngine) genThread(allowFiles bool, root ArticleEntry, prefix, frontend string, wr io.Writer, db Database, json bool) {
+func (self *templateEngine) genThread(allowFiles, requireCaptcha bool, root ArticleEntry, prefix, frontend string, wr io.Writer, db Database, json bool) {
 	newsgroup := root.Newsgroup()
 	msgid := root.MessageID()
 
@@ -302,7 +302,7 @@ func (self *templateEngine) genThread(allowFiles bool, root ArticleEntry, prefix
 		if json {
 			self.renderJSON(wr, t)
 		} else {
-			form := renderPostForm(prefix, newsgroup, msgid, allowFiles)
+			form := renderPostForm(prefix, newsgroup, msgid, allowFiles, requireCaptcha)
 			self.writeTemplate("thread.mustache", map[string]interface{}{"thread": t, "board": map[string]interface{}{"Name": newsgroup, "Frontend": frontend, "AllowFiles": allowFiles}, "form": form}, wr)
 		}
 	} else {
@@ -398,13 +398,13 @@ func (self *templateEngine) findLink(prefix, hash string) (url string) {
 
 var template = newTemplateEngine(defaultTemplateDir())
 
-func renderPostForm(prefix, board, op_msg_id string, files bool) string {
+func renderPostForm(prefix, board, op_msg_id string, files, captcha bool) string {
 	url := prefix + "post/" + board
 	button := "New Thread"
 	if op_msg_id != "" {
 		button = "Reply"
 	}
-	return template.renderTemplate("postform.mustache", map[string]interface{}{"post_url": url, "reference": op_msg_id, "button": button, "files": files, "prefix": prefix})
+	return template.renderTemplate("postform.mustache", map[string]interface{}{"post_url": url, "reference": op_msg_id, "button": button, "files": files, "prefix": prefix, "DisableCaptcha": !captcha})
 }
 
 // generate misc graphs

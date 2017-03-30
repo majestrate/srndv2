@@ -18,8 +18,9 @@ type FileCache struct {
 	webroot_dir string
 	name        string
 
-	regen_threads int
-	attachments   bool
+	regen_threads  int
+	attachments    bool
+	requireCaptcha bool
 
 	prefix          string
 	regenThreadChan chan ArticleEntry
@@ -190,7 +191,7 @@ func (self *FileCache) regenerateThread(root ArticleEntry, json bool) {
 			log.Println("did not write", fname, err)
 			return
 		}
-		template.genThread(self.attachments, root, self.prefix, self.name, wr, self.database, json)
+		template.genThread(self.attachments, self.requireCaptcha, root, self.prefix, self.name, wr, self.database, json)
 	} else {
 		log.Println("don't have root post", msgid, "not regenerating thread")
 	}
@@ -205,7 +206,7 @@ func (self *FileCache) regenerateBoardPage(board string, page int, json bool) {
 		log.Println("error generating board page", page, "for", board, err)
 		return
 	}
-	template.genBoardPage(self.attachments, self.prefix, self.name, board, page, wr, self.database, json)
+	template.genBoardPage(self.attachments, self.requireCaptcha, self.prefix, self.name, board, page, wr, self.database, json)
 }
 
 // regenerate the catalog for a board
@@ -339,6 +340,10 @@ func (self *FileCache) GetHandler() http.Handler {
 
 func (self *FileCache) Close() {
 	//nothig to do
+}
+
+func (self *FileCache) SetRequireCaptcha(require bool) {
+	self.requireCaptcha = require
 }
 
 func NewFileCache(prefix, webroot, name string, threads int, attachments bool, db Database, store ArticleStore) CacheInterface {

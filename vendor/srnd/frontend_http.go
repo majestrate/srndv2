@@ -1533,6 +1533,7 @@ func NewHTTPFrontend(daemon *NNTPDaemon, cache CacheInterface, config map[string
 	front.regen_on_start = config["regen_on_start"] == "1"
 	front.enableBoardCreation = config["board_creation"] == "1"
 	front.requireCaptcha = config["rapeme"] != "omgyesplz"
+	cache.SetRequireCaptcha(front.requireCaptcha)
 	if config["json-api"] == "1" {
 		front.jsonUsername = config["json-api-username"]
 		front.jsonPassword = config["json-api-password"]

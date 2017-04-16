@@ -3,4 +3,4 @@
 
 building:
 
-    go get -u -v github.com/majesterate/srndv2/cmd/nntpchan
+    go get -u -v github.com/majestrate/srndv2/cmd/nntpchan
